@@ -34,14 +34,13 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -49,27 +48,23 @@ import java.util.function.Predicate;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
+@Timeout(600)
 @Category({IntegrationTest.class})
 public class StandbyTaskCreationIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-    @Rule
-    public TestName testName = new TestName();
 
     private static final String INPUT_TOPIC = "input-topic";
 
@@ -78,14 +73,14 @@ public class StandbyTaskCreationIntegrationTest {
     private volatile boolean client1IsOk = false;
     private volatile boolean client2IsOk = false;
 
-    @After
+    @AfterEach
     public void after() {
         client1.close();
         client2.close();
     }
 
-    private Properties streamsConfiguration() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private Properties streamsConfiguration(final TestInfo testInfo) {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -98,7 +93,7 @@ public class StandbyTaskCreationIntegrationTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws Exception {
+    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled(final TestInfo testInfo) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
@@ -121,7 +116,7 @@ public class StandbyTaskCreationIntegrationTest {
             }, stateStoreName);
 
         final Topology topology = builder.build();
-        createClients(topology, streamsConfiguration(), topology, streamsConfiguration());
+        createClients(topology, streamsConfiguration(testInfo), topology, streamsConfiguration(testInfo));
 
         setStateListenersForVerification(thread -> thread.standbyTasks().isEmpty() && !thread.activeTasks().isEmpty());
 
@@ -133,10 +128,10 @@ public class StandbyTaskCreationIntegrationTest {
     }
 
     @Test
-    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables() throws Exception {
-        final Properties streamsConfiguration1 = streamsConfiguration();
+    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables(final TestInfo testInfo) throws Exception {
+        final Properties streamsConfiguration1 = streamsConfiguration(testInfo);
         streamsConfiguration1.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        final Properties streamsConfiguration2 = streamsConfiguration();
+        final Properties streamsConfiguration2 = streamsConfiguration(testInfo);
         streamsConfiguration2.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();

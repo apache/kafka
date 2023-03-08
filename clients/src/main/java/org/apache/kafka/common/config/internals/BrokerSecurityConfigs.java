@@ -61,10 +61,10 @@ public class BrokerSecurityConfigs {
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
             "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
-            "ignored. By default, principal names of the form {username}/{hostname}@{REALM} are mapped to {username}. " +
-            "For more details on the format please see <a href=\"#security_authz\"> security authorization and acls</a>. " +
-            "Note that this configuration is ignored if an extension of KafkaPrincipalBuilder is provided by the " +
-            "<code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
+            "ignored. By default, principal names of the form <code>{username}/{hostname}@{REALM}</code> are mapped " +
+            "to <code>{username}</code>. For more details on the format please see <a href=\"#security_authz\"> " +
+            "security authorization and acls</a>. Note that this configuration is ignored if an extension of " +
+            "<code>KafkaPrincipalBuilder</code> is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
     public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
 
     public static final String SSL_CLIENT_AUTH_DOC = "Configures kafka broker to request client authentication."

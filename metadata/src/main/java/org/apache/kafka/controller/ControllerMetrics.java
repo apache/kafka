@@ -35,9 +35,9 @@ public interface ControllerMetrics extends AutoCloseable {
 
     int activeBrokerCount();
 
-    void setGlobalTopicsCount(int topicCount);
+    void setGlobalTopicCount(int topicCount);
 
-    int globalTopicsCount();
+    int globalTopicCount();
 
     void setGlobalPartitionCount(int partitionCount);
 

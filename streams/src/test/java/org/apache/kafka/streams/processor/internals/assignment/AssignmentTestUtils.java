@@ -28,8 +28,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
-import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -51,11 +51,13 @@ import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.expect;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public final class AssignmentTestUtils {
 
@@ -112,6 +114,93 @@ public final class AssignmentTestUtils {
 
     private AssignmentTestUtils() {}
 
+    public static final long ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT = 100;
+
+    public static AssignmentConfigs getDefaultConfigsWithZeroStandbys() {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            2,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getDefaultConfigsWithOneStandbys() {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            2,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            maxWarmups,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndLagAndWarmups(final long acceptableRecoveryLag,
+                                                                              final int maxWarmups) {
+        return new AssignmentConfigs(
+            acceptableRecoveryLag,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
     static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<UUID, ClientState> clientStates = new HashMap<>();
         int nthState = 1;
@@ -125,24 +214,22 @@ public final class AssignmentTestUtils {
     // If you don't care about setting the end offsets for each specific topic partition, the helper method
     // getTopicPartitionOffsetMap is useful for building this input map for all partitions
     public static AdminClient createMockAdminClientForAssignor(final Map<TopicPartition, Long> changelogEndOffsets) {
-        final AdminClient adminClient = EasyMock.createMock(AdminClient.class);
+        final AdminClient adminClient = mock(AdminClient.class);
 
-        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final ListOffsetsResult result = mock(ListOffsetsResult.class);
         final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
         allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
             Entry::getKey,
             t -> {
-                final ListOffsetsResultInfo info = EasyMock.createNiceMock(ListOffsetsResultInfo.class);
-                expect(info.offset()).andStubReturn(t.getValue());
-                EasyMock.replay(info);
+                final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
+                lenient().when(info.offset()).thenReturn(t.getValue());
                 return info;
             }))
         );
 
-        expect(adminClient.listOffsets(anyObject())).andStubReturn(result);
-        expect(result.all()).andStubReturn(allFuture);
+        when(adminClient.listOffsets(any())).thenReturn(result);
+        when(result.all()).thenReturn(allFuture);
 
-        EasyMock.replay(result);
         return adminClient;
     }
 

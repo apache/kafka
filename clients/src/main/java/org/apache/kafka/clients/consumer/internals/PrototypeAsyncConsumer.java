@@ -29,14 +29,16 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -47,21 +49,28 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
 /**
  * This prototype consumer uses the EventHandler to process application
@@ -72,6 +81,7 @@ import java.util.regex.Pattern;
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final String JMX_PREFIX = "kafka.consumer";
+    static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final LogContext logContext;
     private final EventHandler eventHandler;
@@ -83,12 +93,23 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
+    public PrototypeAsyncConsumer(Properties properties,
+                         Deserializer<K> keyDeserializer,
+                         Deserializer<V> valueDeserializer) {
+        this(Utils.propsToMap(properties), keyDeserializer, valueDeserializer);
+    }
+
+    public PrototypeAsyncConsumer(final Map<String, Object> configs,
+                                  final Deserializer<K> keyDeser,
+                                  final Deserializer<V> valDeser) {
+        this(new ConsumerConfig(appendDeserializerToConfig(configs, keyDeser, valDeser)), keyDeser,
+                valDeser);
+    }
     @SuppressWarnings("unchecked")
-    public PrototypeAsyncConsumer(final Time time,
-                                  final ConsumerConfig config,
+    public PrototypeAsyncConsumer(final ConsumerConfig config,
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer) {
-        this.time = time;
+        this.time = Time.SYSTEM;
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                 GroupRebalanceConfig.ProtocolType.CONSUMER);
         this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
@@ -113,6 +134,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 valueDeserializer, metrics.reporters(), interceptorList);
         this.eventHandler = new DefaultEventHandler(
                 config,
+                groupRebalanceConfig,
                 logContext,
                 subscriptions,
                 new ApiVersions(),
@@ -215,18 +237,30 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync() {
-        final ApplicationEvent commitEvent = new CommitApplicationEvent();
-        eventHandler.add(commitEvent);
+        commitAsync(null);
     }
 
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        throw new KafkaException("method not implemented");
+        commitAsync(subscriptions.allConsumed(), callback);
     }
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        throw new KafkaException("method not implemented");
+        CompletableFuture<Void> future = commit(offsets);
+        future.whenComplete((r, t) -> {
+            if (t != null) {
+                callback.onComplete(offsets, new KafkaException(t));
+            } else {
+                callback.onComplete(offsets, null);
+            }
+        });
+    }
+
+    private CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
+        eventHandler.add(commitEvent);
+        return commitEvent.future();
     }
 
     @Override
@@ -373,17 +407,26 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close() {
-        throw new KafkaException("method not implemented");
+        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
     @Override
     public void close(Duration timeout) {
-        throw new KafkaException("method not implemented");
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
+        Utils.closeQuietly(this.eventHandler, "event handler", firstException);
+        log.debug("Kafka consumer has been closed");
+        Throwable exception = firstException.get();
+        if (exception != null) {
+            if (exception instanceof InterruptException) {
+                throw (InterruptException) exception;
+            }
+            throw new KafkaException("Failed to close kafka consumer", exception);
+        }
     }
 
     @Override
     public void wakeup() {
-        throw new KafkaException("method not implemented");
+        // do nothing
     }
 
     /**
@@ -394,10 +437,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Duration timeout) {
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent();
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(subscriptions.allConsumed());
         eventHandler.add(commitEvent);
 
-        final CompletableFuture<Void> commitFuture = commitEvent.commitFuture;
+        final CompletableFuture<Void> commitFuture = commitEvent.future();
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
@@ -470,22 +513,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         throw new KafkaException("method not implemented");
     }
 
-    /**
-     * A stubbed ApplicationEvent for demonstration purpose
-     */
-    private class CommitApplicationEvent extends ApplicationEvent {
-        // this is the stubbed commitAsyncEvents
-        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
-
-        public CommitApplicationEvent() {
-        }
-
-        @Override
-        public boolean process() {
-            return true;
-        }
-    }
-
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
             final Deserializer<K> keyDeserializer,
             final Deserializer<V> valueDeserializer,
@@ -497,6 +524,23 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         clusterResourceListeners.maybeAdd(keyDeserializer);
         clusterResourceListeners.maybeAdd(valueDeserializer);
         return clusterResourceListeners;
+    }
+
+    // This is here temporary as we don't have public access to the ConsumerConfig in this module.
+    public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
+                                                                 Deserializer<?> keyDeserializer,
+                                                                 Deserializer<?> valueDeserializer) {
+        // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
+        Map<String, Object> newConfigs = new HashMap<>(configs);
+        if (keyDeserializer != null)
+            newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
+        else if (newConfigs.get(KEY_DESERIALIZER_CLASS_CONFIG) == null)
+            throw new ConfigException(KEY_DESERIALIZER_CLASS_CONFIG, null, "must be non-null.");
+        if (valueDeserializer != null)
+            newConfigs.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        else if (newConfigs.get(VALUE_DESERIALIZER_CLASS_CONFIG) == null)
+            throw new ConfigException(VALUE_DESERIALIZER_CLASS_CONFIG, null, "must be non-null.");
+        return newConfigs;
     }
 
     private static Metrics buildMetrics(
@@ -514,5 +558,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         return new Metrics(metricConfig, reporters, time, metricsContext);
+    }
+
+    private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
+        @Override
+        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            if (exception != null)
+                log.error("Offset commit with offsets {} failed", offsets, exception);
+        }
     }
 }

@@ -51,6 +51,18 @@
         <li> update your code and swap old code and jar file with new code and new jar file </li>
         <li> restart all new ({{fullDotVersion}}) application instances </li>
     </ul>
+    <p>
+        Note: The cooperative rebalancing protocol has been the default since 2.4, but we have continued to support the
+        eager rebalancing protocol to provide users an upgrade path. This support will be dropped in a future release,
+        so any users still on the eager protocol should prepare to finish upgrading their applications to the cooperative protocol in version 3.1.
+        This only affects users who are still on a version older than 2.4, and users who have upgraded already but have not yet
+        removed the <code>upgrade.from</code> config that they set when upgrading from a version below 2.4.
+        Users fitting into the latter case will simply need to unset this config when upgrading beyond 3.1,
+        while users in the former case will need to follow a slightly different upgrade path if they attempt to upgrade from 2.3 or below to a version above 3.1.
+        Those applications will need to go through a bridge release, by first upgrading to a version between 2.4 - 3.1 and setting the <code>upgrade.from</code> config,
+        then removing that config and upgrading to the final version above 3.1. See <a href="https://issues.apache.org/jira/browse/KAFKA-8575">KAFKA-8575</a>
+        for more details.
+    </p>
 
     <h3 class="anchor-heading"><a id="streams_notable_changes" class="anchor-link"></a><a href="#streams_notable_changes">Notable compatibility changes in past releases</a></h3>
     <p>
@@ -103,6 +115,42 @@
         the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
         created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to {{fullDotVersion}} in order to use that changelog topic for restoring the state store.
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
+    </p>
+
+    <h3><a id="streams_api_changes_310" href="#streams_api_changes_310">Streams API changes in 3.1.0</a></h3>
+    <p>
+      The semantics of left/outer stream-stream join got improved via
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Deprecate+24-hour+Default+Grace+Period+for+Windowed+Operations+in+Streams">KIP-633</a>.
+      Previously, left-/outer stream-stream join might have emitted so-call spurious left/outer results, due to an eager-emit strategy.
+      The implementation was changed to emit left/outer join result records only after the join window is closed.
+      The old API to specify the join window, i.e., <code>JoinWindows.of()</code> that enables the eager-emit strategy,
+      was deprecated in favor of a <code>JoinWindows.ofTimeDifferenceAndGrace()</code> and <code>JoinWindows.ofTimeDifferencWithNoGrace()</code>.
+      The new semantics are only enabled if you use the new join window builders.<br />
+      Additionally, KIP-633 makes setting a grace period also mandatory for windowed aggregations, i.e., for
+      <code>TimeWindows</code> (hopping/tumbling), <code>SessionWindows</code>, and <code>SlidingWindows</code>.
+      The corresponding builder methods <code>.of(...)</code> were deprecated in favor of the new
+      <code>.ofTimeDifferenceAndGrace()</code> and <code>.ofTimeDifferencWithNoGrace()</code> methods.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-761%3A+Add+Total+Blocked+Time+Metric+to+Streams">KIP-761</a>
+      adds new metrics that allow to track blocking times on the underlying consumer and producer clients.
+      Check out the section on <a href="/documentation/#kafka_streams_monitoring">Kafka Streams metrics</a> for more details.
+    </p>
+
+    <p>
+      <a href="/documentation/streams/developer-guide/interactive-queries.html">Interactive Queries</a> were improved via
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-763%3A+Range+queries+with+open+endpoints">KIP-763</a>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186876596">KIP-766</a>.
+      Range queries now accept <code>null</code> as lower/upper key-range bound to indicate an open-ended lower/upper bound.
+    </p>
+
+    <p>
+      Foreign-key table-table joins now support custom partitioners via
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-775%3A+Custom+partitioners+in+foreign+key+joins">KIP-775</a>.
+      Previously, if an input table was partitioned by a non-default partitioner, joining records might fail.
+      With KIP-775 you now can pass a custom <code>StreamPartitioner</code> into the join using the newly added
+      <code>TableJoined</code> object.
     </p>
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>

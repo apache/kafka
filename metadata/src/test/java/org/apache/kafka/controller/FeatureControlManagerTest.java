@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -202,25 +203,7 @@ public class FeatureControlManagerTest {
     }
 
     @Test
-    public void testFeatureControlIteratorWithOldMetadataVersion() throws Exception {
-        // We require minimum of IBP_3_3_IV0 to write metadata version in the snapshot.
-
-        LogContext logContext = new LogContext();
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        FeatureControlManager manager = new FeatureControlManager.Builder()
-            .setLogContext(logContext)
-            .setSnapshotRegistry(snapshotRegistry)
-            .setMetadataVersion(MetadataVersion.IBP_3_2_IV0)
-            .build();
-
-        RecordTestUtils.assertBatchIteratorContains(
-            Collections.emptyList(),
-            manager.iterator(Long.MAX_VALUE)
-        );
-    }
-
-    @Test
-    public void testFeatureControlIterator() throws Exception {
+    public void testReplayRecords() throws Exception {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         FeatureControlManager manager = new FeatureControlManager.Builder().
@@ -233,17 +216,12 @@ public class FeatureControlManagerTest {
             updateFeatures(updateMap("foo", 5, "bar", 1),
                 Collections.emptyMap(), Collections.emptyMap(), false);
         RecordTestUtils.replayAll(manager, result.records());
-        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
-            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                    setName("metadata.version").
-                    setFeatureLevel((short) 4), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName("foo").
-                setFeatureLevel((short) 5), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName("bar").
-                setFeatureLevel((short) 1), (short) 0))),
-            manager.iterator(Long.MAX_VALUE));
+        assertEquals(MetadataVersion.IBP_3_3_IV0, manager.metadataVersion());
+        assertEquals(Optional.of((short) 5), manager.finalizedFeatures(Long.MAX_VALUE).get("foo"));
+        assertEquals(Optional.of((short) 1), manager.finalizedFeatures(Long.MAX_VALUE).get("bar"));
+        assertEquals(new HashSet<>(Arrays.asList(
+            MetadataVersion.FEATURE_NAME, "foo", "bar")),
+                manager.finalizedFeatures(Long.MAX_VALUE).featureNames());
     }
 
     private static final FeatureControlManager.Builder TEST_MANAGER_BUILDER1 =

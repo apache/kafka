@@ -133,9 +133,9 @@ public class ImageDowngradeTest {
         List<ApiMessageAndVersion> expectedOutputs
     ) {
         MockLossConsumer lossConsumer = new MockLossConsumer(metadataVersion);
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder().build();
         RecordTestUtils.replayAll(delta, inputs);
-        MetadataImage image = delta.apply();
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().
                 setRawMetadataVersion(metadataVersion).

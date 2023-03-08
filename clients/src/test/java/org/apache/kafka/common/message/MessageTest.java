@@ -24,6 +24,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
@@ -96,14 +97,26 @@ public final class MessageTest {
 
     @Test
     public void testAddPartitionsToTxnVersions() throws Exception {
-        testAllMessageRoundTrips(new AddPartitionsToTxnRequestData().
-                setTransactionalId("blah").
-                setProducerId(0xbadcafebadcafeL).
-                setProducerEpoch((short) 30000).
-                setTopics(new AddPartitionsToTxnTopicCollection(singletonList(
+        AddPartitionsToTxnRequestData v3AndBelowData = new AddPartitionsToTxnRequestData().
+                setV3AndBelowTransactionalId("blah").
+                setV3AndBelowProducerId(0xbadcafebadcafeL).
+                setV3AndBelowProducerEpoch((short) 30000).
+                setV3AndBelowTopics(new AddPartitionsToTxnTopicCollection(singletonList(
                         new AddPartitionsToTxnTopic().
                                 setName("Topic").
-                                setPartitions(singletonList(1))).iterator())));
+                                setPartitions(singletonList(1))).iterator()));
+        testDuplication(v3AndBelowData);
+        testAllMessageRoundTripsUntilVersion((short) 3, v3AndBelowData);
+
+        AddPartitionsToTxnRequestData data = new AddPartitionsToTxnRequestData().
+                setTransactions(new AddPartitionsToTxnTransactionCollection(singletonList(
+                       new AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction().
+                              setTransactionalId("blah").
+                              setProducerId(0xbadcafebadcafeL).
+                              setProducerEpoch((short) 30000).
+                              setTopics(v3AndBelowData.v3AndBelowTopics())).iterator()));
+        testDuplication(data);
+        testAllMessageRoundTripsFromVersion((short) 4, data);
     }
 
     @Test
@@ -1028,6 +1041,12 @@ public final class MessageTest {
 
     private void testAllMessageRoundTripsFromVersion(short fromVersion, Message message) throws Exception {
         for (short version = fromVersion; version <= message.highestSupportedVersion(); version++) {
+            testEquivalentMessageRoundTrip(version, message);
+        }
+    }
+
+    private void testAllMessageRoundTripsUntilVersion(short untilVersion, Message message) throws Exception {
+        for (short version = message.lowestSupportedVersion(); version <= untilVersion; version++) {
             testEquivalentMessageRoundTrip(version, message);
         }
     }

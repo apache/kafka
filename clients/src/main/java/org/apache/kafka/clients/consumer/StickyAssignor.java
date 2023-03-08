@@ -216,6 +216,8 @@ public class StickyAssignor extends AbstractStickyAssignor {
 
     @Override
     protected MemberData memberData(Subscription subscription) {
+        // Always deserialize ownedPartitions and generation id from user data
+        // since StickyAssignor is an eager rebalance protocol that will revoke all existing partitions before joining group
         ByteBuffer userData = subscription.userData();
         if (userData == null || !userData.hasRemaining()) {
             return new MemberData(Collections.emptyList(), Optional.empty());

@@ -62,7 +62,8 @@ public final class ClientQuotasImage {
         return entities.isEmpty();
     }
 
-    Map<ClientQuotaEntity, ClientQuotaImage> entities() {
+    // Visible for testing
+    public Map<ClientQuotaEntity, ClientQuotaImage> entities() {
         return entities;
     }
 

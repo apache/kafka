@@ -38,8 +38,9 @@ import org.junit.jupiter.api.Test
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
-  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
+  val controllerPrincipalName = "admin"
 
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val saslContext = context.asInstanceOf[SaslAuthenticationContext]
 
@@ -50,7 +51,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
 
       saslContext.server.getAuthorizationID match {
         case KafkaPlainAdmin =>
-          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
         case KafkaPlainUser =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
         case _ =>
@@ -123,7 +124,7 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
 
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
-  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
 
   override def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                             kafkaClientSaslMechanism: Option[String],

@@ -19,7 +19,15 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResult;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResultCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -34,22 +42,37 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     private final AddPartitionsToTxnRequestData data;
 
-    private List<TopicPartition> cachedPartitions = null;
-
     public static class Builder extends AbstractRequest.Builder<AddPartitionsToTxnRequest> {
         public final AddPartitionsToTxnRequestData data;
+        
+        public static Builder forClient(String transactionalId,
+                                        long producerId,
+                                        short producerEpoch,
+                                        List<TopicPartition> partitions) {
 
-        public Builder(final AddPartitionsToTxnRequestData data) {
-            super(ApiKeys.ADD_PARTITIONS_TO_TXN);
+            AddPartitionsToTxnTopicCollection topics = buildTxnTopicCollection(partitions);
+            
+            return new Builder(ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion(), (short) 3,
+                new AddPartitionsToTxnRequestData()
+                    .setV3AndBelowTransactionalId(transactionalId)
+                    .setV3AndBelowProducerId(producerId)
+                    .setV3AndBelowProducerEpoch(producerEpoch)
+                    .setV3AndBelowTopics(topics));
+        }
+        
+        public static Builder forBroker(AddPartitionsToTxnTransactionCollection transactions) {
+            return new Builder((short) 4, ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(),
+                new AddPartitionsToTxnRequestData()
+                    .setTransactions(transactions));
+        }
+        
+        private Builder(short minVersion, short maxVersion, AddPartitionsToTxnRequestData data) {
+            super(ApiKeys.ADD_PARTITIONS_TO_TXN, minVersion, maxVersion);
+
             this.data = data;
         }
 
-        public Builder(final String transactionalId,
-                       final long producerId,
-                       final short producerEpoch,
-                       final List<TopicPartition> partitions) {
-            super(ApiKeys.ADD_PARTITIONS_TO_TXN);
-
+        private static AddPartitionsToTxnTopicCollection buildTxnTopicCollection(final List<TopicPartition> partitions) {
             Map<String, List<Integer>> partitionMap = new HashMap<>();
             for (TopicPartition topicPartition : partitions) {
                 String topicName = topicPartition.topic();
@@ -66,30 +89,15 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             AddPartitionsToTxnTopicCollection topics = new AddPartitionsToTxnTopicCollection();
             for (Map.Entry<String, List<Integer>> partitionEntry : partitionMap.entrySet()) {
                 topics.add(new AddPartitionsToTxnTopic()
-                               .setName(partitionEntry.getKey())
-                               .setPartitions(partitionEntry.getValue()));
+                    .setName(partitionEntry.getKey())
+                    .setPartitions(partitionEntry.getValue()));
             }
-
-            this.data = new AddPartitionsToTxnRequestData()
-                            .setTransactionalId(transactionalId)
-                            .setProducerId(producerId)
-                            .setProducerEpoch(producerEpoch)
-                            .setTopics(topics);
+            return topics;
         }
 
         @Override
         public AddPartitionsToTxnRequest build(short version) {
             return new AddPartitionsToTxnRequest(data, version);
-        }
-
-        static List<TopicPartition> getPartitions(AddPartitionsToTxnRequestData data) {
-            List<TopicPartition> partitions = new ArrayList<>();
-            for (AddPartitionsToTxnTopic topicCollection : data.topics()) {
-                for (Integer partition : topicCollection.partitions()) {
-                    partitions.add(new TopicPartition(topicCollection.name(), partition));
-                }
-            }
-            return partitions;
         }
 
         @Override
@@ -103,14 +111,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public List<TopicPartition> partitions() {
-        if (cachedPartitions != null) {
-            return cachedPartitions;
-        }
-        cachedPartitions = Builder.getPartitions(data);
-        return cachedPartitions;
-    }
-
     @Override
     public AddPartitionsToTxnRequestData data() {
         return data;
@@ -118,11 +118,73 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     @Override
     public AddPartitionsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        final HashMap<TopicPartition, Errors> errors = new HashMap<>();
-        for (TopicPartition partition : partitions()) {
-            errors.put(partition, Errors.forException(e));
+        Errors error = Errors.forException(e);
+        AddPartitionsToTxnResponseData response = new AddPartitionsToTxnResponseData();
+        if (version() < 4) {
+            response.setResultsByTopicV3AndBelow(errorResponseForTopics(data.v3AndBelowTopics(), error));
+        } else {
+            response.setErrorCode(error.code());
         }
-        return new AddPartitionsToTxnResponse(throttleTimeMs, errors);
+        response.setThrottleTimeMs(throttleTimeMs);
+        return new AddPartitionsToTxnResponse(response);
+    }
+
+    public static List<TopicPartition> getPartitions(AddPartitionsToTxnTopicCollection topics) {
+        List<TopicPartition> partitions = new ArrayList<>();
+
+        for (AddPartitionsToTxnTopic topicCollection : topics) {
+            for (Integer partition : topicCollection.partitions()) {
+                partitions.add(new TopicPartition(topicCollection.name(), partition));
+            }
+        }
+        return partitions;
+    }
+
+    public Map<String, List<TopicPartition>> partitionsByTransaction() {
+        Map<String, List<TopicPartition>> partitionsByTransaction = new HashMap<>();
+        for (AddPartitionsToTxnTransaction transaction : data.transactions()) {
+            List<TopicPartition> partitions = getPartitions(transaction.topics());
+            partitionsByTransaction.put(transaction.transactionalId(), partitions);
+        }
+        return partitionsByTransaction;
+    }
+
+    // Takes a version 3 or below request and returns a v4+ singleton (one transaction ID) request.
+    public AddPartitionsToTxnRequest normalizeRequest() {
+        return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version());
+    }
+
+    private AddPartitionsToTxnTransactionCollection singletonTransaction() {
+        AddPartitionsToTxnTransactionCollection singleTxn = new AddPartitionsToTxnTransactionCollection();
+        singleTxn.add(new AddPartitionsToTxnTransaction()
+            .setTransactionalId(data.v3AndBelowTransactionalId())
+            .setProducerId(data.v3AndBelowProducerId())
+            .setProducerEpoch(data.v3AndBelowProducerEpoch())
+            .setTopics(data.v3AndBelowTopics()));
+        return singleTxn;
+    }
+    
+    public AddPartitionsToTxnResult errorResponseForTransaction(String transactionalId, Errors e) {
+        AddPartitionsToTxnResult txnResult = new AddPartitionsToTxnResult().setTransactionalId(transactionalId);
+        AddPartitionsToTxnTopicResultCollection topicResults = errorResponseForTopics(data.transactions().find(transactionalId).topics(), e);
+        txnResult.setTopicResults(topicResults);
+        return txnResult;
+    }
+    
+    private AddPartitionsToTxnTopicResultCollection errorResponseForTopics(AddPartitionsToTxnTopicCollection topics, Errors e) {
+        AddPartitionsToTxnTopicResultCollection topicResults = new AddPartitionsToTxnTopicResultCollection();
+        for (AddPartitionsToTxnTopic topic : topics) {
+            AddPartitionsToTxnTopicResult topicResult = new AddPartitionsToTxnTopicResult().setName(topic.name());
+            AddPartitionsToTxnPartitionResultCollection partitionResult = new AddPartitionsToTxnPartitionResultCollection();
+            for (Integer partition : topic.partitions()) {
+                partitionResult.add(new AddPartitionsToTxnPartitionResult()
+                    .setPartitionIndex(partition)
+                    .setPartitionErrorCode(e.code()));
+            }
+            topicResult.setResultsByPartition(partitionResult);
+            topicResults.add(topicResult);
+        }
+        return topicResults;
     }
 
     public static AddPartitionsToTxnRequest parse(ByteBuffer buffer, short version) {

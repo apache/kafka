@@ -45,6 +45,8 @@ class Tasks implements TasksRegistry {
     private final Logger log;
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
+    // note that these two maps may be accessed by concurrent threads and hence
+    // should be synchronized when accessed
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
     private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
 
@@ -173,6 +175,18 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public Set<Task> drainPendingTaskToInit() {
+        final Set<Task> result = new HashSet<>(pendingTasksToInit);
+        pendingTasksToInit.clear();
+        return result;
+    }
+
+    @Override
+    public void addPendingTaskToInit(final Collection<Task> tasks) {
+        pendingTasksToInit.addAll(tasks);
+    }
+
+    @Override
     public void addActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task activeTask : newTasks) {
@@ -191,7 +205,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addTask(final Task task) {
+    public synchronized void addTask(final Task task) {
         final TaskId taskId = task.id();
         if (activeTasksPerId.containsKey(taskId)) {
             throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
@@ -213,7 +227,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void removeTask(final Task taskToRemove) {
+    public synchronized void removeTask(final Task taskToRemove) {
         final TaskId taskId = taskToRemove.id();
 
         if (taskToRemove.state() != Task.State.CLOSED) {
@@ -233,7 +247,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void replaceActiveWithStandby(final StandbyTask standbyTask) {
+    public synchronized void replaceActiveWithStandby(final StandbyTask standbyTask) {
         final TaskId taskId = standbyTask.id();
         if (activeTasksPerId.remove(taskId) == null) {
             throw new IllegalStateException("Attempted to replace unknown active task with standby task: " + taskId);
@@ -244,7 +258,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void replaceStandbyWithActive(final StreamTask activeTask) {
+    public synchronized void replaceStandbyWithActive(final StreamTask activeTask) {
         final TaskId taskId = activeTask.id();
         if (standbyTasksPerId.remove(taskId) == null) {
             throw new IllegalStateException("Attempted to convert unknown standby task to stream task: " + taskId);
@@ -283,7 +297,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void clear() {
+    public synchronized void clear() {
         activeTasksPerId.clear();
         standbyTasksPerId.clear();
         activeTasksPerPartition.clear();
@@ -295,7 +309,7 @@ class Tasks implements TasksRegistry {
         return activeTasksPerPartition.get(partition);
     }
 
-    private Task getTask(final TaskId taskId) {
+    private synchronized Task getTask(final TaskId taskId) {
         if (activeTasksPerId.containsKey(taskId)) {
             return activeTasksPerId.get(taskId);
         }
@@ -325,7 +339,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Collection<Task> activeTasks() {
+    public synchronized Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
     }
 
@@ -334,17 +348,17 @@ class Tasks implements TasksRegistry {
      * and the returned task could be modified by other threads concurrently
      */
     @Override
-    public Set<Task> allTasks() {
+    public synchronized Set<Task> allTasks() {
         return union(HashSet::new, new HashSet<>(activeTasksPerId.values()), new HashSet<>(standbyTasksPerId.values()));
     }
 
     @Override
-    public Set<TaskId> allTaskIds() {
+    public synchronized Set<TaskId> allTaskIds() {
         return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }
 
     @Override
-    public Map<TaskId, Task> allTasksPerId() {
+    public synchronized Map<TaskId, Task> allTasksPerId() {
         final Map<TaskId, Task> ret = new HashMap<>();
         ret.putAll(activeTasksPerId);
         ret.putAll(standbyTasksPerId);

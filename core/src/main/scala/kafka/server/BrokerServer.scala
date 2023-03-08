@@ -17,43 +17,44 @@
 
 package kafka.server
 
+import kafka.cluster.Broker.ServerInfo
+import kafka.coordinator.group.GroupCoordinatorAdapter
+import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
+import kafka.log.LogManager
+import kafka.log.remote.RemoteLogManager
+import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.raft.KafkaRaftManager
+import kafka.security.CredentialProvider
+import kafka.server.KafkaRaftServer.ControllerRole
+import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, SnapshotWriterBuilder}
+import kafka.utils.CoreUtils
+import org.apache.kafka.common.feature.SupportedVersionRange
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
+import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.metadata.{BrokerState, VersionRange}
+import org.apache.kafka.raft
+import org.apache.kafka.raft.{RaftClient, RaftConfig}
+import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
+import org.apache.kafka.snapshot.SnapshotWriter
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-
-import kafka.cluster.Broker.ServerInfo
-import kafka.coordinator.group.GroupCoordinator
-import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
-import kafka.log.LogManager
-import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.RaftManager
-import kafka.security.CredentialProvider
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.BrokerServerMetrics
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
-import kafka.utils.{CoreUtils, KafkaScheduler}
-import org.apache.kafka.common.feature.SupportedVersionRange
-import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
-import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft.RaftConfig.AddressSpec
-import org.apache.kafka.raft.{RaftClient, RaftConfig}
-import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.fault.FaultHandler
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.snapshot.SnapshotWriter
-
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -64,7 +65,8 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
   override def build(committedOffset: Long,
                      committedEpoch: Int,
                      lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
-    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).asScala
+    val snapshotId = new raft.OffsetAndEpoch(committedOffset + 1, committedEpoch)
+    raftClient.createSnapshot(snapshotId, lastContainedLogTime).asScala
   }
 }
 
@@ -72,19 +74,16 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-  val config: KafkaConfig,
-  val metaProps: MetaProperties,
-  val raftManager: RaftManager[ApiMessageAndVersion],
-  val time: Time,
-  val metrics: Metrics,
-  val brokerMetrics: BrokerServerMetrics,
-  val threadNamePrefix: Option[String],
+  val sharedServer: SharedServer,
   val initialOfflineDirs: Seq[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-  val fatalFaultHandler: FaultHandler,
-  val metadataLoadingFaultHandler: FaultHandler,
-  val metadataPublishingFaultHandler: FaultHandler
 ) extends KafkaBroker {
+  val threadNamePrefix = sharedServer.threadNamePrefix
+  val config = sharedServer.brokerConfig
+  val time = sharedServer.time
+  def metrics = sharedServer.metrics
+
+  // Get raftManager from SharedServer. It will be initialized during startup.
+  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 
   override def brokerState: BrokerState = Option(lifecycleManager).
     flatMap(m => Some(m.state)).getOrElse(BrokerState.NOT_RUNNING)
@@ -112,6 +111,7 @@ class BrokerServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   var logManager: LogManager = _
+  var remoteLogManager: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
 
@@ -144,7 +144,7 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
-  val clusterId: String = metaProps.clusterId
+  val clusterId: String = sharedServer.metaProps.clusterId
 
   var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
 
@@ -179,14 +179,18 @@ class BrokerServer(
 
   override def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
+    val startupDeadline = Deadline.fromDelay(time, config.serverMaxStartupTimeMs, TimeUnit.MILLISECONDS)
     try {
+      sharedServer.startForBroker()
+
       info("Starting broker")
 
       config.dynamicConfig.initialize(zkClientOpt = None)
 
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
-        threadNamePrefix)
+        threadNamePrefix,
+        isZkBroker = false)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -206,12 +210,17 @@ class BrokerServer(
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
+      remoteLogManager = createRemoteLogManager(config)
+
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying,
+        "controller quorum voters future", sharedServer.controllerQuorumVotersFuture,
+        startupDeadline, time)
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
@@ -260,6 +269,7 @@ class BrokerServer(
         time = time,
         scheduler = kafkaScheduler,
         logManager = logManager,
+        remoteLogManager = remoteLogManager,
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
@@ -278,7 +288,12 @@ class BrokerServer(
 
       // Create group coordinator, but don't start it until we've started replica manager.
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
-      groupCoordinator = GroupCoordinator(config, replicaManager, Time.SYSTEM, metrics)
+      groupCoordinator = GroupCoordinatorAdapter(
+        config,
+        replicaManager,
+        Time.SYSTEM,
+        metrics
+      )
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
@@ -290,7 +305,7 @@ class BrokerServer(
       // Create transaction coordinator, but don't start it until we've started replica manager.
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
-        new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
+        new KafkaScheduler(1, true, "transaction-log-manager-"),
         producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
@@ -320,8 +335,8 @@ class BrokerServer(
         threadNamePrefix,
         config.metadataSnapshotMaxNewRecordBytes,
         metadataSnapshotter,
-        brokerMetrics,
-        metadataLoadingFaultHandler)
+        sharedServer.brokerMetrics,
+        sharedServer.metadataLoaderFaultHandler)
 
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>
@@ -344,12 +359,12 @@ class BrokerServer(
         config,
         "heartbeat",
         threadNamePrefix,
-        config.brokerSessionTimeoutMs.toLong
+        config.brokerSessionTimeoutMs / 2 // KAFKA-14392
       )
       lifecycleManager.start(
         () => metadataListener.highestMetadataOffset,
         brokerLifecycleChannelManager,
-        metaProps.clusterId,
+        sharedServer.metaProps.clusterId,
         networkListeners,
         featuresRemapped
       )
@@ -425,8 +440,8 @@ class BrokerServer(
         config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
 
-      // Block until we've caught up with the latest metadata from the controller quorum.
-      lifecycleManager.initialCatchUpFuture.get()
+      FutureUtils.waitWithLogging(logger.underlying, "broker metadata to catch up",
+        lifecycleManager.initialCatchUpFuture, startupDeadline, time)
 
       // Apply the metadata log changes that we've accumulated.
       metadataPublisher = new BrokerMetadataPublisher(config,
@@ -436,28 +451,33 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         clientQuotaMetadataManager,
-        dynamicConfigHandlers.toMap,
+        new DynamicConfigPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          dynamicConfigHandlers.toMap,
+        "broker"),
         authorizer,
-        fatalFaultHandler,
-        metadataPublishingFaultHandler)
+        credentialProvider,
+        sharedServer.initialBrokerMetadataLoadFaultHandler,
+        sharedServer.metadataPublishingFaultHandler)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
-      try {
-        metadataListener.startPublishing(metadataPublisher).get()
-      } catch {
-        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
-          "waiting for the broker to catch up with the current cluster metadata.", t)
-      }
+      FutureUtils.waitWithLogging(logger.underlying,
+        "the broker to catch up with the current cluster metadata",
+        metadataListener.startPublishing(metadataPublisher), startupDeadline, time)
 
       // Log static broker configurations.
       new KafkaConfig(config.originals(), true)
 
+      // Start RemoteLogManager before broker start serving the requests.
+      remoteLogManager.foreach(_.startup())
+
       // Enable inbound TCP connections. Each endpoint will be started only once its matching
       // authorizer future is completed.
-      socketServer.enableRequestProcessing(authorizerFutures)
+      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       // If we are using a ClusterMetadataAuthorizer which stores its ACLs in the metadata log,
       // notify it that the loading process is complete.
@@ -469,12 +489,16 @@ class BrokerServer(
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
-      try {
-        lifecycleManager.setReadyToUnfence().get()
-      } catch {
-        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
-          "waiting for the broker to be unfenced.", t)
-      }
+      FutureUtils.waitWithLogging(logger.underlying, "the broker to be unfenced",
+        lifecycleManager.setReadyToUnfence(), startupDeadline, time)
+
+      // Block here until all the authorizer futures are complete
+      FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
+        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
+
+      // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
+      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
+        socketServerFuture, startupDeadline, time)
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {
@@ -483,6 +507,19 @@ class BrokerServer(
         fatal("Fatal error during broker startup. Prepare to shutdown", e)
         shutdown()
         throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
+    }
+  }
+
+  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+    if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+      if (config.logDirs.size > 1) {
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+      }
+
+      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
+    } else {
+      None
     }
   }
 
@@ -561,24 +598,23 @@ class BrokerServer(
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
 
+      // Close remote log manager to give a chance to any of its underlying clients
+      // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
+      CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)
+
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
 
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
-      if (metrics != null)
-        CoreUtils.swallow(metrics.close(), this)
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
-
-      // Clear all reconfigurable instances stored in DynamicBrokerConfig
-      config.dynamicConfig.clear()
 
       isShuttingDown.set(false)
 
       CoreUtils.swallow(lifecycleManager.close(), this)
-
-      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, config.nodeId.toString, metrics), this)
+      CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      sharedServer.stopForBroker()
       info("shut down completed")
     } catch {
       case e: Throwable =>

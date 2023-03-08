@@ -18,12 +18,11 @@ package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
@@ -44,9 +43,41 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+
+/**
+ * Listener receives notification from an Online Partition.
+ *
+ * A listener can be (re-)registered to an Online partition only. The listener
+ * is notified as long as the partition remains Online. When the partition fails
+ * or is deleted, respectively `onFailed` or `onDeleted` are called once. No further
+ * notifications are sent after this point on.
+ *
+ * Note that the callbacks are executed in the thread that triggers the change
+ * AND that locks may be held during their execution. They are meant to be used
+ * as notification mechanism only.
+ */
+trait PartitionListener {
+  /**
+   * Called when the Log increments its high watermark.
+   */
+  def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {}
+
+  /**
+   * Called when the Partition (or replica) on this broker has a failure (e.g. goes offline).
+   */
+  def onFailed(partition: TopicPartition): Unit = {}
+
+  /**
+   * Called when the Partition (or replica) on this broker is deleted. Note that it does not mean
+   * that the partition was deleted but only that this broker does not host a replica of it any more.
+   */
+  def onDeleted(partition: TopicPartition): Unit = {}
+}
 
 trait AlterPartitionListener {
   def markIsrExpand(): Unit
@@ -69,7 +100,9 @@ class DelayedOperations(topicPartition: TopicPartition,
   def numDelayedDelete: Int = deleteRecords.numDelayed
 }
 
-object Partition extends KafkaMetricsGroup {
+object Partition {
+  private val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
+
   def apply(topicPartition: TopicPartition,
             time: Time,
             replicaManager: ReplicaManager): Partition = {
@@ -105,13 +138,13 @@ object Partition extends KafkaMetricsGroup {
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
-    val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString)
-    removeMetric("UnderReplicated", tags)
-    removeMetric("UnderMinIsr", tags)
-    removeMetric("InSyncReplicasCount", tags)
-    removeMetric("ReplicasCount", tags)
-    removeMetric("LastStableOffsetLag", tags)
-    removeMetric("AtMinIsr", tags)
+    val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString).asJava
+    metricsGroup.removeMetric("UnderReplicated", tags)
+    metricsGroup.removeMetric("UnderMinIsr", tags)
+    metricsGroup.removeMetric("InSyncReplicasCount", tags)
+    metricsGroup.removeMetric("ReplicasCount", tags)
+    metricsGroup.removeMetric("LastStableOffsetLag", tags)
+    metricsGroup.removeMetric("AtMinIsr", tags)
   }
 }
 
@@ -253,7 +286,9 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterPartitionManager) extends Logging with KafkaMetricsGroup {
+                alterIsrManager: AlterPartitionManager) extends Logging {
+
+  import Partition.metricsGroup
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -284,6 +319,17 @@ class Partition(val topicPartition: TopicPartition,
   // If ReplicaAlterLogDir command is in progress, this is future location of the log
   @volatile var futureLog: Option[UnifiedLog] = None
 
+  // Partition listeners
+  private val listeners = new CopyOnWriteArrayList[PartitionListener]()
+
+  private val logOffsetsListener = new LogOffsetsListener {
+    override def onHighWatermarkUpdated(offset: Long): Unit = {
+      listeners.forEach { listener =>
+        listener.onHighWatermarkUpdated(topicPartition, offset)
+      }
+    }
+  }
+
   /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
    * One way of doing that is through the controller's start replica state change command. When a new broker starts up
    * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
@@ -292,14 +338,14 @@ class Partition(val topicPartition: TopicPartition,
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
 
-  private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
+  private val tags = Map("topic" -> topic, "partition" -> partitionId.toString).asJava
 
-  newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
-  newGauge("InSyncReplicasCount", () => if (isLeader) partitionState.isr.size else 0, tags)
-  newGauge("UnderMinIsr", () => if (isUnderMinIsr) 1 else 0, tags)
-  newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
-  newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
-  newGauge("LastStableOffsetLag", () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
+  metricsGroup.newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
+  metricsGroup.newGauge("InSyncReplicasCount", () => if (isLeader) partitionState.isr.size else 0, tags)
+  metricsGroup.newGauge("UnderMinIsr", () => if (isUnderMinIsr) 1 else 0, tags)
+  metricsGroup.newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
+  metricsGroup.newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
+  metricsGroup.newGauge("LastStableOffsetLag", () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
 
   def hasLateTransaction(currentTimeMs: Long): Boolean = leaderLogIfLocal.exists(_.hasLateTransaction(currentTimeMs))
 
@@ -315,7 +361,30 @@ class Partition(val topicPartition: TopicPartition,
 
   def isAddingReplica(replicaId: Int): Boolean = assignmentState.isAddingReplica(replicaId)
 
+  def producerIdCount: Int = log.map(_.producerIdCount).getOrElse(0)
+
+  // Visible for testing
+  def removeExpiredProducers(currentTimeMs: Long): Unit = log.foreach(_.removeExpiredProducers(currentTimeMs))
+
   def inSyncReplicaIds: Set[Int] = partitionState.isr
+
+  def maybeAddListener(listener: PartitionListener): Boolean = {
+    inReadLock(leaderIsrUpdateLock) {
+      // `log` is set to `None` when the partition is failed or deleted.
+      log match {
+        case Some(_) =>
+          listeners.add(listener)
+          true
+
+        case None =>
+          false
+      }
+    }
+  }
+
+  def removeListener(listener: PartitionListener): Unit = {
+    listeners.remove(listener)
+  }
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
@@ -386,6 +455,7 @@ class Partition(val topicPartition: TopicPartition,
     var maybeLog: Option[UnifiedLog] = None
     try {
       val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
+      if (!isFutureReplica) log.setLogOffsetsListener(logOffsetsListener)
       maybeLog = Some(log)
       updateHighWatermark(log)
       log
@@ -468,10 +538,12 @@ class Partition(val topicPartition: TopicPartition,
 
   // Visible for testing -- Used by unit tests to set log for this partition
   def setLog(log: UnifiedLog, isFutureLog: Boolean): Unit = {
-    if (isFutureLog)
+    if (isFutureLog) {
       futureLog = Some(log)
-    else
+    } else {
+      log.setLogOffsetsListener(logOffsetsListener)
       this.log = Some(log)
+    }
   }
 
   /**
@@ -516,6 +588,7 @@ class Partition(val topicPartition: TopicPartition,
             case Some(futurePartitionLog) =>
               if (log.exists(_.logEndOffset == futurePartitionLog.logEndOffset)) {
                 logManager.replaceCurrentWithFutureLog(topicPartition)
+                futurePartitionLog.setLogOffsetsListener(logOffsetsListener)
                 log = futureLog
                 removeFutureLocalReplica(false)
                 true
@@ -539,15 +612,39 @@ class Partition(val topicPartition: TopicPartition,
   def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
-      remoteReplicasMap.clear()
-      assignmentState = SimpleAssignmentState(Seq.empty)
-      log = None
-      futureLog = None
-      partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
-      leaderReplicaIdOpt = None
-      leaderEpochStartOffsetOpt = None
-      Partition.removeMetrics(topicPartition)
+      clear()
+
+      listeners.forEach { listener =>
+        listener.onDeleted(topicPartition)
+      }
+      listeners.clear()
     }
+  }
+
+  /**
+   * Fail the partition. This is called by the ReplicaManager when the partition
+   * transitions to Offline.
+   */
+  def markOffline(): Unit = {
+    inWriteLock(leaderIsrUpdateLock) {
+      clear()
+
+      listeners.forEach { listener =>
+        listener.onFailed(topicPartition)
+      }
+      listeners.clear()
+    }
+  }
+
+  private def clear(): Unit = {
+    remoteReplicasMap.clear()
+    assignmentState = SimpleAssignmentState(Seq.empty)
+    log = None
+    futureLog = None
+    partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
+    leaderReplicaIdOpt = None
+    leaderEpochStartOffsetOpt = None
+    Partition.removeMetrics(topicPartition)
   }
 
   def getLeaderEpoch: Int = this.leaderEpoch
@@ -1175,7 +1272,7 @@ class Partition(val topicPartition: TopicPartition,
       }
     }
 
-    info.copy(leaderHwChange = if (leaderHWIncremented) LeaderHwChange.Increased else LeaderHwChange.Same)
+    info.copy(if (leaderHWIncremented) LeaderHwChange.INCREASED else LeaderHwChange.SAME)
   }
 
   /**
@@ -1188,7 +1285,7 @@ class Partition(val topicPartition: TopicPartition,
    * @param minOneMessage whether to ensure that at least one complete message is returned
    * @param updateFetchState true if the Fetch should update replica state (only applies to follower fetches)
    * @return [[LogReadInfo]] containing the fetched records or the diverging epoch if present
-   * @throws NotLeaderOrFollowerException if this node is not the current leader and [[FetchParams.fetchOnlyLeader]]
+   * @throws NotLeaderOrFollowerException if this node is not the current leader and `FetchParams.fetchOnlyLeader`
    *                                      is enabled, or if this is a follower fetch with an older request version
    *                                      and the replicaId is not recognized among the current valid replicas
    * @throws FencedLeaderEpochException if the leader epoch in the `Fetch` request is lower than the current
@@ -1197,7 +1294,7 @@ class Partition(val topicPartition: TopicPartition,
    *                                     leader epoch, or if this is a follower fetch and the replicaId is not
    *                                     recognized among the current valid replicas
    * @throws OffsetOutOfRangeException if the fetch offset is smaller than the log start offset or larger than
-   *                                   the log end offset (or high watermark depending on [[FetchParams.isolation]]),
+   *                                   the log end offset (or high watermark depending on `FetchParams.isolation`),
    *                                   or if the end offset for the last fetched epoch in [[FetchRequest.PartitionData]]
    *                                   cannot be determined from the local epoch cache (e.g. if it is larger than
    *                                   any cached epoch value)
@@ -1237,7 +1334,7 @@ class Partition(val topicPartition: TopicPartition,
         (replica, logReadInfo)
       }
 
-      if (updateFetchState && logReadInfo.divergingEpoch.isEmpty) {
+      if (updateFetchState && !logReadInfo.divergingEpoch.isPresent) {
         updateFollowerFetchState(
           replica,
           followerFetchOffsetMetadata = logReadInfo.fetchedData.fetchOffsetMetadata,
@@ -1329,13 +1426,13 @@ class Partition(val topicPartition: TopicPartition,
           .setEpoch(epochEndOffset.leaderEpoch)
           .setEndOffset(epochEndOffset.endOffset)
 
-        return LogReadInfo(
-          fetchedData = FetchDataInfo.empty(fetchOffset),
-          divergingEpoch = Some(divergingEpoch),
-          highWatermark = initialHighWatermark,
-          logStartOffset = initialLogStartOffset,
-          logEndOffset = initialLogEndOffset,
-          lastStableOffset = initialLastStableOffset)
+        return new LogReadInfo(
+          FetchDataInfo.empty(fetchOffset),
+          Optional.of(divergingEpoch),
+          initialHighWatermark,
+          initialLogStartOffset,
+          initialLogEndOffset,
+          initialLastStableOffset)
       }
     }
 
@@ -1346,13 +1443,13 @@ class Partition(val topicPartition: TopicPartition,
       minOneMessage
     )
 
-    LogReadInfo(
-      fetchedData = fetchedData,
-      divergingEpoch = None,
-      highWatermark = initialHighWatermark,
-      logStartOffset = initialLogStartOffset,
-      logEndOffset = initialLogEndOffset,
-      lastStableOffset = initialLastStableOffset
+    new LogReadInfo(
+      fetchedData,
+      Optional.empty(),
+      initialHighWatermark,
+      initialLogStartOffset,
+      initialLogEndOffset,
+      initialLastStableOffset
     )
   }
 
@@ -1394,7 +1491,7 @@ class Partition(val topicPartition: TopicPartition,
       case ListOffsetsRequest.LATEST_TIMESTAMP =>
         maybeOffsetsError.map(e => throw e)
           .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
-      case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
+      case ListOffsetsRequest.EARLIEST_TIMESTAMP | ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP =>
         getOffsetByTimestamp
       case _ =>
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
@@ -1470,7 +1567,7 @@ class Partition(val topicPartition: TopicPartition,
         if (convertedOffset < 0)
           throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
 
-        leaderLog.maybeIncrementLogStartOffset(convertedOffset, ClientRecordDeletion)
+        leaderLog.maybeIncrementLogStartOffset(convertedOffset, LogStartOffsetIncrementReason.ClientRecordDeletion)
         LogDeleteRecordsResult(
           requestedOffset = convertedOffset,
           lowWatermark = lowWatermarkIfLeader)

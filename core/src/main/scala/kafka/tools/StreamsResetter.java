@@ -21,7 +21,6 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
-import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
@@ -39,7 +38,7 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import scala.collection.JavaConverters;
+import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -282,13 +281,13 @@ public class StreamsResetter {
         try {
             options = optionParser.parse(args);
             if (args.length == 0 || options.has(helpOption)) {
-                CommandLineUtils.printUsageAndDie(optionParser, USAGE);
+                CommandLineUtils.printUsageAndExit(optionParser, USAGE);
             }
             if (options.has(versionOption)) {
-                CommandLineUtils.printVersionAndDie();
+                CommandLineUtils.printVersionAndExit();
             }
         } catch (final OptionException e) {
-            CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
+            CommandLineUtils.printUsageAndExit(optionParser, e.getMessage());
         }
 
         final Set<OptionSpec<?>> allScenarioOptions = new HashSet<>();
@@ -319,7 +318,7 @@ public class StreamsResetter {
             optionParser,
             options,
             option,
-            JavaConverters.asScalaSetConverter(invalidOptions).asScala());
+            invalidOptions);
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map<Object, Object> consumerConfig,

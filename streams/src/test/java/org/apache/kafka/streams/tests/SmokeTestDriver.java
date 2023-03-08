@@ -420,6 +420,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
         consumer.close();
+
         final long finished = System.currentTimeMillis() - start;
         System.out.println("Verification time=" + finished);
         System.out.println("-------------------");
@@ -434,19 +435,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
             System.out.println("PROCESSED-LESS-THAN-GENERATED");
         }
 
-        boolean success;
+        final Map<String, Set<Number>> received = parseRecordsForEchoTopic(events);
 
-        final Map<String, Set<Number>> received =
-            events.get("echo")
-                  .entrySet()
-                  .stream()
-                  .map(entry -> mkEntry(
-                      entry.getKey(),
-                      entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
-                  )
-                  .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-        success = inputs.equals(received);
+        boolean success = inputs.equals(received);
 
         if (success) {
             System.out.println("ALL-RECORDS-DELIVERED");
@@ -468,6 +459,19 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
         return verificationResult;
+    }
+
+    private static Map<String, Set<Number>> parseRecordsForEchoTopic(
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
+        return events.containsKey("echo") ?
+            events.get("echo")
+                .entrySet()
+                .stream()
+                .map(entry -> mkEntry(
+                    entry.getKey(),
+                    entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
+                )
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)) : Collections.emptyMap();
     }
 
     public static class VerificationResult {

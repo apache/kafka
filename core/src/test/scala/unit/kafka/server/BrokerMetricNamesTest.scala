@@ -48,6 +48,7 @@ class BrokerMetricNamesTest(cluster: ClusterInstance) {
       "LeaderCount", "PartitionCount", "OfflineReplicaCount", "UnderReplicatedPartitions",
       "UnderMinIsrPartitionCount", "AtMinIsrPartitionCount", "ReassigningPartitions",
       "IsrExpandsPerSec", "IsrShrinksPerSec", "FailedIsrUpdatesPerSec",
+      "ProducerIdCount",
     )
     expectedMetricNames.foreach { metricName =>
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == s"$expectedPrefix=$metricName"))

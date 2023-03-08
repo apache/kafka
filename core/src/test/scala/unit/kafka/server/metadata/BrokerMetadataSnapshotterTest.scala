@@ -24,7 +24,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.EventQueue
@@ -32,6 +32,7 @@ import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, SnapshotWriter}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.Test
 
 import java.util
@@ -55,10 +56,10 @@ class BrokerMetadataSnapshotterTest {
       RecordsSnapshotWriter.createWithHeader(
         () => {
           Optional.of(
-            new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer(committedOffset, committedEpoch))
+            new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer(committedOffset, committedEpoch, lastContainedLogTime))
           )
         },
-        1024,
+        4096,
         MemoryPool.NONE,
         Time.SYSTEM,
         lastContainedLogTime,
@@ -67,7 +68,11 @@ class BrokerMetadataSnapshotterTest {
       ).asScala
     }
 
-    def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {
+    def consumeSnapshotBuffer(
+      committedOffset: Long,
+      committedEpoch: Int,
+      lastContainedLogTime: Long
+    )(buffer: ByteBuffer): Unit = {
       val delta = new MetadataDelta(MetadataImage.EMPTY)
       val memoryRecords = MemoryRecords.readableRecords(buffer)
       val batchIterator = memoryRecords.batchIterator()
@@ -78,11 +83,11 @@ class BrokerMetadataSnapshotterTest {
             val recordBuffer = record.value().duplicate()
             val messageAndVersion = MetadataRecordSerde.INSTANCE.read(
               new ByteBufferAccessor(recordBuffer), recordBuffer.remaining())
-            delta.replay(committedOffset, committedEpoch, messageAndVersion.message())
+            delta.replay(messageAndVersion.message())
           })
         }
       }
-      image.complete(delta.apply())
+      image.complete(delta.apply(new MetadataProvenance(committedOffset, committedEpoch, lastContainedLogTime)))
     }
   }
 
@@ -92,6 +97,7 @@ class BrokerMetadataSnapshotterTest {
   }
 
   @Test
+  @Timeout(30)
   def testCreateSnapshot(): Unit = {
     val writerBuilder = new MockSnapshotWriterBuilder()
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
@@ -101,8 +107,8 @@ class BrokerMetadataSnapshotterTest {
       val reasons = Set(SnapshotReason.UNKNOWN)
 
       snapshotter.eventQueue.append(blockingEvent)
-      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
-      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, reasons))
+      assertTrue(snapshotter.maybeStartSnapshot(2000L, MetadataImageTest.IMAGE1, reasons))
+      assertFalse(snapshotter.maybeStartSnapshot(4000L, MetadataImageTest.IMAGE2, reasons))
       blockingEvent.latch.countDown()
       assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
     } finally {

@@ -51,6 +51,10 @@ public final class ClusterImage {
         return brokers.get(nodeId);
     }
 
+    public boolean containsBroker(int brokerId) {
+        return brokers.containsKey(brokerId);
+    }
+
     public void write(ImageWriter writer, ImageWriterOptions options) {
         for (BrokerRegistration broker : brokers.values()) {
             writer.write(broker.toRecord(options));

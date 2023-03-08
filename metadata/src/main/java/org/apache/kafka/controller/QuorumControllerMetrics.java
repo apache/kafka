@@ -49,7 +49,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
     private final static MetricName METADATA_ERROR_COUNT = getMetricName(
-            "KafkaController", "MetadataErrorCount");
+        "KafkaController", "MetadataErrorCount");
     private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
@@ -67,7 +67,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
-    private volatile AtomicInteger metadataErrorCount;
+    private final AtomicInteger metadataErrorCount;
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
@@ -215,12 +215,12 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void setGlobalTopicsCount(int topicCount) {
+    public void setGlobalTopicCount(int topicCount) {
         this.globalTopicCount = topicCount;
     }
 
     @Override
-    public int globalTopicsCount() {
+    public int globalTopicCount() {
         return this.globalTopicCount;
     }
 

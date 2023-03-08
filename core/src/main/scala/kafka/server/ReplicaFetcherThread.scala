@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,11 +17,11 @@
 
 package kafka.server
 
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.FetchResponse
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 
 import scala.collection.mutable
 
@@ -37,6 +37,7 @@ class ReplicaFetcherThread(name: String,
                                 clientId = name,
                                 leader = leader,
                                 failedPartitions,
+                                fetchTierStateMachine = new ReplicaFetcherTierStateMachine(leader, replicaMgr),
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
                                 replicaMgr.brokerTopicStats) {
@@ -114,7 +115,7 @@ class ReplicaFetcherThread(name: String,
         topicPartition, fetchOffset, log.logEndOffset))
 
     if (logTrace)
-      trace("Follower has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
+      trace("Follower has replica log end offset %d for partition %s. Received %d bytes of messages and leader hw %d"
         .format(log.logEndOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
@@ -133,7 +134,7 @@ class ReplicaFetcherThread(name: String,
       partitionsWithNewHighWatermark += topicPartition
     }
 
-    log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
+    log.maybeIncrementLogStartOffset(leaderLogStartOffset, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
     if (logTrace)
       trace(s"Follower received high watermark ${partitionData.highWatermark} from the leader " +
         s"$maybeUpdateHighWatermarkMessage for partition $topicPartition")
@@ -191,5 +192,4 @@ class ReplicaFetcherThread(name: String,
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.truncateFullyAndStartAt(offset, isFuture = false)
   }
-
 }

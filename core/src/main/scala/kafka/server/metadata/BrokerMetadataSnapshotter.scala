@@ -61,7 +61,7 @@ class BrokerMetadataSnapshotter(
   /**
    * The event queue which runs this listener.
    */
-  val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
+  val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""), new ShutdownEvent())
 
   override def maybeStartSnapshot(
     lastContainedLogTime: Long,
@@ -126,7 +126,7 @@ class BrokerMetadataSnapshotter(
   }
 
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
+    eventQueue.beginShutdown("beginShutdown");
   }
 
   class ShutdownEvent() extends EventQueue.Event {

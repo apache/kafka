@@ -264,7 +264,7 @@ public class SnapshotRegistry {
     }
 
     /**
-     * Associate with this registry.
+     * Associate a revertable with this registry.
      */
     public void register(Revertable revertable) {
         revertables.add(revertable);

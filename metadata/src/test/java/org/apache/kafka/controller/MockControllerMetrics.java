@@ -75,12 +75,12 @@ public final class MockControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void setGlobalTopicsCount(int topicCount) {
+    public void setGlobalTopicCount(int topicCount) {
         this.topics = topicCount;
     }
 
     @Override
-    public int globalTopicsCount() {
+    public int globalTopicCount() {
         return this.topics;
     }
 
