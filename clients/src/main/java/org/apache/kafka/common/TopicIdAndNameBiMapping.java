@@ -31,7 +31,7 @@ import java.util.Optional;
  * not to characterize the set of topics which are known by a client. Use the
  * {@link org.apache.kafka.clients.MetadataCache} for that purpose.
  */
-public class TopicResolver {
+public class TopicIdAndNameBiMapping {
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
 
@@ -40,7 +40,7 @@ public class TopicResolver {
      * between a topic ID and a topic name is computed by this method. If there are more than one topic name
      * resolving to the same topic ID, an {@link InvalidTopicException} is thrown.
      */
-    public static TopicResolver fromTopicIds(Map<String, Uuid> topicIds) {
+    public static TopicIdAndNameBiMapping fromTopicIds(Map<String, Uuid> topicIds) {
         Map<Uuid, String> topicNames = new HashMap<>(topicIds.size());
 
         for (Map.Entry<String, Uuid> e: topicIds.entrySet()) {
@@ -51,7 +51,7 @@ public class TopicResolver {
             }
         }
 
-        return new TopicResolver(topicIds, topicNames);
+        return new TopicIdAndNameBiMapping(topicIds, topicNames);
     }
 
     /**
@@ -59,18 +59,18 @@ public class TopicResolver {
      * No validation is performed about the consistency of the mapping. This method is to be preferred
      * when the copy of the input maps needs to be avoided.
      */
-    public static TopicResolver wrap(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
-        return new TopicResolver(topicIds, topicNames);
+    public static TopicIdAndNameBiMapping wrap(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
+        return new TopicIdAndNameBiMapping(topicIds, topicNames);
     }
 
     /**
      * A resolver with no existing mapping between any topic name and id.
      */
-    public static TopicResolver emptyResolver() {
+    public static TopicIdAndNameBiMapping emptyResolver() {
         return fromTopicIds(Collections.emptyMap());
     }
 
-    private TopicResolver(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
+    private TopicIdAndNameBiMapping(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
         this.topicIds = Collections.unmodifiableMap(topicIds);
         this.topicNames = Collections.unmodifiableMap(topicNames);
     }
@@ -78,8 +78,8 @@ public class TopicResolver {
     /**
      * Returns the ID of the topic with the given name, if that association exists.
      */
-    public Optional<Uuid> getTopicId(String name) {
-        return Optional.ofNullable(topicIds.get(name));
+    public Uuid getTopicIdOrZero(String name) {
+        return Optional.ofNullable(topicIds.get(name)).orElse(Uuid.ZERO_UUID);
     }
 
     /**

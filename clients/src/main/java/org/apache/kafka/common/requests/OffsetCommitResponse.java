@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
@@ -26,7 +25,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -57,21 +55,14 @@ import java.util.function.Function;
 public class OffsetCommitResponse extends AbstractResponse {
 
     private final OffsetCommitResponseData data;
-    private final short version;
 
     public OffsetCommitResponse(OffsetCommitResponseData data) {
-        this(data, OffsetCommitResponseData.HIGHEST_SUPPORTED_VERSION);
-    }
-
-    public OffsetCommitResponse(OffsetCommitResponseData data, short version) {
         super(ApiKeys.OFFSET_COMMIT);
         this.data = data;
-        this.version = version;
     }
 
-    public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData, short version) {
+    public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
         super(ApiKeys.OFFSET_COMMIT);
-        this.version = version;
         Map<String, OffsetCommitResponseTopic>
                 responseTopicDataMap = new HashMap<>();
 
@@ -93,8 +84,8 @@ public class OffsetCommitResponse extends AbstractResponse {
                 .setThrottleTimeMs(requestThrottleMs);
     }
 
-    public OffsetCommitResponse(Map<TopicPartition, Errors> responseData, short version) {
-        this(DEFAULT_THROTTLE_TIME, responseData, version);
+    public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
+        this(DEFAULT_THROTTLE_TIME, responseData);
     }
 
     @Override
@@ -110,7 +101,7 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetCommitResponse(new OffsetCommitResponseData(new ByteBufferAccessor(buffer), version), version);
+        return new OffsetCommitResponse(new OffsetCommitResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
@@ -133,20 +124,9 @@ public class OffsetCommitResponse extends AbstractResponse {
         return version >= 4;
     }
 
-    public short version() {
-        return version;
-    }
-
     public static class Builder {
         OffsetCommitResponseData data = new OffsetCommitResponseData();
         HashMap<String, OffsetCommitResponseTopic> byTopicName = new HashMap<>();
-        private final TopicResolver topicResolver;
-        private final short version;
-
-        public Builder(TopicResolver topicResolver, short version) {
-            this.topicResolver = topicResolver;
-            this.version = version;
-        }
 
         private OffsetCommitResponseTopic getOrCreateTopic(
             String topicName,
@@ -215,24 +195,8 @@ public class OffsetCommitResponse extends AbstractResponse {
         }
 
         public Builder merge(
-            OffsetCommitResponseData newData,
-            Logger logger
+            OffsetCommitResponseData newData
         ) {
-            if (version >= 9) {
-                // This method is called after the group coordinator committed the offsets. The group coordinator
-                // provides the OffsetCommitResponseData it built in the process. As of now, this data does
-                // not contain topic ids, so we resolve them here.
-                newData.topics().forEach(topic -> {
-                    Uuid topicId = topicResolver.getTopicId(topic.name()).orElse(Uuid.ZERO_UUID);
-                    if (Uuid.ZERO_UUID.equals(topicId)) {
-                        // This should not happen because topic names returned by the group coordinator should
-                        // always be resolvable.
-                        logger.debug("Unresolvable topic id for topic {} while preparing " +
-                                "the OffsetCommitResponse", topic.name());
-                    }
-                    topic.setTopicId(topicId);
-                });
-            }
             if (data.topics().isEmpty()) {
                 // If the current data is empty, we can discard it and use the new data.
                 data = newData;
@@ -252,11 +216,12 @@ public class OffsetCommitResponse extends AbstractResponse {
                     }
                 });
             }
+
             return this;
         }
 
         public OffsetCommitResponse build() {
-            return new OffsetCommitResponse(data, version);
+            return new OffsetCommitResponse(data);
         }
     }
 }

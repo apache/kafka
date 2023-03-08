@@ -454,7 +454,7 @@ public class KafkaAdminClientTest {
     private static OffsetCommitResponse prepareOffsetCommitResponse(TopicPartition tp, Errors error) {
         Map<TopicPartition, Errors> responseData = new HashMap<>();
         responseData.put(tp, error);
-        return new OffsetCommitResponse(0, responseData, (short) 8);
+        return new OffsetCommitResponse(0, responseData);
     }
 
     private static CreateTopicsResponse prepareCreateTopicsResponse(String topicName, Errors error) {
@@ -2748,7 +2748,7 @@ public class KafkaAdminClientTest {
             Map<TopicPartition, Errors> responseData = new HashMap<>();
             responseData.put(foo0, Errors.NONE);
             responseData.put(foo1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            env.kafkaClient().prepareResponse(new OffsetCommitResponse(0, responseData, (short) 8));
+            env.kafkaClient().prepareResponse(new OffsetCommitResponse(0, responseData));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(foo0, new OffsetAndMetadata(123L));
@@ -4568,7 +4568,7 @@ public class KafkaAdminClientTest {
             Map<TopicPartition, Errors> responseData = new HashMap<>();
             responseData.put(tp1, Errors.NONE);
             responseData.put(tp2, Errors.NONE);
-            env.kafkaClient().prepareResponse(new OffsetCommitResponse(0, responseData, (short) 8));
+            env.kafkaClient().prepareResponse(new OffsetCommitResponse(0, responseData));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(tp1, new OffsetAndMetadata(123L));

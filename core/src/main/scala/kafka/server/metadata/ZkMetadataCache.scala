@@ -33,7 +33,7 @@ import kafka.utils.Logging
 import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicIdAndNameBiMapping, TopicPartition, Uuid}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition
 import org.apache.kafka.common.network.ListenerName
@@ -218,6 +218,11 @@ class ZkMetadataCache(
 
   def topicIdsToNames(): util.Map[Uuid, String] = {
     Collections.unmodifiableMap(metadataSnapshot.topicNames.asJava)
+  }
+
+  def topicIdAndNames(): TopicIdAndNameBiMapping = {
+    val snapshot = metadataSnapshot
+    TopicIdAndNameBiMapping.wrap(snapshot.topicIds.asJava, snapshot.topicNames.asJava)
   }
 
   /**

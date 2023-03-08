@@ -44,7 +44,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.TopicResolver;
+import org.apache.kafka.common.TopicIdAndNameBiMapping;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -66,7 +66,6 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartiti
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
-import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -148,7 +147,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.KafkaConsumer.DEFAULT_REASON;
-import static org.apache.kafka.common.TopicResolver.fromTopicIds;
+import static org.apache.kafka.common.TopicIdAndNameBiMapping.fromTopicIds;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -206,7 +205,7 @@ public class KafkaConsumerTest {
             new AbstractMap.SimpleEntry<>(topicId3, topic3))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-    private final TopicResolver topicResolver = fromTopicIds(topicIds);
+    private final TopicIdAndNameBiMapping topicIdAndNames = fromTopicIds(topicIds);
 
     private final String partitionRevoked = "Hit partition revoke ";
     private final String partitionAssigned = "Hit partition assign ";
@@ -2456,7 +2455,7 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(body -> {
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> commitErrors = OffsetCommitRequestTest.offsets(commitRequest, topicResolver);
+            Map<TopicPartition, Long> commitErrors = OffsetCommitRequestTest.offsets(commitRequest, topicIdAndNames);
 
             for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
                 // verify that the expected offset has been committed
@@ -2475,7 +2474,7 @@ public class KafkaConsumerTest {
     }
 
     private OffsetCommitResponse offsetCommitResponse(Map<TopicPartition, Errors> responseData) {
-        return new OffsetCommitResponse(responseData, OffsetCommitResponseData.HIGHEST_SUPPORTED_VERSION);
+        return new OffsetCommitResponse(responseData);
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(ConsumerPartitionAssignor assignor, int generationId, String memberId, String leaderId, Errors error) {

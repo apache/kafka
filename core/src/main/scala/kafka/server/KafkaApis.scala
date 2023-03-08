@@ -65,7 +65,7 @@ import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
-import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, TopicIdAndNameBiMapping, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
@@ -428,8 +428,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      val topicResolver = metadataCache.topicResolver()
-      val responseBuilder = new OffsetCommitResponse.Builder(topicResolver, offsetCommitRequest.version)
+      val topicIdAndNames = metadataCache.topicIdAndNames()
+      val responseBuilder = new OffsetCommitResponse.Builder()
 
       val resolvedTopics =
         if (offsetCommitRequest.version < 9)
@@ -438,7 +438,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topics = new ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
 
           offsetCommitRequest.data.topics.forEach { topic =>
-            topicResolver.getTopicName(topic.topicId).asScala match {
+            topicIdAndNames.getTopicName(topic.topicId).asScala match {
               case Some(topicName) =>
                 topic.setName(topicName)
                 topics += topic
@@ -508,7 +508,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetCommitRequest,
           authorizedTopicsRequest,
           responseBuilder,
-          requestLocal
+          requestLocal,
+          topicIdAndNames
         )
       }
     }
@@ -550,11 +551,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def commitOffsetsToCoordinator(
-    request: RequestChannel.Request,
-    offsetCommitRequest: OffsetCommitRequest,
-    authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
-    responseBuilder: OffsetCommitResponse.Builder,
-    requestLocal: RequestLocal
+                                          request: RequestChannel.Request,
+                                          offsetCommitRequest: OffsetCommitRequest,
+                                          authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
+                                          responseBuilder: OffsetCommitResponse.Builder,
+                                          requestLocal: RequestLocal,
+                                          topicIdAndNames: TopicIdAndNameBiMapping
   ): CompletableFuture[Unit] = {
     val offsetCommitRequestData = new OffsetCommitRequestData()
       .setGroupId(offsetCommitRequest.data.groupId)
@@ -572,7 +574,23 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
       } else {
-        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results, logger.underlying).build())
+        if (request.header.apiVersion() >= 9) {
+          results.topics().forEach { topic =>
+            val topicId = topicIdAndNames.getTopicIdOrZero(topic.name())
+            if (Uuid.ZERO_UUID.equals(topicId)) {
+              // This should not happen because topic names returned by the group coordinator should
+              // always be resolvable.
+              logger.warn("Unresolvable topic id for topic {} while preparing " +
+                "the OffsetCommitResponse", topic.name());
+              requestHelper.sendMaybeThrottle(
+                request,
+                offsetCommitRequest.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception()))
+              return null
+            }
+            topic.setTopicId(topicId)
+          }
+        }
+        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
       }
     }
   }

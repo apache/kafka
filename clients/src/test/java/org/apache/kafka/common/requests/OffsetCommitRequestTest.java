@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicResolver;
+import org.apache.kafka.common.TopicIdAndNameBiMapping;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -96,13 +96,16 @@ public class OffsetCommitRequestTest {
            ));
     }
 
-    public static Map<TopicPartition, Long> offsets(OffsetCommitRequest request, TopicResolver topicResolver) {
+    public static Map<TopicPartition, Long> offsets(
+        OffsetCommitRequest request,
+        TopicIdAndNameBiMapping topicIdAndNames
+    ) {
         Map<TopicPartition, Long> offsets = new HashMap<>();
         for (OffsetCommitRequestTopic topic : request.data().topics()) {
             String topicName = topic.name();
 
             if (request.version() >= 9) {
-                topicName = topicResolver.getTopicName(topic.topicId()).orElseThrow(
+                topicName = topicIdAndNames.getTopicName(topic.topicId()).orElseThrow(
                     () -> new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found."));
             }
 
@@ -179,7 +182,7 @@ public class OffsetCommitRequestTest {
     public void testUnresolvableTopicIdWhenListingOffset() {
         OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate(), true).build((short) 9);
         assertThrows(UnknownTopicIdException.class,
-            () -> OffsetCommitRequestTest.offsets(request, TopicResolver.emptyResolver()));
+            () -> OffsetCommitRequestTest.offsets(request, TopicIdAndNameBiMapping.emptyResolver()));
     }
 
     @ParameterizedTest

@@ -1303,7 +1303,16 @@ class KafkaApisTest {
     )
 
     // This is the response returned by the group coordinator.
-    val offsetCommitResponse = new OffsetCommitResponseData()
+    val coordinatorResponse = new OffsetCommitResponseData()
+      .setTopics(List(
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+
+    val expectedResponse = new OffsetCommitResponseData()
       .setTopics(List(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
           .setName(if (version < 9) "foo" else "")
@@ -1313,9 +1322,9 @@ class KafkaApisTest {
               .setPartitionIndex(0)
               .setErrorCode(Errors.NONE.code)).asJava)).asJava)
 
-    future.complete(offsetCommitResponse)
+    future.complete(coordinatorResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
-    assertEquals(offsetCommitResponse, response.data)
+    assertEquals(expectedResponse, response.data)
   }
 
   @Test

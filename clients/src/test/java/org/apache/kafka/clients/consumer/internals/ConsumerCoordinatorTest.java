@@ -33,7 +33,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicResolver;
+import org.apache.kafka.common.TopicIdAndNameBiMapping;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -195,7 +195,7 @@ public abstract class ConsumerCoordinatorTest {
         partitionCounts.put(topic2, 1);
     }
 
-    private final TopicResolver topicResolver = TopicResolver.fromTopicIds(topicIds);
+    private final TopicIdAndNameBiMapping topicIdAndNames = TopicIdAndNameBiMapping.fromTopicIds(topicIds);
 
     private MockClient client;
     private MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, topicIds);
@@ -4360,7 +4360,7 @@ public abstract class ConsumerCoordinatorTest {
     ) {
         return body -> {
             OffsetCommitRequest req = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicResolver);
+            Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicIdAndNames);
             if (offsets.size() != expectedOffsets.size())
                 return false;
 

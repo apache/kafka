@@ -38,7 +38,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicResolver;
+import org.apache.kafka.common.TopicIdAndNameBiMapping;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -1277,7 +1277,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
-        TopicResolver topicResolver = metadata.topicResolver();
+        TopicIdAndNameBiMapping topicIdAndNames = metadata.topicIdAndNames();
         boolean canUseTopicIds = true;
 
         // create the offset commit request
@@ -1289,7 +1289,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return RequestFuture.failure(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
             }
 
-            Uuid topicId = topicResolver.getTopicId(topicPartition.topic()).orElse(ZERO_UUID);
+            Uuid topicId = topicIdAndNames.getTopicIdOrZero(topicPartition.topic());
             if (ZERO_UUID.equals(topicId)) {
                 canUseTopicIds = false;
             }
@@ -1350,21 +1350,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
         return client.send(coordinator, builder)
-                .compose(new OffsetCommitResponseHandler(offsets, generation, topicResolver));
+                .compose(new OffsetCommitResponseHandler(offsets, generation, topicIdAndNames));
     }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
-        private final TopicResolver topicResolver;
+        private final TopicIdAndNameBiMapping topicIdAndNames;
 
         private OffsetCommitResponseHandler(
                 Map<TopicPartition, OffsetAndMetadata> offsets,
                 Generation generation,
-                TopicResolver topicResolver
+                TopicIdAndNameBiMapping topicIdAndNames
         ) {
             super(generation);
             this.offsets = offsets;
-            this.topicResolver = topicResolver;
+            this.topicIdAndNames = topicIdAndNames;
         }
 
         @Override
@@ -1376,7 +1376,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 String topicName = topic.name();
 
                 if (this.response.requestHeader().apiVersion() >= 9) {
-                    topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
+                    topicName = topicIdAndNames.getTopicName(topic.topicId()).orElse(null);
 
                     if (topicName == null) {
                         // Could only happen if the broker replied with an ID which was not in the request and
