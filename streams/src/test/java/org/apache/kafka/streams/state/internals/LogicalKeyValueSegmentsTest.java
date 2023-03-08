@@ -108,6 +108,8 @@ public class LogicalKeyValueSegmentsTest {
         final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(3, context, SEGMENT_INTERVAL * 3L);
         final LogicalKeyValueSegment segment4 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
 
+        segments.cleanupExpiredSegments(SEGMENT_INTERVAL * 7L);
+
         final List<LogicalKeyValueSegment> allSegments = segments.allSegments(true);
         assertEquals(2, allSegments.size());
         assertEquals(segment3, allSegments.get(0));
