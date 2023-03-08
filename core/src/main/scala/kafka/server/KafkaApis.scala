@@ -429,16 +429,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       CompletableFuture.completedFuture[Unit](())
     } else {
       val topicResolver = metadataCache.topicResolver()
-      val responseBuilder = new OffsetCommitResponse.Builder(topicResolver, offsetCommitRequest.version())
+      val responseBuilder = new OffsetCommitResponse.Builder(topicResolver, offsetCommitRequest.version)
 
       val resolvedTopics =
-        if (offsetCommitRequest.version() < 9)
-          offsetCommitRequest.data.topics().asScala
+        if (offsetCommitRequest.version < 9)
+          offsetCommitRequest.data.topics.asScala
         else {
           val topics = new ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
 
           offsetCommitRequest.data.topics.forEach { topic =>
-            topicResolver.getTopicName(topic.topicId()).asScala match {
+            topicResolver.getTopicName(topic.topicId).asScala match {
               case Some(topicName) =>
                 topic.setName(topicName)
                 topics += topic

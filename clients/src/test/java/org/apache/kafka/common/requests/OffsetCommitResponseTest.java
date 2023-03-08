@@ -242,7 +242,11 @@ public class OffsetCommitResponseTest {
     }
 
     private static OffsetCommitResponseTopic createResponseTopic(
-            String topicName, Uuid topicId, int partition, Errors error) {
+        String topicName,
+        Uuid topicId,
+        int partition,
+        Errors error
+    ) {
         return new OffsetCommitResponseTopic()
             .setTopicId(topicId)
             .setName(topicName)
@@ -254,7 +258,12 @@ public class OffsetCommitResponseTest {
     }
 
     private static OffsetCommitResponseTopic createResponseTopic(
-            String topicName, Uuid topicId, int firstPartition, int secondPartition, Errors error) {
+        String topicName,
+        Uuid topicId,
+        int firstPartition,
+        int secondPartition,
+        Errors error
+    ) {
         OffsetCommitResponseTopic topic = createResponseTopic(topicName, topicId, firstPartition, error);
         topic.partitions().add(new OffsetCommitResponsePartition()
             .setPartitionIndex(secondPartition)

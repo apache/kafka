@@ -4311,10 +4311,11 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private void prepareOffsetCommitRequest(
-            Map<TopicIdPartition, Long> offsets,
-            Errors error,
-            boolean disconnected,
-            Consumer<OffsetCommitRequest> requestCaptor) {
+        Map<TopicIdPartition, Long> offsets,
+        Errors error,
+        boolean disconnected,
+        Consumer<OffsetCommitRequest> requestCaptor
+    ) {
 
         Map<TopicIdPartition, Errors> errorsByTopicId = offsets.keySet().stream()
             .map(tip -> new SimpleEntry<>(tip, error))
@@ -4330,7 +4331,7 @@ public abstract class ConsumerCoordinatorTest {
             disconnected);
     }
 
-    private void respondToOffsetCommitRequest(final Map<TopicIdPartition, Long> expectedOffsets, Errors error) {
+    private void respondToOffsetCommitRequest(Map<TopicIdPartition, Long> expectedOffsets, Errors error) {
         Map<TopicIdPartition, Errors> errors = expectedOffsets.keySet().stream()
             .map(tp -> new SimpleEntry<>(tp, error))
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -4354,8 +4355,9 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private MockClient.RequestMatcher offsetCommitRequestMatcher(
-            Map<TopicPartition, Long> expectedOffsets,
-            Consumer<OffsetCommitRequest> requestConsumer) {
+        Map<TopicPartition, Long> expectedOffsets,
+        Consumer<OffsetCommitRequest> requestConsumer
+    ) {
         return body -> {
             OffsetCommitRequest req = (OffsetCommitRequest) body;
             Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicResolver);

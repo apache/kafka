@@ -132,7 +132,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
         topicPartitions = responses,
       )
       val response = connectAndReceive[OffsetCommitResponse](
-        new OffsetCommitRequest.Builder(requestData).build(version)
+        new OffsetCommitRequest.Builder(requestData, true).build(version)
       )
       assertEquals(expectedResponse, response.data(), s"OffsetCommit version = $version")
     }

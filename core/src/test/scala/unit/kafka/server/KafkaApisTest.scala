@@ -1288,7 +1288,7 @@ class KafkaApisTest {
               .setPartitionIndex(0)
               .setCommittedOffset(10)).asJava)).asJava)
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build(version))
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, true).build(version))
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1335,7 +1335,7 @@ class KafkaApisTest {
               .setPartitionIndex(0)
               .setCommittedOffset(10)).asJava)).asJava)
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, true).build())
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1380,7 +1380,7 @@ class KafkaApisTest {
       (NameAndId(id = quxId), ListMap(0 -> 10))                    // qux does not exist.
     ))
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, true).build())
 
     // This is the request expected by the group coordinator.
     val expectedOffsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
@@ -1443,7 +1443,7 @@ class KafkaApisTest {
       (if (version < 9) NameAndId("baz") else NameAndId(id = bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build(version))
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, true).build(version))
 
     val expectedOffsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
       (if (version < 9) NameAndId("foo") else NameAndId("foo", fooId), ListMap(0 -> 10, 1 -> 20)),
@@ -1490,21 +1490,22 @@ class KafkaApisTest {
     def checkInvalidPartition(invalidPartitionId: Int): Unit = {
       reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
-      val offsetCommitRequest = new OffsetCommitRequest.Builder(
-        new OffsetCommitRequestData()
-          .setGroupId("groupId")
-          .setTopics(Collections.singletonList(
-            new OffsetCommitRequestData.OffsetCommitRequestTopic()
-              .setName(topic)
-              .setTopicId(topicId)
-              .setPartitions(Collections.singletonList(
-                new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                  .setPartitionIndex(invalidPartitionId)
-                  .setCommittedOffset(15)
-                  .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                  .setCommittedMetadata(""))
-              )
-          ))).build(version)
+      val requestData = new OffsetCommitRequestData()
+        .setGroupId("groupId")
+        .setTopics(Collections.singletonList(
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(topic)
+            .setTopicId(topicId)
+            .setPartitions(Collections.singletonList(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(invalidPartitionId)
+                .setCommittedOffset(15)
+                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                .setCommittedMetadata(""))
+            )
+        ))
+
+      val offsetCommitRequest = new OffsetCommitRequest.Builder(requestData, true).build(version)
 
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
@@ -4042,26 +4043,24 @@ class KafkaApisTest {
   @Test
   def rejectOffsetCommitRequestWhenStaticMembershipNotSupported(): Unit = {
     val topicId = Uuid.randomUuid()
-
-    val offsetCommitRequest = new OffsetCommitRequest.Builder(
-      new OffsetCommitRequestData()
-        .setGroupId("test")
-        .setMemberId("test")
-        .setGroupInstanceId("instanceId")
-        .setGenerationId(100)
-        .setTopics(Collections.singletonList(
-          new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName("test")
-            .setTopicId(topicId)
-            .setPartitions(Collections.singletonList(
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(0)
-                .setCommittedOffset(100)
-                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                .setCommittedMetadata("")
-            ))
-        ))
-    ).build()
+    val data = new OffsetCommitRequestData()
+      .setGroupId("test")
+      .setMemberId("test")
+      .setGroupInstanceId("instanceId")
+      .setGenerationId(100)
+      .setTopics(Collections.singletonList(
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("test")
+          .setTopicId(topicId)
+          .setPartitions(Collections.singletonList(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+              .setCommittedMetadata("")
+          ))
+      ))
+    val offsetCommitRequest = new OffsetCommitRequest.Builder(data, true).build()
 
     val requestChannelRequest = buildRequest(offsetCommitRequest)
 
