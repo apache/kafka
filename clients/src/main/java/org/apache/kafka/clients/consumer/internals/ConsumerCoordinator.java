@@ -1375,7 +1375,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 String topicName = topic.name();
 
-                if (commitResponse.version() >= 9) {
+                if (this.response.requestHeader().apiVersion() >= 9) {
                     topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
 
                     if (topicName == null) {
