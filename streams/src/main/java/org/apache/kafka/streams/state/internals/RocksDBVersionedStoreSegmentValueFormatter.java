@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Helper utility for managing the bytes layout of the value stored in segments of the {@link RocksDBVersionedStore}.
@@ -90,6 +92,8 @@ import java.util.List;
  * from calling the method on degenerate rows as well.
  */
 final class RocksDBVersionedStoreSegmentValueFormatter {
+    private static final Logger LOG = LoggerFactory.getLogger(RocksDBVersionedStoreSegmentValueFormatter.class);
+
     private static final int TIMESTAMP_SIZE = 8;
     private static final int VALUE_SIZE = 4;
 
@@ -341,8 +345,10 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 // detected inconsistency edge case where older segment has [a,b) while newer store
                 // has [a,c), due to [b,c) having failed to write to newer store.
                 // remove entries from this store until the overlap is resolved.
-                // TODO: will be implemented in a follow-up PR
-                throw new UnsupportedOperationException("case not yet implemented");
+                LOG.warn("Detected inconsistency among versioned store segments. "
+                    + "This indicates a previous failure to write to a state store. "
+                    + "Automatically recovering and continuing.");
+                truncateRecordsToTimestamp(validFrom);
             }
 
             if (nextTimestamp == validFrom) {
@@ -493,6 +499,41 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 return false;
             }
             return unpackedReversedTimestampAndValueSizes.get(index).timestamp == minTimestamp;
+        }
+
+        private void truncateRecordsToTimestamp(final long timestamp) {
+            if (timestamp <= minTimestamp) {
+                // delete everything in this current segment by replacing it with a degenerate segment
+                initializeWithRecord(new ValueAndValueSize(null), timestamp, timestamp);
+                return;
+            }
+
+            final SegmentSearchResult searchResult = find(timestamp, false);
+            // all records with later timestamps should be removed
+            int fullRecordsToTruncate = searchResult.index();
+            // additionally remove the current record as well, if its validFrom equals the
+            // timestamp to truncate to
+            if (searchResult.validFrom() == timestamp) {
+                fullRecordsToTruncate++;
+            }
+
+            if (fullRecordsToTruncate == 0) {
+                // no records to remove; update nextTimestamp and return
+                nextTimestamp = timestamp;
+                ByteBuffer.wrap(segmentValue, 0, TIMESTAMP_SIZE).putLong(0, timestamp);
+                return;
+            }
+
+            final int valuesLengthToRemove = cumulativeValueSizes.get(fullRecordsToTruncate - 1);
+            final int timestampAndValueSizesLengthToRemove = (TIMESTAMP_SIZE + VALUE_SIZE) * fullRecordsToTruncate;
+            final int newSegmentLength = segmentValue.length - valuesLengthToRemove - timestampAndValueSizesLengthToRemove;
+            segmentValue = ByteBuffer.allocate(newSegmentLength)
+                .putLong(timestamp) // update nextTimestamp as part of truncation
+                .putLong(minTimestamp)
+                .put(segmentValue, 2 * TIMESTAMP_SIZE + timestampAndValueSizesLengthToRemove, newSegmentLength - 2 * TIMESTAMP_SIZE)
+                .array();
+            nextTimestamp = timestamp;
+            resetDeserHelpers();
         }
 
         private static class TimestampAndValueSize {
