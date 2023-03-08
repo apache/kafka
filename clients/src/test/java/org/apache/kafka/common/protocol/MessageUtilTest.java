@@ -99,15 +99,15 @@ public final class MessageUtilTest {
 
         mapper.writeTree(mapper.createGenerator(writer), new BinaryNode(expected));
 
-        JsonNode binaryNode = mapper.readTree(writer.toString());
+        JsonNode textNode = mapper.readTree(writer.toString());
 
-        assertTrue(binaryNode.isTextual(), binaryNode.toString());
-        byte[] actual = MessageUtil.jsonNodeToBinary(binaryNode, "Test base64 JSON string");
+        assertTrue(textNode.isTextual(), String.format("Expected a JSON string but was: %s", textNode.toString()));
+        byte[] actual = MessageUtil.jsonNodeToBinary(textNode, "Test base64 JSON string");
         assertArrayEquals(expected, actual);
     }
 
     @Test
-    public void testInvalidBineryNode() {
+    public void testInvalidBinaryNode() {
         assertThrows(
             IllegalArgumentException.class,
             () -> MessageUtil.jsonNodeToBinary(new IntNode(42), "Test int to binary")
