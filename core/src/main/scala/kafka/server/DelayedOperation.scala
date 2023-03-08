@@ -20,14 +20,15 @@ package kafka.server
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.{Lock, ReentrantLock}
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.utils.timer._
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection._
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 /**
  * An operation whose processing needs to be delayed for at most the given delayMs. For example
@@ -153,7 +154,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
                                                              purgeInterval: Int = 1000,
                                                              reaperEnabled: Boolean = true,
                                                              timerEnabled: Boolean = true)
-        extends Logging with KafkaMetricsGroup {
+        extends Logging {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
   /* a list of operation watching keys */
   private class WatcherList {
     val watchersByKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
@@ -180,9 +183,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   /* background thread expiring operations that have timed out */
   private val expirationReaper = new ExpiredOperationReaper()
 
-  private val metricsTags = Map("delayedOperation" -> purgatoryName)
-  newGauge("PurgatorySize", () => watched, metricsTags)
-  newGauge("NumDelayedOperations", () => numDelayed, metricsTags)
+  private val metricsTags = Map("delayedOperation" -> purgatoryName).asJava
+  metricsGroup.newGauge("PurgatorySize", () => watched, metricsTags)
+  metricsGroup.newGauge("NumDelayedOperations", () => numDelayed, metricsTags)
 
   if (reaperEnabled)
     expirationReaper.start()
@@ -338,8 +341,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       expirationReaper.awaitShutdown()
     }
     timeoutTimer.shutdown()
-    removeMetric("PurgatorySize", metricsTags)
-    removeMetric("NumDelayedOperations", metricsTags)
+    metricsGroup.removeMetric("PurgatorySize", metricsTags)
+    metricsGroup.removeMetric("NumDelayedOperations", metricsTags)
   }
 
   /**
