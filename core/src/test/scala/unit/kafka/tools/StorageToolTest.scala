@@ -163,12 +163,13 @@ Found problem:
       val metaProperties = MetaProperties(
         clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
       val stream = new ByteArrayOutputStream()
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latest(), None, "test foramt command")
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), None, ignoreFormatted = false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false))
       assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), None, ignoreFormatted = false)) catch {
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false)) catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -176,7 +177,7 @@ Found problem:
 
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), None, ignoreFormatted = true))
+        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = true))
       assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
   }

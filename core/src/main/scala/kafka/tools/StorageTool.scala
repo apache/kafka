@@ -70,13 +70,14 @@ object StorageTool extends Logging {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
             }
           }
+          val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, Some(metadataRecords), "format command")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
               "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
           }
-          Exit.exit(formatCommand(System.out, directories, metaProperties, metadataVersion,
-                                  Some(metadataRecords), ignoreFormatted))
+          Exit.exit(formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
+                                  metadataVersion,ignoreFormatted))
 
         case "random-uuid" =>
           System.out.println(Uuid.randomUuid)
@@ -337,6 +338,24 @@ object StorageTool extends Logging {
     }
   }
 
+  def buildBootstrapMetadata(metadataVersion: MetadataVersion,
+                             metadataOptionalArguments: Option[ArrayBuffer[ApiMessageAndVersion]],
+                             source: String): BootstrapMetadata = {
+
+    val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
+    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
+
+    metadataOptionalArguments.foreach { metadataArguments =>
+      for (record <- metadataArguments) metadataRecords.add(record)
+    }
+
+    metadataRecords.add(new ApiMessageAndVersion(new NoOpRecord(), 0.toShort));
+    new BootstrapMetadata(metadataRecords, metadataVersion, source)
+  }
+
+
   def buildMetadataProperties(
     clusterIdStr: String,
     config: KafkaConfig
@@ -357,22 +376,21 @@ object StorageTool extends Logging {
                     directories: Seq[String],
                     metaProperties: MetaProperties,
                     metadataVersion: MetadataVersion,
-                    metadataOptionalArguments: Option[ArrayBuffer[ApiMessageAndVersion]],
+                    ignoreFormatted: Boolean): Int = {
+    val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
+    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted)
+  }
+
+
+  def formatCommand(stream: PrintStream,
+                    directories: Seq[String],
+                    metaProperties: MetaProperties,
+                    bootstrapMetadata: BootstrapMetadata,
+                    metadataVersion: MetadataVersion,
                     ignoreFormatted: Boolean): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
     }:1
-
-    val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
-    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
-
-    metadataOptionalArguments.foreach { metadataArguments =>
-      for (record <- metadataArguments) metadataRecords.add(record)
-    }
-
-    metadataRecords.add(new ApiMessageAndVersion(new NoOpRecord(), 0.toShort));
 
     val unformattedDirectories = directories.filter(directory => {
       if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
@@ -398,7 +416,6 @@ object StorageTool extends Logging {
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
       checkpoint.write(metaProperties.toProperties)
 
-      val bootstrapMetadata = new BootstrapMetadata(metadataRecords, metadataVersion, "format command")
       val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
       bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
 

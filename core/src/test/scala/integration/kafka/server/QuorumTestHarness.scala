@@ -283,8 +283,10 @@ abstract class QuorumTestHarness extends Logging {
     var out: PrintStream = null
     try {
       out = new PrintStream(stream)
-      if (StorageTool.formatCommand(out, directories, metaProperties, metadataVersion,
-                                    optionalMetadataRecords, ignoreFormatted = false) != 0) {
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion,
+                                                                 optionalMetadataRecords, "format command")
+      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion,
+                                    ignoreFormatted = false) != 0) {
         throw new RuntimeException(stream.toString())
       }
       debug(s"Formatted storage directory(ies) ${directories}")
