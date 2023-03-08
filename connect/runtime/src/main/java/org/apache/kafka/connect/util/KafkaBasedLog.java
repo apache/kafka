@@ -561,6 +561,9 @@ public class KafkaBasedLog<K, V> {
                 }
             } catch (Throwable t) {
                 log.error("Unexpected exception in {}", this, t);
+                // resume the thread in case of any unexpected exception encountered
+                thread = new WorkThread();
+                thread.start();
             }
         }
     }
