@@ -566,6 +566,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
       .setTopics(authorizedTopicsRequest.asJava)
 
+    def resolveTopicIds(results: OffsetCommitResponseData): Boolean = {
+      if (request.header.apiVersion() < 9)
+        true
+      else
+        !results.topics().asScala.exists { topic =>
+          val topicId = topicIdAndNames.getTopicIdOrZero(topic.name())
+          if (Uuid.ZERO_UUID.equals(topicId)) {
+            logger.warn("Unresolvable topic id for topic {} after committing offsets.", topic.name())
+            true
+          } else {
+            topic.setTopicId(topicId)
+            false
+          }
+        }
+    }
+
     groupCoordinator.commitOffsets(
       request.context,
       offsetCommitRequestData,
@@ -573,23 +589,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     ).handle[Unit] { (results, exception) =>
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
+      } else if (!resolveTopicIds(results)) {
+        requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception()))
       } else {
-        if (request.header.apiVersion() >= 9) {
-          results.topics().forEach { topic =>
-            val topicId = topicIdAndNames.getTopicIdOrZero(topic.name())
-            if (Uuid.ZERO_UUID.equals(topicId)) {
-              // This should not happen because topic names returned by the group coordinator should
-              // always be resolvable.
-              logger.warn("Unresolvable topic id for topic {} while preparing " +
-                "the OffsetCommitResponse", topic.name());
-              requestHelper.sendMaybeThrottle(
-                request,
-                offsetCommitRequest.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception()))
-              return null
-            }
-            topic.setTopicId(topicId)
-          }
-        }
         requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
       }
     }

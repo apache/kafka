@@ -1411,10 +1411,10 @@ class KafkaApisTest {
     )
 
     // This is the response returned by the group coordinator.
-    val offsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameAndId("foo", fooId), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameAndId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameAndId("baz", bazId), ListMap(0 -> NONE, 1 -> NONE))
+    val coordinatorResponse = newOffsetCommitResponseData(Seq(
+      (NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("baz"), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
     val expectedOffsetCommitResponse = newOffsetCommitResponseData(Seq(
@@ -1432,7 +1432,7 @@ class KafkaApisTest {
       (NameAndId(id = bazId), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
-    future.complete(offsetCommitResponse)
+    future.complete(coordinatorResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
     assertEquals(expectedOffsetCommitResponse, response.data)
   }
@@ -1484,6 +1484,51 @@ class KafkaApisTest {
         (NameAndId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
         (NameAndId("baz", bazId), ListMap(0 -> NONE, 1 -> NONE)))
     )
+
+    future.complete(groupCoordinatorResponse)
+    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
+    assertEquals(expectedOffsetCommitResponse, response.data)
+  }
+
+  @Test
+  def testInvalidTopicNameReturnedByTheCoordinator(): Unit = {
+    val fooId = Uuid.randomUuid()
+    addTopicToMetadataCache("foo", numPartitions = 2, topicId = fooId)
+
+    val request = newOffsetCommitRequestData(
+      "group",
+      "member",
+      Seq((NameAndId(id = fooId), ListMap(0 -> 10, 1 -> 20)))
+    )
+
+    val expectedRequest = newOffsetCommitRequestData(
+      "group",
+      "member",
+      Seq((NameAndId("foo", fooId), ListMap(0 -> 10, 1 -> 20)))
+    )
+
+    val version = ApiKeys.OFFSET_COMMIT.latestVersion()
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(request, true).build(version))
+
+    val future = new CompletableFuture[OffsetCommitResponseData]()
+    when(groupCoordinator.commitOffsets(
+      requestChannelRequest.context,
+      expectedRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    val groupCoordinatorResponse = newOffsetCommitResponseData(
+      Seq((NameAndId("invalidName"), ListMap(0 -> NONE, 1 -> NONE))
+    ))
+
+    val expectedOffsetCommitResponse = newOffsetCommitResponseData(
+      version, Seq((NameAndId(id = fooId), ListMap(0 -> UNKNOWN_SERVER_ERROR, 1 -> UNKNOWN_SERVER_ERROR))
+    ))
 
     future.complete(groupCoordinatorResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)

@@ -24,8 +24,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Encapsulates the resolution of a topic name from its ID, or its ID from its name, using a local
- * bidirectional mapping. This resolver assumes there is a bijection between topic IDs and topic names.
+ * Encapsulates the mapping between topic names and ids assuming a 1:1 relationship between
+ * a name and an id.
  * <p></p>
  * Note that this class intends to be used for the (reverse) lookup of topic IDs/names, but
  * not to characterize the set of topics which are known by a client. Use the
@@ -36,7 +36,7 @@ public class TopicIdAndNameBiMapping {
     private final Map<Uuid, String> topicNames;
 
     /**
-     * A resolver which universe of topic ids and names is captured from the input map. The reverse association
+     * A mapping which universe of topic ids and names is captured from the input map. The reverse association
      * between a topic ID and a topic name is computed by this method. If there are more than one topic name
      * resolving to the same topic ID, an {@link InvalidTopicException} is thrown.
      */
@@ -55,7 +55,7 @@ public class TopicIdAndNameBiMapping {
     }
 
     /**
-     * A resolver which acts as a wrapper around the input mapping of topic ids from/to topic names.
+     * A mapping which acts as a wrapper around the input mapping of topic ids from/to topic names.
      * No validation is performed about the consistency of the mapping. This method is to be preferred
      * when the copy of the input maps needs to be avoided.
      */
@@ -64,9 +64,9 @@ public class TopicIdAndNameBiMapping {
     }
 
     /**
-     * A resolver with no existing mapping between any topic name and id.
+     * Used when no mapping between topic name and id exists.
      */
-    public static TopicIdAndNameBiMapping emptyResolver() {
+    public static TopicIdAndNameBiMapping emptyMapping() {
         return fromTopicIds(Collections.emptyMap());
     }
 
