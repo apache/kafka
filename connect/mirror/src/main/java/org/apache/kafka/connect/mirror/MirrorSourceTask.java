@@ -305,7 +305,6 @@ public class MirrorSourceTask extends SourceTask {
     static class PartitionState {
         long previousUpstreamOffset = -1L;
         long previousDownstreamOffset = -1L;
-        long lastSyncUpstreamOffset = -1L;
         long lastSyncDownstreamOffset = -1L;
         long maxOffsetLag;
         boolean shouldSyncOffsets;
@@ -316,13 +315,14 @@ public class MirrorSourceTask extends SourceTask {
 
         // true if we should emit an offset sync
         boolean update(long upstreamOffset, long downstreamOffset) {
-            long upstreamStep = upstreamOffset - lastSyncUpstreamOffset;
-            long downstreamTargetOffset = lastSyncDownstreamOffset + upstreamStep;
+            // This value is what OffsetSyncStore::translateOffsets would compute for this offset given the last sync.
+            // Because this method is called at most once for each upstream offset, simplify upstreamStep to 1.
+            // TODO: share common implementation to enforce this relationship
+            long downstreamTargetOffset = lastSyncDownstreamOffset + 1;
             if (lastSyncDownstreamOffset == -1L
                     || downstreamOffset - downstreamTargetOffset >= maxOffsetLag
                     || upstreamOffset - previousUpstreamOffset != 1L
                     || downstreamOffset < previousDownstreamOffset) {
-                lastSyncUpstreamOffset = upstreamOffset;
                 lastSyncDownstreamOffset = downstreamOffset;
                 shouldSyncOffsets = true;
             }
