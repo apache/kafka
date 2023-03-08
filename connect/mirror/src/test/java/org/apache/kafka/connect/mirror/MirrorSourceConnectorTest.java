@@ -175,7 +175,7 @@ public class MirrorSourceConnectorTest {
         when(describeAclsResult.values()).thenReturn(describeAclsFuture);
         when(sourceAdmin.describeAcls(any())).thenReturn(describeAclsResult);
 
-        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class);) {
+        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
             LogCaptureAppender.setClassLoggerToTrace(MirrorSourceConnector.class);
             connector.syncTopicAcls();
             long aclSyncDisableMessages = connectorLogs.getMessages().stream()
