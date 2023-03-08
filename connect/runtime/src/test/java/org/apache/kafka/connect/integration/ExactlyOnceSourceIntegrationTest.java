@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -138,7 +139,7 @@ public class ExactlyOnceSourceIntegrationTest {
         brokerProps.put("transaction.state.log.replication.factor", "1");
         brokerProps.put("transaction.state.log.min.isr", "1");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by Kafka
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .numWorkers(DEFAULT_NUM_WORKERS)
                 .numBrokers(1)
@@ -157,7 +158,7 @@ public class ExactlyOnceSourceIntegrationTest {
     @After
     public void close() {
         try {
-            // stop all Connect, Kafka and Zk threads.
+            // stop the Connect cluster and its backing Kafka cluster.
             connect.stop();
         } finally {
             // Clear the handle for the connector. Fun fact: if you don't do this, your tests become quite flaky.
@@ -624,12 +625,21 @@ public class ExactlyOnceSourceIntegrationTest {
      */
     @Test
     public void testTasksFailOnInabilityToFence() throws Exception {
-        brokerProps.put("authorizer.class.name", "kafka.security.authorizer.AclAuthorizer");
-        brokerProps.put("sasl.enabled.mechanisms", "PLAIN");
-        brokerProps.put("sasl.mechanism.inter.broker.protocol", "PLAIN");
-        brokerProps.put("security.inter.broker.protocol", "SASL_PLAINTEXT");
-        brokerProps.put("listeners", "SASL_PLAINTEXT://localhost:0");
-        brokerProps.put("listener.name.sasl_plaintext.plain.sasl.jaas.config",
+        brokerProps.put(KafkaConfig.AuthorizerClassNameProp(), "org.apache.kafka.metadata.authorizer.StandardAuthorizer");
+        brokerProps.put(KafkaConfig.SaslEnabledMechanismsProp(), "PLAIN");
+        brokerProps.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp(), "PLAIN");
+        brokerProps.put(KafkaConfig.SaslMechanismControllerProtocolProp(), "PLAIN");
+        brokerProps.put(KafkaConfig.ListenersProp(), "EXTERNAL://localhost:0,CONTROLLER://localhost:0");
+        brokerProps.put(KafkaConfig.InterBrokerListenerNameProp(), "EXTERNAL");
+        brokerProps.put(KafkaConfig.ControllerListenerNamesProp(), "CONTROLLER");
+        brokerProps.put(KafkaConfig.ListenerSecurityProtocolMapProp(), "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
+        brokerProps.put("listener.name.external.plain.sasl.jaas.config",
+                "org.apache.kafka.common.security.plain.PlainLoginModule required "
+                        + "username=\"super\" "
+                        + "password=\"super_pwd\" "
+                        + "user_connector=\"connector_pwd\" "
+                        + "user_super=\"super_pwd\";");
+        brokerProps.put("listener.name.controller.plain.sasl.jaas.config",
                 "org.apache.kafka.common.security.plain.PlainLoginModule required "
                         + "username=\"super\" "
                         + "password=\"super_pwd\" "

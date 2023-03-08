@@ -66,7 +66,7 @@ public class RestExtensionIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
             .numWorkers(NUM_WORKERS)
@@ -137,7 +137,7 @@ public class RestExtensionIntegrationTest {
 
     @After
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
         IntegrationTestRestExtension.instance = null;
     }

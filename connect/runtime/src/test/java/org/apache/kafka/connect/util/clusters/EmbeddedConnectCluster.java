@@ -67,9 +67,11 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STA
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_CONFIG;
 
 /**
- * Start an embedded connect worker. Internally, this class will spin up a Kafka and Zk cluster, setup any tmp
- * directories and clean up them on them. Methods on the same {@code EmbeddedConnectCluster} are
- * not guaranteed to be thread-safe.
+ * Start an embedded Connect cluster that can be used for integration tests. Internally, this class also spins up a
+ * backing Kafka KRaft cluster for the Connect cluster leveraging {@link kafka.testkit.KafkaClusterTestKit}. Methods
+ * on the same {@code EmbeddedConnectCluster} are not guaranteed to be thread-safe. This class also provides various
+ * utility methods to perform actions on the Connect cluster such as connector creation, config validation, connector
+ * restarts, pause / resume, connector deletion etc.
  */
 public class EmbeddedConnectCluster {
 
@@ -137,7 +139,7 @@ public class EmbeddedConnectCluster {
     };
 
     /**
-     * Start the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Start the Connect cluster and the embedded Kafka KRaft cluster.
      */
     public void start() {
         if (maskExitProcedures) {
@@ -154,7 +156,7 @@ public class EmbeddedConnectCluster {
     }
 
     /**
-     * Stop the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Stop the Connect cluster and the embedded Kafka KRaft cluster.
      * Clean up any temp directories created locally.
      *
      * @throws RuntimeException if Kafka brokers fail to stop
@@ -164,11 +166,6 @@ public class EmbeddedConnectCluster {
         connectCluster.forEach(this::stopWorker);
         try {
             kafkaCluster.stop();
-        } catch (UngracefulShutdownException e) {
-            log.warn("Kafka did not shutdown gracefully");
-        } catch (Exception e) {
-            log.error("Could not stop kafka", e);
-            throw new RuntimeException("Could not stop brokers", e);
         } finally {
             if (maskExitProcedures) {
                 Exit.resetExitProcedure();

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import kafka.server.KafkaConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
@@ -30,6 +31,7 @@ import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.ServerSocket;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -89,7 +91,7 @@ public class ConnectWorkerIntegrationTest {
         brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -100,7 +102,7 @@ public class ConnectWorkerIntegrationTest {
 
     @After
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
@@ -196,7 +198,22 @@ public class ConnectWorkerIntegrationTest {
     public void testBrokerCoordinator() throws Exception {
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         workerProps.put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(5000));
-        connect = connectBuilder.workerProps(workerProps).build();
+        Properties brokerProps = new Properties();
+
+        // Find a free port and use it in the Kafka broker's listeners config. We can't use port 0 in the listeners
+        // config to get a random free port because in this test we want to stop the Kafka broker and then bring it
+        // back up and listening on the same port in order to verify that the Connect cluster can re-connect to Kafka
+        // and continue functioning normally. If we were to use port 0 here, the Kafka broker would most likely listen
+        // on a different random free port the second time it is started.
+        int listenerPort;
+        try (ServerSocket s = new ServerSocket(0)) {
+            listenerPort = s.getLocalPort();
+        }
+        brokerProps.put("listeners", String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));
+        brokerProps.put(KafkaConfig.InterBrokerListenerNameProp(), "EXTERNAL");
+        brokerProps.put(KafkaConfig.ControllerListenerNamesProp(), "CONTROLLER");
+        brokerProps.put(KafkaConfig.ListenerSecurityProtocolMapProp(), "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT");
+        connect = connectBuilder.workerProps(workerProps).brokerProps(brokerProps).build();
         // start the clusters
         connect.start();
         int numTasks = 4;
@@ -218,7 +235,7 @@ public class ConnectWorkerIntegrationTest {
         // expect that the connector will be stopped once the coordinator is detected to be down
         StartAndStopLatch stopLatch = connectorHandle.expectedStops(1, false);
 
-        connect.kafka().stopOnlyKafka();
+        connect.kafka().stopOnlyBrokers();
 
         connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
                 "Group of workers did not remain the same after broker shutdown");
@@ -233,7 +250,7 @@ public class ConnectWorkerIntegrationTest {
                 stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(1, false);
-        connect.kafka().startOnlyKafkaOnSamePorts();
+        connect.kafka().restartOnlyBrokers();
 
         // Allow for the kafka brokers to come back online
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));

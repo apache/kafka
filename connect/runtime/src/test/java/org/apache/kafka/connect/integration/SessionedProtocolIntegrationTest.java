@@ -65,7 +65,7 @@ public class SessionedProtocolIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, ConnectProtocolCompatibility.SESSIONED.protocol());
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
             .numWorkers(2)
@@ -82,7 +82,7 @@ public class SessionedProtocolIntegrationTest {
 
     @After
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 

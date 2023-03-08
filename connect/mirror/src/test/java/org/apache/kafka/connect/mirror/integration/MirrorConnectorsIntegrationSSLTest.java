@@ -41,8 +41,10 @@ public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrat
     public void startClusters() throws Exception {
         Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
         // enable SSL on backup kafka broker
-        backupBrokerProps.put(KafkaConfig.ListenersProp(), "SSL://localhost:0");
+        backupBrokerProps.put(KafkaConfig.ListenersProp(), "SSL://localhost:0,CONTROLLER://localhost:0");
         backupBrokerProps.put(KafkaConfig.InterBrokerListenerNameProp(), "SSL");
+        backupBrokerProps.put(KafkaConfig.ControllerListenerNamesProp(), "CONTROLLER");
+        backupBrokerProps.put(KafkaConfig.ListenerSecurityProtocolMapProp(), "SSL:SSL,CONTROLLER:SSL");
         backupBrokerProps.putAll(sslConfig);
         
         Properties sslProps = new Properties();

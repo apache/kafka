@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import kafka.cluster.EndPoint;
+import kafka.server.BrokerServer;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaServer;
-import kafka.utils.CoreUtils;
-import kafka.utils.TestUtils;
-import kafka.zk.EmbeddedZookeeper;
+import kafka.testkit.KafkaClusterTestKit;
+import kafka.testkit.TestKitNodes;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -48,18 +46,13 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.metadata.BrokerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,96 +84,62 @@ import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CL
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 /**
- * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
- * integration tests.
+ * Setup an embedded Kafka KRaft cluster (using {@link kafka.testkit.KafkaClusterTestKit} internally) with the
+ * specified number of brokers and the specified broker properties. This can be used for integration tests and is
+ * typically used in conjunction with {@link EmbeddedConnectCluster}. Additional Kafka client properties can also be
+ * supplied if required. This class also provides various utility methods to easily create Kafka topics, produce data,
+ * consume data etc.
  */
 public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
 
-    private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.SECONDS.toMillis(120); 
+    private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.SECONDS.toMillis(120);
 
-    // Kafka Config
-    private final KafkaServer[] brokers;
+    private final KafkaClusterTestKit cluster;
     private final Properties brokerConfig;
-    private final Time time = new MockTime();
-    private final int[] currentBrokerPorts;
-    private final String[] currentBrokerLogDirs;
-    private final boolean hasListenerConfig;
-
-    final Map<String, String> clientConfigs;
-
-    private EmbeddedZookeeper zookeeper = null;
-    private ListenerName listenerName = new ListenerName("PLAINTEXT");
+    private final Map<String, String> clientConfigs;
     private KafkaProducer<byte[], byte[]> producer;
 
-    public EmbeddedKafkaCluster(final int numBrokers,
-                                final Properties brokerConfig) {
+    public EmbeddedKafkaCluster(final int numBrokers, final Properties brokerConfig) {
         this(numBrokers, brokerConfig, Collections.emptyMap());
     }
 
     public EmbeddedKafkaCluster(final int numBrokers,
-                                final Properties brokerConfig,
-                                final Map<String, String> clientConfigs) {
-        brokers = new KafkaServer[numBrokers];
-        currentBrokerPorts = new int[numBrokers];
-        currentBrokerLogDirs = new String[numBrokers];
-        this.brokerConfig = brokerConfig;
-        // Since we support `stop` followed by `startOnlyKafkaOnSamePorts`, we track whether
-        // a listener config is defined during initialization in order to know if it's
-        // safe to override it
-        hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
+                                   final Properties brokerConfig,
+                                   final Map<String, String> clientConfigs) {
+        addDefaultBrokerPropsIfAbsent(brokerConfig, numBrokers);
+        try {
+            KafkaClusterTestKit.Builder clusterBuilder = new KafkaClusterTestKit.Builder(
+                    new TestKitNodes.Builder()
+                            .setCoResident(true)
+                            .setNumBrokerNodes(numBrokers)
+                            .setNumControllerNodes(numBrokers)
+                            .build()
+            );
 
+            brokerConfig.forEach((k, v) -> clusterBuilder.setConfigProp((String) k, v));
+            cluster = clusterBuilder.build();
+            cluster.nonFatalFaultHandler().setIgnore(true);
+        } catch (Exception e) {
+            throw new ConnectException("Failed to create test Kafka cluster", e);
+        }
+        this.brokerConfig = brokerConfig;
         this.clientConfigs = clientConfigs;
     }
 
-    /**
-     * Starts the Kafka cluster alone using the ports that were assigned during initialization of
-     * the harness.
-     *
-     * @throws ConnectException if a directory to store the data cannot be created
-     */
-    public void startOnlyKafkaOnSamePorts() {
-        doStart();
-    }
-
     public void start() {
-        // pick a random port
-        zookeeper = new EmbeddedZookeeper();
-        Arrays.fill(currentBrokerPorts, 0);
-        Arrays.fill(currentBrokerLogDirs, null);
-        doStart();
-    }
-
-    private void doStart() {
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
-
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
-        // reduce the size of the log cleaner map to reduce test memory usage
-        putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
-
-        Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
-        if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
-        if (listenerConfig == null)
-            listenerConfig = "PLAINTEXT";
-        listenerName = new ListenerName(listenerConfig.toString());
-
-        for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
-            currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
-            brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
-            if (!hasListenerConfig)
-                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
-            brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
-            currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
+        try {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+        } catch (Exception e) {
+            throw new ConnectException("Failed to start test Kafka cluster", e);
         }
 
         Map<String, Object> producerProps = new HashMap<>(clientConfigs);
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+
         if (sslEnabled()) {
             producerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             producerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
@@ -189,112 +148,66 @@ public class EmbeddedKafkaCluster {
         producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
-    public void stopOnlyKafka() {
-        stop(false, false);
+    /**
+     * Restarts the Kafka brokers. This can be called after {@link #stopOnlyBrokers()}. Note that if the Kafka brokers
+     * need to be listening on the same ports as earlier, the {@link #brokerConfig} should contain the
+     * {@link KafkaConfig#ListenersProp} property and it should use a fixed non-zero free port.
+     */
+    public void restartOnlyBrokers() {
+        for (BrokerServer broker : cluster.brokers().values()) {
+            broker.startup();
+        }
+    }
+
+    /**
+     * Stop only the Kafka brokers (and not the KRaft controllers). This can be used to test Connect's functionality
+     * when the backing Kafka cluster goes offline.
+     */
+    public void stopOnlyBrokers() {
+        for (BrokerServer broker : cluster.brokers().values()) {
+            broker.shutdown();
+            broker.awaitShutdown();
+        }
     }
 
     public void stop() {
-        stop(true, true);
-    }
-
-    private void stop(boolean deleteLogDirs, boolean stopZK) {
+        if (producer != null) {
+            producer.close();
+        }
         try {
-            if (producer != null) {
-                producer.close();
-            }
+            cluster.close();
         } catch (Exception e) {
-            log.error("Could not shutdown producer ", e);
-            throw new RuntimeException("Could not shutdown producer", e);
-        }
-
-        for (KafkaServer broker : brokers) {
-            try {
-                broker.shutdown();
-            } catch (Throwable t) {
-                String msg = String.format("Could not shutdown broker at %s", address(broker));
-                log.error(msg, t);
-                throw new RuntimeException(msg, t);
-            }
-        }
-
-        if (deleteLogDirs) {
-            for (KafkaServer broker : brokers) {
-                try {
-                    log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
-                    CoreUtils.delete(broker.config().logDirs());
-                } catch (Throwable t) {
-                    String msg = String.format("Could not clean up log dirs for broker at %s",
-                            address(broker));
-                    log.error(msg, t);
-                    throw new RuntimeException(msg, t);
-                }
-            }
-        }
-
-        try {
-            if (stopZK) {
-                zookeeper.shutdown();
-            }
-        } catch (Throwable t) {
-            String msg = String.format("Could not shutdown zookeeper at %s", zKConnectString());
-            log.error(msg, t);
-            throw new RuntimeException(msg, t);
-        }
-    }
-
-    private static void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
-        if (!props.containsKey(propertyKey)) {
-            props.put(propertyKey, propertyValue);
-        }
-    }
-
-    private String createLogDir() {
-        try {
-            return Files.createTempDirectory(getClass().getSimpleName()).toString();
-        } catch (IOException e) {
-            log.error("Unable to create temporary log directory", e);
-            throw new ConnectException("Unable to create temporary log directory", e);
+            throw new ConnectException("Failed to shutdown test Kafka cluster", e);
         }
     }
 
     public String bootstrapServers() {
-        return Arrays.stream(brokers)
-                .map(this::address)
-                .collect(Collectors.joining(","));
-    }
-
-    public String address(KafkaServer server) {
-        final EndPoint endPoint = server.advertisedListeners().head();
-        return endPoint.host() + ":" + endPoint.port();
-    }
-
-    public String zKConnectString() {
-        return "127.0.0.1:" + zookeeper.port();
+        return cluster.bootstrapServers();
     }
 
     /**
      * Get the brokers that have a {@link BrokerState#RUNNING} state.
      *
-     * @return the list of {@link KafkaServer} instances that are running;
-     *         never null but  possibly empty
+     * @return the list of {@link BrokerServer} instances that are running;
+     *         never null but possibly empty
      */
-    public Set<KafkaServer> runningBrokers() {
+    public Set<BrokerServer> runningBrokers() {
         return brokersInState(state -> state == BrokerState.RUNNING);
     }
 
     /**
      * Get the brokers whose state match the given predicate.
      *
-     * @return the list of {@link KafkaServer} instances with states that match the predicate;
-     *         never null but  possibly empty
+     * @return the list of {@link BrokerServer} instances with states that match the predicate;
+     *         never null but possibly empty
      */
-    public Set<KafkaServer> brokersInState(Predicate<BrokerState> desiredState) {
-        return Arrays.stream(brokers)
-                     .filter(b -> hasState(b, desiredState))
-                     .collect(Collectors.toSet());
+    public Set<BrokerServer> brokersInState(Predicate<BrokerState> desiredState) {
+        return cluster.brokers().values().stream()
+                .filter(b -> hasState(b, desiredState))
+                .collect(Collectors.toSet());
     }
 
-    protected boolean hasState(KafkaServer server, Predicate<BrokerState> desiredState) {
+    protected boolean hasState(BrokerServer server, Predicate<BrokerState> desiredState) {
         try {
             return desiredState.test(server.brokerState());
         } catch (Throwable e) {
@@ -302,7 +215,6 @@ public class EmbeddedKafkaCluster {
             return false;
         }
     }
-    
     public boolean sslEnabled() {
         final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
         return listeners != null && listeners.contains("SSL");
@@ -411,9 +323,9 @@ public class EmbeddedKafkaCluster {
      * @param adminClientConfig Additional admin client configuration settings.
      */
     public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig, Map<String, Object> adminClientConfig) {
-        if (replication > brokers.length) {
+        if (replication > cluster.brokers().size()) {
             throw new InvalidReplicationFactorException("Insufficient brokers ("
-                    + brokers.length + ") for desired replication (" + replication + ")");
+                    + cluster.brokers().size() + ") for desired replication (" + replication + ")");
         }
 
         log.info("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
@@ -462,8 +374,7 @@ public class EmbeddedKafkaCluster {
         Properties props = Utils.mkProperties(clientConfigs);
         props.putAll(adminClientConfig);
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
-        if (listeners != null && listeners.toString().contains("SSL")) {
+        if (sslEnabled()) {
             props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
             props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
@@ -679,6 +590,19 @@ public class EmbeddedKafkaCluster {
             throw new ConnectException("Failed to create producer", t);
         }
         return producer;
+    }
+
+    private void addDefaultBrokerPropsIfAbsent(Properties brokerConfig, int numBrokers) {
+        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), "true");
+        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), "0");
+        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), String.valueOf(numBrokers));
+        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), "false");
+    }
+
+    private static void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
+        if (!props.containsKey(propertyKey)) {
+            props.put(propertyKey, propertyValue);
+        }
     }
 
     private static void putIfAbsent(final Map<String, Object> props, final String propertyKey, final Object propertyValue) {

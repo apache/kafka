@@ -21,11 +21,11 @@ import kafka.raft.KafkaRaftManager;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
-import kafka.server.SharedServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
+import kafka.server.SharedServer;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -139,14 +139,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public static class Builder {
         private TestKitNodes nodes;
-        private Map<String, String> configProps = new HashMap<>();
-        private SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
+        private final Map<String, Object> configProps = new HashMap<>();
+        private final SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
         }
 
-        public Builder setConfigProp(String key, String value) {
+        public Builder setConfigProp(String key, Object value) {
             this.configProps.put(key, value);
             return this;
         }
@@ -155,7 +155,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             BrokerNode brokerNode = nodes.brokerNodes().get(node.id());
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
-            Map<String, String> props = new HashMap<>(configProps);
+            Map<String, Object> props = new HashMap<>(configProps);
             props.put(KafkaConfig$.MODULE$.ServerMaxStartupTimeMsProp(),
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
             props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
@@ -174,13 +174,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.put(KafkaConfig$.MODULE$.LogDirsProp(),
                         String.join(",", brokerNode.logDataDirectories()));
             }
-            props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
-                    "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-            props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
-            props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
-                    nodes.interBrokerListenerName().value());
-            props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
-                    "CONTROLLER");
+
+            // listeners could be defined via Builder::setConfigProp which shouldn't be overridden
+            if (!props.containsKey(KafkaConfig$.MODULE$.ListenersProp())) {
+                props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
+                        "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
+                props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
+                props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
+                        nodes.interBrokerListenerName().value());
+                props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
+                        "CONTROLLER");
+            }
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string
             // for now as a placeholder.
@@ -237,7 +241,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 bootstrapMetadata);
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
                         if (controller != null) controller.shutdown();
                         throw e;
                     }
@@ -266,7 +270,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq());
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", sharedServer::stopForBroker);
                         if (broker != null) broker.shutdown();
                         throw e;
                     }
@@ -470,24 +474,28 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Properties clientProperties(Properties configOverrides) {
         if (!brokers.isEmpty()) {
-            StringBuilder bld = new StringBuilder();
-            String prefix = "";
-            for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
-                int brokerId = entry.getKey();
-                BrokerServer broker = entry.getValue();
-                ListenerName listenerName = nodes.externalListenerName();
-                int port = broker.boundPort(listenerName);
-                if (port <= 0) {
-                    throw new RuntimeException("Broker " + brokerId + " does not yet " +
-                        "have a bound port for " + listenerName + ".  Did you start " +
-                        "the cluster yet?");
-                }
-                bld.append(prefix).append("localhost:").append(port);
-                prefix = ",";
-            }
-            configOverrides.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
+            configOverrides.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         }
         return configOverrides;
+    }
+
+    public String bootstrapServers() {
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
+            int brokerId = entry.getKey();
+            BrokerServer broker = entry.getValue();
+            ListenerName listenerName = broker.config().effectiveAdvertisedListeners().head().listenerName();
+            int port = broker.boundPort(listenerName);
+            if (port <= 0) {
+                throw new RuntimeException("Broker " + brokerId + " does not yet " +
+                        "have a bound port for " + listenerName + ".  Did you start " +
+                        "the cluster yet?");
+            }
+            bld.append(prefix).append("localhost:").append(port);
+            prefix = ",";
+        }
+        return bld.toString();
     }
 
     public Map<Integer, ControllerServer> controllers() {

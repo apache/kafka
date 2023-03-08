@@ -110,7 +110,7 @@ public class ConnectorClientPolicyIntegrationTest {
         Properties exampleBrokerProps = new Properties();
         exampleBrokerProps.put("auto.create.topics.enable", "false");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         EmbeddedConnectCluster connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
             .numWorkers(NUM_WORKERS)
