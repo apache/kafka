@@ -234,10 +234,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         LoaderManifest manifest
     ) {
         enqueueMetadataChangeEvent(delta,
-                newImage,
-                manifest.provenance(),
-                manifest.type() == LoaderManifestType.SNAPSHOT,
-                NO_OP_HANDLER);
+            newImage,
+            manifest.provenance(),
+            manifest.type() == LoaderManifestType.SNAPSHOT,
+            NO_OP_HANDLER);
     }
 
     /**

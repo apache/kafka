@@ -213,8 +213,6 @@ public class SnapshotGenerator implements MetadataPublisher {
             case SNAPSHOT:
                 publishSnapshot(delta, newImage, (SnapshotManifest) manifest);
                 break;
-            default:
-                break;
         }
     }
 

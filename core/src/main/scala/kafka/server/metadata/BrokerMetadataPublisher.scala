@@ -217,7 +217,7 @@ class BrokerMetadataPublisher(
       // Apply client quotas delta.
       dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage)
 
-      // APply SCRAM delta.
+      // Apply SCRAM delta.
       scramPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply changes to ACLs. This needs to be handled carefully because while we are

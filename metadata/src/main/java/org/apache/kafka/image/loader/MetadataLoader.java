@@ -455,8 +455,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     publisher.onControllerChange(currentLeaderAndEpoch);
                 } catch (Throwable e) {
                     faultHandler.handleFault("Unhandled error publishing the new leader " +
-                            "change to " + currentLeaderAndEpoch + " with publisher " +
-                            publisher.name(), e);
+                        "change to " + currentLeaderAndEpoch + " with publisher " +
+                        publisher.name(), e);
                 }
             }
         });
