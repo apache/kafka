@@ -29,9 +29,9 @@ import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
-import org.apache.kafka.metadata.migration.{MigrationClient, MigrationClientException, ZkMigrationLeadershipState}
+import org.apache.kafka.metadata.migration.{MigrationClient, MigrationClientAuthException, MigrationClientException, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
-import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.KeeperException.{AuthFailedException, Code, NoAuthException, SessionClosedRequireAuthException}
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import java.util
@@ -51,6 +51,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     try {
       fn
     } catch {
+      case e @ (_: AuthFailedException | _: NoAuthException | _: SessionClosedRequireAuthException) =>
+        // We don't expect authentication errors to be recoverable, so treat them differently
+        throw new MigrationClientAuthException(e)
       case e: KeeperException => throw new MigrationClientException(e)
     }
   }

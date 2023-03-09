@@ -93,7 +93,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.log = LoggerFactory.getLogger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, new LogContext("KRaftMigrationDriver"), "kraft-migration");
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, new LogContext("KRaftMigrationDriver "), "kraft-migration");
         this.image = MetadataImage.EMPTY;
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
@@ -283,16 +283,23 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     // Events handled by Migration Driver.
     abstract class MigrationEvent implements EventQueue.Event {
+        @SuppressWarnings("ThrowableNotThrown")
         @Override
         public void handleException(Throwable e) {
-            if (e instanceof MigrationClientException) {
-                log.warn(String.format("Encountered client error during event %s. Will retry.", this), e.getCause());
+            if (e instanceof MigrationClientAuthException) {
+                KRaftMigrationDriver.this.faultHandler.handleFault("Encountered client auth error in " + this, e);
+            } else if (e instanceof MigrationClientException) {
+                log.debug(String.format("Encountered client error during event %s. Will retry.", this), e.getCause());
             } else if (e instanceof RejectedExecutionException) {
-                log.info("Not processing {} because the event queue is closed.", this);
+                log.debug("Not processing {} because the event queue is closed.", this);
             } else {
-                KRaftMigrationDriver.this.faultHandler.handleFault(
-                    "Unhandled error in " + this.getClass().getSimpleName(), e);
+                KRaftMigrationDriver.this.faultHandler.handleFault("Unhandled error in " + this, e);
             }
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName();
         }
     }
 

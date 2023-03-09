@@ -16,23 +16,11 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.KafkaException;
-
 /**
- * Unchecked exception that can be thrown by the migration client.
- *
- * Authentication related errors should use {@link MigrationClientAuthException}.
+ * Wrapped for authentication exceptions in the migration client such as ZooKeeper AuthFailedException
  */
-public class MigrationClientException extends KafkaException {
-    public MigrationClientException(String message, Throwable t) {
-        super(message, t);
-    }
-
-    public MigrationClientException(Throwable t) {
+public class MigrationClientAuthException extends MigrationClientException {
+    public MigrationClientAuthException(Throwable t) {
         super(t);
-    }
-
-    public MigrationClientException(String message) {
-        super(message);
     }
 }
