@@ -149,8 +149,8 @@ class DefaultAlterPartitionManager(
   // Used to allow only one in-flight request at a time
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
 
-  // Used to store the mapping from broker ID to its brokerEpoch. If the epoch is -1, this broker may not support
-  // broker epoch verification.
+  // Used to store the mapping from the follower broker ID to its brokerEpoch. If the epoch is -1, this broker
+  // may not support the broker epoch verification.
   private val brokerEpochs: util.Map[Int, Long] = new ConcurrentHashMap[Int, Long]()
 
   override def start(): Unit = {
@@ -304,10 +304,8 @@ class DefaultAlterPartitionManager(
       items.foreach { item =>
         val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
         item.leaderAndIsr.isr.foreach(isrBrokerId => {
-          var currentBrokerEpoch = brokerEpochs.getOrDefault(isrBrokerId, -2)
-          if (isrBrokerId == brokerId) {
-            currentBrokerEpoch = brokerEpoch
-          }
+          val currentBrokerEpoch =
+            if (isrBrokerId == brokerId) brokerEpoch else brokerEpochs.getOrDefault(isrBrokerId, -2)
 
           if (isBrokerEpochConsistentWithMetadataCache(isrBrokerId, currentBrokerEpoch)) {
             newIsrWithBrokerEpoch.append(new BrokerState()

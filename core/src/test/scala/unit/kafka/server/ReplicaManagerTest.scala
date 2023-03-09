@@ -2433,10 +2433,10 @@ class ReplicaManagerTest {
       responseCallback
     )
 
-    if (replicaId != -1) {
-      verify(replicaManager.alterPartitionManager, atLeast(1)).updateBrokerEpoch(replicaId, 1)
+    if (replicaId == -1) {
+      verify(replicaManager.alterPartitionManager, never()).updateBrokerEpoch(ArgumentMatchers.eq(replicaId), any())
     } else {
-      verify(replicaManager.alterPartitionManager, never()).updateBrokerEpoch(replicaId, 1)
+      verify(replicaManager.alterPartitionManager, atLeast(1)).updateBrokerEpoch(replicaId, 1)
     }
   }
 

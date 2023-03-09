@@ -685,4 +685,25 @@ class MetadataCacheTest {
 
     assertTrue(metadataCache.isBrokerShuttingDown(0))
   }
+
+  @Test
+  def testGetLiveBrokerEpoch(): Unit = {
+    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+
+    val delta = new MetadataDelta.Builder().build()
+    delta.replay(new RegisterBrokerRecord()
+      .setBrokerId(0)
+      .setBrokerEpoch(100)
+      .setFenced(false))
+
+    delta.replay(new RegisterBrokerRecord()
+      .setBrokerId(1)
+      .setBrokerEpoch(101)
+      .setFenced(true))
+
+    metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
+
+    assertEquals(100L, metadataCache.getAliveBrokerEpoch(0).getOrElse(-1))
+    assertEquals(-1L, metadataCache.getAliveBrokerEpoch(1).getOrElse(-1L))
+  }
 }
