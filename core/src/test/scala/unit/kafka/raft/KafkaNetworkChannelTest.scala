@@ -16,21 +16,29 @@
  */
 package kafka.raft
 
+import kafka.common.RequestAndCompletionHandler
+
 import java.net.InetSocketAddress
 import java.util
 import java.util.Collections
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{MockClient, NodeApiVersions}
+import org.apache.kafka.common.message.FetchRequestData.ReplicaState
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchRequest, FetchResponse, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{RaftRequest, RaftUtil}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.mockito.ArgumentCaptor
+import org.mockito.Mockito.{mock, verify}
 
+import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
 
 class KafkaNetworkChannelTest {
@@ -159,6 +167,29 @@ class KafkaNetworkChannelTest {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource(Array("fetchVersions"))
+  def testFetchRequestDowngrade(version: Short): Unit = {
+    val destinationId = 2
+    val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
+    val mockSendThread = mock(classOf[RaftSendThread])
+    channel.setRequestThread(mockSendThread)
+    sendTestRequest(ApiKeys.FETCH, destinationId)
+    val requestCapture: ArgumentCaptor[RequestAndCompletionHandler] = ArgumentCaptor.forClass(classOf[RequestAndCompletionHandler])
+    verify(mockSendThread).sendRequest(requestCapture.capture())
+
+    val request = requestCapture.getValue.request.build(version)
+    if (version < 15) {
+      assertTrue(request.asInstanceOf[FetchRequest].data().replicaId() == 1)
+      assertTrue(request.asInstanceOf[FetchRequest].data().replicaState().replicaId() == -1)
+    } else {
+      assertTrue(request.asInstanceOf[FetchRequest].data().replicaId() == -1)
+      assertTrue(request.asInstanceOf[FetchRequest].data().replicaState().replicaId() == 1)
+    }
+  }
+
   private def sendTestRequest(
     apiKey: ApiKeys,
     destinationId: Int,
@@ -216,7 +247,7 @@ class KafkaNetworkChannelTest {
             .setFetchOffset(333)
             .setLastFetchedEpoch(5)
         })
-        request.setReplicaId(1)
+        request.setReplicaState(new ReplicaState().setReplicaId(1))
 
       case _ =>
         throw new AssertionError(s"Unexpected api $key")
@@ -288,4 +319,6 @@ object KafkaNetworkChannelTest {
 
     override def update(time: Time, update: MockClient.MetadataUpdate): Unit = {}
   }
+
+  def fetchVersions:Stream[Arguments] = ApiKeys.FETCH.allVersions.asScala.map(version => Arguments.of(version)).asJava.stream()
 }

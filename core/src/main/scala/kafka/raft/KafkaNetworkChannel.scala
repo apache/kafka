@@ -45,7 +45,7 @@ object KafkaNetworkChannel {
         // Since we already have the request, we go through a simplified builder
         new AbstractRequest.Builder[FetchRequest](ApiKeys.FETCH) {
           override def build(version: Short): FetchRequest = {
-            FetchRequest.updateReplicaStateBasedOnVersion(fetchRequest, version)
+            FetchRequest.maybeDownGradeReplicaState(fetchRequest, version)
             new FetchRequest(fetchRequest, version)
           }
           override def toString: String = fetchRequest.toString
@@ -108,13 +108,17 @@ class KafkaNetworkChannel(
   private val correlationIdCounter = new AtomicInteger(0)
   private val endpoints = mutable.HashMap.empty[Int, Node]
 
-  private val requestThread = new RaftSendThread(
+  private var requestThread = new RaftSendThread(
     name = threadNamePrefix + "-outbound-request-thread",
     networkClient = client,
     requestTimeoutMs = requestTimeoutMs,
     time = time,
     isInterruptible = false
   )
+
+  def setRequestThread(raftSendThread: RaftSendThread): Unit = {
+    requestThread = raftSendThread
+  }
 
   override def send(request: RaftRequest.Outbound): Unit = {
     def completeFuture(message: ApiMessage): Unit = {

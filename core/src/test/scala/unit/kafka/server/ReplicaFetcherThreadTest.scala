@@ -34,8 +34,8 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
-import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_3_5_IV0}
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -48,7 +48,6 @@ import org.mockito.Mockito.{mock, never, times, verify, when}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional}
-
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1137,14 +1136,18 @@ class ReplicaFetcherThreadTest {
     assertProcessPartitionDataWhen(isReassigning = false)
   }
 
-  @Test
-  def testBuildFetch(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testBuildFetch(usingReplicaState: Boolean): Unit = {
     val tid1p0 = new TopicIdPartition(topicId1, t1p0)
     val tid1p1 = new TopicIdPartition(topicId1, t1p1)
     val tid2p1 = new TopicIdPartition(topicId2, t2p1)
 
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    val config = KafkaConfig.fromProps(props)
+    var config = KafkaConfig.fromProps(props)
+    if (!usingReplicaState) {
+      config = kafkaConfigWithoutReplicaState
+    }
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
     val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
@@ -1189,7 +1192,9 @@ class ReplicaFetcherThreadTest {
     assertEquals(partitionDataMap.asJava, fetchRequestBuilder.fetchData())
     assertEquals(0, fetchRequestBuilder.replaced().size)
     assertEquals(0, fetchRequestBuilder.removed().size)
-    assertEquals(1, fetchRequestBuilder.build().data().replicaState().replicaEpoch())
+    assertEquals(if (usingReplicaState) 1 else -1, fetchRequestBuilder.build().data().replicaState().replicaEpoch())
+    assertEquals(if (usingReplicaState) 1 else -1, fetchRequestBuilder.build().data().replicaState().replicaId())
+    assertEquals(if (usingReplicaState) -1 else 1, fetchRequestBuilder.build().data().replicaId())
 
     val responseData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     responseData.put(tid1p0, new FetchResponseData.PartitionData())
@@ -1371,6 +1376,12 @@ class ReplicaFetcherThreadTest {
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_6_IV0.version)
+    KafkaConfig.fromProps(props)
+  }
+
+  private def kafkaConfigWithoutReplicaState: KafkaConfig = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_3_5_IV0.version)
     KafkaConfig.fromProps(props)
   }
 }

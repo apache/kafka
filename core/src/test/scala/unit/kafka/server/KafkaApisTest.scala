@@ -3368,6 +3368,8 @@ class KafkaApisTest {
 
     val fetchRequest = new FetchRequest.Builder(9, 9, -1, -1, 100, 0, fetchDataBuilder)
       .build()
+    assertEquals(fetchRequest.replicaEpoch(), -1)
+    assertEquals(fetchRequest.replicaId(), -1)
     val request = buildRequest(fetchRequest)
 
     createKafkaApis().handleFetchRequest(request)
@@ -3422,7 +3424,9 @@ class KafkaApisTest {
 
     // If replicaId is -1 we will build a consumer request. Any non-negative replicaId will build a follower request.
     val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
-      replicaId, -1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
+      replicaId, if (replicaId < 0) -1 else 1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
+    assertEquals(fetchRequest.replicaEpoch(), if (replicaId < 0) -1 else 1)
+    assertEquals(fetchRequest.replicaId(), replicaId)
     val request = buildRequest(fetchRequest)
 
     createKafkaApis().handleFetchRequest(request)
@@ -4527,8 +4531,11 @@ class KafkaApisTest {
 
     val fetchDataBuilder = Collections.singletonMap(tp0, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
     val fetchData = Collections.singletonMap(tidp0, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
-    val fetchFromFollower = buildRequest(new FetchRequest.Builder(
-      ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1, 1000, 0, fetchDataBuilder).build())
+    val fetchRequest = new FetchRequest.Builder(
+      ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1, 1000, 0, fetchDataBuilder).build()
+    assertEquals(fetchRequest.replicaId(), 1)
+    assertEquals(fetchRequest.replicaEpoch(), 1)
+    val fetchFromFollower = buildRequest(fetchRequest)
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))

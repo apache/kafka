@@ -204,27 +204,19 @@ public class FetchRequestTest {
 
     @ParameterizedTest
     @MethodSource("fetchVersions")
-    public void testUpdateReplicaState(short version) {
-        FetchRequestData fetchRequestDataWithReplicaId = new FetchRequestData();
-        FetchRequestData fetchRequestDataWithReplicaState = new FetchRequestData();
-        fetchRequestDataWithReplicaId.setReplicaId(1);
-        fetchRequestDataWithReplicaState.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
-        FetchRequest.updateReplicaStateBasedOnVersion(fetchRequestDataWithReplicaId, version);
-        FetchRequest.updateReplicaStateBasedOnVersion(fetchRequestDataWithReplicaState, version);
+    public void testReplicaStateDowngrade(short version) {
+        FetchRequestData fetchRequestData = new FetchRequestData();
+        fetchRequestData.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
+        FetchRequest.maybeDownGradeReplicaState(fetchRequestData, version);
 
-        assertEquals(1, FetchRequest.getReplicaIdWithoutVersion(fetchRequestDataWithReplicaId));
-        assertEquals(1, FetchRequest.getReplicaIdWithoutVersion(fetchRequestDataWithReplicaState));
+        assertEquals(1, FetchRequest.replicaId(fetchRequestData));
 
         if (version < 15) {
-            assertEquals(1, fetchRequestDataWithReplicaId.replicaId());
-            assertEquals(-1, fetchRequestDataWithReplicaId.replicaState().replicaId());
-            assertEquals(1, fetchRequestDataWithReplicaState.replicaId());
-            assertEquals(-1, fetchRequestDataWithReplicaState.replicaState().replicaId());
+            assertEquals(1, fetchRequestData.replicaId());
+            assertEquals(-1, fetchRequestData.replicaState().replicaId());
         } else {
-            assertEquals(-1, fetchRequestDataWithReplicaId.replicaId());
-            assertEquals(1, fetchRequestDataWithReplicaId.replicaState().replicaId());
-            assertEquals(-1, fetchRequestDataWithReplicaState.replicaId());
-            assertEquals(1, fetchRequestDataWithReplicaState.replicaState().replicaId());
+            assertEquals(-1, fetchRequestData.replicaId());
+            assertEquals(1, fetchRequestData.replicaState().replicaId());
         }
     }
 

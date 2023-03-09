@@ -249,8 +249,8 @@ public class FetchRequest extends AbstractRequest {
                 fetchRequestData.setReplicaId(replicaId);
             } else {
                 fetchRequestData.setReplicaState(new ReplicaState()
-                        .setReplicaId(replicaId)
-                        .setReplicaEpoch(replicaEpoch));
+                    .setReplicaId(replicaId)
+                    .setReplicaEpoch(replicaEpoch));
             }
 
             Map<String, FetchRequestData.ForgottenTopic> forgottenTopicMap = new LinkedHashMap<>();
@@ -340,7 +340,15 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    public static int getReplicaIdWithoutVersion(FetchRequestData fetchRequestData) {
+    // Downgrade the ReplicaState field to be compatible with lower version.
+    public static void maybeDownGradeReplicaState(FetchRequestData fetchRequestData, short version) {
+        if (version < 15) {
+            fetchRequestData.setReplicaId(fetchRequestData.replicaState().replicaId());
+            fetchRequestData.setReplicaState(new ReplicaState());
+        }
+    }
+
+    public static int replicaId(FetchRequestData fetchRequestData) {
         return fetchRequestData.replicaId() != -1 ?
                 fetchRequestData.replicaId() : fetchRequestData.replicaState().replicaId();
     }
