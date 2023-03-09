@@ -21,7 +21,6 @@ import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicLong
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
-import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -102,10 +101,10 @@ class BrokerMetadataPublisher(
   replicaManager: ReplicaManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  clientQuotaMetadataManager: ClientQuotaMetadataManager,
   var dynamicConfigPublisher: DynamicConfigPublisher,
+  dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
+  scramPublisher: ScramPublisher,
   private val _authorizer: Option[Authorizer],
-  credentialProvider: CredentialProvider,
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
 ) extends MetadataPublisher with Logging {
@@ -213,32 +212,13 @@ class BrokerMetadataPublisher(
       }
 
       // Apply configuration deltas.
-      dynamicConfigPublisher.publish(delta, newImage)
+      dynamicConfigPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply client quotas delta.
-      try {
-        Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
-          clientQuotaMetadataManager.update(clientQuotasDelta)
-        }
-      } catch {
-        case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating client " +
-          s"quotas in $deltaName", t)
-      }
+      dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage)
 
-      // Apply changes to SCRAM credentials.
-      Option(delta.scramDelta()).foreach { scramDelta =>
-        scramDelta.changes().forEach {
-          case (mechanism, userChanges) =>
-            userChanges.forEach {
-              case (userName, change) =>
-                if (change.isPresent) {
-                  credentialProvider.updateCredential(mechanism, userName, change.get().toCredential(mechanism))
-                } else {
-                  credentialProvider.removeCredentials(mechanism, userName)
-                }
-            }
-        }
-      }
+      // Apply SCRAM delta.
+      scramPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply changes to ACLs. This needs to be handled carefully because while we are
       // applying these changes, the Authorizer is continuing to return authorization

@@ -43,18 +43,19 @@ public class FutureUtils {
      */
     public static <T> T waitWithLogging(
         Logger log,
+        String prefix,
         String action,
         CompletableFuture<T> future,
         Deadline deadline,
         Time time
     ) throws Throwable {
-        log.info("Waiting for {}", action);
+        log.info("{}Waiting for {}", prefix, action);
         try {
             T result = time.waitForFuture(future, deadline.nanoseconds());
-            log.info("Finished waiting for {}", action);
+            log.info("{}Finished waiting for {}", prefix, action);
             return result;
         } catch (TimeoutException t)  {
-            log.error("Timed out while waiting for {}", action, t);
+            log.error("{}Timed out while waiting for {}", prefix, action, t);
             TimeoutException timeout = new TimeoutException("Timed out while waiting for " + action);
             timeout.setStackTrace(t.getStackTrace());
             throw timeout;
@@ -63,7 +64,7 @@ public class FutureUtils {
                 ExecutionException executionException = (ExecutionException) t;
                 t = executionException.getCause();
             }
-            log.error("Received a fatal error while waiting for {}", action, t);
+            log.error("{}Received a fatal error while waiting for {}", prefix, action, t);
             throw new RuntimeException("Received a fatal error while waiting for " + action, t);
         }
     }

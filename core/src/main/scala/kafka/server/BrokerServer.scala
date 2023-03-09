@@ -26,7 +26,7 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, SnapshotWriterBuilder}
+import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, SnapshotWriterBuilder}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -217,8 +217,9 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying,
-        "controller quorum voters future", sharedServer.controllerQuorumVotersFuture,
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "controller quorum voters future",
+        sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
@@ -437,7 +438,8 @@ class BrokerServer(
         config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
 
-      FutureUtils.waitWithLogging(logger.underlying, "broker metadata to catch up",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "broker metadata to catch up",
         lifecycleManager.initialCatchUpFuture, startupDeadline, time)
 
       // Apply the metadata log changes that we've accumulated.
@@ -447,14 +449,22 @@ class BrokerServer(
         replicaManager,
         groupCoordinator,
         transactionCoordinator,
-        clientQuotaMetadataManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
           dynamicConfigHandlers.toMap,
         "broker"),
+        new DynamicClientQuotaPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          clientQuotaMetadataManager),
+        new ScramPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          credentialProvider),
         authorizer,
-        credentialProvider,
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)
 
@@ -465,7 +475,7 @@ class BrokerServer(
       // publish operation to complete. This first operation will initialize logManager,
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
-      FutureUtils.waitWithLogging(logger.underlying,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the broker to catch up with the current cluster metadata",
         metadataListener.startPublishing(metadataPublisher), startupDeadline, time)
 
@@ -489,15 +499,18 @@ class BrokerServer(
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
-      FutureUtils.waitWithLogging(logger.underlying, "the broker to be unfenced",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the broker to be unfenced",
         lifecycleManager.setReadyToUnfence(), startupDeadline, time)
 
       // Block here until all the authorizer futures are complete
-      FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
 
       // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
 
       maybeChangeStatus(STARTING, STARTED)
