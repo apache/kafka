@@ -175,7 +175,7 @@ public class FetcherTest {
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
-    private FetcherMetricsRegistry metricsRegistry;
+    private FetchMetricsRegistry metricsRegistry;
     private MockClient client;
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
@@ -3686,7 +3686,7 @@ public class FetcherTest {
         metrics = new Metrics(metricConfig, time);
         consumerClient = spy(new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE));
-        metricsRegistry = new FetcherMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
+        metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {

@@ -231,9 +231,9 @@ public class CompletedFetchTest {
                                                           FetchResponseData.PartitionData partitionData) {
         LogContext logContext = new LogContext();
         SubscriptionState subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
-        FetcherMetricsRegistry fetcherMetricsRegistry = new FetcherMetricsRegistry();
-        FetchManagerMetrics metrics = new FetchManagerMetrics(new Metrics(), fetcherMetricsRegistry);
-        FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(metrics, Collections.singleton(tp));
+        FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry();
+        FetchMetricsManager metrics = new FetchMetricsManager(new Metrics(), metricsRegistry);
+        FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(tp));
 
         return new CompletedFetch<>(logContext,
                 subscriptions,

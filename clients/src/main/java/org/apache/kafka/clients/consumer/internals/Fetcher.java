@@ -98,7 +98,7 @@ public class Fetcher<K, V> implements Closeable {
     private final boolean checkCrcs;
     private final String clientRackId;
     private final ConsumerMetadata metadata;
-    private final FetchManagerMetrics sensors;
+    private final FetchMetricsManager metricsManager;
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch<K, V>> completedFetches;
     private final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
@@ -124,7 +124,7 @@ public class Fetcher<K, V> implements Closeable {
                    ConsumerMetadata metadata,
                    SubscriptionState subscriptions,
                    Metrics metrics,
-                   FetcherMetricsRegistry metricsRegistry,
+                   FetchMetricsRegistry metricsRegistry,
                    Time time,
                    IsolationLevel isolationLevel) {
         this.log = logContext.logger(Fetcher.class);
@@ -143,7 +143,7 @@ public class Fetcher<K, V> implements Closeable {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.completedFetches = new ConcurrentLinkedQueue<>();
-        this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
+        this.metricsManager = new FetchMetricsManager(metrics, metricsRegistry);
         this.isolationLevel = isolationLevel;
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingFetchRequests = new HashSet<>();
@@ -173,7 +173,7 @@ public class Fetcher<K, V> implements Closeable {
      */
     public synchronized int sendFetches() {
         // Update metrics in case there was an assignment change
-        sensors.maybeUpdateAssignment(subscriptions);
+        metricsManager.maybeUpdateAssignment(subscriptions);
 
         Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
@@ -206,7 +206,7 @@ public class Fetcher<K, V> implements Closeable {
 
                             Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
-                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
+                            FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
 
                             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                                 TopicPartition partition = entry.getKey();
@@ -249,7 +249,7 @@ public class Fetcher<K, V> implements Closeable {
                                 }
                             }
 
-                            sensors.recordLatency(resp.requestLatencyMs());
+                            metricsManager.recordLatency(resp.requestLatencyMs());
                         } finally {
                             nodesWithPendingFetchRequests.remove(fetchTarget.id());
                         }
@@ -408,11 +408,11 @@ public class Fetcher<K, V> implements Closeable {
 
                 Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
                 if (partitionLag != null)
-                    this.sensors.recordPartitionLag(completedFetch.partition, partitionLag);
+                    this.metricsManager.recordPartitionLag(completedFetch.partition, partitionLag);
 
                 Long lead = subscriptions.partitionLead(completedFetch.partition);
                 if (lead != null) {
-                    this.sensors.recordPartitionLead(completedFetch.partition, lead);
+                    this.metricsManager.recordPartitionLead(completedFetch.partition, lead);
                 }
 
                 return Fetch.forPartition(completedFetch.partition, partRecords, positionAdvanced);
@@ -716,7 +716,7 @@ public class Fetcher<K, V> implements Closeable {
         return sessionHandlers.get(node);
     }
 
-    public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
+    public static Sensor throttleTimeSensor(Metrics metrics, FetchMetricsRegistry metricsRegistry) {
         Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
         fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
 

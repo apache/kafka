@@ -79,7 +79,7 @@ class CompletedFetch<K, V> {
     private final Iterator<? extends RecordBatch> batches;
     private final Set<Long> abortedProducerIds;
     private final PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactions;
-    private final FetchResponseMetricAggregator metricAggregator;
+    private final FetchMetricsAggregator metricAggregator;
 
     private int recordsRead;
     private int bytesRead;
@@ -98,7 +98,7 @@ class CompletedFetch<K, V> {
                    IsolationLevel isolationLevel,
                    TopicPartition partition,
                    FetchResponseData.PartitionData partitionData,
-                   FetchResponseMetricAggregator metricAggregator,
+                   FetchMetricsAggregator metricAggregator,
                    Long fetchOffset,
                    short requestVersion) {
         this.log = logContext.logger(CompletedFetch.class);

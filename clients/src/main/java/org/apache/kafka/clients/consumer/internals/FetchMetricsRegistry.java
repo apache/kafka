@@ -24,7 +24,7 @@ import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
 
-public class FetcherMetricsRegistry {
+public class FetchMetricsRegistry {
 
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
@@ -56,15 +56,15 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLeadAvg;
     public MetricNameTemplate partitionPreferredReadReplica;
 
-    public FetcherMetricsRegistry() {
+    public FetchMetricsRegistry() {
         this(new HashSet<String>(), "");
     }
 
-    public FetcherMetricsRegistry(String metricGrpPrefix) {
+    public FetchMetricsRegistry(String metricGrpPrefix) {
         this(new HashSet<String>(), metricGrpPrefix);
     }
 
-    public FetcherMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
+    public FetchMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
 
         /***** Client level *****/
         String groupName = metricGrpPrefix + "-fetch-manager-metrics";
