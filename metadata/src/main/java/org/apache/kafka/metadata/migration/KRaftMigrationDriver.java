@@ -132,24 +132,37 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         return true;
     }
 
+    private boolean imageDoesNotContainAllBrokers(MetadataImage image, Set<Integer> brokerIds) {
+        for (BrokerRegistration broker : image.cluster().brokers().values()) {
+            if (broker.isMigratingZkBroker()) {
+                brokerIds.remove(broker.id());
+            }
+        }
+        return !brokerIds.isEmpty();
+    }
+
     private boolean areZkBrokersReadyForMigration() {
         if (image == MetadataImage.EMPTY) {
             // TODO maybe add WAIT_FOR_INITIAL_METADATA_PUBLISH state to avoid this kind of check?
             log.info("Waiting for initial metadata publish before checking if Zk brokers are registered.");
             return false;
         }
-        Set<Integer> zkRegisteredZkBrokers = zkMigrationClient.readBrokerIdsFromTopicAssignments();
-        for (BrokerRegistration broker : image.cluster().brokers().values()) {
-            if (broker.isMigratingZkBroker()) {
-                zkRegisteredZkBrokers.remove(broker.id());
-            }
-        }
-        if (zkRegisteredZkBrokers.isEmpty()) {
-            return true;
-        } else {
-            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkRegisteredZkBrokers);
+
+        // First check the brokers registered in ZK
+        Set<Integer> zkBrokerRegistrations = zkMigrationClient.readBrokerIds();
+        if (imageDoesNotContainAllBrokers(image, zkBrokerRegistrations)) {
+            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokerRegistrations);
             return false;
         }
+
+        // Once all of those are found, check the topic assignments. This is much more expensive than listing /brokers
+        Set<Integer> zkBrokersWithAssignments = zkMigrationClient.readBrokerIdsFromTopicAssignments();
+        if (imageDoesNotContainAllBrokers(image, zkBrokersWithAssignments)) {
+            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokersWithAssignments);
+            return false;
+        }
+
+        return true;
     }
 
     private void apply(String name, Function<ZkMigrationLeadershipState, ZkMigrationLeadershipState> stateMutator) {
