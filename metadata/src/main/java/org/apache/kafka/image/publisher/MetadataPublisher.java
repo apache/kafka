@@ -45,7 +45,7 @@ public interface MetadataPublisher extends AutoCloseable {
      * @param newLeaderAndEpoch The new quorum leader and epoch. The new leader will be
      *                          OptionalInt.empty if there is currently no active controller.
      */
-    default void handleControllerChange(LeaderAndEpoch newLeaderAndEpoch) { }
+    default void onControllerChange(LeaderAndEpoch newLeaderAndEpoch) { }
 
     /**
      * Publish a new cluster metadata snapshot that we loaded.
@@ -56,7 +56,7 @@ public interface MetadataPublisher extends AutoCloseable {
      *                 If we loaded a snapshot, this will be a SnapshotManifest.
      *                 If we loaded a log delta, this will be a LogDeltaManifest.
      */
-    void publish(
+    void onMetadataUpdate(
             MetadataDelta delta,
             MetadataImage newImage,
             LoaderManifest manifest

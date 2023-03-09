@@ -26,7 +26,7 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, SnapshotWriterBuilder}
+import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, SnapshotWriterBuilder}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -450,14 +450,22 @@ class BrokerServer(
         replicaManager,
         groupCoordinator,
         transactionCoordinator,
-        clientQuotaMetadataManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
           dynamicConfigHandlers.toMap,
         "broker"),
+        new DynamicClientQuotaPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          clientQuotaMetadataManager),
+        new ScramPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          credentialProvider),
         authorizer,
-        credentialProvider,
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)
 

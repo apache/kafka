@@ -223,12 +223,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     @Override
-    public void handleControllerChange(LeaderAndEpoch newLeaderAndEpoch) {
+    public void onControllerChange(LeaderAndEpoch newLeaderAndEpoch) {
         eventQueue.append(new KRaftLeaderEvent(newLeaderAndEpoch));
     }
 
     @Override
-    public void publish(
+    public void onMetadataUpdate(
         MetadataDelta delta,
         MetadataImage newImage,
         LoaderManifest manifest

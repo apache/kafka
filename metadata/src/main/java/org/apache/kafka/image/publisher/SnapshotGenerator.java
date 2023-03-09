@@ -201,7 +201,7 @@ public class SnapshotGenerator implements MetadataPublisher {
     }
 
     @Override
-    public void publish(
+    public void onMetadataUpdate(
         MetadataDelta delta,
         MetadataImage newImage,
         LoaderManifest manifest

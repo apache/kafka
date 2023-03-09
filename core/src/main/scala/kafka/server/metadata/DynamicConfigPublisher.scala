@@ -37,10 +37,17 @@ class DynamicConfigPublisher(
 
   override def name(): String = s"DynamicConfigPublisher ${nodeType} id=${conf.nodeId}"
 
-  def publish(
+  override def onMetadataUpdate(
     delta: MetadataDelta,
     newImage: MetadataImage,
     manifest: LoaderManifest
+  ): Unit = {
+    onMetadataUpdate(delta, newImage)
+  }
+
+  def onMetadataUpdate(
+    delta: MetadataDelta,
+    newImage: MetadataImage,
   ): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {

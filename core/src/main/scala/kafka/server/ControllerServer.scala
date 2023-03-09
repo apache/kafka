@@ -27,7 +27,7 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -37,6 +37,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
+import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
@@ -304,24 +305,39 @@ class ControllerServer(
 
       // register this instance for dynamic config changes to the KafkaConfig
       config.dynamicConfig.addReconfigurables(this)
-      // We must install the below publisher and receive the changes when we are also running the broker role
-      // because we don't share a single KafkaConfig instance with the broker, and therefore
-      // the broker's DynamicConfigPublisher won't take care of the changes for us.
-      val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
-        // controllers don't host topics, so no need to do anything with dynamic topic config changes here
-        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
-      val dynamicConfigPublisher = new DynamicConfigPublisher(
+
+      val publishers = new java.util.ArrayList[MetadataPublisher]()
+
+      // Set up the dynamic config publisher. This runs even in combined mode, since the broker
+      // has its own separate dynamic configuration object.
+      publishers.add(new DynamicConfigPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
-        dynamicConfigHandlers,
-        "controller")
-      val dynamicClientQuotaPublisher = new DynamicClientQuotaPublisher(
+        immutable.Map[String, ConfigHandler](
+          // controllers don't host topics, so no need to do anything with dynamic topic config changes here
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers)
+        ),
+        "controller"))
+
+      // Set up the client quotas publisher. This will enable controller mutation quotas and any
+      // other quotas which are applicable.
+      publishers.add(new DynamicClientQuotaPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager)
-      FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config and client quota publishers to be installed",
-        sharedServer.loader.installPublishers(List(dynamicConfigPublisher, dynamicClientQuotaPublisher).asJava), startupDeadline, time)
+        clientQuotaMetadataManager))
+
+      // Set up the SCRAM publisher.
+      publishers.add(new ScramPublisher(
+        config,
+        sharedServer.metadataPublishingFaultHandler,
+        "controller",
+        credentialProvider
+      ))
+
+      // Install all metadata publishers.
+      FutureUtils.waitWithLogging(logger.underlying, "all of the metadata publishers to be installed",
+        sharedServer.loader.installPublishers(publishers), startupDeadline, time)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)

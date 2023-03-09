@@ -92,7 +92,7 @@ public class MetadataLoaderTest {
         }
 
         @Override
-        public void publish(
+        public void onMetadataUpdate(
             MetadataDelta delta,
             MetadataImage newImage,
             LoaderManifest manifest
