@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.collection.mutable.ArrayBuffer
-import org.apache.kafka.server.common.{ApiMessageAndVersion}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
