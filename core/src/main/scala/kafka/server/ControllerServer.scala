@@ -197,7 +197,7 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying,
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
@@ -298,11 +298,13 @@ class ControllerServer(
       val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       // Block here until all the authorizer futures are complete
-      FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
 
       // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
 
       // register this instance for dynamic config changes to the KafkaConfig
@@ -338,7 +340,8 @@ class ControllerServer(
       ))
 
       // Install all metadata publishers.
-      FutureUtils.waitWithLogging(logger.underlying, "all of the metadata publishers to be installed",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the metadata publishers to be installed",
         sharedServer.loader.installPublishers(publishers), startupDeadline, time)
     } catch {
       case e: Throwable =>
