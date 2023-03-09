@@ -90,6 +90,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected static final int NUM_RECORDS_PER_PARTITION = 10;
     protected static final int NUM_PARTITIONS = 10;
     protected static final int NUM_RECORDS_PRODUCED = NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION;
+    protected static final int OFFSET_LAG_MAX = 10;
     protected static final int RECORD_TRANSFER_DURATION_MS = 30_000;
     protected static final int CHECKPOINT_DURATION_MS = 20_000;
     private static final int RECORD_CONSUME_DURATION_MS = 20_000;
@@ -450,12 +451,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"),
                     consumerGroupName, NUM_RECORDS_PRODUCED);
 
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-
-            // the size of consumer record should be zero, because the offsets of the same consumer group
-            // have been automatically synchronized from primary to backup by the background job, so no
-            // more records to consume from the replicated topic by the same consumer group at backup cluster
-            assertEquals(0, records.count(), "consumer record size is not zero");
+            assertDownstreamRedeliveriesBoundedByMaxLag(backupConsumer);
         }
 
         // now create a new topic in primary cluster
@@ -480,9 +476,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             waitForConsumerGroupFullSync(backup, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"),
                     consumerGroupName, NUM_RECORDS_PRODUCED);
 
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-            // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
-            assertEquals(0, records.count(), "consumer record size is not zero");
+            assertDownstreamRedeliveriesBoundedByMaxLag(backupConsumer);
         }
 
         assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
@@ -834,7 +828,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 for (TopicPartition tp : tps) {
                     assertTrue(consumerGroupOffsets.containsKey(tp),
                             "TopicPartition " + tp + " does not have translated offsets");
-                    assertTrue(consumerGroupOffsets.get(tp).offset() > lastOffset.get(tp),
+                    assertTrue(consumerGroupOffsets.get(tp).offset() > lastOffset.get(tp) - OFFSET_LAG_MAX,
                             "TopicPartition " + tp + " does not have fully-translated offsets");
                     assertTrue(consumerGroupOffsets.get(tp).offset() <= endOffsets.get(tp).offset(),
                             "TopicPartition " + tp + " has downstream offsets beyond the log end, this would lead to negative lag metrics");
@@ -867,6 +861,20 @@ public class MirrorConnectorsIntegrationBaseTest {
                 }
             } while (backupConsumer.currentLag(checkpointTopicPartition).orElse(1) > 0 && System.currentTimeMillis() < deadline);
             assertEquals(0, backupConsumer.currentLag(checkpointTopicPartition).orElse(1), "Unable to read all checkpoints within " + CHECKPOINT_DURATION_MS + "ms");
+        }
+    }
+
+    protected static void assertDownstreamRedeliveriesBoundedByMaxLag(Consumer<byte[], byte[]> targetConsumer) {
+        ConsumerRecords<byte[], byte[]> records = targetConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+        // After a full sync, there should be at most offset.lag.max records per partition consumed by both upstream and downstream consumers.
+        Map<TopicPartition, Integer> perPartitionCount = new HashMap<>();
+        for (ConsumerRecord<byte[], byte[]> record : records) {
+            TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+            int previous = perPartitionCount.getOrDefault(tp, 0);
+            perPartitionCount.put(tp, previous + 1);
+        }
+        for (Map.Entry<TopicPartition, Integer> entry : perPartitionCount.entrySet()) {
+            assertTrue(entry.getValue() < OFFSET_LAG_MAX,  "downstream consumer is re-reading more than " + OFFSET_LAG_MAX + " records from" + entry.getKey());
         }
     }
 
@@ -903,8 +911,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Props.put("offset.storage.replication.factor", "1");
         mm2Props.put("status.storage.replication.factor", "1");
         mm2Props.put("replication.factor", "1");
-        // Sync offsets as soon as possible to ensure the final record in a finite test has its offset translated.
-        mm2Props.put("offset.lag.max", "0");
+        mm2Props.put("offset.lag.max", String.valueOf(OFFSET_LAG_MAX));
         mm2Props.put(PRIMARY_CLUSTER_ALIAS + ".offset.flush.interval.ms", "5000");
         mm2Props.put(BACKUP_CLUSTER_ALIAS + ".offset.flush.interval.ms", "5000");
         return mm2Props;
