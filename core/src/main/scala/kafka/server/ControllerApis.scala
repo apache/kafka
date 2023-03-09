@@ -17,10 +17,11 @@
 
 package kafka.server
 
-import java.util
+import java.{lang, util}
 import java.util.{Collections, OptionalLong}
 import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
+import java.util.function.Consumer
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -175,8 +176,10 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleDeleteTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
       request.context.apiVersion,
@@ -184,7 +187,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.handle[Unit] { (results, exception) =>
-      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
         if (exception != null) {
           deleteTopicsRequest.getErrorResponse(throttleTimeMs, exception)
         } else {
@@ -339,8 +342,10 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleCreateTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = createTopics(context,
         createTopicsRequest.data,
         authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
@@ -348,7 +353,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
             names, logIfDenied = false)(identity))
     future.handle[Unit] { (result, exception) =>
-      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
         if (exception != null) {
           createTopicsRequest.getErrorResponse(throttleTimeMs, exception)
         } else {
@@ -356,6 +361,12 @@ class ControllerApis(val requestChannel: RequestChannel,
           new CreateTopicsResponse(result)
         }
       })
+    }
+  }
+
+  private def controllerMutationQuotaRecorderFor(controllerMutationQuota: ControllerMutationQuota) = {
+    new Consumer[lang.Integer]() {
+      override def accept(permits: lang.Integer): Unit = controllerMutationQuota.record(permits.doubleValue())
     }
   }
 
@@ -748,8 +759,10 @@ class ControllerApis(val requestChannel: RequestChannel,
       authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
     }
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = createPartitions(context,
       createPartitionsRequest.data(),
       filterAlterAuthorizedTopics)
@@ -757,7 +770,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.handleError(request, exception)
       } else {
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, requestThrottleMs => {
           val responseData = new CreatePartitionsResponseData().
             setResults(responses).
             setThrottleTimeMs(requestThrottleMs)

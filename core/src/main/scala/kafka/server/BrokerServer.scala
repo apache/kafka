@@ -312,9 +312,6 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      /* Add all reconfigurables for config change notification before starting the metadata listener */
-      config.dynamicConfig.addReconfigurables(this)
-
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
@@ -460,6 +457,9 @@ class BrokerServer(
         credentialProvider,
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)
+
+      // Add all reconfigurables for config change notification before installing the metadata publisher.
+      config.dynamicConfig.addReconfigurables(this)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

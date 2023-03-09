@@ -24,7 +24,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 import kafka.consumer.BaseConsumerRecord
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
@@ -34,6 +33,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
@@ -61,7 +61,8 @@ import scala.util.{Failure, Success, Try}
  * @deprecated Since 3.0, use the Connect-based MirrorMaker instead (aka MM2).
  */
 @deprecated(message = "Use the Connect-based MirrorMaker instead (aka MM2).", since = "3.0")
-object MirrorMaker extends Logging with KafkaMetricsGroup {
+object MirrorMaker extends Logging {
+  private val metricsGroup = new KafkaMetricsGroup(MirrorMaker.getClass)
 
   private[tools] var producer: MirrorMakerProducer = _
   private var mirrorMakerThreads: Seq[MirrorMakerThread] = _
@@ -78,7 +79,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   // If a message send failed after retries are exhausted. The offset of the messages will also be removed from
   // the unacked offset list to avoid offset commit being stuck on that offset. In this case, the offset of that
   // message was not really acked, but was skipped. This metric records the number of skipped offsets.
-  newGauge("MirrorMaker-numDroppedMessages", () => numDroppedMessages.get())
+  metricsGroup.newGauge("MirrorMaker-numDroppedMessages", () => numDroppedMessages.get())
 
   def main(args: Array[String]): Unit = {
 
@@ -185,7 +186,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   class MirrorMakerThread(consumerWrapper: ConsumerWrapper,
-                          val threadId: Int) extends Thread with Logging with KafkaMetricsGroup {
+                          val threadId: Int) extends Thread with Logging {
     private val threadName = "mirrormaker-thread-" + threadId
     private val shutdownLatch: CountDownLatch = new CountDownLatch(1)
     private var lastOffsetCommitMs = System.currentTimeMillis()
