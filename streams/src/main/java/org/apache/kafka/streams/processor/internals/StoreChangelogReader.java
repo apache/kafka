@@ -846,7 +846,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
                 changelogMetadata.restoreEndOffset = Math.min(endOffset, committedOffset);
 
-                log.debug("End offset for changelog {} initialized as {}.", partition, changelogMetadata.restoreEndOffset);
+                log.info("End offset for changelog {} initialized as {}.", partition, changelogMetadata.restoreEndOffset);
             } else {
                 if (!newPartitionsToRestore.remove(changelogMetadata)) {
                     throw new IllegalStateException("New changelogs to restore " + newPartitionsToRestore +

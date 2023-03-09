@@ -477,6 +477,7 @@ public class CachingKeyValueStore
         try {
             validateStoreOpen();
             context.cache().flush(cacheName);
+            context.cache().clear(cacheName);
         } finally {
             lock.writeLock().unlock();
         }

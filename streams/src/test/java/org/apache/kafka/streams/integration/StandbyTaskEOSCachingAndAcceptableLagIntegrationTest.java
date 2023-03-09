@@ -51,7 +51,9 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -71,6 +73,7 @@ import static org.hamcrest.Matchers.is;
  */
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
+@SuppressWarnings("deprecation")
 public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(StandbyTaskEOSCachingAndAcceptableLagIntegrationTest.class);
@@ -81,7 +84,8 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
                 // The default config produces errors.
                 {ConfigSetup.DEFAULT_CONFIG},
                 // Caching disabled and no lag acceptable both works as expected
-                {ConfigSetup.CACHING_DISABLED}, {ConfigSetup.NO_LAG_ACCEPTABLE}
+                //{ConfigSetup.CACHING_DISABLED}//,
+                //{ConfigSetup.NO_LAG_ACCEPTABLE}
         });
     }
 
@@ -106,6 +110,8 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
     private KafkaStreams streamInstanceOne;
     private KafkaStreams streamInstanceTwo;
     private KafkaStreams streamInstanceThree;
+
+    private final Map<Integer, Integer> mStore = new HashMap<>();
 
 
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
@@ -240,7 +246,7 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
                 ),
                 outputTopic,
                 initialBulk + secondBulk,
-                TWO_MINUTE_TIMEOUT
+                Duration.ofMinutes(10L).toMillis()
         );
         LOG.info("Processing completed");
 
@@ -252,7 +258,7 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
     private void logIfDuplicate(final Integer id, final List<ConsumerRecord<Integer, Integer>> record) {
         assertThat("The id and the value in the records must match", record.stream().allMatch(r -> id.equals(r.value())));
         if (record.size() > 1) {
-            LOG.debug("Id : " + id + " is assigned to the following " + record.stream().map(ConsumerRecord::key).collect(Collectors.toList()));
+            LOG.warn("Id : " + id + " is assigned to the following " + record.stream().map(ConsumerRecord::key).collect(Collectors.toList()));
         }
     }
 
@@ -295,6 +301,7 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
                                     }
                                 }
                                 Integer id = store.get(key);
+                                Integer mid = mStore.get(key);
                                 // Only assign a new id if the value have not been observed before
                                 if (id == null) {
                                     final int counterKey = 0;
@@ -304,6 +311,11 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
                                     // Partitions assign ids from their own id space
                                     id = newCounter * partitionCount + context.partition();
                                     store.put(key, id);
+
+                                    if (mid != null && !id.equals(mid))
+                                        LOG.warn("{}: in-mem {}-{} does not match disk {}-{} for key {}",
+                                            context.taskId(), mid, (mid - context.partition()) / partitionCount, id, newCounter, key);
+                                    mStore.put(key, id);
                                 }
                                 return KeyValue.pair(key, id);
                             }

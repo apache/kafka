@@ -590,12 +590,13 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    void transitionTaskType(final TaskType newType) {
+    void transitionTaskType(final TaskType newType, final LogContext logContext) {
         if (taskType.equals(newType)) {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");
         }
 
         taskType = newType;
+        log = logContext.logger(ProcessorStateManager.class);
     }
 
     @Override
@@ -639,7 +640,7 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        log.debug("Writing checkpoint: {}", checkpointingOffsets);
+        log.warn("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
         try {
             checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {
