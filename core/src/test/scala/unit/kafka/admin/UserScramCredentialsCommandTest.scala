@@ -26,7 +26,6 @@ import kafka.utils.TestInfoUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-// import org.junit.jupiter.api.Test
 
 class UserScramCredentialsCommandTest extends BaseRequestTest {
   override def brokerCount = 1
@@ -97,7 +96,6 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
 
     // describe both
     result = runConfigCommandViaBroker(Array("--entity-type", "users", "--describe"))
-    println(result.stdout)
     // we don't know the order that quota or scram users come out, so we have 2 possibilities for each, 4 total
     val quotaPossibilityAOut = s"$quotaConfigsUser1Out$quotaConfigsUser2Out"
     val quotaPossibilityBOut = s"$quotaConfigsUser2Out$quotaConfigsUser1Out"
