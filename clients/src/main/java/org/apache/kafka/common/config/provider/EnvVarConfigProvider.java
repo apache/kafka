@@ -28,9 +28,11 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.config.provider.EnvVarConfigProviderConfig.ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG;
-
 public class EnvVarConfigProvider implements ConfigProvider {
+
+    public static final String ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG = "env.var.pattern";
+    public static final String ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG_DOC = "A pattern / regular expression that needs to match for environment variables" +
+            " to be used by this config provider.";
     private final Map<String, String> envVarMap;
     private Pattern envVarPattern;
 
@@ -46,7 +48,7 @@ public class EnvVarConfigProvider implements ConfigProvider {
 
     @Override
     public void configure(Map<String, ?> configs) {
-        if (configs.keySet().contains(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG)) {
+        if (configs.containsKey(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG)) {
             envVarPattern = Pattern.compile(
                     String.valueOf(configs.get(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG))
             );
