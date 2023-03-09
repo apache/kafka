@@ -38,8 +38,8 @@ public class FetchMetricsManagerTest {
     private static final double EPSILON = 0.0001;
 
     private final Time time = new MockTime(1, 0, 0);
-    private final static String topicName = "test";
-    private final static TopicPartition tp = new TopicPartition(topicName, 0);
+    private final static String TOPIC_NAME = "test";
+    private final static TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
 
     private Metrics metrics;
     private FetchMetricsRegistry metricsRegistry;
@@ -85,7 +85,7 @@ public class FetchMetricsManagerTest {
 
     @Test
     public void testBytesFetchedTopic() {
-        String topicName1 = topicName;
+        String topicName1 = TOPIC_NAME;
         String topicName2 = "another-topic";
         Map<String, String> tags1 = topicTags(topicName1);
         Map<String, String> tags2 = topicTags(topicName2);
@@ -113,7 +113,7 @@ public class FetchMetricsManagerTest {
 
     @Test
     public void testRecordsFetchedTopic() {
-        String topicName1 = topicName;
+        String topicName1 = TOPIC_NAME;
         String topicName2 = "another-topic";
         Map<String, String> tags1 = topicTags(topicName1);
         Map<String, String> tags2 = topicTags(topicName2);
@@ -130,11 +130,11 @@ public class FetchMetricsManagerTest {
 
     @Test
     public void testPartitionLag() {
-        Map<String, String> tags = topicPartitionTags(tp);
-        metricsManager.recordPartitionLag(tp, 14);
-        metricsManager.recordPartitionLag(tp, 8);
+        Map<String, String> tags = topicPartitionTags(TP);
+        metricsManager.recordPartitionLag(TP, 14);
+        metricsManager.recordPartitionLag(TP, 8);
         time.sleep(metrics.config().timeWindowMs() + 1);
-        metricsManager.recordPartitionLag(tp, 5);
+        metricsManager.recordPartitionLag(TP, 5);
 
         assertEquals(14, metricValue(metricsRegistry.recordsLagMax), EPSILON);
         assertEquals(5, metricValue(metricsRegistry.partitionRecordsLag, tags), EPSILON);
@@ -144,11 +144,11 @@ public class FetchMetricsManagerTest {
 
     @Test
     public void testPartitionLead() {
-        Map<String, String> tags = topicPartitionTags(tp);
-        metricsManager.recordPartitionLead(tp, 15);
-        metricsManager.recordPartitionLead(tp, 11);
+        Map<String, String> tags = topicPartitionTags(TP);
+        metricsManager.recordPartitionLead(TP, 15);
+        metricsManager.recordPartitionLead(TP, 11);
         time.sleep(metrics.config().timeWindowMs() + 1);
-        metricsManager.recordPartitionLead(tp, 13);
+        metricsManager.recordPartitionLead(TP, 13);
 
         assertEquals(11, metricValue(metricsRegistry.recordsLeadMin), EPSILON);
         assertEquals(13, metricValue(metricsRegistry.partitionRecordsLead, tags), EPSILON);

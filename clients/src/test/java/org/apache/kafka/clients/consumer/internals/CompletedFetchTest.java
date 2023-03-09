@@ -55,8 +55,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CompletedFetchTest {
 
-    private final static String topicName = "test";
-    private final static TopicPartition tp = new TopicPartition(topicName, 0);
+    private final static String TOPIC_NAME = "test";
+    private final static TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
     private final static long PRODUCER_ID = 1000L;
     private final static short PRODUCER_EPOCH = 0;
 
@@ -174,7 +174,7 @@ public class CompletedFetchTest {
     public void testCorruptedMessage() {
         // Create one good record and then one "corrupted" record.
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0);
-        builder.append(new SimpleRecord(new UUIDSerializer().serialize(topicName, UUID.randomUUID())));
+        builder.append(new SimpleRecord(new UUIDSerializer().serialize(TOPIC_NAME, UUID.randomUUID())));
         builder.append(0L, "key".getBytes(), "value".getBytes());
         Records records = builder.build();
 
@@ -233,7 +233,7 @@ public class CompletedFetchTest {
         SubscriptionState subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry();
         FetchMetricsManager metrics = new FetchMetricsManager(new Metrics(), metricsRegistry);
-        FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(tp));
+        FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
 
         return new CompletedFetch<>(logContext,
                 subscriptions,
@@ -242,7 +242,7 @@ public class CompletedFetchTest {
                 keyDeserializer,
                 valueDeserializer,
                 isolationLevel,
-                tp,
+                TP,
                 partitionData,
                 metricAggregator,
                 fetchOffset,
