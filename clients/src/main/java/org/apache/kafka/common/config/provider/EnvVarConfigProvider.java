@@ -86,9 +86,7 @@ public class EnvVarConfigProvider implements ConfigProvider {
             return new ConfigData(new HashMap<>());
         }
 
-        Map<String, String> filteredEnvVarMap = envVarMap;
-
-        filteredEnvVarMap = envVarMap.entrySet().stream()
+        Map<String, String> filteredEnvVarMap = envVarMap.entrySet().stream()
                 .filter(envVar -> envVarPattern.asPredicate().test(envVar.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)
                 );
