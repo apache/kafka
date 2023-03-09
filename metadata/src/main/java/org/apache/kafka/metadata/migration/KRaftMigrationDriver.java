@@ -165,6 +165,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         return true;
     }
 
+    /**
+     * Apply a function which transforms our internal migration state.
+     *
+     * @param name  A descriptive name of the function that is being applied
+     * @param stateMutator  A function which performs some migration operations and possibly transforms our internal state
+     */
     private void apply(String name, Function<ZkMigrationLeadershipState, ZkMigrationLeadershipState> stateMutator) {
         ZkMigrationLeadershipState beforeState = this.migrationLeadershipState;
         ZkMigrationLeadershipState afterState = stateMutator.apply(beforeState);
