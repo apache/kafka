@@ -2881,6 +2881,7 @@ project(':connect:mirror') {
     implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter
+    testImplementation libs.log4j
     testImplementation libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output

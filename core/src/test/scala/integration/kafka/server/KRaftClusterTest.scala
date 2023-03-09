@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -49,7 +49,8 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.{FileSystems, Path}
 import java.{lang, util}
-import java.util.concurrent.CompletionStage
+import java.util.concurrent.{CompletableFuture, CompletionStage}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable
@@ -974,7 +975,7 @@ class KRaftClusterTest {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true))
+  @ValueSource(booleans = Array(false, true))
   def testReconfigureControllerClientQuotas(combinedController: Boolean): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
@@ -1010,6 +1011,47 @@ class KRaftClusterTest {
         admin.close()
       }
       assertConfigValue(1)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testReconfigureControllerAuthorizer(combinedMode: Boolean): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setCoResident(combinedMode).
+        setNumControllerNodes(1).build()).
+      setConfigProp("authorizer.class.name", classOf[FakeConfigurableAuthorizer].getName).
+      build()
+
+    def assertFoobarValue(expected: Int): Unit = {
+      TestUtils.retry(60000) {
+        assertEquals(expected, cluster.controllers().values().iterator().next().
+          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+        assertEquals(expected, cluster.brokers().values().iterator().next().
+          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+      }
+    }
+
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      assertFoobarValue(0)
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.incrementalAlterConfigs(
+          Collections.singletonMap(new ConfigResource(Type.BROKER, ""),
+            Collections.singletonList(new AlterConfigOp(
+              new ConfigEntry(FakeConfigurableAuthorizer.foobarConfigKey, "123"), OpType.SET)))).
+          all().get()
+      } finally {
+        admin.close()
+      }
+      assertFoobarValue(123)
     } finally {
       cluster.close()
     }
@@ -1070,3 +1112,70 @@ class DummyClientQuotaCallback() extends ClientQuotaCallback with Reconfigurable
   override def reconfigure(configs: util.Map[String, _]): Unit = configure(configs)
 }
 
+object FakeConfigurableAuthorizer {
+  val foobarConfigKey = "fake.configurable.authorizer.foobar.config"
+
+  def fakeConfigurableAuthorizerConfigToInt(configs: util.Map[String, _]): Int = {
+    val result = configs.get(foobarConfigKey)
+    if (result == null) {
+      0
+    } else {
+      val resultString = result.toString().trim()
+      try {
+        Integer.valueOf(resultString)
+      } catch {
+        case e: NumberFormatException => throw new ConfigException(s"Bad value of ${foobarConfigKey}: ${resultString}")
+      }
+    }
+  }
+}
+
+class FakeConfigurableAuthorizer() extends Authorizer with Reconfigurable {
+  import FakeConfigurableAuthorizer._
+
+  val foobar = new AtomicInteger(0)
+
+  override def start(serverInfo: AuthorizerServerInfo): java.util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+    serverInfo.endpoints().asScala.map(e => e -> {
+      val future = new CompletableFuture[Void]
+      future.complete(null)
+      future
+    }).toMap.asJava
+  }
+
+  override def reconfigurableConfigs(): java.util.Set[String] = Set(foobarConfigKey).asJava
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+    fakeConfigurableAuthorizerConfigToInt(configs)
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    foobar.set(fakeConfigurableAuthorizerConfigToInt(configs))
+  }
+
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+    actions.asScala.map(_ => AuthorizationResult.ALLOWED).toList.asJava
+  }
+
+  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = List[AclBinding]().asJava
+
+  override def close(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {
+    foobar.set(fakeConfigurableAuthorizerConfigToInt(configs))
+  }
+
+  override def createAcls(
+    requestContext: AuthorizableRequestContext,
+    aclBindings: util.List[AclBinding]
+  ): util.List[_ <: CompletionStage[AclCreateResult]] = {
+    Collections.emptyList()
+  }
+
+  override def deleteAcls(
+    requestContext: AuthorizableRequestContext,
+    aclBindingFilters: util.List[AclBindingFilter]
+  ): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+    Collections.emptyList()
+  }
+}

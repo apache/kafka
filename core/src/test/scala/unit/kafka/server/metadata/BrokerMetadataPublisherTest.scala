@@ -23,7 +23,6 @@ import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.{LogManager, UnifiedLog}
-import kafka.security.CredentialProvider
 import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
@@ -275,10 +274,6 @@ class BrokerMetadataPublisherTest {
     val logManager = mock(classOf[LogManager])
     val replicaManager = mock(classOf[ReplicaManager])
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val txnCoordinator = mock(classOf[TransactionCoordinator])
-    val quotaManager = mock(classOf[ClientQuotaMetadataManager])
-    val configPublisher = mock(classOf[DynamicConfigPublisher])
-    val credentialProvider = mock(classOf[CredentialProvider])
     val faultHandler = mock(classOf[FaultHandler])
 
     val metadataPublisher = new BrokerMetadataPublisher(
@@ -287,11 +282,11 @@ class BrokerMetadataPublisherTest {
       logManager,
       replicaManager,
       groupCoordinator,
-      txnCoordinator,
-      quotaManager,
-      configPublisher,
+      mock(classOf[TransactionCoordinator]),
+      mock(classOf[DynamicConfigPublisher]),
+      mock(classOf[DynamicClientQuotaPublisher]),
+      mock(classOf[ScramPublisher]),
       None,
-      credentialProvider,
       faultHandler,
       faultHandler
     )
