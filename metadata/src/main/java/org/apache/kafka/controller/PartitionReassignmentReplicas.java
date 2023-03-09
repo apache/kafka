@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.metadata.placement.PartitionAssignment;
+
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.List;
@@ -27,7 +29,7 @@ import java.util.TreeSet;
 class PartitionReassignmentReplicas {
     private final List<Integer> removing;
     private final List<Integer> adding;
-    private final List<Integer> merged;
+    private final List<Integer> replicas;
 
     private static Set<Integer> calculateDifference(List<Integer> a, List<Integer> b) {
         Set<Integer> result = new TreeSet<>(a);
@@ -35,14 +37,16 @@ class PartitionReassignmentReplicas {
         return result;
     }
 
-    PartitionReassignmentReplicas(List<Integer> currentReplicas,
-                                  List<Integer> targetReplicas) {
-        Set<Integer> removing = calculateDifference(currentReplicas, targetReplicas);
+    PartitionReassignmentReplicas(
+        PartitionAssignment currentAssignment,
+        PartitionAssignment targetAssignment
+    ) {
+        Set<Integer> removing = calculateDifference(currentAssignment.replicas(), targetAssignment.replicas());
         this.removing = new ArrayList<>(removing);
-        Set<Integer> adding = calculateDifference(targetReplicas, currentReplicas);
+        Set<Integer> adding = calculateDifference(targetAssignment.replicas(), currentAssignment.replicas());
         this.adding = new ArrayList<>(adding);
-        this.merged = new ArrayList<>(targetReplicas);
-        this.merged.addAll(removing);
+        this.replicas = new ArrayList<>(targetAssignment.replicas());
+        this.replicas.addAll(removing);
     }
 
     List<Integer> removing() {
@@ -53,13 +57,13 @@ class PartitionReassignmentReplicas {
         return adding;
     }
 
-    List<Integer> merged() {
-        return merged;
+    List<Integer> replicas() {
+        return replicas;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(removing, adding, merged);
+        return Objects.hash(removing, adding, replicas);
     }
 
     @Override
@@ -68,7 +72,7 @@ class PartitionReassignmentReplicas {
         PartitionReassignmentReplicas other = (PartitionReassignmentReplicas) o;
         return removing.equals(other.removing) &&
             adding.equals(other.adding) &&
-            merged.equals(other.merged);
+            replicas.equals(other.replicas);
     }
 
     @Override
@@ -76,6 +80,6 @@ class PartitionReassignmentReplicas {
         return "PartitionReassignmentReplicas(" +
             "removing=" + removing + ", " +
             "adding=" + adding + ", " +
-            "merged=" + merged + ")";
+            "replicas=" + replicas + ")";
     }
 }
