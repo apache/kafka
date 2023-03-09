@@ -149,14 +149,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
 
         // First check the brokers registered in ZK
-        Set<Integer> zkBrokerRegistrations = zkMigrationClient.readBrokerIds();
+        Set<Integer> zkBrokerRegistrations = new HashSet<>(zkMigrationClient.readBrokerIds());
         if (imageDoesNotContainAllBrokers(image, zkBrokerRegistrations)) {
             log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokerRegistrations);
             return false;
         }
 
         // Once all of those are found, check the topic assignments. This is much more expensive than listing /brokers
-        Set<Integer> zkBrokersWithAssignments = zkMigrationClient.readBrokerIdsFromTopicAssignments();
+        Set<Integer> zkBrokersWithAssignments = new HashSet<>(zkMigrationClient.readBrokerIdsFromTopicAssignments());
         if (imageDoesNotContainAllBrokers(image, zkBrokersWithAssignments)) {
             log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokersWithAssignments);
             return false;
