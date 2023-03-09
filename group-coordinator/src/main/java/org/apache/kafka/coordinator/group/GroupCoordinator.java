@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -40,6 +42,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 
 import java.util.List;
 import java.util.OptionalInt;
@@ -51,6 +55,19 @@ import java.util.function.IntSupplier;
  * Group Coordinator's internal API.
  */
 public interface GroupCoordinator {
+
+    /**
+     * Heartbeat to a Consumer Group.
+     *
+     * @param context           The request context.
+     * @param request           The ConsumerGroupHeartbeatResponse data.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
+        RequestContext context,
+        ConsumerGroupHeartbeatRequestData request
+    );
 
     /**
      * Join a Generic Group.
@@ -283,6 +300,17 @@ public interface GroupCoordinator {
     void onResignation(
         int groupMetadataPartitionIndex,
         OptionalInt groupMetadataPartitionLeaderEpoch
+    );
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The metadata delta.
+     */
+    void onNewMetadataImage(
+        MetadataImage newImage,
+        MetadataDelta delta
     );
 
     /**

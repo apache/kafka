@@ -1605,6 +1605,11 @@ $ bin/kafka-acls.sh \
         <td>0</td>
       </tr>
       <tr>
+        <td>Producer Id counts</td>
+        <td>kafka.server:type=ReplicaManager,name=ProducerIdCount</td>
+        <td>Count of all producer ids created by transactional and idempotent producers in each replica on the broker</td>
+      </tr>
+      <tr>
         <td>Partition counts</td>
         <td>kafka.server:type=ReplicaManager,name=PartitionCount</td>
         <td>mostly even across brokers</td>

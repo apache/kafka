@@ -52,7 +52,6 @@ import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -323,7 +322,7 @@ public final class StreamsTestUtils {
 
         public static TopologyMetadataBuilder unnamedTopology() {
             final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
-            when(topologyMetadata.isPaused(any())).thenReturn(false);
+            when(topologyMetadata.isPaused(null)).thenReturn(false);
             return new TopologyMetadataBuilder(topologyMetadata);
         }
 

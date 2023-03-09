@@ -22,8 +22,8 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -60,15 +60,15 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
     }
 
     private class KTableAggregateProcessor implements Processor<KIn, Change<VIn>, KIn, Change<VAgg>> {
-        private TimestampedKeyValueStore<KIn, VAgg> store;
+        private KeyValueStoreWrapper<KIn, VAgg> store;
         private TimestampedTupleForwarder<KIn, VAgg> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext<KIn, Change<VAgg>> context) {
-            store = (TimestampedKeyValueStore<KIn, VAgg>) context.getStateStore(storeName);
+            store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store,
+                store.getStore(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
@@ -116,7 +116,7 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
             }
 
             // update the store with the new value
-            store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
+            store.put(record.key(), newAgg, newTimestamp);
             tupleForwarder.maybeForward(
                 record.withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
                     .withTimestamp(newTimestamp));

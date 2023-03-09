@@ -17,8 +17,6 @@
 
 package kafka.server.metadata
 
-import kafka.metrics.KafkaMetricsGroup
-
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.Gauge
@@ -26,19 +24,20 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoaderMetrics
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 
+import java.util.Collections
 import java.util.concurrent.TimeUnit.NANOSECONDS
 
 final class BrokerServerMetrics private (
   metrics: Metrics
-) extends MetadataLoaderMetrics with KafkaMetricsGroup {
+) extends MetadataLoaderMetrics {
   import BrokerServerMetrics._
 
-  private val batchProcessingTimeHistName = explicitMetricName("kafka.server",
+  private val batchProcessingTimeHistName = KafkaMetricsGroup.explicitMetricName("kafka.server",
     "BrokerMetadataListener",
     "MetadataBatchProcessingTimeUs",
-    Map.empty)
+    Collections.emptyMap())
 
   /**
    * A histogram tracking the time in microseconds it took to process batches of events.
@@ -46,10 +45,10 @@ final class BrokerServerMetrics private (
   private val batchProcessingTimeHist =
     KafkaYammerMetrics.defaultRegistry().newHistogram(batchProcessingTimeHistName, true)
 
-  private val batchSizeHistName = explicitMetricName("kafka.server",
+  private val batchSizeHistName = KafkaMetricsGroup.explicitMetricName("kafka.server",
     "BrokerMetadataListener",
     "MetadataBatchSizes",
-    Map.empty)
+    Collections.emptyMap())
 
   /**
    * A histogram tracking the sizes of batches that we have processed.

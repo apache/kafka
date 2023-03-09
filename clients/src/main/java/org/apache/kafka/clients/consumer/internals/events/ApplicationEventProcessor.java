@@ -76,8 +76,9 @@ public class ApplicationEventProcessor {
         if (!commitRequestManger.isPresent()) {
             // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
             // upfront so we should never get to this block.
-            backgroundEventQueue.add(new ErrorBackgroundEvent(
-                    new RuntimeException("Unable to commit offset. Most likely because the group.id wasn't set")));
+            Exception exception = new RuntimeException("Unable to commit offset. Most likely because the group.id " +
+                    "wasn't set");
+            event.future().completeExceptionally(exception);
             return false;
         }
 

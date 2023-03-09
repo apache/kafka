@@ -18,15 +18,16 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData, LogOffsetMetadata}
 
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
@@ -180,9 +181,10 @@ class DelayedFetch(
   }
 }
 
-object DelayedFetchMetrics extends KafkaMetricsGroup {
+object DelayedFetchMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedFetchMetrics.getClass)
   private val FetcherTypeKey = "fetcherType"
-  val followerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "follower"))
-  val consumerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "consumer"))
+  val followerExpiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "follower").asJava)
+  val consumerExpiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "consumer").asJava)
 }
 

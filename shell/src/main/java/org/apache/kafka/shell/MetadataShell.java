@@ -149,12 +149,12 @@ public final class MetadataShell {
             builder.setSnapshotPath(res.getString("snapshot"));
             Path tempDir = Files.createTempDirectory("MetadataShell");
             Exit.addShutdownHook("agent-shutdown-hook", () -> {
-                log.debug("Removing temporary directory " + tempDir.toAbsolutePath().toString());
+                log.debug("Removing temporary directory " + tempDir.toAbsolutePath());
                 try {
                     Utils.delete(tempDir.toFile());
                 } catch (Exception e) {
                     log.error("Got exception while removing temporary directory " +
-                        tempDir.toAbsolutePath().toString());
+                        tempDir.toAbsolutePath());
                 }
             });
             MetadataShell shell = builder.build();

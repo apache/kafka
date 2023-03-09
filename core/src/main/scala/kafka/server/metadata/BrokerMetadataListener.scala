@@ -16,10 +16,11 @@
  */
 package kafka.server.metadata
 
+import kafka.utils.Logging
+
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CompletableFuture
-import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -42,7 +43,7 @@ class BrokerMetadataListener(
   val snapshotter: Option[MetadataSnapshotter],
   brokerMetrics: BrokerServerMetrics,
   _metadataLoadingFaultHandler: FaultHandler
-) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
+) extends RaftClient.Listener[ApiMessageAndVersion] with Logging {
 
   private val metadataFaultOccurred = new AtomicBoolean(false)
   private val metadataLoadingFaultHandler: FaultHandler = new FaultHandler() {

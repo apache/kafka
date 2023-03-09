@@ -54,6 +54,20 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedResponse, consumerGroupHeartbeatResponse.data)
   }
 
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true")
+  ))
+  def testConsumerGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabled(): Unit = {
+    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+    ).build()
+
+    val consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+    val expectedResponse = new ConsumerGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    assertEquals(expectedResponse, consumerGroupHeartbeatResponse.data)
+  }
+
   private def connectAndReceive(request: ConsumerGroupHeartbeatRequest): ConsumerGroupHeartbeatResponse = {
     IntegrationTestUtils.connectAndReceive[ConsumerGroupHeartbeatResponse](
       request,

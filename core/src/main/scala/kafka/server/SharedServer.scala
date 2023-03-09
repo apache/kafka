@@ -171,6 +171,17 @@ class SharedServer(
     })
 
   /**
+   * The fault handler to use when ControllerServer.startup throws an exception.
+   */
+  def controllerStartupFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "controller startup",
+    fatal = true,
+    action = () => SharedServer.this.synchronized {
+      if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
+      snapshotsDiabledReason.compareAndSet(null, "controller startup fault")
+    })
+
+  /**
    * The fault handler to use when the initial broker metadata load fails.
    */
   def initialBrokerMetadataLoadFaultHandler: FaultHandler = faultHandlerFactory.build(
