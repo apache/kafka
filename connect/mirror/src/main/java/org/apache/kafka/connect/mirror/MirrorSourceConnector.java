@@ -119,11 +119,12 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing the deprecated setting "use.incremental.alter.configs"
     // this constructor should be removed when the deprecated setting is removed in Kafka 4.0
     MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
-                          String useIncrementalAlterConfigs, ConfigPropertyFilter configPropertyFilter) {
+                          String useIncrementalAlterConfigs, ConfigPropertyFilter configPropertyFilter, Admin targetAdmin) {
         this.sourceAndTarget = sourceAndTarget;
         this.replicationPolicy = replicationPolicy;
         this.configPropertyFilter = configPropertyFilter;
         this.useIncrementalAlterConfigs = useIncrementalAlterConfigs;
+        this.targetAdminClient = targetAdmin;
     }
 
     @Override
@@ -487,7 +488,7 @@ public class MirrorSourceConnector extends SourceConnector {
         if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
             alterConfigs(topicConfigs);
         } else {
-            if (incrementalAlterConfigs(topicConfigs).get()) alterConfigs(topicConfigs);
+            incrementalAlterConfigs(topicConfigs);
         }
     }
 
@@ -507,8 +508,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // visible for testing
-    AtomicBoolean incrementalAlterConfigs(Map<String, Config> topicConfigs) {
-        AtomicBoolean fallbackToAlterConfigs = new AtomicBoolean(false);
+    void incrementalAlterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
             Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -525,18 +525,17 @@ public class MirrorSourceConnector extends SourceConnector {
         log.trace("Syncing configs for {} topics.", configOps.size());
         targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
-                if (useIncrementalAlterConfigs == MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT
-                        && e.getCause() instanceof UnsupportedVersionException) {
+                if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT)
+                        && e instanceof UnsupportedVersionException) {
                     //Fallback logic
                     log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. Therefore using deprecated AlterConfigs API for syncing topic configurations", sourceAndTarget.target(), e);
-                    fallbackToAlterConfigs.set(true);
+                    alterConfigs(topicConfigs);
                     useIncrementalAlterConfigs = MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG;
                 } else {
                     log.warn("Could not alter configuration of topic {}.", k.name(), e);
                 }
             }
         }));
-        return fallbackToAlterConfigs;
     }
 
     private void updateTopicAcls(List<AclBinding> bindings) {

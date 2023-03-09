@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -34,6 +36,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
@@ -64,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.mockito.Mockito;
 
 public class MirrorSourceConnectorTest {
     private ConfigPropertyFilter getConfigPropertyFilter() {
@@ -185,7 +189,7 @@ public class MirrorSourceConnectorTest {
     @Deprecated
     public void testConfigPropertyFilteringWithAlterConfigs() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter());
+                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), null);
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         // When set to not using incrementalAlterConfigs, the default config should be excluded
@@ -246,31 +250,32 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testIncrementalAlterConfigsRequested() throws Exception {
+        MockAdminClient admin = spy(new MockAdminClient());
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT, new DefaultConfigPropertyFilter()));
+                new DefaultReplicationPolicy(), MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT, new DefaultConfigPropertyFilter(), admin));
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         Config config = new Config(entries);
         doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
-        doReturn(new AtomicBoolean(true)).when(connector).incrementalAlterConfigs(any());
+        doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
         doNothing().when(connector).alterConfigs(any());
         connector.syncTopicConfigs();
         verify(connector).syncTopicConfigs();
         verify(connector).incrementalAlterConfigs(any());
-        verify(connector).alterConfigs(any());
+        verify(connector, times(1)).alterConfigs(any());
     }
 
     @Test
     public void testIncrementalAlterConfigsRequired() throws Exception {
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
+                new DefaultReplicationPolicy(), MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), null));
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         Config config = new Config(entries);
         doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
-        doReturn(new AtomicBoolean(false)).when(connector).incrementalAlterConfigs(any());
+        doNothing().when(connector).incrementalAlterConfigs(any());
         connector.syncTopicConfigs();
         verify(connector).syncTopicConfigs();
         verify(connector).incrementalAlterConfigs(any());
@@ -279,7 +284,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIncrementalAlterConfigsNeverUsed() throws Exception {
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
+                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), null));
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
