@@ -266,7 +266,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     abstract class MigrationEvent implements EventQueue.Event {
         @Override
         public void handleException(Throwable e) {
-            if (e instanceof RejectedExecutionException) {
+            if (e instanceof MigrationClientException) {
+                log.warn(String.format("Encountered client error during event %s. Will retry.", this), e.getCause());
+            } else if (e instanceof RejectedExecutionException) {
                 log.info("Not processing {} because the event queue is closed.", this);
             } else {
                 KRaftMigrationDriver.this.faultHandler.handleFault(
@@ -376,23 +378,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class BecomeZkControllerEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            switch (migrationState) {
-                case BECOME_CONTROLLER:
-                    // TODO: Handle unhappy path.
-                    apply("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
-                    if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
-                        // We could not claim leadership, stay in BECOME_CONTROLLER to retry
+            if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
+                apply("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
+                if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
+                    log.debug("Unable to claim leadership, will retry until we learn of a different KRaft leader");
+                } else {
+                    if (!migrationLeadershipState.zkMigrationComplete()) {
+                        transitionTo(MigrationDriverState.ZK_MIGRATION);
                     } else {
-                        if (!migrationLeadershipState.zkMigrationComplete()) {
-                            transitionTo(MigrationDriverState.ZK_MIGRATION);
-                        } else {
-                            transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
-                        }
+                        transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
                     }
-                    break;
-                default:
-                    // Ignore the event as we're not trying to become controller anymore.
-                    break;
+                }
             }
         }
     }
