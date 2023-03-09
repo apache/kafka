@@ -3423,9 +3423,10 @@ class KafkaApisTest {
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
 
     // If replicaId is -1 we will build a consumer request. Any non-negative replicaId will build a follower request.
+    val replicaEpoch = if (replicaId < 0) -1 else 1
     val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
-      replicaId, if (replicaId < 0) -1 else 1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
-    assertEquals(fetchRequest.replicaEpoch(), if (replicaId < 0) -1 else 1)
+      replicaId, replicaEpoch, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
+    assertEquals(fetchRequest.replicaEpoch(), replicaEpoch)
     assertEquals(fetchRequest.replicaId(), replicaId)
     val request = buildRequest(fetchRequest)
 

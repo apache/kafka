@@ -960,9 +960,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         FetchResponseData response = tryCompleteFetchRequest(
-                FetchRequest.replicaId(request),
-                fetchPartition,
-                currentTimeMs);
+            FetchRequest.replicaId(request),
+            fetchPartition,
+            currentTimeMs);
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
 

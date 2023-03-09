@@ -320,27 +320,7 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    public static void updateReplicaStateBasedOnVersion(FetchRequestData fetchRequestData, short version) {
-        if (fetchRequestData.replicaId() == fetchRequestData.replicaState().replicaId()) {
-            // The only case where these two replica ids are the same is that they are both -1. Nothing to update.
-            return;
-        }
-        if (fetchRequestData.replicaId() != -1) {
-            // Using old replicaId.
-            if (version >= 15) {
-                fetchRequestData.setReplicaState(new ReplicaState().setReplicaId(fetchRequestData.replicaId()));
-                fetchRequestData.setReplicaId(-1);
-            }
-            return;
-        }
-        // Using replica state
-        if (version < 15) {
-            fetchRequestData.setReplicaId(fetchRequestData.replicaState().replicaId());
-            fetchRequestData.setReplicaState(new ReplicaState());
-        }
-    }
-
-    // Downgrade the ReplicaState field to be compatible with lower version.
+    // Downgrades the ReplicaState field to be compatible with lower version.
     public static void maybeDownGradeReplicaState(FetchRequestData fetchRequestData, short version) {
         if (version < 15) {
             fetchRequestData.setReplicaId(fetchRequestData.replicaState().replicaId());
