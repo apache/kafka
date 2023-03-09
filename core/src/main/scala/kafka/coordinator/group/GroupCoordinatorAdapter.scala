@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
 
 import java.util
@@ -578,6 +579,13 @@ private[group] class GroupCoordinatorAdapter(
     groupMetadataPartitionLeaderEpoch: OptionalInt
   ): Unit = {
     coordinator.onResignation(groupMetadataPartitionIndex, groupMetadataPartitionLeaderEpoch)
+  }
+
+  override def onNewMetadataImage(
+    newImage: MetadataImage,
+    delta: MetadataDelta
+  ): Unit = {
+    // The metadata image is not used in the old group coordinator.
   }
 
   override def groupMetadataTopicConfigs(): Properties = {

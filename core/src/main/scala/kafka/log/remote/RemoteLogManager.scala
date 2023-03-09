@@ -17,7 +17,6 @@
 package kafka.log.remote
 
 import kafka.cluster.Partition
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.common._
@@ -48,7 +47,7 @@ import scala.jdk.CollectionConverters._
  */
 class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
                        brokerId: Int,
-                       logDir: String) extends Logging with Closeable with KafkaMetricsGroup {
+                       logDir: String) extends Logging with Closeable {
 
   // topic ids received on leadership changes
   private val topicPartitionIds: ConcurrentMap[TopicPartition, Uuid] = new ConcurrentHashMap[TopicPartition, Uuid]()
