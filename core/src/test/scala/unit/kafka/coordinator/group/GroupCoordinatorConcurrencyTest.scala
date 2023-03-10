@@ -20,13 +20,12 @@ package kafka.coordinator.group
 import java.util.Properties
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -284,7 +283,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val topicId = Uuid.randomUuid()
+      val offsets = immutable.Map(new TopicIdPartition(topicId, tp) -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, offsets, responseCallback)
       replicaManager.tryCompleteActions()
@@ -295,8 +295,12 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
   }
 
-  class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
-    override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
+  class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends GroupOperation[TxnCommitOffsetCallbackParams, TxnCommitOffsetCallback] {
+    override def responseCallback(responsePromise: Promise[TxnCommitOffsetCallbackParams]): TxnCommitOffsetCallback = {
+      val callback: TxnCommitOffsetCallback = offsets => responsePromise.success(offsets)
+      callback
+    }
+    override def runWithCallback(member: GroupMember, responseCallback: TxnCommitOffsetCallback): Unit = {
       val tp = new TopicPartition("topic", 0)
       val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       val producerId = 1000L
@@ -317,6 +321,11 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
           offsets, callbackWithTxnCompletion)
         replicaManager.tryCompleteActions()
       } finally lock.foreach(_.unlock())
+    }
+
+    override def awaitAndVerify(member: GroupMember): Unit = {
+      val offsets = await(member, 500)
+      offsets.foreach { case (_, error) => assertEquals(Errors.NONE, error) }
     }
   }
 
@@ -373,8 +382,10 @@ object GroupCoordinatorConcurrencyTest {
   type HeartbeatCallback = Errors => Unit
   type OffsetFetchCallbackParams = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData])
   type OffsetFetchCallback = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) => Unit
-  type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
-  type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
+  type CommitOffsetCallbackParams = Map[TopicIdPartition, Errors]
+  type CommitOffsetCallback = Map[TopicIdPartition, Errors] => Unit
+  type TxnCommitOffsetCallbackParams = Map[TopicPartition, Errors]
+  type TxnCommitOffsetCallback = Map[TopicPartition, Errors] => Unit
   type LeaveGroupCallbackParams = LeaveGroupResult
   type LeaveGroupCallback = LeaveGroupResult => Unit
   type CompleteTxnCallbackParams = Errors

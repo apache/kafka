@@ -451,7 +451,8 @@ class KafkaServer(
           config,
           replicaManager,
           Time.SYSTEM,
-          metrics
+          metrics,
+          metadataCache
         )
         groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions))
 

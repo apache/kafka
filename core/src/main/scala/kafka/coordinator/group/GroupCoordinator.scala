@@ -18,10 +18,10 @@ package kafka.coordinator.group
 
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.OffsetAndMetadata
+import kafka.common.{OffsetAndMetadata, TopicIdAdaptor}
 import kafka.server._
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
@@ -917,8 +917,8 @@ private[group] class GroupCoordinator(
                           memberId: String,
                           groupInstanceId: Option[String],
                           generationId: Int,
-                          offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
+                          offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
+                          responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
@@ -1019,9 +1019,10 @@ private[group] class GroupCoordinator(
                               memberId: String,
                               groupInstanceId: Option[String],
                               generationId: Int,
-                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
+                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
+                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
                               requestLocal: RequestLocal): Unit = {
+
     group.inLock {
       val validationErrorOpt = validateOffsetCommit(
         group,
@@ -1034,16 +1035,21 @@ private[group] class GroupCoordinator(
       if (validationErrorOpt.isDefined) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> validationErrorOpt.get })
       } else {
+        // GroupMetadataManager does not support topic ids yet.
+        val adaptor = TopicIdAdaptor.from(offsetMetadata.keys)
+        val adaptedOffsetMetadata = TopicIdAdaptor.adapt(offsetMetadata)
+        val adaptedResponseCallback = (m: immutable.Map[TopicPartition, Errors]) => responseCallback(adaptor.adapt(m))
+
         group.currentState match {
           case Empty =>
-            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
+            groupManager.storeOffsets(group, memberId, adaptedOffsetMetadata, adaptedResponseCallback)
 
           case Stable | PreparingRebalance =>
             // During PreparingRebalance phase, we still allow a commit request since we rely
             // on heartbeat response to eventually notify the rebalance in progress signal to the consumer
             val member = group.get(memberId)
             completeAndScheduleNextHeartbeatExpiration(group, member)
-            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, requestLocal = requestLocal)
+            groupManager.storeOffsets(group, memberId, adaptedOffsetMetadata, adaptedResponseCallback, requestLocal = requestLocal)
 
           case CompletingRebalance =>
             // We should not receive a commit request if the group has not completed rebalance;
