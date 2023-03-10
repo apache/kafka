@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -104,6 +104,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -143,7 +144,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
     @Mock private TransformationChain<SourceRecord> transformationChain;
-    @Mock private KafkaProducer<byte[], byte[]> producer;
+    @Mock private Producer<byte[], byte[]> producer;
     @Mock private TopicAdmin admin;
     @Mock private CloseableOffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
@@ -196,9 +197,13 @@ public class ExactlyOnceWorkerSourceTaskTest {
         time = Time.SYSTEM;
         when(offsetStore.primaryOffsetsTopic()).thenReturn("offsets-topic");
         when(sourceTask.poll()).thenAnswer(invocation -> {
+            // Capture the records we'll return before decrementing the poll latch,
+            // since test cases may mutate the poll records field immediately
+            // after awaiting the latch
+            List<SourceRecord> result = pollRecords.get();
             pollLatch.get().countDown();
             Thread.sleep(10);
-            return pollRecords.get();
+            return result;
         });
     }
 
@@ -667,6 +672,51 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifyPossibleTopicCreation();
         assertPollMetrics(1);
         assertTransactionMetrics(abort ? 0 : (3 * RECORDS.size()));
+    }
+
+    @Test
+    public void testConnectorAbortsEmptyTransaction() throws Exception {
+        Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.CONNECTOR);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        createWorkerTask();
+
+        expectPossibleTopicCreation();
+        expectTaskGetTopic();
+        expectApplyTransformationChain();
+        expectConvertHeadersAndKeyValue();
+        TransactionContext transactionContext = workerTask.sourceTaskContext.transactionContext();
+
+        startTaskThread();
+
+        // Ensure the task produces at least one non-empty batch
+        awaitPolls(1);
+        // Start returning empty batches from SourceTask::poll
+        awaitEmptyPolls(1);
+        // The task commits the active transaction, which should not be empty and should
+        // result in a single call to Producer::commitTransaction
+        transactionContext.commitTransaction();
+
+        // Ensure the task produces at least one empty batch after the transaction has been committed
+        awaitEmptyPolls(1);
+        // The task aborts the active transaction, which has no records in it and should not trigger a call to
+        // Producer::abortTransaction
+        transactionContext.abortTransaction();
+        // Make sure we go through at least one more poll, to give the framework a chance to handle the
+        // transaction abort request
+        awaitEmptyPolls(1);
+
+        awaitShutdown(true);
+
+        verify(producer, times(1)).beginTransaction();
+        verify(producer, times(1)).commitTransaction();
+        verify(producer, atLeast(RECORDS.size())).send(any(), any());
+        // We never abort transactions in this test!
+        verify(producer, never()).abortTransaction();
+
+        verifyPreflight();
+        verifyStartup();
+        verifyCleanShutdown();
+        verifyPossibleTopicCreation();
     }
 
     @Test
