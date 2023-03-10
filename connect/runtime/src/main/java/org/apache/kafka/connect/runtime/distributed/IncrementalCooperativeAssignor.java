@@ -22,11 +22,13 @@ import java.util.Map.Entry;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -42,6 +44,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -179,7 +182,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 coordinator.configSnapshot(),
                 coordinator.lastCompletedGenerationId(),
                 coordinator.generationId(),
-                memberAssignments
+                memberAssignments,
+                coordinator
         );
 
         coordinator.leaderState(new LeaderState(memberConfigs, clusterAssignment.allAssignedConnectors(), clusterAssignment.allAssignedTasks()));
@@ -199,7 +203,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             ClusterConfigState configSnapshot,
             int lastCompletedGenerationId,
             int currentGenerationId,
-            Map<String, ConnectorsAndTasks> memberAssignments
+            Map<String, ConnectorsAndTasks> memberAssignments,
+            WorkerCoordinator coordinator
     ) {
         // Base set: The previous assignment of connectors-and-tasks is a standalone snapshot that
         // can be used to calculate derived sets
@@ -285,7 +290,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // the scheduled rebalance delay. These assignments will be re-allocated to the existing workers
         // in the cluster later on
         ConnectorsAndTasks.Builder lostAssignmentsToReassignBuilder = new ConnectorsAndTasks.Builder();
-        handleLostAssignments(lostAssignments, lostAssignmentsToReassignBuilder, nextWorkerAssignment);
+        handleLostAssignments(lostAssignments, lostAssignmentsToReassignBuilder, nextWorkerAssignment, coordinator);
         ConnectorsAndTasks lostAssignmentsToReassign = lostAssignmentsToReassignBuilder.build();
 
         // Do not revoke resources for re-assignment while a delayed rebalance is active
@@ -441,7 +446,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     // visible for testing
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks.Builder lostAssignmentsToReassign,
-                                         List<WorkerLoad> completeWorkerAssignment) {
+                                         List<WorkerLoad> completeWorkerAssignment,
+                                         WorkerCoordinator coordinator) {
         // There are no lost assignments and there have been no successive revoking rebalances
         if (lostAssignments.isEmpty() && !revokedInPrevious) {
             resetDelay();
@@ -463,6 +469,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             lostAssignmentsToReassign.addConnectors(lostAssignments.connectors());
             lostAssignmentsToReassign.addTasks(lostAssignments.tasks());
             return;
+        }
+
+        if (coordinator.isEosEnabled()) {
+            abortOpenTransactionsForLostTasks(lostAssignments, coordinator);
         }
 
         if (scheduledRebalance > 0 && now >= scheduledRebalance) {
@@ -523,6 +533,31 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                         delay, scheduledRebalance, now, scheduledRebalance - now);
             }
             scheduledRebalance = now + delay;
+        }
+    }
+
+    /*
+    * If a task running in EOS mode is killed ungracefully, it could leave a hanging transaction open. This could become
+    * a problem if the write involved writing to the global offsets topic. Nonetheless, we can't rely on workers that
+    * got restarted after being ungracefully shutdown to fence out their own hanging transactions since they won't be
+    * able to join the group in the first place.
+    * That's why we rely on the leader to proactively abort any open transactions for tasks from workers who seemed to
+    * have left the group. This plays out nicely because in EOS mode, fencing can only be performed by the leader.
+     */
+    private void abortOpenTransactionsForLostTasks(ConnectorsAndTasks lostAssignments, WorkerCoordinator coordinator) {
+        Set<String> connectorTasksToFence =  lostAssignments.tasks().stream().map(ConnectorTaskId::connector).collect(Collectors.toSet());
+        for (String toFence : connectorTasksToFence) {
+            FutureCallback<Void> preflightFencing = new FutureCallback<>();
+            // It should be ok to cast to DistributedHerder since EOS is supported only in Distributed mode right now.
+            ((DistributedHerder) coordinator.getWorker().herder()).fenceZombieSourceTasks(toFence, preflightFencing);
+            try {
+                preflightFencing.get();
+            } catch (InterruptedException e) {
+                throw new ConnectException("Interrupted while attempting to perform round of zombie fencing", e);
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                throw ConnectUtils.maybeWrap(cause, "Failed to perform round of zombie fencing");
+            }
         }
     }
 

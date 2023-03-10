@@ -130,7 +130,7 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
  *     In addition to distributing work, the DistributedHerder uses the leader determined during the work assignment
  *     to select a leader for this generation of the group who is responsible for other tasks that can only be performed
  *     by a single node at a time. Most importantly, this includes writing updated configurations for connectors and tasks,
- *     (and therefore, also for creating, destroy, and scaling up/down connectors).
+ *     (and therefore, also for creating, destroy, scaling up/down connectors, and fencing out zombie producers in EOS mode).
  * </p>
  * <p>
  *     The DistributedHerder uses a single thread for most of its processing. This includes processing
@@ -296,8 +296,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         this.member = member != null
                       ? member
-                      : new WorkerGroupMember(config, restUrl, this.configBackingStore,
-                              new RebalanceListener(time), time, clientId, logContext);
+                      : new WorkerGroupMember(worker, config, restUrl, this.configBackingStore,
+                              new RebalanceListener(time), time, clientId, logContext, this);
 
         this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L,
                 TimeUnit.MILLISECONDS,
@@ -1210,7 +1210,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     // Visible for testing
-    void fenceZombieSourceTasks(final String connName, final Callback<Void> callback) {
+    public void fenceZombieSourceTasks(final String connName, final Callback<Void> callback) {
         addRequest(
                 () -> {
                     log.trace("Performing zombie fencing request for connector {}", connName);

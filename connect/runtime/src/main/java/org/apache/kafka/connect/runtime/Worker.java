@@ -191,7 +191,7 @@ public class Worker {
         return workerConfigTransformer;
     }
 
-    protected Herder herder() {
+    public Herder herder() {
         return herder;
     }
 

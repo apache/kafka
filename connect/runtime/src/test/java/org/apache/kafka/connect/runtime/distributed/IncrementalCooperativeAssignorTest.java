@@ -721,10 +721,11 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
 
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -741,7 +742,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // Lost assignments detected - No candidate worker has appeared yet (worker with no assignments)
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -756,7 +757,7 @@ public class IncrementalCooperativeAssignorTest {
         // A new worker (probably returning worker) has joined
         configuredAssignment.put(flakyWorker, new WorkerLoad.Builder(flakyWorker).build());
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.singleton(flakyWorker),
@@ -769,7 +770,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // The new worker has still no assignments
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertTrue("Wrong assignment of lost connectors",
                 configuredAssignment.getOrDefault(flakyWorker, new WorkerLoad.Builder(flakyWorker).build())
@@ -801,10 +802,12 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
 
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -821,7 +824,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // Lost assignments detected - No candidate worker has appeared yet (worker with no assignments)
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -835,7 +838,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // No new worker has joined
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -847,7 +850,7 @@ public class IncrementalCooperativeAssignorTest {
 
         ConnectorsAndTasks.Builder lostAssignmentsToReassign = new ConnectorsAndTasks.Builder();
         assignor.handleLostAssignments(lostAssignments, lostAssignmentsToReassign,
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertTrue("Wrong assignment of lost connectors",
                 lostAssignmentsToReassign.build().connectors().containsAll(lostAssignments.connectors()));
@@ -875,10 +878,12 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
 
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -898,7 +903,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // Lost assignments detected - A new worker also has joined that is not the returning worker
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.singleton(newWorker),
@@ -913,7 +918,7 @@ public class IncrementalCooperativeAssignorTest {
         // Now two new workers have joined
         configuredAssignment.put(flakyWorker, new WorkerLoad.Builder(flakyWorker).build());
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         Set<String> expectedWorkers = new HashSet<>();
         expectedWorkers.addAll(Arrays.asList(newWorker, flakyWorker));
@@ -932,7 +937,7 @@ public class IncrementalCooperativeAssignorTest {
         // we don't reflect these new assignments in memberConfigs currently because they are not
         // used in handleLostAssignments method
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         // both the newWorkers would need to be considered for re assignment of connectors and tasks
         List<String> listOfConnectorsInLast2Workers = new ArrayList<>();
@@ -971,10 +976,12 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
         configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
 
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+
         // No lost assignments
         assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
                 new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -991,7 +998,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // Lost assignments detected - No candidate worker has appeared yet (worker with no assignments)
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
@@ -1006,7 +1013,7 @@ public class IncrementalCooperativeAssignorTest {
         // A new worker (probably returning worker) has joined
         configuredAssignment.put(veryFlakyWorker, new WorkerLoad.Builder(veryFlakyWorker).build());
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertEquals("Wrong set of workers for reassignments",
                 Collections.singleton(veryFlakyWorker),
@@ -1021,7 +1028,7 @@ public class IncrementalCooperativeAssignorTest {
         configuredAssignment.remove(veryFlakyWorker);
         ConnectorsAndTasks.Builder lostAssignmentsToReassign = new ConnectorsAndTasks.Builder();
         assignor.handleLostAssignments(lostAssignments, lostAssignmentsToReassign,
-                new ArrayList<>(configuredAssignment.values()));
+                new ArrayList<>(configuredAssignment.values()), coordinator);
 
         assertTrue("Wrong assignment of lost connectors",
                 lostAssignmentsToReassign.build().connectors().containsAll(lostAssignments.connectors()));
@@ -1228,7 +1235,8 @@ public class IncrementalCooperativeAssignorTest {
                             Map.Entry::getKey,
                             e -> new ConnectorsAndTasks.Builder().with(e.getValue().connectors(), e.getValue().tasks()).build()
                     ));
-            returnedAssignments = assignor.performTaskAssignment(configState(), lastCompletedGenerationId, generationId, memberAssignmentsCopy);
+            WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+            returnedAssignments = assignor.performTaskAssignment(configState(), lastCompletedGenerationId, generationId, memberAssignmentsCopy, coordinator);
         } catch (RuntimeException e) {
             if (assignmentFailure) {
                 RequestFuture.failure(e);

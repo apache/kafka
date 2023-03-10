@@ -172,7 +172,7 @@ public class WorkerCoordinatorIncrementalTest {
                                                  configStorage,
                                                  rebalanceListener,
                                                  compatibility,
-                                                 rebalanceDelay);
+                                                 rebalanceDelay, false);
 
         configState1 = clusterConfigState(offset, 2, 4);
     }

@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -66,7 +67,8 @@ public class WorkerGroupMember {
 
     private boolean stopped = false;
 
-    public WorkerGroupMember(DistributedConfig config,
+    public WorkerGroupMember(Worker worker,
+                             DistributedConfig config,
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener,
@@ -125,6 +127,7 @@ public class WorkerGroupMember {
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
                     Integer.MAX_VALUE);
             this.coordinator = new WorkerCoordinator(
+                    worker,
                     new GroupRebalanceConfig(config, GroupRebalanceConfig.ProtocolType.CONNECT),
                     logContext,
                     this.client,
@@ -135,7 +138,8 @@ public class WorkerGroupMember {
                     configStorage,
                     listener,
                     ConnectProtocolCompatibility.compatibility(config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)),
-                    config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG));
+                    config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG),
+                    config.exactlyOnceSourceEnabled());
 
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Connect group member created");

@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -67,11 +68,15 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     private final ConnectAssignor eagerAssignor;
     private final ConnectAssignor incrementalAssignor;
     private final int coordinatorDiscoveryTimeoutMs;
+    private final Worker worker;
+
+    private final boolean isEosEnabled;
 
     /**
      * Initialize the coordination manager.
      */
-    public WorkerCoordinator(GroupRebalanceConfig config,
+    public WorkerCoordinator(Worker worker,
+                             GroupRebalanceConfig config,
                              LogContext logContext,
                              ConsumerNetworkClient client,
                              Metrics metrics,
@@ -81,13 +86,15 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener,
                              ConnectProtocolCompatibility protocolCompatibility,
-                             int maxDelay) {
+                             int maxDelay,
+                             boolean isEosEnabled) {
         super(config,
               logContext,
               client,
               metrics,
               metricGrpPrefix,
               time);
+        this.worker = worker;
         this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
@@ -101,6 +108,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.currentConnectProtocol = protocolCompatibility;
         this.coordinatorDiscoveryTimeoutMs = config.heartbeatIntervalMs;
         this.lastCompletedGenerationId = Generation.NO_GENERATION.generationId;
+        this.isEosEnabled = isEosEnabled;
     }
 
     @Override
@@ -349,6 +357,14 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      */
     public short currentProtocolVersion() {
         return currentConnectProtocol.protocolVersion();
+    }
+
+    public Worker getWorker() {
+        return worker;
+    }
+
+    public boolean isEosEnabled() {
+        return isEosEnabled;
     }
 
     private class WorkerCoordinatorMetrics {
