@@ -293,8 +293,7 @@ class BrokerServer(
         config,
         replicaManager,
         Time.SYSTEM,
-        metrics,
-        metadataCache
+        metrics
       )
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(

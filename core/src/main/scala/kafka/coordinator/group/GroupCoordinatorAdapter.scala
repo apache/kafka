@@ -16,8 +16,8 @@
  */
 package kafka.coordinator.group
 
-import kafka.common.{OffsetAndMetadata, TopicIdAdaptor}
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
+import kafka.common.OffsetAndMetadata
+import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
@@ -41,8 +41,7 @@ object GroupCoordinatorAdapter {
     config: KafkaConfig,
     replicaManager: ReplicaManager,
     time: Time,
-    metrics: Metrics,
-    metadata: MetadataCache
+    metrics: Metrics
   ): GroupCoordinatorAdapter = {
     new GroupCoordinatorAdapter(
       GroupCoordinator(
@@ -51,8 +50,7 @@ object GroupCoordinatorAdapter {
         time,
         metrics
       ),
-      time,
-      metadata
+      time
     )
   }
 }
@@ -63,8 +61,7 @@ object GroupCoordinatorAdapter {
  */
 private[group] class GroupCoordinatorAdapter(
   private val coordinator: GroupCoordinator,
-  private val time: Time,
-  private val metadata: MetadataCache
+  private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
 
   override def consumerGroupHeartbeat(
@@ -359,11 +356,12 @@ private[group] class GroupCoordinatorAdapter(
   ): CompletableFuture[OffsetCommitResponseData] = {
     val currentTimeMs = time.milliseconds
     val future = new CompletableFuture[OffsetCommitResponseData]()
-    val response = new OffsetCommitResponseData()
-    val byTopics = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
 
-    def appendToResponse(results: Map[TopicPartition, Errors]): Unit = {
-      results.forKeyValue { (tp, error) =>
+    def callback(commitStatus: Map[TopicIdPartition, Errors]): Unit = {
+      val response = new OffsetCommitResponseData()
+      val byTopics = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
+
+      commitStatus.forKeyValue { (tp, error) =>
         val topic = byTopics.get(tp.topic) match {
           case Some(existingTopic) =>
             existingTopic
@@ -378,10 +376,7 @@ private[group] class GroupCoordinatorAdapter(
           .setPartitionIndex(tp.partition)
           .setErrorCode(error.code))
       }
-    }
 
-    def callback(commitStatus: Map[TopicIdPartition, Errors]): Unit = {
-      appendToResponse(TopicIdAdaptor.adapt(commitStatus))
       future.complete(response)
     }
 
@@ -393,27 +388,18 @@ private[group] class GroupCoordinatorAdapter(
       case retentionTimeMs => Some(currentTimeMs + retentionTimeMs)
     }
 
-    val topicIds = metadata.topicNamesToIds()
     val partitions = new mutable.HashMap[TopicIdPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
-      val topicId = topicIds.get(topic.name)
-      if (Uuid.ZERO_UUID.equals(topicId)) {
-        val topicPartitions = topic.partitions.asScala.map { p =>
-          new TopicPartition(topic.name, p.partitionIndex) -> Errors.UNKNOWN_TOPIC_OR_PARTITION
-        }
-        appendToResponse(topicPartitions.toMap)
-      } else {
-        topic.partitions.forEach { partition =>
-          val tp = new TopicIdPartition(topicId, new TopicPartition(topic.name, partition.partitionIndex))
-          partitions += tp -> createOffsetAndMetadata(
-            currentTimeMs,
-            partition.committedOffset,
-            partition.committedLeaderEpoch,
-            partition.committedMetadata,
-            partition.commitTimestamp,
-            expireTimeMs
-          )
-        }
+      topic.partitions.forEach { partition =>
+        val tp = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition(topic.name, partition.partitionIndex))
+        partitions += tp -> createOffsetAndMetadata(
+          currentTimeMs,
+          partition.committedOffset,
+          partition.committedLeaderEpoch,
+          partition.committedMetadata,
+          partition.commitTimestamp,
+          expireTimeMs
+        )
       }
     }
 
