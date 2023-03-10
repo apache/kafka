@@ -54,7 +54,7 @@ public class JaasContext {
      * If the property is not defined, the context will contain the default Configuration and
      * the context name will be one of:
      * <ol>
-     *   <li>Lowercased listener name followed by a period and the string `KafkaServer`</li>
+     *   <li>Lowercase listener name followed by a period and the string `KafkaServer`</li>
      *   <li>The string `KafkaServer`</li>
      *  </ol>
      * If both are valid entries in the default JAAS configuration, the first option is chosen.
