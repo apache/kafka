@@ -390,7 +390,7 @@ object StorageTool extends Logging {
                     ignoreFormatted: Boolean): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
-    }:1
+    }
 
     val unformattedDirectories = directories.filter(directory => {
       if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
