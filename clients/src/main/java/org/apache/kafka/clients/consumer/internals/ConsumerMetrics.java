@@ -26,10 +26,10 @@ import org.apache.kafka.common.metrics.Metrics;
 
 public class ConsumerMetrics {
     
-    public FetcherMetricsRegistry fetcherMetrics;
+    public FetchMetricsRegistry fetcherMetrics;
     
     public ConsumerMetrics(Set<String> metricsTags, String metricGrpPrefix) {
-        this.fetcherMetrics = new FetcherMetricsRegistry(metricsTags, metricGrpPrefix);
+        this.fetcherMetrics = new FetchMetricsRegistry(metricsTags, metricGrpPrefix);
     }
 
     public ConsumerMetrics(String metricGroupPrefix) {
