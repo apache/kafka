@@ -66,7 +66,7 @@ import java.util.function.Supplier;
  *     to ensure correct behavior (e.g. acks, auto.offset.reset).
  * </p>
  */
-public class KafkaOffsetBackingStore extends KafkaTopicBackingStore implements OffsetBackingStore {
+public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaOffsetBackingStore.class);
 
     /**

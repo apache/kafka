@@ -192,7 +192,7 @@ import static org.apache.kafka.connect.util.ConnectUtils.className;
  * rebalance must be deferred.
  * </p>
  */
-public class KafkaConfigBackingStore extends KafkaTopicBackingStore implements ConfigBackingStore {
+public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore implements ConfigBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaConfigBackingStore.class);
 
     public static final String TARGET_STATE_PREFIX = "target-state-";

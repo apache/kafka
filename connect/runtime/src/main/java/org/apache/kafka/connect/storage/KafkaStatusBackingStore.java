@@ -90,7 +90,7 @@ import java.util.function.Supplier;
  * obviously cannot take into account in-flight requests.
  *
  */
-public class KafkaStatusBackingStore extends KafkaTopicBackingStore implements StatusBackingStore {
+public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore implements StatusBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaStatusBackingStore.class);
 
     public static final String TASK_STATUS_PREFIX = "status-task-";

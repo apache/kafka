@@ -33,8 +33,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public abstract class KafkaTopicBackingStore {
-    private static final Logger log = LoggerFactory.getLogger(KafkaTopicBackingStore.class);
+public abstract class KafkaTopicBasedBackingStore {
+    private static final Logger log = LoggerFactory.getLogger(KafkaTopicBasedBackingStore.class);
 
     Consumer<TopicAdmin> topicInitializer(String topic, NewTopic topicDescription, WorkerConfig config, Time time) {
         return admin -> {
