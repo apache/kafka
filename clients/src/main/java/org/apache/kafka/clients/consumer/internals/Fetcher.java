@@ -1095,6 +1095,15 @@ public class Fetcher<K, V> implements Closeable {
             this.recordsFetchLead.add(metrics.metricInstance(metricsRegistry.recordsLeadMin), new Min());
         }
 
+
+        public void close() {
+            metrics.removeSensor(bytesFetched.name());
+            metrics.removeSensor(recordsFetched.name());
+            metrics.removeSensor(fetchLatency.name());
+            metrics.removeSensor(recordsFetchLag.name());
+            metrics.removeSensor(recordsFetchLead.name());
+        }
+
         private void recordTopicFetchMetrics(String topic, int bytes, int records) {
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
@@ -1276,6 +1285,8 @@ public class Fetcher<K, V> implements Closeable {
             Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
             sessionHandlers.clear();
         }
+
+        sensors.close();
     }
 
     @Override

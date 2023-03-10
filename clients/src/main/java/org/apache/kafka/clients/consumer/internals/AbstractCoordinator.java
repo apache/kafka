@@ -1110,6 +1110,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.warn("Close timed out with {} pending requests to coordinator, terminating client connections",
                             client.pendingRequestCount(coordinator));
             }
+            sensors.close();
         }
     }
 
@@ -1292,6 +1293,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private class GroupCoordinatorMetrics {
         public final String metricGrpName;
 
+        private final Metrics metrics;
         public final Sensor heartbeatSensor;
         public final Sensor joinSensor;
         public final Sensor syncSensor;
@@ -1299,6 +1301,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor failedRebalanceSensor;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.heartbeatSensor = metrics.sensor("heartbeat-latency");
@@ -1392,6 +1395,16 @@ public abstract class AbstractCoordinator implements Closeable {
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
                 lastHeartbeat);
+        }
+
+        public void close() {
+            metrics.removeSensor(heartbeatSensor.name());
+            metrics.removeSensor(joinSensor.name());
+            metrics.removeSensor(syncSensor.name());
+            metrics.removeSensor(successfulRebalanceSensor.name());
+            metrics.removeSensor(failedRebalanceSensor.name());
+            metrics.removeMetric(metrics.metricName("last-heartbeat-seconds-ago", this.metricGrpName));
+            metrics.removeMetric(metrics.metricName("last-rebalance-seconds-ago", this.metricGrpName));
         }
     }
 

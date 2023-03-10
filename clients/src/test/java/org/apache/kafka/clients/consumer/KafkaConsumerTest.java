@@ -2841,6 +2841,16 @@ public class KafkaConsumerTest {
         return consumer.metrics.metrics().containsKey(metricName);
     }
 
+    private static boolean consumerCoordinatorMetricPresent(KafkaConsumer<String, String> consumer, String name) {
+        MetricName metricName = new MetricName(name, "consumer-coordinator-metrics", "", Collections.emptyMap());
+        return consumer.metrics.metrics().containsKey(metricName);
+    }
+
+    private static boolean consumerFetcherMetricPresent(KafkaConsumer<String, String> consumer, String name) {
+        MetricName metricName = new MetricName(name, "consumer-fetch-manager-metrics", "", Collections.emptyMap());
+        return consumer.metrics.metrics().containsKey(metricName);
+    }
+
     @Test
     public void testClosingConsumerUnregistersConsumerMetrics() {
         Time time = new MockTime(1L);
@@ -2853,10 +2863,18 @@ public class KafkaConsumerTest {
         assertTrue(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
         assertTrue(consumerMetricPresent(consumer, "time-between-poll-avg"));
         assertTrue(consumerMetricPresent(consumer, "time-between-poll-max"));
+        assertTrue(consumerCoordinatorMetricPresent(consumer, "commit-latency-avg"));
+        assertTrue(consumerCoordinatorMetricPresent(consumer, "assigned-partitions"));
+        assertTrue(consumerCoordinatorMetricPresent(consumer, "heartbeat-response-time-max"));
+        assertTrue(consumerFetcherMetricPresent(consumer, "fetch-size-avg"));
         consumer.close();
         assertFalse(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-avg"));
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
+        assertFalse(consumerCoordinatorMetricPresent(consumer, "commit-latency-avg"));
+        assertFalse(consumerCoordinatorMetricPresent(consumer, "assigned-partitions"));
+        assertFalse(consumerCoordinatorMetricPresent(consumer, "heartbeat-response-time-max"));
+        assertFalse(consumerFetcherMetricPresent(consumer, "fetch-size-avg"));
     }
 
     @Test
