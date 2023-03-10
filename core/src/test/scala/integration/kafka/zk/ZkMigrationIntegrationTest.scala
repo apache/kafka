@@ -85,7 +85,7 @@ class ZkMigrationIntegrationTest {
     quotas.add(new ClientQuotaAlteration(
       new ClientQuotaEntity(Map("ip" -> "8.8.8.8").asJava),
       List(new ClientQuotaAlteration.Op("connection_creation_rate", 10.0)).asJava))
-    admin.alterClientQuotas(quotas)
+    admin.alterClientQuotas(quotas).all().get(60, TimeUnit.SECONDS)
 
     val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
     val migrationClient = new ZkMigrationClient(zkClient)
