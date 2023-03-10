@@ -38,7 +38,7 @@ public abstract class KafkaTopicBackingStore {
 
     Consumer<TopicAdmin> topicInitializer(String topic, NewTopic topicDescription, WorkerConfig config, Time time) {
         return admin -> {
-            log.debug("Creating admin client to manage Connect internal {} topic", getTopicPurpose());
+            log.debug("Creating Connect internal topic for {}", getTopicPurpose());
             // Create the topic if it doesn't exist
             Set<String> newTopics = createTopics(topicDescription, admin, config, time);
             if (!newTopics.contains(topic)) {
