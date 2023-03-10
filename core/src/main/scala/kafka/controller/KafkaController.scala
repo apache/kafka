@@ -2305,8 +2305,10 @@ class KafkaController(val config: KafkaConfig,
   private def validateReplicas(topicPartition: TopicPartition, replicas: Option[Seq[Int]]): Either[ApiError, Seq[Int]] = {
     replicas match {
       case Some(targetReplicas) => {
-        validateTargetReplicas(topicPartition, targetReplicas)
-        Right(targetReplicas)
+        validateTargetReplicas(topicPartition, targetReplicas) match {
+          case Some(apiError) => Left(apiError)
+          case None => Right(targetReplicas)
+        }
       }
       case None => {
         // this is trying to cancel an existing replica reassignment
