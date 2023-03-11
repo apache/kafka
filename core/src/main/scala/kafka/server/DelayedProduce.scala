@@ -21,14 +21,15 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Implicits._
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
@@ -129,15 +130,16 @@ class DelayedProduce(delayMs: Long,
   }
 }
 
-object DelayedProduceMetrics extends KafkaMetricsGroup {
+object DelayedProduceMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedProduceMetrics.getClass)
 
-  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  private val aggregateExpirationMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 
   private val partitionExpirationMeterFactory = (key: TopicPartition) =>
-    newMeter("ExpiresPerSec",
+    metricsGroup.newMeter("ExpiresPerSec",
              "requests",
              TimeUnit.SECONDS,
-             tags = Map("topic" -> key.topic, "partition" -> key.partition.toString))
+             Map("topic" -> key.topic, "partition" -> key.partition.toString).asJava)
   private val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
 
   def recordExpiration(partition: TopicPartition): Unit = {

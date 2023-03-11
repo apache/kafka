@@ -22,12 +22,12 @@ import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
 import java.util.{List => JList}
 import com.yammer.metrics.core.MetricName
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.Logging
 import kafka.zookeeper.ZooKeeperClient._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.zookeeper.AsyncCallback.{Children2Callback, DataCallback, StatCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
@@ -36,6 +36,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper._
 import org.apache.zookeeper.client.ZKClientConfig
 
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.collection.mutable.Set
@@ -62,7 +63,14 @@ class ZooKeeperClient(connectString: String,
                       metricGroup: String,
                       metricType: String,
                       private[zookeeper] val clientConfig: ZKClientConfig,
-                      name: String) extends Logging with KafkaMetricsGroup {
+                      name: String) extends Logging {
+
+  private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass) {
+    override def metricName(name: String, metricTags: util.Map[String, String]): MetricName = {
+      KafkaMetricsGroup.explicitMetricName(metricGroup, metricType, name, metricTags)
+    }
+  }
+
 
   this.logIdent = s"[ZooKeeperClient $name] "
   private val initializationLock = new ReentrantReadWriteLock()
@@ -91,7 +99,7 @@ class ZooKeeperClient(connectString: String,
     stateToEventTypeMap.map { case (state, eventType) =>
       val name = s"ZooKeeper${eventType}PerSec"
       metricNames += name
-      state -> newMeter(name, eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
+      state -> metricsGroup.newMeter(name, eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
     }
   }
 
@@ -100,7 +108,7 @@ class ZooKeeperClient(connectString: String,
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher,
     clientConfig)
 
-  newGauge("SessionState", () => connectionState.toString)
+  metricsGroup.newGauge("SessionState", () => connectionState.toString)
 
   metricNames += "SessionState"
 
@@ -110,10 +118,6 @@ class ZooKeeperClient(connectString: String,
     case e: Throwable =>
       close()
       throw e
-  }
-
-  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
-    explicitMetricName(metricGroup, metricType, name, metricTags)
   }
 
   /**
@@ -344,7 +348,7 @@ class ZooKeeperClient(connectString: String,
       zNodeChildChangeHandlers.clear()
       stateChangeHandlers.clear()
       zooKeeper.close()
-      metricNames.foreach(removeMetric(_))
+      metricNames.foreach(metricsGroup.removeMetric(_))
     }
     info("Closed.")
   }

@@ -85,7 +85,7 @@ class PartitionReassignmentRevert {
 
     @Override
     public int hashCode() {
-        return Objects.hash(replicas, isr);
+        return Objects.hash(replicas, isr, unclean);
     }
 
     @Override
@@ -93,13 +93,15 @@ class PartitionReassignmentRevert {
         if (!(o instanceof PartitionReassignmentRevert)) return false;
         PartitionReassignmentRevert other = (PartitionReassignmentRevert) o;
         return replicas.equals(other.replicas) &&
-            isr.equals(other.isr);
+            isr.equals(other.isr) &&
+            unclean == other.unclean;
     }
 
     @Override
     public String toString() {
         return "PartitionReassignmentRevert(" +
             "replicas=" + replicas + ", " +
-            "isr=" + isr + ")";
+            "isr=" + isr + ", " +
+            "unclean=" + unclean + ")";
     }
 }

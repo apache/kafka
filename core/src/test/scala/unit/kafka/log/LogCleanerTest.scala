@@ -1888,7 +1888,7 @@ class LogCleanerTest {
       time = time)
 
     def checkGauge(name: String): Unit = {
-      val gauge = logCleaner.newGauge(name, () => 999)
+      val gauge = logCleaner.metricsGroup.newGauge(name, () => 999)
       // if there is no cleaners, 0 is default value
       assertEquals(0, gauge.value())
     }

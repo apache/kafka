@@ -277,8 +277,9 @@ public class KRaftMigrationDriverTest {
         image = delta.apply(provenance);
 
         // Publish a delta with this node (3000) as the leader
-        driver.publishLogDelta(delta, image, new LogDeltaManifest(provenance,
-            new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+        LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
+        driver.onControllerChange(newLeader);
+        driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
 
         TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
             "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
