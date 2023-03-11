@@ -77,10 +77,7 @@ class KafkaRaftServer(
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
-    Some(new BrokerServer(
-      sharedServer,
-      offlineDirs
-    ))
+    Some(new BrokerServer(sharedServer, offlineDirs))
   } else {
     None
   }

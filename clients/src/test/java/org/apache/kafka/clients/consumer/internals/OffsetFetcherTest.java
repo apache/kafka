@@ -1244,7 +1244,7 @@ public class OffsetFetcherTest {
 
         buildFetcher(metricConfig, isolationLevel, metadataExpireMs, subscriptionState, logContext);
 
-        FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(metricConfig.tags().keySet(), "consumertest-group");
+        FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumertest-group");
         Fetcher<byte[], byte[]> fetcher = new Fetcher<>(
                 logContext,
                 consumerClient,
