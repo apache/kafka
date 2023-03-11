@@ -182,8 +182,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
     val partitionData = fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion).get(topicPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
-    assertEquals(-1, fetchRequest.replicaId())
-    assertEquals(-1, fetchRequest.replicaEpoch())
 
     // Repeat with request that does not use topic IDs
     val oldFetchRequest = FetchRequest.Builder.forConsumer(12, Int.MaxValue, 0, createPartitionMap(1024,

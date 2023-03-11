@@ -313,5 +313,4 @@ object KafkaNetworkChannelTest {
 
     override def update(time: Time, update: MockClient.MetadataUpdate): Unit = {}
   }
-
 }
