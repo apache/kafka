@@ -23,11 +23,12 @@ import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
-import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -38,10 +39,12 @@ import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -1438,8 +1441,9 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
     }
 
-    @Test
-    public void testFetchRequestVersionHandling() throws Exception {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+    public void testFetchRequestVersionHandling(short version) throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
@@ -1447,17 +1451,26 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
-        // Latest fetch request.
-        FetchRequestData fetchRequestData = context.fetchRequest(
-                epoch, context.clusterId.toString(), otherNodeId, 0L, 0, 0);
-        context.deliverRequest(fetchRequestData);
-        context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        int maxWaitTimeMs = 50;
+        FetchRequestData fetchRequestData = context.fetchRequest(epoch, otherNodeId, 2L, epoch, maxWaitTimeMs);
+        FetchRequestData downgradedRequest = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
+        context.deliverRequest(downgradedRequest);
+        context.client.poll();
+        assertEquals(0, context.channel.drainSendQueue().size());
+        // For the first attempt to fetch offset at 2, it should fail because of divergent log, so the highWatermark will
+        // not move.
+        assertEquals(0L, context.log.highWatermark().offset);
 
-        FetchRequest.maybeDownGradeReplicaState(fetchRequestData, (short) 14);
-        context.deliverRequest(fetchRequestData);
-        context.pollUntilResponse();
+        context.log.appendAsLeader(
+                context.buildBatch(context.log.endOffset().offset, epoch, singletonList("raft")),
+                epoch
+        );
+
+        context.time.sleep(maxWaitTimeMs);
+        context.client.poll();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        // The client will try to fetch again after maxWaitTimeMs, then it should be able to update the highWatermark.
+        assertEquals(1L, context.log.highWatermark().offset);
     }
 
     @Test

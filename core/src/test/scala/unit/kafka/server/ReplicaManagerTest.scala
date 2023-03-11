@@ -1236,13 +1236,11 @@ class ReplicaManagerTest {
     val aliveBrokerIds = Seq[Integer](followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
     val offsetFromLeader = 5
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     // Prepare the mocked components for the test
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
-      expectTruncation = expectTruncation, localLogOffset = Some(10), offsetFromLeader = offsetFromLeader, extraProps = extraProps, topicId = Some(topicId),
-      brokerEpochSupplier = () => mockBrokerEpochSupplier.getBrokerEpoch())
+      expectTruncation = expectTruncation, localLogOffset = Some(10), offsetFromLeader = offsetFromLeader, extraProps = extraProps, topicId = Some(topicId))
 
     try {
       // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
@@ -1274,7 +1272,6 @@ class ReplicaManagerTest {
       }
 
       verify(mockLogMgr).finishedInitializingLog(ArgumentMatchers.eq(tp), any())
-      assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
     } finally {
       replicaManager.shutdown()
     }
@@ -2101,8 +2098,7 @@ class ReplicaManagerTest {
                                                  offsetFromLeader: Long = 5,
                                                  leaderEpochFromLeader: Int = 3,
                                                  extraProps: Properties = new Properties(),
-                                                 topicId: Option[Uuid] = None,
-                                                 brokerEpochSupplier: () => Long = null): (ReplicaManager, LogManager) = {
+                                                 topicId: Option[Uuid] = None): (ReplicaManager, LogManager) = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     props.asScala ++= extraProps.asScala
@@ -2221,14 +2217,14 @@ class ReplicaManagerTest {
                                                          time: Time,
                                                          threadNamePrefix: Option[String],
                                                          replicationQuotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
-        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, replicationQuotaManager, () => metadataCache.metadataVersion(), brokerEpochSupplier) {
+        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, replicationQuotaManager, () => metadataCache.metadataVersion(), null) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
             val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${sourceBroker.id}, " +
               s"fetcherId=$fetcherId] ")
             val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
             val leader = new RemoteLeaderEndPoint(logContext.logPrefix, blockingSend, fetchSessionHandler, config,
-              replicaManager, quotaManager.follower, () => config.interBrokerProtocolVersion, brokerEpochSupplier)
+              replicaManager, quotaManager.follower, () => config.interBrokerProtocolVersion, () => 1)
             new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", leader, config, failedPartitions, replicaManager,
               quotaManager.follower, logContext.logPrefix, () => config.interBrokerProtocolVersion) {
               override def doWork(): Unit = {
@@ -4503,17 +4499,5 @@ class MockReplicaSelector extends ReplicaSelector {
     selectionCount.incrementAndGet()
     partitionViewArgument = Some(partitionView)
     Optional.of(partitionView.leader)
-  }
-}
-
-class MockBrokerEpochSupplier(brokerEpoch: Long) {
-  var counter: Int = 0
-  def getBrokerEpoch(): Long = {
-    counter += 1
-    brokerEpoch
-  }
-
-  def getCounter(): Int = {
-    counter
   }
 }

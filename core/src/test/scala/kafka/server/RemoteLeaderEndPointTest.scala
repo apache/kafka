@@ -18,22 +18,25 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
+import kafka.log.UnifiedLog
+import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.mockito.Mockito.mock
+import org.mockito.Mockito.{mock, when}
 
 import java.util
+import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
 class RemoteLeaderEndPointTest {
@@ -43,6 +46,7 @@ class RemoteLeaderEndPointTest {
     val logStartOffset = 20
     val localLogStartOffset = 100
     val logEndOffset = 300
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     var blockingSend: MockBlockingSender = _
     var endPoint: LeaderEndPoint = _
 
@@ -54,7 +58,6 @@ class RemoteLeaderEndPointTest {
         val props = TestUtils.createBrokerConfig(sourceBroker.id, TestUtils.MockZkConnect, port = sourceBroker.port)
         val fetchSessionHandler = new FetchSessionHandler(new LogContext(logPrefix), sourceBroker.id)
         val config = KafkaConfig.fromProps(props)
-        val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
         blockingSend = new MockBlockingSender(offsets = new util.HashMap[TopicPartition, EpochEndOffset](),
             sourceBroker = sourceBroker, time = time)
         endPoint = new RemoteLeaderEndPoint(logPrefix, blockingSend, fetchSessionHandler,
@@ -115,5 +118,19 @@ class RemoteLeaderEndPointTest {
         assertThrows(classOf[UnknownLeaderEpochException], () => endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch + 1))
         assertThrows(classOf[UnknownLeaderEpochException], () => endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch + 1))
         assertThrows(classOf[UnknownLeaderEpochException], () => endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch + 1))
+    }
+
+    @Test
+    def testBrokerEpochSupplier(): Unit = {
+        val tp = new TopicPartition("topic1", 0)
+        val topicId1 = Uuid.randomUuid()
+        val log: UnifiedLog = mock(classOf[UnifiedLog])
+        val partitionMap = Map(
+            tp -> PartitionFetchState(Some(topicId1), 150, None, 0, None, state = Fetching, lastFetchedEpoch = None))
+        when(replicaManager.localLogOrException(tp)).thenReturn(log)
+        when(log.logStartOffset).thenReturn(1)
+        val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = endPoint.buildFetch(partitionMap)
+        assertTrue(partitionsWithError.isEmpty)
+        assertEquals(1L, fetchRequestOpt.get.fetchRequest.build(15).replicaEpoch())
     }
 }

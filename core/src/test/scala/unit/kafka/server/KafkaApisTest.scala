@@ -3368,8 +3368,6 @@ class KafkaApisTest {
 
     val fetchRequest = new FetchRequest.Builder(9, 9, -1, -1, 100, 0, fetchDataBuilder)
       .build()
-    assertEquals(fetchRequest.replicaEpoch(), -1)
-    assertEquals(fetchRequest.replicaId(), -1)
     val request = buildRequest(fetchRequest)
 
     createKafkaApis().handleFetchRequest(request)
@@ -3426,8 +3424,6 @@ class KafkaApisTest {
     val replicaEpoch = if (replicaId < 0) -1 else 1
     val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
       replicaId, replicaEpoch, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
-    assertEquals(fetchRequest.replicaEpoch(), replicaEpoch)
-    assertEquals(fetchRequest.replicaId(), replicaId)
     val request = buildRequest(fetchRequest)
 
     createKafkaApis().handleFetchRequest(request)
@@ -4534,8 +4530,6 @@ class KafkaApisTest {
     val fetchData = Collections.singletonMap(tidp0, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
     val fetchRequest = new FetchRequest.Builder(
       ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1, 1000, 0, fetchDataBuilder).build()
-    assertEquals(fetchRequest.replicaId(), 1)
-    assertEquals(fetchRequest.replicaEpoch(), 1)
     val fetchFromFollower = buildRequest(fetchRequest)
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,

@@ -34,8 +34,8 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
-import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_3_5_IV0}
+import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -48,6 +48,7 @@ import org.mockito.Mockito.{mock, never, times, verify, when}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional}
+
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -102,12 +103,11 @@ class ReplicaFetcherThreadTest {
                                          failedPartitions: FailedPartitions,
                                          replicaMgr: ReplicaManager,
                                          quota: ReplicaQuota,
-                                         leaderEndpointBlockingSend: BlockingSend,
-                                         mockBrokerEpochSupplier: MockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)): ReplicaFetcherThread = {
+                                         leaderEndpointBlockingSend: BlockingSend): ReplicaFetcherThread = {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${leaderEndpointBlockingSend.brokerEndPoint().id}, fetcherId=$fetcherId] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, leaderEndpointBlockingSend.brokerEndPoint().id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler,
-      brokerConfig, replicaMgr, quota, () => brokerConfig.interBrokerProtocolVersion, () => mockBrokerEpochSupplier.getBrokerEpoch())
+      brokerConfig, replicaMgr, quota, () => brokerConfig.interBrokerProtocolVersion, () => 1)
     new ReplicaFetcherThread(name,
       leader,
       brokerConfig,
@@ -142,7 +142,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val leaderEpoch = 5
 
@@ -177,8 +176,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier)
+      mockNetwork)
 
     // topic 1 supports epoch, t2 doesn't.
     thread.addPartitions(Map(
@@ -210,7 +208,6 @@ class ReplicaFetcherThreadTest {
 
     //Assert that truncate to is called exactly once (despite two loops)
     verify(partition, times(3)).truncateTo(anyLong(), anyBoolean())
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   /**
@@ -298,7 +295,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val leaderEpoch = 5
 
@@ -328,8 +324,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       UnboundedQuota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -347,7 +342,6 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(epochFetchCount, mockNetwork.epochFetchCount)
     assertEquals(3, mockNetwork.fetchCount)
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -364,7 +358,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val leaderEpoch = 5
     val initialLEO = 200
@@ -397,8 +390,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t2p1 -> initialFetchState(Some(topicId2), 0L)))
 
@@ -411,7 +403,6 @@ class ReplicaFetcherThreadTest {
                "Expected " + t1p0 + " to truncate to offset 156 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     assertTrue(truncateToCapture.getAllValues.asScala.contains(172),
                "Expected " + t2p1 + " to truncate to offset 172 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -427,7 +418,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val leaderEpochAtFollower = 5
     val leaderEpochAtLeader = 4
@@ -460,8 +450,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t2p1 -> initialFetchState(Some(topicId2), 0L)))
 
@@ -475,7 +464,6 @@ class ReplicaFetcherThreadTest {
     assertTrue(truncateToCapture.getAllValues.asScala.contains(initialLEO),
                "Expected " + t2p1 + " to truncate to offset " + initialLEO +
                " (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -492,7 +480,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val initialLEO = 200
 
@@ -526,8 +513,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -560,7 +546,6 @@ class ReplicaFetcherThreadTest {
                "Expected " + t1p1 + " to truncate to offset 102 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     assertTrue(truncateToCapture.getAllValues.asScala.contains(101),
                "Expected " + t1p0 + " to truncate to offset 101 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -683,7 +668,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val logEndOffset = 150
     val highWatermark = 130
@@ -718,7 +702,7 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       quota,
       () => config.interBrokerProtocolVersion,
-      () => mockBrokerEpochSupplier.getBrokerEpoch()
+      () => 1
     )
 
     val thread = new ReplicaFetcherThread(
@@ -756,7 +740,6 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
     verify(partition, times(1)).truncateTo(140, false)
     verify(log, times(0)).maybeUpdateHighWatermark(anyLong())
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -776,7 +759,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val initialLEO = 200
 
@@ -811,8 +793,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -834,7 +815,6 @@ class ReplicaFetcherThreadTest {
                "Expected " + t1p0 + " to truncate to offset 155 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     assertTrue(truncateToCapture.getAllValues.asScala.contains(143),
                "Expected " + t1p1 + " to truncate to offset 143 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -851,7 +831,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val initialFetchOffset = 100
 
@@ -878,8 +857,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialFetchOffset)))
 
@@ -889,7 +867,6 @@ class ReplicaFetcherThreadTest {
     //We should have truncated to initial fetch offset
     verify(partition).truncateTo(truncated.capture(), anyBoolean())
     assertEquals(initialFetchOffset, truncated.getValue)
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -906,7 +883,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val leaderEpoch = 5
     val highWaterMark = 100
@@ -942,8 +918,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
@@ -963,7 +938,6 @@ class ReplicaFetcherThreadTest {
     //Now the final call should have actually done a truncation (to offset 156)
     verify(partition).truncateTo(truncated.capture(), anyBoolean())
     assertEquals(156, truncated.getValue)
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -977,7 +951,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     val leaderEpoch = 4
 
@@ -1007,8 +980,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
 
     //When
@@ -1025,7 +997,6 @@ class ReplicaFetcherThreadTest {
     assertEquals(Option(Fetching), thread.fetchState(t1p0).map(_.state))
     assertEquals(Option(Fetching), thread.fetchState(t1p1).map(_.state))
     verify(partition, times(2)).truncateTo(0L, false)
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -1041,7 +1012,6 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val mockBrokerEpochSupplier = new MockBrokerEpochSupplier(1)
 
     //Stub return values
     when(partition.localLogOrException).thenReturn(log)
@@ -1070,8 +1040,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      mockNetwork,
-      mockBrokerEpochSupplier
+      mockNetwork
     )
 
     //When
@@ -1089,7 +1058,6 @@ class ReplicaFetcherThreadTest {
     //Then we should not have truncated the partition that became leader. Exactly one partition should be truncated.
     verify(partition).truncateTo(truncateToCapture.capture(), anyBoolean())
     assertEquals(49, truncateToCapture.getValue)
-    assertTrue(mockBrokerEpochSupplier.getCounter() > 0)
   }
 
   @Test
@@ -1136,18 +1104,14 @@ class ReplicaFetcherThreadTest {
     assertProcessPartitionDataWhen(isReassigning = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testBuildFetch(usingReplicaState: Boolean): Unit = {
+  @Test
+  def testBuildFetch(): Unit = {
     val tid1p0 = new TopicIdPartition(topicId1, t1p0)
     val tid1p1 = new TopicIdPartition(topicId1, t1p1)
     val tid2p1 = new TopicIdPartition(topicId2, t2p1)
 
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    var config = KafkaConfig.fromProps(props)
-    if (!usingReplicaState) {
-      config = kafkaConfigWithoutReplicaState
-    }
+    val config = KafkaConfig.fromProps(props)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
     val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
@@ -1192,9 +1156,6 @@ class ReplicaFetcherThreadTest {
     assertEquals(partitionDataMap.asJava, fetchRequestBuilder.fetchData())
     assertEquals(0, fetchRequestBuilder.replaced().size)
     assertEquals(0, fetchRequestBuilder.removed().size)
-    assertEquals(if (usingReplicaState) 1 else -1, fetchRequestBuilder.build().data().replicaState().replicaEpoch())
-    assertEquals(if (usingReplicaState) 1 else -1, fetchRequestBuilder.build().data().replicaState().replicaId())
-    assertEquals(if (usingReplicaState) -1 else 1, fetchRequestBuilder.build().data().replicaId())
 
     val responseData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     responseData.put(tid1p0, new FetchResponseData.PartitionData())
@@ -1376,12 +1337,6 @@ class ReplicaFetcherThreadTest {
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_6_IV0.version)
-    KafkaConfig.fromProps(props)
-  }
-
-  private def kafkaConfigWithoutReplicaState: KafkaConfig = {
-    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_3_5_IV0.version)
     KafkaConfig.fromProps(props)
   }
 }

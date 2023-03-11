@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -203,11 +204,30 @@ public class FetchRequestTest {
     }
 
     @ParameterizedTest
-    @MethodSource("fetchVersions")
-    public void testReplicaStateDowngrade(short version) {
+    @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+    public void testFetchRequestSimpleBuilderDowngrade(short version) {
         FetchRequestData fetchRequestData = new FetchRequestData();
         fetchRequestData.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
-        FetchRequest.maybeDownGradeReplicaState(fetchRequestData, version);
+        FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
+        fetchRequestData = builder.build(version).data();
+
+        assertEquals(1, FetchRequest.replicaId(fetchRequestData));
+
+        if (version < 15) {
+            assertEquals(1, fetchRequestData.replicaId());
+            assertEquals(-1, fetchRequestData.replicaState().replicaId());
+        } else {
+            assertEquals(-1, fetchRequestData.replicaId());
+            assertEquals(1, fetchRequestData.replicaState().replicaId());
+        }
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+    public void testFetchRequestSimpleBuilderUpgrade(short version) {
+        FetchRequestData fetchRequestData = new FetchRequestData().setReplicaId(1);
+        FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
+        fetchRequestData = builder.build(version).data();
 
         assertEquals(1, FetchRequest.replicaId(fetchRequestData));
 

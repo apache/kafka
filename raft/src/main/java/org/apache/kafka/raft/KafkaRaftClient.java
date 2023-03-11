@@ -987,16 +987,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Errors error = Errors.forException(cause);
                 if (error != Errors.REQUEST_TIMED_OUT) {
                     logger.debug("Failed to handle fetch from {} at {} due to {}",
-                        request.replicaId(), fetchPartition.fetchOffset(), error);
+                        FetchRequest.replicaId(request), fetchPartition.fetchOffset(), error);
                     return buildEmptyFetchResponse(error, Optional.empty());
                 }
             }
 
             // FIXME: `completionTimeMs`, which can be null
             logger.trace("Completing delayed fetch from {} starting at offset {} at {}",
-                request.replicaId(), fetchPartition.fetchOffset(), completionTimeMs);
+                FetchRequest.replicaId(request), fetchPartition.fetchOffset(), completionTimeMs);
 
-            return tryCompleteFetchRequest(request.replicaId(), fetchPartition, time.milliseconds());
+            return tryCompleteFetchRequest(FetchRequest.replicaId(request), fetchPartition, time.milliseconds());
         });
     }
 

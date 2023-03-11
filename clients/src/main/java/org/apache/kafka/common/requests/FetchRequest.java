@@ -131,6 +131,28 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
+    public static class SimpleBuilder extends AbstractRequest.Builder<FetchRequest> {
+        private final FetchRequestData fetchRequestData;
+        public SimpleBuilder(FetchRequestData fetchRequestData) {
+            super(ApiKeys.FETCH);
+            this.fetchRequestData = fetchRequestData;
+        }
+
+        @Override
+        public FetchRequest build(short version) {
+            int replicaId = FetchRequest.replicaId(fetchRequestData);
+            long replicaEpoch = fetchRequestData.replicaState().replicaEpoch();
+            if (version < 15) {
+                fetchRequestData.setReplicaId(replicaId);
+                fetchRequestData.setReplicaState(new ReplicaState());
+            } else {
+                fetchRequestData.setReplicaState(new ReplicaState().setReplicaId(replicaId).setReplicaEpoch(replicaEpoch));
+                fetchRequestData.setReplicaId(-1);
+            }
+            return new FetchRequest(fetchRequestData, version);
+        }
+    }
+
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
         private final int maxWait;
         private final int minBytes;
@@ -156,15 +178,6 @@ public class FetchRequest extends AbstractRequest {
 
         public Builder(short minVersion, short maxVersion, int replicaId, long replicaEpoch, int maxWait, int minBytes,
                        Map<TopicPartition, PartitionData> fetchData) {
-            super(ApiKeys.FETCH, minVersion, maxVersion);
-            this.replicaId = replicaId;
-            this.replicaEpoch = replicaEpoch;
-            this.maxWait = maxWait;
-            this.minBytes = minBytes;
-            this.toFetch = fetchData;
-        }
-        public Builder(short minVersion, short maxVersion, int replicaId, int maxWait, int minBytes,
-                       Map<TopicPartition, PartitionData> fetchData, long replicaEpoch) {
             super(ApiKeys.FETCH, minVersion, maxVersion);
             this.replicaId = replicaId;
             this.replicaEpoch = replicaEpoch;
@@ -320,17 +333,8 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    // Downgrades the ReplicaState field to be compatible with lower version.
-    public static void maybeDownGradeReplicaState(FetchRequestData fetchRequestData, short version) {
-        if (version < 15) {
-            fetchRequestData.setReplicaId(fetchRequestData.replicaState().replicaId());
-            fetchRequestData.setReplicaState(new ReplicaState());
-        }
-    }
-
     public static int replicaId(FetchRequestData fetchRequestData) {
-        return fetchRequestData.replicaId() != -1 ?
-                fetchRequestData.replicaId() : fetchRequestData.replicaState().replicaId();
+        return fetchRequestData.replicaId() != -1 ? fetchRequestData.replicaId() : fetchRequestData.replicaState().replicaId();
     }
 
     public FetchRequest(FetchRequestData fetchRequestData, short version) {
