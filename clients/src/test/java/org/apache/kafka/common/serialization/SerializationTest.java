@@ -407,4 +407,11 @@ public class SerializationTest {
         Serde<Boolean> booleanSerde = Serdes.Boolean();
         assertEquals(true, booleanSerde.deserializer().deserialize(topic, testData));
     }
+
+    @Test
+    public void booleanDeserializerShouldThrowOnNotNullValues() {
+        try (Serde<Boolean> serde = Serdes.Boolean()) {
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
+        }
+    }
 }
