@@ -261,6 +261,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     private CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
         eventHandler.add(commitEvent);
         return commitEvent.future();
@@ -317,20 +318,31 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions,
                                                             final Duration timeout) {
         maybeThrowInvalidGroupIdException();
+        if (partitions.isEmpty()) {
+            return new HashMap<>();
+        }
+
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
         eventHandler.add(event);
         try {
-            Map<TopicPartition, OffsetAndMetadata> res = event.future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            return res;
-        } catch (ExecutionException | InterruptedException | TimeoutException e) {
+            return event.complete(Duration.ofMillis(100));
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        } catch (TimeoutException e) {
+            throw new org.apache.kafka.common.errors.TimeoutException(e);
+        } catch (ExecutionException e) {
+            // Execution exception is thrown here
             throw new KafkaException(e);
+        } catch (Exception e) {
+            throw e;
         }
     }
 
     private void maybeThrowInvalidGroupIdException() {
-        if (!groupId.isPresent() || groupId.get().isEmpty())
+        if (!groupId.isPresent() || groupId.get().isEmpty()) {
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                     "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+        }
     }
 
     @Override
@@ -444,7 +456,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
-        // do nothing
     }
 
     /**
@@ -469,9 +480,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException("timeout");
-        } catch (final Exception e) {
+            throw new org.apache.kafka.common.errors.TimeoutException(e);
+        } catch (final InterruptedException e) {
+            throw new InterruptException(e);
+        } catch (final ExecutionException e) {
             throw new KafkaException(e);
+        } catch (final Exception e) {
+            throw e;
         }
     }
 

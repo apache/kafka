@@ -85,7 +85,7 @@ public class ApplicationEventProcessor {
         }
 
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.add(event.offsets()).whenComplete((r, e) -> {
+        manager.addOffsetCommitRequest(event.offsets()).whenComplete((r, e) -> {
             if (e != null) {
                 event.future().completeExceptionally(e);
                 return;
@@ -103,7 +103,7 @@ public class ApplicationEventProcessor {
             return false;
         }
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.sendFetchCommittedOffsetRequest(event.partitions, event.future);
+        manager.addOffsetFetchRequest(event.partitions);
         return true;
     }
 }
