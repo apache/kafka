@@ -392,19 +392,19 @@ public class SerializationTest {
 
     @Test
     public void testBooleanSerializer() {
-        byte[] byteArray = new byte[1];
-        byteArray[0] = (byte) 1;
+        byte[] testData = new byte[1];
+        testData[0] = (byte) 1;
 
         Serde<Boolean> booleanSerde = Serdes.Boolean();
-        assertArrayEquals(byteArray, booleanSerde.serializer().serialize(topic, true));
+        assertArrayEquals(testData, booleanSerde.serializer().serialize(topic, true));
     }
 
     @Test
     public void testBooleanDeserializer() {
-        byte[] byteArray = new byte[1];
-        byteArray[0] = (byte) 1;
+        byte[] testData = new byte[1];
+        testData[0] = (byte) 1;
 
         Serde<Boolean> booleanSerde = Serdes.Boolean();
-        assertEquals(true, booleanSerde.deserializer().deserialize(topic, byteArray));
+        assertEquals(true, booleanSerde.deserializer().deserialize(topic, testData));
     }
 }
