@@ -730,8 +730,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            // TODO maxBufferedSize != -1 would be removed once the deprecated config buffered.records.per.partition is removed
-            if (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) {
+            // TODO the second part of OR condition would be removed once
+            //  deprecated config buffered.records.per.partition is removed
+            if (recordInfo.queue().isEmpty() || (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize)) {
                 mainConsumer.resume(singleton(partition));
             }
 
