@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
@@ -58,6 +59,7 @@ import java.util.concurrent.TimeoutException;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1558,6 +1560,166 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.endEpochRequest("invalid-uuid", epoch, localId, Collections.singletonList(otherNodeId)));
         context.pollUntilResponse();
         context.assertSentEndQuorumEpochResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @Test
+    public void testInconsistentClusterIdInFetchResponse() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
+
+        // Send a request
+        context.pollUntilRequest();
+        int correlationId = context.assertSentFetchRequest(epoch, 0L, 0);
+
+        // Firstly receive a response with a valid cluster id
+        FetchResponseData fetchResponse = context.fetchResponse(epoch, otherNodeId,
+            MemoryRecords.EMPTY, 0L, Errors.NONE);
+        context.deliverResponse(correlationId, otherNodeId, fetchResponse);
+
+        // Send fetch request
+        context.pollUntilRequest();
+        correlationId = context.assertSentFetchRequest(epoch, 0L, 0);
+
+        // Secondly receive a response with an inconsistent cluster id
+        context.deliverResponse(correlationId, otherNodeId,
+            new FetchResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+
+        // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
+        assertDoesNotThrow(context.client::poll);
+
+        // This time we receive a inconsistent cluster id directly
+        context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
+
+        context.pollUntilRequest();
+        correlationId = context.assertSentFetchRequest(epoch, 0L, 0);
+        context.deliverResponse(correlationId, otherNodeId,
+            new FetchResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+        // Inconsistent cluster id are fatal if this is the first rpc request
+        assertThrows(InconsistentClusterIdException.class, context.client::poll);
+    }
+
+    @Test
+    public void testInconsistentClusterIdInVoteResponse() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(epoch, localId)
+            .build();
+
+        // Send vote request
+        context.pollUntilRequest();
+        int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+
+        // Firstly receive a response with a valid cluster id
+        context.deliverResponse(correlationId, otherNodeId,
+            context.voteResponse(false, Optional.empty(), epoch));
+        context.client.poll();
+
+        // Send vote request again
+        context.pollUntilRequest();
+        correlationId = context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
+
+        // Receive a response with an inconsistent cluster id
+        context.deliverResponse(correlationId, otherNodeId,
+            new VoteResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+
+        // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
+        assertDoesNotThrow(context.client::poll);
+
+        // This time we receive a inconsistent cluster id directly
+        context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(epoch, localId)
+            .build();
+
+        context.pollUntilRequest();
+        correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        context.deliverResponse(correlationId, otherNodeId,
+            new VoteResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+        // Inconsistent cluster id are fatal if this is the first rpc request
+        assertThrows(InconsistentClusterIdException.class, context.client::poll);
+    }
+
+    @Test
+    public void testInconsistentClusterIdInBeginQuorumResponse() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(epoch, localId)
+            .build();
+        context.assertVotedCandidate(epoch, localId);
+
+        // Send a request
+        context.pollUntilRequest();
+        int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+
+        // Firstly receive a response with a valid cluster id
+        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(true, Optional.empty(), epoch));
+        context.client.poll();
+        context.assertElectedLeader(epoch, localId);
+
+        // Send begin quorum request
+        context.pollUntilRequest();
+        correlationId = context.assertSentBeginQuorumEpochRequest(epoch, 1);
+
+        // Secondly receive a response with an inconsistent cluster id
+        context.deliverResponse(correlationId, otherNodeId,
+            new BeginQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+
+        // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
+        assertDoesNotThrow(context.client::poll);
+
+        // It's impossible to receive a BeginQuorumEpochResponse before any other request so we don't test
+    }
+
+    @Test
+    public void testInconsistentClusterIdInEndQuorumResponse() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(epoch, localId)
+            .build();
+        context.assertVotedCandidate(epoch, localId);
+
+        // Send a request
+        context.pollUntilRequest();
+        int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+
+        // Firstly receive a response with a valid cluster id
+        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(true, Optional.empty(), epoch));
+        context.client.poll();
+        context.assertElectedLeader(epoch, localId);
+
+        context.client.shutdown(5000);
+
+        // Send end quorum request
+        context.pollUntilRequest();
+        correlationId = context.assertSentEndQuorumEpochRequest(epoch, 1);
+
+        // Secondly receive a response with an inconsistent cluster id
+        context.deliverResponse(correlationId, otherNodeId,
+            new EndQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+
+        // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
+        assertDoesNotThrow(context.client::poll);
+
+        // It's impossible to receive an EndQuorumEpochResponse before any other request so we don't test
     }
 
     @Test
