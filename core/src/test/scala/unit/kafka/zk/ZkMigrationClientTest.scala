@@ -54,7 +54,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     super.setUp(testInfo)
     zkClient.createControllerEpochRaw(1)
 
-    migrationClient = new ZkMigrationClient(zkClient)
+    migrationClient = new ZkMigrationClient(zkClient, null)
     migrationState = initialMigrationState
     migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
    }

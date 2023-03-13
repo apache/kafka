@@ -88,7 +88,8 @@ class ZkMigrationIntegrationTest {
     admin.alterClientQuotas(quotas)
 
     val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-    val migrationClient = new ZkMigrationClient(zkClient)
+    val kafkaConfig = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying.servers.head.config
+    val migrationClient = new ZkMigrationClient(zkClient, kafkaConfig)
     var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
     migrationState = migrationState.withNewKRaftController(3000, 42)
     migrationState = migrationClient.claimControllerLeadership(migrationState)
