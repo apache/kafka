@@ -449,6 +449,9 @@ class BrokerServer(
 
       // Wait for the first metadata update to be published. Metadata updates are not published
       // until we read at least up to the high water mark of the cluster metadata partition.
+      // Usually, we publish the initial metadata before lifecycleManager.initialCatchUpFuture
+      // is completed, so this check is not necessary. But this is a simple check to make
+      // completely sure.
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the initial broker metadata update to be published",
         brokerMetadataPublisher.firstPublishFuture , startupDeadline, time)
