@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.queue.EventQueue;
@@ -200,7 +201,22 @@ public class SnapshotGenerator implements MetadataPublisher {
     }
 
     @Override
-    public void publishSnapshot(
+    public void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage,
+        LoaderManifest manifest
+    ) {
+        switch (manifest.type()) {
+            case LOG_DELTA:
+                publishLogDelta(delta, newImage, (LogDeltaManifest) manifest);
+                break;
+            case SNAPSHOT:
+                publishSnapshot(delta, newImage, (SnapshotManifest) manifest);
+                break;
+        }
+    }
+
+    void publishSnapshot(
         MetadataDelta delta,
         MetadataImage newImage,
         SnapshotManifest manifest
@@ -209,8 +225,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         resetSnapshotCounters();
     }
 
-    @Override
-    public void publishLogDelta(
+    void publishLogDelta(
         MetadataDelta delta,
         MetadataImage newImage,
         LogDeltaManifest manifest
