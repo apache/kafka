@@ -352,7 +352,7 @@ public class KRaftMigrationDriverTest {
             image = delta.apply(provenance);
 
             // Publish a delta with this node (3000) as the leader
-            driver.publishLogDelta(delta, image, new LogDeltaManifest(provenance,
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
                 new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
 
             Assertions.assertTrue(claimLeaderAttempts.await(1, TimeUnit.MINUTES));
