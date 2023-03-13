@@ -74,6 +74,9 @@ import java.util.stream.Collectors;
 public class TopicAdmin implements AutoCloseable {
 
     public static final TopicCreationResponse EMPTY_CREATION = new TopicCreationResponse(Collections.emptySet(), Collections.emptySet());
+    private static final List<Class<? extends Exception>> CAUSES_TO_RETRY_TOPIC_CREATION = Arrays.asList(
+            InvalidReplicationFactorException.class,
+            TimeoutException.class);
 
     public static class TopicCreationResponse {
 
@@ -363,13 +366,10 @@ public class TopicAdmin implements AutoCloseable {
         // createTopics wraps the exception into ConnectException
         // to retry the creation, it should be an ExecutionException from future get which was caused by InvalidReplicationFactorException
         // or can be a TimeoutException
-        List<Class<? extends Exception>> causesToRetry = Arrays.asList(
-                InvalidReplicationFactorException.class,
-                TimeoutException.class);
         Throwable cause = e.getCause();
         while (cause != null) {
             final Throwable finalCause = cause;
-            if (causesToRetry.stream().anyMatch(exceptionClass -> exceptionClass.isInstance(finalCause))) {
+            if (CAUSES_TO_RETRY_TOPIC_CREATION.stream().anyMatch(exceptionClass -> exceptionClass.isInstance(finalCause))) {
                 return true;
             }
             cause = cause.getCause();
