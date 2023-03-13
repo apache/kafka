@@ -69,7 +69,7 @@ class BrokerRegistrationRequestTest {
       new Metrics(),
       clusterInstance.anyControllerSocketServer().config,
       "heartbeat",
-      Some("heartbeat"),
+      "test-heartbeat-",
       10000
     )
   }

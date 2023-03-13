@@ -68,13 +68,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     private final ClusterConfig clusterConfig;
     private final AtomicReference<KafkaClusterTestKit> clusterReference;
     private final AtomicReference<EmbeddedZookeeper> zkReference;
-    private final boolean isCoResident;
+    private final boolean isCombined;
 
-    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCoResident) {
+    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCombined) {
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
         this.zkReference = new AtomicReference<>();
-        this.isCoResident = isCoResident;
+        this.isCombined = isCombined;
     }
 
     @Override
@@ -82,7 +82,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCoResident ? "CoReside" : "Distributed", clusterDesc);
+        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCombined ? "Combined" : "Isolated", clusterDesc);
     }
 
     @Override
@@ -92,7 +92,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
                         setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
-                        setCoResident(isCoResident).
+                        setCombined(isCombined).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 nodes.brokerNodes().forEach((brokerId, brokerNode) -> {

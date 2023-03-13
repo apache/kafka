@@ -89,11 +89,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
         this.time = Time.SYSTEM;
-        LogContext logContext = new LogContext(String.format("[KRaftMigrationDriver nodeId=%d] ", nodeId));
+        LogContext logContext = new LogContext("[KRaftMigrationDriver id=" + nodeId + "] ");
         this.log = logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "kraft-migration");
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "controller-" + nodeId + "-migration-driver-");
         this.image = MetadataImage.EMPTY;
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;

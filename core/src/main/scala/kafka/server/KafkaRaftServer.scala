@@ -48,7 +48,6 @@ import scala.jdk.CollectionConverters._
 class KafkaRaftServer(
   config: KafkaConfig,
   time: Time,
-  threadNamePrefix: Option[String]
 ) extends Server with Logging {
 
   this.logIdent = s"[KafkaRaftServer nodeId=${config.nodeId}] "
@@ -71,7 +70,6 @@ class KafkaRaftServer(
     metaProps,
     time,
     metrics,
-    threadNamePrefix,
     controllerQuorumVotersFuture,
     new StandardFaultHandlerFactory(),
   )
