@@ -867,14 +867,9 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected static void assertDownstreamRedeliveriesBoundedByMaxLag(Consumer<byte[], byte[]> targetConsumer) {
         ConsumerRecords<byte[], byte[]> records = targetConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
         // After a full sync, there should be at most offset.lag.max records per partition consumed by both upstream and downstream consumers.
-        Map<TopicPartition, Integer> perPartitionCount = new HashMap<>();
-        for (ConsumerRecord<byte[], byte[]> record : records) {
-            TopicPartition tp = new TopicPartition(record.topic(), record.partition());
-            int previous = perPartitionCount.getOrDefault(tp, 0);
-            perPartitionCount.put(tp, previous + 1);
-        }
-        for (Map.Entry<TopicPartition, Integer> entry : perPartitionCount.entrySet()) {
-            assertTrue(entry.getValue() < OFFSET_LAG_MAX,  "downstream consumer is re-reading more than " + OFFSET_LAG_MAX + " records from" + entry.getKey());
+        for (TopicPartition tp : records.partitions()) {
+            int count = records.records(tp).size();
+            assertTrue(count < OFFSET_LAG_MAX,  "downstream consumer is re-reading more than " + OFFSET_LAG_MAX + " records from" + tp);
         }
     }
 

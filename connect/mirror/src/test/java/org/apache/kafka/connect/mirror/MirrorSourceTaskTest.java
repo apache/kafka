@@ -103,7 +103,7 @@ public class MirrorSourceTaskTest {
         partitionState.reset();
         assertFalse(partitionState.update(5, 154), "no sync");
         partitionState.reset();
-        assertFalse(partitionState.update(6, 203), "one past target offset");
+        assertFalse(partitionState.update(6, 203), "no sync");
         partitionState.reset();
         assertTrue(partitionState.update(7, 204), "one past target offset");
         partitionState.reset();
