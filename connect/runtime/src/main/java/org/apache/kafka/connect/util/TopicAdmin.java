@@ -59,6 +59,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -360,10 +361,20 @@ public class TopicAdmin implements AutoCloseable {
 
     private boolean retryableTopicCreationException(ConnectException e) {
         // createTopics wraps the exception into ConnectException
-        // which can be an ExecutionException from future get which was caused by InvalidReplicationFactorException
+        // to retry the creation, it should be an ExecutionException from future get which was caused by InvalidReplicationFactorException
         // or can be a TimeoutException
-        return e.getCause() instanceof ExecutionException && e.getCause().getCause() instanceof InvalidReplicationFactorException
-                || e.getCause() instanceof TimeoutException;
+        List<Class<? extends Exception>> causesToRetry = Arrays.asList(
+                InvalidReplicationFactorException.class,
+                TimeoutException.class);
+        Throwable cause = e.getCause();
+        while (cause != null) {
+            final Throwable finalCause = cause;
+            if (causesToRetry.stream().anyMatch(exceptionClass -> exceptionClass.isInstance(finalCause))) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     /**
