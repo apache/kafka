@@ -330,6 +330,11 @@ class BrokerServer(
         networkListeners,
         featuresRemapped
       )
+      // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
+      // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
+      lifecycleManager.initialCatchUpFuture.whenComplete((_, e) => {
+        if (e != null) brokerMetadataPublisher.firstPublishFuture.completeExceptionally(e)
+      })
 
       val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
       var interBrokerListener: Endpoint = null
@@ -435,12 +440,15 @@ class BrokerServer(
         "the broker metadata publishers to be installed",
         sharedServer.loader.installPublishers(publishers), startupDeadline, time)
 
+      // Wait for this broker to contact the quorum, and for the active controller to acknowledge
+      // us as caught up. It will do this by returning a heartbeat response with isCaughtUp set to
+      // true. The BrokerLifecycleManager tracks this.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the controller to acknowledge that we are caught up",
+        lifecycleManager.initialCatchUpFuture, startupDeadline, time)
+
       // Wait for the first metadata update to be published. Metadata updates are not published
       // until we read at least up to the high water mark of the cluster metadata partition.
-      //
-      // This first publish operation will initialize logManager, replicaManager, groupCoordinator,
-      // and txnCoordinator. The log manager may perform a potentially lengthy
-      // recovery-from-unclean-shutdown operation here, if required.
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the initial broker metadata update to be published",
         brokerMetadataPublisher.firstPublishFuture , startupDeadline, time)
@@ -450,12 +458,6 @@ class BrokerServer(
       // by the dynamic configuration publisher. Ironically, KafkaConfig.originals does not
       // contain the original configuration values.
       new KafkaConfig(config.originals(), true)
-
-      // Wait for the controller to acknowledge us as caught up, by returning a heartbeat
-      // response with isCaughtUp set to true. The BrokerLifecycleManager tracks this.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
-        "the controller to acknowledge that we are caught up",
-        lifecycleManager.initialCatchUpFuture, startupDeadline, time)
 
       // Start RemoteLogManager before broker start serving the requests.
       remoteLogManager.foreach(_.startup())

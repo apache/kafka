@@ -23,6 +23,7 @@ import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.LoaderManifest
@@ -400,5 +401,7 @@ class BrokerMetadataPublisher(
     }
   }
 
-  override def close(): Unit = { }
+  override def close(): Unit = {
+    firstPublishFuture.completeExceptionally(new TimeoutException())
+  }
 }
