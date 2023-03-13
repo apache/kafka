@@ -827,8 +827,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
 
+
   // visible for testing
   private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
+
+  private[group] def pendingOffsetCommit(topicIdPartition: TopicIdPartition): Option[OffsetAndMetadata] = {
+    pendingOffsetCommits.get(topicIdPartition.topicPartition)
+  }
+
+  private[group] def pendingTxnOffsetCommit(producerId: Long, topicIdPartition: TopicIdPartition): Option[CommitRecordMetadataAndOffset] = {
+    pendingTransactionalOffsetCommits.get(producerId).flatMap(_.get(topicIdPartition.topicPartition))
+  }
 
   def numOffsets: Int = offsets.size
 
