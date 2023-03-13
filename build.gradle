@@ -36,7 +36,7 @@ plugins {
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.1.2'
   id 'org.nosphere.apache.rat' version "0.8.0"
-  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
 
   id "com.github.spotbugs" version '5.0.13' apply false
   id 'org.gradle.test-retry' version '1.5.2' apply false
