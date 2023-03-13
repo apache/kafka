@@ -258,7 +258,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             try {
                 log.info("Publishing initial snapshot at offset {} to {}",
                         image.highestOffsetAndEpoch().offset(), publisher.name());
-                publisher.publishSnapshot(delta, image, manifest);
+                publisher.onMetadataUpdate(delta, image, manifest);
+                publisher.onControllerChange(currentLeaderAndEpoch);
                 publishers.put(publisher.name(), publisher);
             } catch (Throwable e) {
                 faultHandler.handleFault("Unhandled error publishing the initial metadata " +
@@ -295,7 +296,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 log.debug("Publishing new image with provenance {}.", image.provenance());
                 for (MetadataPublisher publisher : publishers.values()) {
                     try {
-                        publisher.publishLogDelta(delta, image, manifest);
+                        publisher.onMetadataUpdate(delta, image, manifest);
                     } catch (Throwable e) {
                         faultHandler.handleFault("Unhandled error publishing the new metadata " +
                             "image ending at " + manifest.provenance().lastContainedOffset() +
@@ -392,7 +393,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 log.debug("Publishing new snapshot image with provenance {}.", image.provenance());
                 for (MetadataPublisher publisher : publishers.values()) {
                     try {
-                        publisher.publishSnapshot(delta, image, manifest);
+                        publisher.onMetadataUpdate(delta, image, manifest);
                     } catch (Throwable e) {
                         faultHandler.handleFault("Unhandled error publishing the new metadata " +
                                 "image from snapshot at offset " + reader.lastContainedLogOffset() +
@@ -449,6 +450,15 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
         eventQueue.append(() -> {
             currentLeaderAndEpoch = leaderAndEpoch;
+            for (MetadataPublisher publisher : publishers.values()) {
+                try {
+                    publisher.onControllerChange(currentLeaderAndEpoch);
+                } catch (Throwable e) {
+                    faultHandler.handleFault("Unhandled error publishing the new leader " +
+                        "change to " + currentLeaderAndEpoch + " with publisher " +
+                        publisher.name(), e);
+                }
+            }
         });
     }
 

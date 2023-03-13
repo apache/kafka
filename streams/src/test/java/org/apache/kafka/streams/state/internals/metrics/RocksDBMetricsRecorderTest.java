@@ -23,12 +23,12 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.Mockito;
 import org.rocksdb.Cache;
 import org.rocksdb.HistogramData;
 import org.rocksdb.HistogramType;
@@ -52,7 +52,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
     private final static TaskId TASK_ID1 = new TaskId(0, 0);
@@ -98,16 +97,21 @@ public class RocksDBMetricsRecorderTest {
 
     private MockedStatic<RocksDBMetrics> dbMetrics;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         setUpMetricsMock();
         when(streamsMetrics.rocksDBMetricsRecordingTrigger()).thenReturn(recordingTrigger);
         recorder.init(streamsMetrics, TASK_ID1);
     }
 
-    @After
+    @AfterEach
     public void cleanUpMocks() {
         dbMetrics.close();
+    }
+
+    @AfterAll
+    public static void cleanUpMockito() {
+        Mockito.framework().clearInlineMocks();
     }
 
     @Test

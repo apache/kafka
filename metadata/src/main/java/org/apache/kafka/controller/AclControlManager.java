@@ -139,6 +139,9 @@ public class AclControlManager {
                 throw new InvalidRequestException("Invalid permissionType " +
                     binding.entry().permissionType());
         }
+        if (binding.pattern().name() == null || binding.pattern().name().isEmpty()) {
+            throw new InvalidRequestException("Resource name should not be empty");
+        }
     }
 
     ControllerResult<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> filters) {

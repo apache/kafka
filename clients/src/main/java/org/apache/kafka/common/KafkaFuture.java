@@ -127,8 +127,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
     public abstract <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function);
 
     /**
-     * @see KafkaFuture#thenApply(BaseFunction)
-     *
      * Prefer {@link KafkaFuture#thenApply(BaseFunction)} as this function is here for backwards compatibility reasons
      * and might be deprecated/removed in a future release.
      */

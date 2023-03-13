@@ -172,17 +172,17 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testFormatAuthorizationHeader() throws IOException {
+    public void testFormatAuthorizationHeader() {
         assertAuthorizationHeader("id", "secret");
     }
 
     @Test
-    public void testFormatAuthorizationHeaderEncoding() throws IOException {
+    public void testFormatAuthorizationHeaderEncoding() {
         // See KAFKA-14496
         assertAuthorizationHeader("SOME_RANDOM_LONG_USER_01234", "9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E");
     }
 
-    private void assertAuthorizationHeader(String clientId, String clientSecret) throws IOException {
+    private void assertAuthorizationHeader(String clientId, String clientSecret) {
         String expected = "Basic " + Base64.getEncoder().encodeToString(Utils.utf8(clientId + ":" + clientSecret));
         String actual = HttpAccessTokenRetriever.formatAuthorizationHeader(clientId, clientSecret);
         assertEquals(expected, actual, String.format("Expected the HTTP Authorization header generated for client ID \"%s\" and client secret \"%s\" to match", clientId, clientSecret));

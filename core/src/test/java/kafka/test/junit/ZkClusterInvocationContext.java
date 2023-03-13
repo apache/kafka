@@ -27,6 +27,7 @@ import kafka.test.ClusterInstance;
 import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
@@ -319,6 +320,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 clusterReference.get().killBroker(i);
             }
             clusterReference.get().restartDeadBrokers(true);
+            clusterReference.get().adminClientConfig().put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         }
 
         @Override

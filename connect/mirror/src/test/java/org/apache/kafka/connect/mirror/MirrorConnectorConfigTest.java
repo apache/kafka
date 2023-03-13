@@ -29,6 +29,7 @@ import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class MirrorConnectorConfigTest {
 
@@ -181,6 +182,12 @@ public class MirrorConnectorConfigTest {
         Map<String, String> connectorProps = makeProps("metric.reporters", reporters);
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
         assertEquals(2, config.metricsReporters().size());
+    }
+
+    @Test
+    public void testReplicationPolicy() {
+        MirrorConnectorConfig config = new TestMirrorConnectorConfig(makeProps());
+        assertSame(config.replicationPolicy(), config.replicationPolicy());
     }
 
 }

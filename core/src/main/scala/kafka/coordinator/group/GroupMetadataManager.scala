@@ -20,14 +20,12 @@ package kafka.coordinator.group
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.Optional
+import java.util.{Optional, OptionalInt}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
-import kafka.internals.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
@@ -44,10 +42,12 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition}
+import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -58,7 +58,9 @@ class GroupMetadataManager(brokerId: Int,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
                            time: Time,
-                           metrics: Metrics) extends Logging with KafkaMetricsGroup {
+                           metrics: Metrics) extends Logging {
+  // Visible for test.
+  private[group] val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private val compressionType: CompressionType = config.offsetsTopicCompressionType
 
@@ -123,8 +125,8 @@ class GroupMetadataManager(brokerId: Int,
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
   private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
-    removeMetric(name)
-    newGauge(name, gauge)
+    metricsGroup.removeMetric(name)
+    metricsGroup.newGauge(name, gauge)
   }
 
   recreateGauge("NumOffsets",
@@ -547,7 +549,7 @@ class GroupMetadataManager(brokerId: Int,
     onGroupLoaded: GroupMetadata => Unit,
     startTimeMs: java.lang.Long
   ): Unit = {
-    if (!maybeUpdateCoordinatorEpoch(topicPartition.partition, Some(coordinatorEpoch))) {
+    if (!maybeUpdateCoordinatorEpoch(topicPartition.partition, OptionalInt.of(coordinatorEpoch))) {
       info(s"Not loading offsets and group metadata for $topicPartition " +
         s"in epoch $coordinatorEpoch since current epoch is ${epochForPartitionId.get(topicPartition.partition)}")
     } else if (!addLoadingPartition(topicPartition.partition)) {
@@ -763,7 +765,7 @@ class GroupMetadataManager(brokerId: Int,
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int,
-                               coordinatorEpoch: Option[Int],
+                               coordinatorEpoch: OptionalInt,
                                onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
@@ -771,7 +773,7 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   private [group] def removeGroupsAndOffsets(topicPartition: TopicPartition,
-                                             coordinatorEpoch: Option[Int],
+                                             coordinatorEpoch: OptionalInt,
                                              onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val offsetsPartition = topicPartition.partition
     if (maybeUpdateCoordinatorEpoch(offsetsPartition, coordinatorEpoch)) {
@@ -810,19 +812,22 @@ class GroupMetadataManager(brokerId: Int,
    */
   private def maybeUpdateCoordinatorEpoch(
     partitionId: Int,
-    epochOpt: Option[Int]
+    epochOpt: OptionalInt
   ): Boolean = {
     val updatedEpoch = epochForPartitionId.compute(partitionId, (_, currentEpoch) => {
       if (currentEpoch == null) {
-        epochOpt.map(Int.box).orNull
+        if (epochOpt.isPresent) epochOpt.getAsInt
+        else null
       } else {
-        epochOpt match {
-          case Some(epoch) if epoch > currentEpoch => epoch
-          case _ => currentEpoch
-        }
+        if (epochOpt.isPresent && epochOpt.getAsInt > currentEpoch) epochOpt.getAsInt
+        else currentEpoch
       }
     })
-    epochOpt.forall(_ == updatedEpoch)
+    if (epochOpt.isPresent) {
+      epochOpt.getAsInt == updatedEpoch
+    } else {
+      true
+    }
   }
 
   // visible for testing

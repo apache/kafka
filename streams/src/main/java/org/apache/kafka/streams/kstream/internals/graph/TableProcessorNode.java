@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -27,19 +27,18 @@ import java.util.Objects;
 public class TableProcessorNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
-    private final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
+    private final StoreBuilder<?> storeBuilder;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder) {
+                              final StoreBuilder<?> storeBuilder) {
         this(nodeName, processorParameters, storeBuilder, null);
     }
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              // TODO KIP-300: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder,
+                              final StoreBuilder<?> storeBuilder,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;
@@ -56,6 +55,7 @@ public class TableProcessorNode<K, V> extends GraphNode {
             "} " + super.toString();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();
@@ -65,8 +65,10 @@ public class TableProcessorNode<K, V> extends GraphNode {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
-        if (processorParameters.kTableSourceSupplier() != null) {
-            if (processorParameters.kTableSourceSupplier().materialized()) {
+        final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?
+                (KTableSource<K, V>) processorParameters.processorSupplier() : null;
+        if (tableSource != null) {
+            if (tableSource.materialized()) {
                 topologyBuilder.addStateStore(Objects.requireNonNull(storeBuilder, "storeBuilder was null"),
                                               processorName);
             }

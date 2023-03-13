@@ -20,7 +20,6 @@ import java.util
 import java.util.Properties
 import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
@@ -48,7 +47,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
@@ -69,7 +68,7 @@ object ZkAdminManager {
 class ZkAdminManager(val config: KafkaConfig,
                      val metrics: Metrics,
                      val metadataCache: MetadataCache,
-                     val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                     val zkClient: KafkaZkClient) extends Logging {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 

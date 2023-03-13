@@ -18,7 +18,8 @@ package integration.kafka.server
 
 import kafka.server.{BaseFetchRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
@@ -28,7 +29,8 @@ import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.Properties
+import java.util.{Collections, Properties}
+import java.util.concurrent.{Executors, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
@@ -165,6 +167,66 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
     } finally {
       consumer.close()
+    }
+  }
+
+  @Test
+  def testRackAwareRangeAssignor(): Unit = {
+    val partitionList = servers.indices.toList
+
+    val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"
+    createTopic(topicWithAllPartitionsOnAllRacks, servers.size, servers.size)
+
+    // Racks are in order of broker ids, assign leaders in reverse order
+    val topicWithSingleRackPartitions = "topicWithSingleRackPartitions"
+    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(servers.size - i - 1))).toMap)
+
+    // Create consumers with instance ids in ascending order, with racks in the same order.
+    consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RangeAssignor].getName)
+    val consumers = servers.map { server =>
+      consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+      consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, server.config.rack.orNull)
+      consumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, s"instance-${server.config.brokerId}")
+      createConsumer()
+    }
+
+    val producer = createProducer()
+    val executor = Executors.newFixedThreadPool(consumers.size)
+
+    def verifyAssignments(assignments: List[Set[TopicPartition]]): Unit = {
+      val assignmentFutures = consumers.zipWithIndex.map { case (consumer, i) =>
+        executor.submit(() => {
+          val expectedAssignment = assignments(i)
+          TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
+            s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}")
+        }, 0)
+      }
+      assignmentFutures.foreach(future => assertEquals(0, future.get(20, TimeUnit.SECONDS)))
+
+      assignments.flatten.foreach { tp =>
+        producer.send(new ProducerRecord(tp.topic, tp.partition, s"key-$tp".getBytes, s"value-$tp".getBytes))
+      }
+      consumers.zipWithIndex.foreach { case (consumer, i) =>
+        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size)
+        assertEquals(assignments(i), records.map(r => new TopicPartition(r.topic, r.partition)).toSet)
+      }
+    }
+
+    try {
+      // Rack-based assignment results in partitions assigned in reverse order since partition racks are in the reverse order.
+      consumers.foreach(_.subscribe(Collections.singleton(topicWithSingleRackPartitions)))
+      verifyAssignments(partitionList.reverse.map(p => Set(new TopicPartition(topicWithSingleRackPartitions, p))))
+
+      // Non-rack-aware assignment results in ordered partitions.
+      consumers.foreach(_.subscribe(Collections.singleton(topicWithAllPartitionsOnAllRacks)))
+      verifyAssignments(partitionList.map(p => Set(new TopicPartition(topicWithAllPartitionsOnAllRacks, p))))
+
+      // Rack-aware assignment with co-partitioning results in reverse assignment for both topics.
+      consumers.foreach(_.subscribe(Set(topicWithSingleRackPartitions, topicWithAllPartitionsOnAllRacks).asJava))
+      verifyAssignments(partitionList.reverse.map(p => Set(new TopicPartition(topicWithAllPartitionsOnAllRacks, p), new TopicPartition(topicWithSingleRackPartitions, p))))
+
+    } finally {
+      executor.shutdownNow()
     }
   }
 

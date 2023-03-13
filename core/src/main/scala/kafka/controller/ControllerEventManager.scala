@@ -23,10 +23,11 @@ import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.ShutdownableThread
+import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection._
 
@@ -72,8 +73,10 @@ class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
                              rateAndTimeMetrics: Map[ControllerState, Timer],
-                             eventQueueTimeTimeoutMs: Long = 300000) extends KafkaMetricsGroup {
+                             eventQueueTimeTimeoutMs: Long = 300000) {
   import ControllerEventManager._
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
@@ -81,9 +84,9 @@ class ControllerEventManager(controllerId: Int,
   // Visible for test
   private[controller] var thread = new ControllerEventThread(ControllerEventThreadName)
 
-  private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
+  private val eventQueueTimeHist = metricsGroup.newHistogram(EventQueueTimeMetricName)
 
-  newGauge(EventQueueSizeMetricName, () => queue.size)
+  metricsGroup.newGauge(EventQueueSizeMetricName, () => queue.size)
 
   def state: ControllerState = _state
 
@@ -95,8 +98,8 @@ class ControllerEventManager(controllerId: Int,
       clearAndPut(ShutdownEventThread)
       thread.awaitShutdown()
     } finally {
-      removeMetric(EventQueueTimeMetricName)
-      removeMetric(EventQueueSizeMetricName)
+      metricsGroup.removeMetric(EventQueueTimeMetricName)
+      metricsGroup.removeMetric(EventQueueSizeMetricName)
     }
   }
 
@@ -115,8 +118,12 @@ class ControllerEventManager(controllerId: Int,
 
   def isEmpty: Boolean = queue.isEmpty
 
-  class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
-    logIdent = s"[ControllerEventThread controllerId=$controllerId] "
+  class ControllerEventThread(name: String)
+    extends ShutdownableThread(
+      name, false, s"[ControllerEventThread controllerId=$controllerId] ")
+      with Logging {
+
+    logIdent = logPrefix
 
     override def doWork(): Unit = {
       val dequeued = pollFromEventQueue()

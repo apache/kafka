@@ -26,10 +26,10 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
@@ -90,7 +90,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
     private class KTableTransformValuesProcessor extends ContextualProcessor<K, Change<V>, K, Change<VOut>> {
         private final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer;
-        private TimestampedKeyValueStore<K, VOut> store;
+        private KeyValueStoreWrapper<K, VOut> store;
         private TimestampedTupleForwarder<K, VOut> tupleForwarder;
 
         private KTableTransformValuesProcessor(final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer) {
@@ -103,9 +103,9 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             final InternalProcessorContext<K, Change<VOut>> internalProcessorContext = (InternalProcessorContext<K, Change<VOut>>) context;
             valueTransformer.init(new ForwardingDisabledProcessorContext(internalProcessorContext));
             if (queryableName != null) {
-                store = context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.getStore(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -121,7 +121,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
                 context().forward(record.withValue(new Change<>(newValue, oldValue)));
             } else {
                 final VOut oldValue = sendOldValues ? getValueOrNull(store.get(record.key())) : null;
-                store.put(record.key(), ValueAndTimestamp.make(newValue, record.timestamp()));
+                store.put(record.key(), newValue, record.timestamp());
                 tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
             }
         }

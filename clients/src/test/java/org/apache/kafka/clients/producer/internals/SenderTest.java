@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -280,7 +281,6 @@ public class SenderTest {
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
-    @SuppressWarnings("deprecation")
     @Test
     public void testQuotaMetrics() {
         MockSelector selector = new MockSelector(time);
@@ -640,7 +640,7 @@ public class SenderTest {
      * polls are necessary to send requests.
      */
     @Test
-    public void testInitProducerIdWithMaxInFlightOne() throws Exception {
+    public void testInitProducerIdWithMaxInFlightOne() {
         final long producerId = 123456L;
         createMockClientWithMaxFlightOneMetadataPending();
 
@@ -668,7 +668,7 @@ public class SenderTest {
      * polls are necessary to send requests.
      */
     @Test
-    public void testIdempotentInitProducerIdWithMaxInFlightOne() throws Exception {
+    public void testIdempotentInitProducerIdWithMaxInFlightOne() {
         final long producerId = 123456L;
         createMockClientWithMaxFlightOneMetadataPending();
 
@@ -774,7 +774,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -824,7 +824,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -924,7 +924,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -984,7 +984,7 @@ public class SenderTest {
         appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
 
         // make sure the next sequence number accounts for multi-message batches.
@@ -1256,7 +1256,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -1338,7 +1338,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
 
         // Send second ProduceRequest
@@ -1543,7 +1543,7 @@ public class SenderTest {
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
         // Send first ProduceRequest
@@ -1779,7 +1779,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -1829,7 +1829,7 @@ public class SenderTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce(); // Receive AddPartitions response
 
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
@@ -2315,7 +2315,7 @@ public class SenderTest {
         sender.runOnce();  // connect.
         sender.runOnce();  // send.
         String id = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(id), "localhost", 0);
+        Node node = new Node(Integer.parseInt(id), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
         client.disconnect(id);
@@ -2385,7 +2385,7 @@ public class SenderTest {
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
         sender.runOnce();
 
         testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
@@ -2425,7 +2425,7 @@ public class SenderTest {
             assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence should be 2");
             String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            Node node = new Node(Integer.valueOf(id), "localhost", 0);
+            Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
@@ -2443,7 +2443,7 @@ public class SenderTest {
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            node = new Node(Integer.valueOf(id), "localhost", 0);
+            node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
@@ -2460,7 +2460,7 @@ public class SenderTest {
             sender.runOnce(); // send the seconcd produce request
             id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            node = new Node(Integer.valueOf(id), "localhost", 0);
+            node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
@@ -2732,7 +2732,7 @@ public class SenderTest {
 
             txnManager.beginTransaction();
             txnManager.maybeAddPartition(tp);
-            client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+            client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
             txnManager.beginCommit();
@@ -2852,7 +2852,7 @@ public class SenderTest {
 
     private void addPartitionToTxn(Sender sender, TransactionManager txnManager, TopicPartition tp) {
         txnManager.maybeAddPartition(tp);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
         runUntil(sender, () -> txnManager.isPartitionAdded(tp));
         assertFalse(txnManager.hasInFlightRequest());
     }
@@ -2893,7 +2893,7 @@ public class SenderTest {
 
             txnManager.beginTransaction();
             txnManager.maybeAddPartition(tp);
-            client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+            client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.ABORT);
@@ -2927,7 +2927,7 @@ public class SenderTest {
 
             txnManager.beginTransaction();
             txnManager.maybeAddPartition(tp);
-            client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+            client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
 
             // Try to commit the transaction but it won't happen as we'll forcefully close the sender
@@ -2952,7 +2952,7 @@ public class SenderTest {
         // Begin the transaction
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         // Run it once so that the partition is added to the transaction.
         sender.runOnce();
         // Append a record to the accumulator.
@@ -2990,7 +2990,7 @@ public class SenderTest {
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
         // create a producer batch with more than one record so it is eligible for splitting
@@ -3338,5 +3338,12 @@ public class SenderTest {
 
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
+    }
+    
+    private AddPartitionsToTxnResponse buildAddPartitionsToTxnResponseData(int throttleMs, Map<TopicPartition, Errors> errors) {
+        AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
+                AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(throttleMs);
+        return new AddPartitionsToTxnResponse(data);
     }
 }

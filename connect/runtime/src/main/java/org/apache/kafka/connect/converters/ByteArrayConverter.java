@@ -29,8 +29,8 @@ import java.util.Map;
 
 /**
  * Pass-through converter for raw byte data.
- *
- * This implementation currently does nothing with the topic names or header names.
+ * <p>
+ * This implementation currently does nothing with the topic names or header keys.
  */
 public class ByteArrayConverter implements Converter, HeaderConverter {
 
