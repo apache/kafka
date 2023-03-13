@@ -147,28 +147,17 @@ public class WorkerSourceTaskTest {
     private SourceConnectorConfig sourceConfig;
     private Plugins plugins;
     private MockConnectMetrics metrics;
-    @Mock
-    private SourceTask sourceTask;
-    @Mock
-    private Converter keyConverter;
-    @Mock
-    private Converter valueConverter;
-    @Mock
-    private HeaderConverter headerConverter;
-    @Mock
-    private TransformationChain<SourceRecord> transformationChain;
-    @Mock
-    private KafkaProducer<byte[], byte[]> producer;
-    @Mock
-    private TopicAdmin admin;
-    @Mock
-    private CloseableOffsetStorageReader offsetReader;
-    @Mock
-    private OffsetStorageWriter offsetWriter;
-    @Mock
-    private ConnectorOffsetBackingStore offsetStore;
-    @Mock
-    private ClusterConfigState clusterConfigState;
+    @Mock private SourceTask sourceTask;
+    @Mock private Converter keyConverter;
+    @Mock private Converter valueConverter;
+    @Mock private HeaderConverter headerConverter;
+    @Mock private TransformationChain<SourceRecord> transformationChain;
+    @Mock private KafkaProducer<byte[], byte[]> producer;
+    @Mock private TopicAdmin admin;
+    @Mock private CloseableOffsetStorageReader offsetReader;
+    @Mock private OffsetStorageWriter offsetWriter;
+    @Mock private ConnectorOffsetBackingStore offsetStore;
+    @Mock private ClusterConfigState clusterConfigState;
     private WorkerSourceTask workerTask;
     @Mock
     private TaskStatus.Listener statusListener;
