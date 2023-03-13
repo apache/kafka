@@ -733,8 +733,8 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.commitTransactionalOffsets(ctx, data, bufferSupplier)
     assertFalse(future.isDone)
 
-    val capturedCallback: ArgumentCaptor[Map[TopicPartition, Errors] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, Errors] => Unit])
+    val capturedCallback: ArgumentCaptor[Map[TopicIdPartition, Errors] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, Errors] => Unit])
 
     verify(groupCoordinator).handleTxnCommitOffsets(
       ArgumentMatchers.eq(data.groupId),
@@ -744,7 +744,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(data.generationId),
       ArgumentMatchers.eq(Map(
-        new TopicPartition("foo", 0) -> new OffsetAndMetadata(
+        new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0)) -> new OffsetAndMetadata(
           offset = 100,
           leaderEpoch = Optional.of[Integer](1),
           metadata = "",
@@ -757,7 +757,7 @@ class GroupCoordinatorAdapterTest {
     )
 
     capturedCallback.getValue.apply(Map(
-      new TopicPartition("foo", 0) -> Errors.NONE
+      new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0)) -> Errors.NONE
     ))
 
     val expectedData = new TxnOffsetCommitResponseData()

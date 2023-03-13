@@ -424,7 +424,7 @@ private[group] class GroupCoordinatorAdapter(
     val currentTimeMs = time.milliseconds
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
 
-    def callback(results: Map[TopicPartition, Errors]): Unit = {
+    def callback(results: Map[TopicIdPartition, Errors]): Unit = {
       val response = new TxnOffsetCommitResponseData()
       val byTopics = new mutable.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
 
@@ -447,10 +447,10 @@ private[group] class GroupCoordinatorAdapter(
       future.complete(response)
     }
 
-    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    val partitions = new mutable.HashMap[TopicIdPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
-        val tp = new TopicPartition(topic.name, partition.partitionIndex)
+        val tp = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition(topic.name, partition.partitionIndex))
         partitions += tp -> createOffsetAndMetadata(
           currentTimeMs,
           partition.committedOffset,

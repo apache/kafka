@@ -20,6 +20,7 @@ package kafka.coordinator.group
 import java.util.Properties
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
@@ -295,20 +296,17 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
   }
 
-  class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends GroupOperation[TxnCommitOffsetCallbackParams, TxnCommitOffsetCallback] {
-    override def responseCallback(responsePromise: Promise[TxnCommitOffsetCallbackParams]): TxnCommitOffsetCallback = {
-      val callback: TxnCommitOffsetCallback = offsets => responsePromise.success(offsets)
-      callback
-    }
-    override def runWithCallback(member: GroupMember, responseCallback: TxnCommitOffsetCallback): Unit = {
+  class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
+    override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val topicId = Uuid.randomUuid()
+      val offsets = immutable.Map(new TopicIdPartition(topicId, tp) -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       val producerId = 1000L
       val producerEpoch : Short = 2
       // When transaction offsets are appended to the log, transactions may be scheduled for
       // completion. Since group metadata locks are acquired for transaction completion, include
       // this in the callback to test that there are no deadlocks.
-      def callbackWithTxnCompletion(errors: Map[TopicPartition, Errors]): Unit = {
+      def callbackWithTxnCompletion(errors: Map[TopicIdPartition, Errors]): Unit = {
         val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
         groupCoordinator.groupManager.scheduleHandleTxnCompletion(producerId,
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
@@ -321,11 +319,6 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
           offsets, callbackWithTxnCompletion)
         replicaManager.tryCompleteActions()
       } finally lock.foreach(_.unlock())
-    }
-
-    override def awaitAndVerify(member: GroupMember): Unit = {
-      val offsets = await(member, 500)
-      offsets.foreach { case (_, error) => assertEquals(Errors.NONE, error) }
     }
   }
 
@@ -384,8 +377,6 @@ object GroupCoordinatorConcurrencyTest {
   type OffsetFetchCallback = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) => Unit
   type CommitOffsetCallbackParams = Map[TopicIdPartition, Errors]
   type CommitOffsetCallback = Map[TopicIdPartition, Errors] => Unit
-  type TxnCommitOffsetCallbackParams = Map[TopicPartition, Errors]
-  type TxnCommitOffsetCallback = Map[TopicPartition, Errors] => Unit
   type LeaveGroupCallbackParams = LeaveGroupResult
   type LeaveGroupCallback = LeaveGroupResult => Unit
   type CompleteTxnCallbackParams = Errors
