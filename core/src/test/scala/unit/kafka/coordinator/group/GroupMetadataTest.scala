@@ -262,7 +262,7 @@ class GroupMetadataTest {
   @Test
   def testOffsetRemovalDuringTransitionFromEmptyToNonEmpty(): Unit = {
     val topic = "foo"
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition(topic, 0))
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, topic)
     val time = new MockTime()
     group = new GroupMetadata("groupId", Empty, time)
 
@@ -386,7 +386,7 @@ class GroupMetadataTest {
 
   @Test
   def testOffsetCommit(): Unit = {
-    val partition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val partition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = offsetAndMetadata(37)
     val commitRecordOffset = 3
 
@@ -401,8 +401,7 @@ class GroupMetadataTest {
 
   @Test
   def testOffsetCommitFailure(): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, tp)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = offsetAndMetadata(37)
 
     group.prepareOffsetCommit(Map(topicIdPartition -> offset))
@@ -418,8 +417,7 @@ class GroupMetadataTest {
 
   @Test
   def testOffsetCommitFailureWithAnotherPending(): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, tp)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val firstOffset = offsetAndMetadata(37)
     val secondOffset = offsetAndMetadata(57)
 
@@ -446,7 +444,7 @@ class GroupMetadataTest {
 
   @Test
   def testOffsetCommitWithAnotherPending(): Unit = {
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val firstOffset = offsetAndMetadata(37)
     val secondOffset = offsetAndMetadata(57)
 
@@ -473,7 +471,7 @@ class GroupMetadataTest {
 
   @Test
   def testConsumerBeatsTransactionalOffsetCommit(): Unit = {
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val producerId = 13232L
     val txnOffsetCommit = offsetAndMetadata(37)
     val consumerOffsetCommit = offsetAndMetadata(57)
@@ -505,7 +503,7 @@ class GroupMetadataTest {
 
   @Test
   def testTransactionBeatsConsumerOffsetCommit(): Unit = {
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val producerId = 13232L
     val txnOffsetCommit = offsetAndMetadata(37)
     val consumerOffsetCommit = offsetAndMetadata(57)
@@ -538,7 +536,7 @@ class GroupMetadataTest {
 
   @Test
   def testTransactionalCommitIsAbortedAndConsumerCommitWins(): Unit = {
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val producerId = 13232L
     val txnOffsetCommit = offsetAndMetadata(37)
     val consumerOffsetCommit = offsetAndMetadata(57)
@@ -572,7 +570,7 @@ class GroupMetadataTest {
 
   @Test
   def testFailedTxnOffsetCommitLeavesNoPendingState(): Unit = {
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val producerId = 13232L
     val txnOffsetCommit = offsetAndMetadata(37)
 
@@ -741,7 +739,7 @@ class GroupMetadataTest {
 
   @Test
   def testHasPendingNonTxnOffsets(): Unit = {
-    val partition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val partition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = offsetAndMetadata(37)
 
     group.prepareOffsetCommit(Map(partition -> offset))
@@ -750,7 +748,7 @@ class GroupMetadataTest {
 
   @Test
   def testHasPendingTxnOffsets(): Unit = {
-    val txnPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val txnPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = offsetAndMetadata(37)
     val producerId = 5
 

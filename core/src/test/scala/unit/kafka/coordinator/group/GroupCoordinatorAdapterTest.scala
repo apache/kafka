@@ -636,7 +636,6 @@ class GroupCoordinatorAdapterTest {
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
   def testCommitOffsets(version: Short): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-
     val time = new MockTime()
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, time)
     val now = time.milliseconds()
@@ -672,7 +671,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(data.generationId),
       ArgumentMatchers.eq(Map(
-        new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0)) -> new OffsetAndMetadata(
+        new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
           offset = 100,
           leaderEpoch = Optional.of[Integer](1),
           metadata = "",
@@ -685,7 +684,7 @@ class GroupCoordinatorAdapterTest {
     )
 
     capturedCallback.getValue.apply(Map(
-      new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0)) -> Errors.NONE
+      new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> Errors.NONE
     ))
 
     val expectedResponseData = new OffsetCommitResponseData()
@@ -744,7 +743,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(data.generationId),
       ArgumentMatchers.eq(Map(
-        new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0)) -> new OffsetAndMetadata(
+        new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
           offset = 100,
           leaderEpoch = Optional.of[Integer](1),
           metadata = "",
@@ -757,7 +756,7 @@ class GroupCoordinatorAdapterTest {
     )
 
     capturedCallback.getValue.apply(Map(
-      new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0)) -> Errors.NONE
+      new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> Errors.NONE
     ))
 
     val expectedData = new TxnOffsetCommitResponseData()

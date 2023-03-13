@@ -391,7 +391,7 @@ private[group] class GroupCoordinatorAdapter(
     val partitions = new mutable.HashMap[TopicIdPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
-        val tp = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition(topic.name, partition.partitionIndex))
+        val tp = new TopicIdPartition(Uuid.ZERO_UUID, partition.partitionIndex, topic.name)
         partitions += tp -> createOffsetAndMetadata(
           currentTimeMs,
           partition.committedOffset,
@@ -450,7 +450,7 @@ private[group] class GroupCoordinatorAdapter(
     val partitions = new mutable.HashMap[TopicIdPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
-        val tp = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition(topic.name, partition.partitionIndex))
+        val tp = new TopicIdPartition(Uuid.ZERO_UUID, partition.partitionIndex, topic.name)
         partitions += tp -> createOffsetAndMetadata(
           currentTimeMs,
           partition.committedOffset,

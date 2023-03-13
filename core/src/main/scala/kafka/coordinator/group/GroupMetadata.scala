@@ -19,6 +19,7 @@ package kafka.coordinator.group
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
+
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import kafka.utils.Implicits._
@@ -659,7 +660,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def prepareOffsetCommit(offsets: Map[TopicIdPartition, OffsetAndMetadata]): Unit = {
     receivedConsumerOffsetCommits = true
-    pendingOffsetCommits ++= offsets.map { case(k, v) => k.topicPartition -> v }
+    offsets.forKeyValue { (topicIdPartition, offsetAndMetadata) =>
+      pendingOffsetCommits += topicIdPartition.topicPartition -> offsetAndMetadata
+    }
   }
 
   def prepareTxnOffsetCommit(producerId: Long, offsets: Map[TopicIdPartition, OffsetAndMetadata]): Unit = {
@@ -827,14 +830,15 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
 
-
   // visible for testing
   private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
 
+  // Used for testing
   private[group] def pendingOffsetCommit(topicIdPartition: TopicIdPartition): Option[OffsetAndMetadata] = {
     pendingOffsetCommits.get(topicIdPartition.topicPartition)
   }
 
+  // Used for testing
   private[group] def pendingTxnOffsetCommit(producerId: Long, topicIdPartition: TopicIdPartition): Option[CommitRecordMetadataAndOffset] = {
     pendingTransactionalOffsetCommits.get(producerId).flatMap(_.get(topicIdPartition.topicPartition))
   }

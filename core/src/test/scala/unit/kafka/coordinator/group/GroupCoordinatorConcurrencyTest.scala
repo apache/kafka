@@ -283,9 +283,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val tp = new TopicPartition("topic", 0)
-      val topicId = Uuid.randomUuid()
-      val offsets = immutable.Map(new TopicIdPartition(topicId, tp) -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
+      val offsets = immutable.Map(tip -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, offsets, responseCallback)
       replicaManager.tryCompleteActions()
@@ -298,9 +297,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val tp = new TopicPartition("topic", 0)
-      val topicId = Uuid.randomUuid()
-      val offsets = immutable.Map(new TopicIdPartition(topicId, tp) -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val offsets = immutable.Map(new TopicIdPartition(Uuid.randomUuid(), 0, "topic") -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       val producerId = 1000L
       val producerEpoch : Short = 2
       // When transaction offsets are appended to the log, transactions may be scheduled for
