@@ -391,32 +391,29 @@ class GroupMetadataTest {
     val commitRecordOffset = 3
 
     group.prepareOffsetCommit(Map(partition -> offset))
-    assertOffsets(
-      topicIdPartition = partition,
-      pendingOffsetCommit = Some(offset),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(None, group.offset(partition.topicPartition))
 
     group.onOffsetCommitAppend(partition, CommitRecordMetadataAndOffset(Some(commitRecordOffset), offset))
-    assertOffsets(
-      topicIdPartition = partition,
-      offset = Some(offset)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(offset), group.offset(partition.topicPartition))
   }
 
   @Test
   def testOffsetCommitFailure(): Unit = {
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val tp = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, tp)
     val offset = offsetAndMetadata(37)
 
     group.prepareOffsetCommit(Map(topicIdPartition -> offset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = Some(offset)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(offset), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.failPendingOffsetWrite(topicIdPartition, offset)
-    assertNoOffset(topicIdPartition)
+    assertFalse(group.hasOffsets)
+    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
   }
 
   @Test
@@ -427,32 +424,24 @@ class GroupMetadataTest {
     val secondOffset = offsetAndMetadata(57)
 
     group.prepareOffsetCommit(Map(topicIdPartition -> firstOffset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = Some(firstOffset),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(firstOffset), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.prepareOffsetCommit(Map(topicIdPartition -> secondOffset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = Some(secondOffset),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(secondOffset), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.failPendingOffsetWrite(topicIdPartition, firstOffset)
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = Some(secondOffset),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(secondOffset), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.onOffsetCommitAppend(topicIdPartition, CommitRecordMetadataAndOffset(Some(3L), secondOffset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = None,
-      offset = Some(secondOffset)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(Some(secondOffset), group.offset(topicIdPartition.topicPartition))
   }
 
   @Test
@@ -462,32 +451,24 @@ class GroupMetadataTest {
     val secondOffset = offsetAndMetadata(57)
 
     group.prepareOffsetCommit(Map(topicIdPartition -> firstOffset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = Some(firstOffset),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(firstOffset), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.prepareOffsetCommit(Map(topicIdPartition -> secondOffset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = Some(secondOffset),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(secondOffset), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.onOffsetCommitAppend(topicIdPartition, CommitRecordMetadataAndOffset(Some(4L), firstOffset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = Some(secondOffset),
-      offset = Some(firstOffset)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(secondOffset), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(Some(firstOffset), group.offset(topicIdPartition.topicPartition))
 
     group.onOffsetCommitAppend(topicIdPartition, CommitRecordMetadataAndOffset(Some(5L), secondOffset))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      pendingOffsetCommit = None,
-      offset = Some(secondOffset)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(Some(secondOffset), group.offset(topicIdPartition.topicPartition))
   }
 
   @Test
@@ -498,41 +479,28 @@ class GroupMetadataTest {
     val consumerOffsetCommit = offsetAndMetadata(57)
 
     group.prepareTxnOffsetCommit(producerId, Map(topicIdPartition -> txnOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.prepareOffsetCommit(Map(topicIdPartition -> consumerOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)),
-      pendingOffsetCommit = Some(consumerOffsetCommit),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(consumerOffsetCommit), group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.onTxnOffsetCommitAppend(producerId, topicIdPartition, CommitRecordMetadataAndOffset(Some(3L), txnOffsetCommit))
     group.onOffsetCommitAppend(topicIdPartition, CommitRecordMetadataAndOffset(Some(4L), consumerOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(Some(3), txnOffsetCommit)),
-      pendingOffsetCommit = None,
-      offset = Some(consumerOffsetCommit)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(CommitRecordMetadataAndOffset(Some(3), txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(Some(consumerOffsetCommit), group.offset(topicIdPartition.topicPartition))
 
     group.completePendingTxnOffsetCommit(producerId, isCommit = true)
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = None,
-      pendingOffsetCommit = None,
-      // This is the crucial assertion which validates that we materialize offsets in offset order, not transactional order.
-      offset = Some(consumerOffsetCommit)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(None, group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
+    // This is the crucial assertion which validates that we materialize offsets in offset order, not transactional order.
+    assertEquals(Some(consumerOffsetCommit), group.offset(topicIdPartition.topicPartition))
   }
 
   @Test
@@ -543,43 +511,29 @@ class GroupMetadataTest {
     val consumerOffsetCommit = offsetAndMetadata(57)
 
     group.prepareTxnOffsetCommit(producerId, Map(topicIdPartition -> txnOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
 
     group.prepareOffsetCommit(Map(topicIdPartition -> consumerOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)),
-      pendingOffsetCommit = Some(consumerOffsetCommit),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(consumerOffsetCommit), group.pendingOffsetCommit(topicIdPartition))
 
     group.onOffsetCommitAppend(topicIdPartition, CommitRecordMetadataAndOffset(Some(3L), consumerOffsetCommit))
     group.onTxnOffsetCommitAppend(producerId, topicIdPartition, CommitRecordMetadataAndOffset(Some(4L), txnOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(Some(4), txnOffsetCommit)),
-      pendingOffsetCommit = None,
-      // The transactional offset commit hasn't been committed yet, so we should materialize the consumer offset commit.
-      offset = Some(consumerOffsetCommit)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(CommitRecordMetadataAndOffset(Some(4), txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
+    // The transactional offset commit hasn't been committed yet, so we should materialize the consumer offset commit.
+    assertEquals(Some(consumerOffsetCommit), group.offset(topicIdPartition.topicPartition))
 
     group.completePendingTxnOffsetCommit(producerId, isCommit = true)
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = None,
-      pendingOffsetCommit = None,
-      // The transactional offset commit has been materialized and the transactional commit record is later in the log,
-      // so it should be materialized.
-      offset = Some(txnOffsetCommit)
-    )
+    assertTrue(group.hasOffsets)
+    // The transactional offset commit has been materialized and the transactional commit record is later in the log,
+    // so it should be materialized.
+    assertEquals(None, group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
+    assertEquals(Some(txnOffsetCommit), group.offset(topicIdPartition.topicPartition))
   }
 
   @Test
@@ -590,42 +544,30 @@ class GroupMetadataTest {
     val consumerOffsetCommit = offsetAndMetadata(57)
 
     group.prepareTxnOffsetCommit(producerId, Map(topicIdPartition -> txnOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
+    assertEquals(Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
 
     group.prepareOffsetCommit(Map(topicIdPartition -> consumerOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)),
-      pendingOffsetCommit = Some(consumerOffsetCommit),
-      offset = None
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
+    assertEquals(Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(Some(consumerOffsetCommit), group.pendingOffsetCommit(topicIdPartition))
 
     group.onOffsetCommitAppend(topicIdPartition, CommitRecordMetadataAndOffset(Some(3L), consumerOffsetCommit))
     group.onTxnOffsetCommitAppend(producerId, topicIdPartition, CommitRecordMetadataAndOffset(Some(4L), txnOffsetCommit))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(Some(4L), txnOffsetCommit)),
-      // The transactional offset commit hasn't been committed yet, so we should materialize the consumer offset commit.
-      offset = Some(consumerOffsetCommit)
-    )
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(CommitRecordMetadataAndOffset(Some(4L), txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    // The transactional offset commit hasn't been committed yet, so we should materialize the consumer offset commit.
+    assertEquals(Some(consumerOffsetCommit), group.offset(topicIdPartition.topicPartition))
 
     group.completePendingTxnOffsetCommit(producerId, isCommit = false)
+    assertTrue(group.hasOffsets)
+    // The transactional offset commit should be discarded and the consumer offset commit should continue to be
+    // materialized.
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = None,
-      // The transactional offset commit should be discarded and the consumer offset commit should continue to be
-      // materialized.
-      offset = Some(consumerOffsetCommit)
-    )
+    assertEquals(None, group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(Some(consumerOffsetCommit), group.offset(topicIdPartition.topicPartition))
   }
 
   @Test
@@ -636,19 +578,18 @@ class GroupMetadataTest {
 
     group.prepareTxnOffsetCommit(producerId, Map(topicIdPartition -> txnOffsetCommit))
     assertTrue(group.hasPendingOffsetCommitsFromProducer(producerId))
-    assertOffsets(
-      topicIdPartition = topicIdPartition,
-      producerId = producerId,
-      pendingTxnOffsetCommit = Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)),
-      offset = None
-    )
-
+    assertTrue(group.hasOffsets)
+    assertEquals(Some(CommitRecordMetadataAndOffset(None, txnOffsetCommit)), group.pendingTxnOffsetCommit(producerId, topicIdPartition))
+    assertEquals(None, group.offset(topicIdPartition.topicPartition))
     group.failPendingTxnOffsetCommit(producerId, topicIdPartition)
-    assertNoOffset(topicIdPartition, producerId)
+    assertFalse(group.hasOffsets)
+    assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
+    assertEquals(None, group.pendingTxnOffsetCommit(producerId, topicIdPartition))
 
     // The commit marker should now have no effect.
     group.completePendingTxnOffsetCommit(producerId, isCommit = true)
-    assertNoOffset(topicIdPartition, producerId)
+    assertFalse(group.hasOffsets)
+    assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
   }
 
   @Test
@@ -916,27 +857,6 @@ class GroupMetadataTest {
       assertFalse(group.is(otherState))
     }
     assertTrue(group.is(targetState))
-  }
-
-  private def assertNoOffset(topicIdPartition: TopicIdPartition, producerId: Long = 0): Unit = {
-    assertFalse(group.hasOffsets)
-    assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
-    assertEquals(None, group.offset(topicIdPartition.topicPartition))
-    assertEquals(None, group.pendingOffsetCommit(topicIdPartition))
-    assertEquals(None, group.pendingTxnOffsetCommit(producerId, topicIdPartition))
-  }
-
-  private def assertOffsets(
-    topicIdPartition: TopicIdPartition,
-    producerId: Long = 0,
-    offset: Option[OffsetAndMetadata] = None,
-    pendingOffsetCommit: Option[OffsetAndMetadata] = None,
-    pendingTxnOffsetCommit: Option[CommitRecordMetadataAndOffset] = None
-  ): Unit = {
-    assertTrue(group.hasOffsets)
-    assertEquals(offset, group.offset(topicIdPartition.topicPartition))
-    assertEquals(pendingOffsetCommit, group.pendingOffsetCommit(topicIdPartition))
-    assertEquals(pendingTxnOffsetCommit, group.pendingTxnOffsetCommit(producerId, topicIdPartition))
   }
 
   private def offsetAndMetadata(offset: Long, timestamp: Long = Time.SYSTEM.milliseconds()): OffsetAndMetadata = {
