@@ -408,9 +408,9 @@ class GroupMetadataManager(brokerId: Int,
                 if (!group.is(Dead)) {
                   filteredOffsetMetadata.forKeyValue { (topicIdPartition, offsetAndMetadata) =>
                     if (isTxnOffsetCommit)
-                      group.onTxnOffsetCommitAppend(producerId, topicIdPartition.topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
+                      group.onTxnOffsetCommitAppend(producerId, topicIdPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
                     else
-                      group.onOffsetCommitAppend(topicIdPartition.topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
+                      group.onOffsetCommitAppend(topicIdPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
                   }
                 }
 
@@ -424,9 +424,9 @@ class GroupMetadataManager(brokerId: Int,
                     removeProducerGroup(producerId, group.groupId)
                   filteredOffsetMetadata.forKeyValue { (topicIdPartition, offsetAndMetadata) =>
                     if (isTxnOffsetCommit)
-                      group.failPendingTxnOffsetCommit(producerId, topicIdPartition.topicPartition)
+                      group.failPendingTxnOffsetCommit(producerId, topicIdPartition)
                     else
-                      group.failPendingOffsetWrite(topicIdPartition.topicPartition, offsetAndMetadata)
+                      group.failPendingOffsetWrite(topicIdPartition, offsetAndMetadata)
                   }
                 }
 
@@ -469,11 +469,11 @@ class GroupMetadataManager(brokerId: Int,
           if (isTxnOffsetCommit) {
             group.inLock {
               addProducerGroup(producerId, group.groupId)
-              group.prepareTxnOffsetCommit(producerId, offsetMetadata.map { case(k, v) => k.topicPartition -> v })
+              group.prepareTxnOffsetCommit(producerId, offsetMetadata)
             }
           } else {
             group.inLock {
-              group.prepareOffsetCommit(offsetMetadata.map { case(k, v) => k.topicPartition -> v })
+              group.prepareOffsetCommit(offsetMetadata)
             }
           }
 

@@ -19,12 +19,11 @@ package kafka.coordinator.group
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -631,7 +630,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     this.pendingTransactionalOffsetCommits ++= pendingTxnOffsets
   }
 
-  def onOffsetCommitAppend(topicPartition: TopicPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset): Unit = {
+  def onOffsetCommitAppend(topicIdPartition: TopicIdPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset): Unit = {
+    val topicPartition = topicIdPartition.topicPartition
     if (pendingOffsetCommits.contains(topicPartition)) {
       if (offsetWithCommitRecordMetadata.appendedBatchOffset.isEmpty)
         throw new IllegalStateException("Cannot complete offset commit write without providing the metadata of the record " +
@@ -649,26 +649,27 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def failPendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata): Unit = {
+  def failPendingOffsetWrite(topicIdPartition: TopicIdPartition, offset: OffsetAndMetadata): Unit = {
+    val topicPartition = topicIdPartition.topicPartition
     pendingOffsetCommits.get(topicPartition) match {
       case Some(pendingOffset) if offset == pendingOffset => pendingOffsetCommits.remove(topicPartition)
       case _ =>
     }
   }
 
-  def prepareOffsetCommit(offsets: Map[TopicPartition, OffsetAndMetadata]): Unit = {
+  def prepareOffsetCommit(offsets: Map[TopicIdPartition, OffsetAndMetadata]): Unit = {
     receivedConsumerOffsetCommits = true
-    pendingOffsetCommits ++= offsets
+    pendingOffsetCommits ++= offsets.map { case(k, v) => k.topicPartition -> v }
   }
 
-  def prepareTxnOffsetCommit(producerId: Long, offsets: Map[TopicPartition, OffsetAndMetadata]): Unit = {
+  def prepareTxnOffsetCommit(producerId: Long, offsets: Map[TopicIdPartition, OffsetAndMetadata]): Unit = {
     trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $offsets is pending")
     receivedTransactionalOffsetCommits = true
     val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
       mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
 
-    offsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
-      producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
+    offsets.forKeyValue { (topicIdPartition, offsetAndMetadata) =>
+      producerOffsets.put(topicIdPartition.topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
     }
   }
 
@@ -679,7 +680,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   /* Remove a pending transactional offset commit if the actual offset commit record was not written to the log.
    * We will return an error and the client will retry the request, potentially to a different coordinator.
    */
-  def failPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition): Unit = {
+  def failPendingTxnOffsetCommit(producerId: Long, topicIdPartition: TopicIdPartition): Unit = {
+    val topicPartition = topicIdPartition.topicPartition
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffsets) =>
         val pendingOffsetCommit = pendingOffsets.remove(topicPartition)
@@ -692,8 +694,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def onTxnOffsetCommitAppend(producerId: Long, topicPartition: TopicPartition,
+  def onTxnOffsetCommitAppend(producerId: Long, topicIdPartition: TopicIdPartition,
                               commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset): Unit = {
+    val topicPartition = topicIdPartition.topicPartition
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffset) =>
         if (pendingOffset.contains(topicPartition)
