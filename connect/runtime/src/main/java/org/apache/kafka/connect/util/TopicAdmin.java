@@ -336,13 +336,15 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     /**
-     * Implements a retry logic around creating topic(s) in case it'd fail due to InvalidReplicationFactorException
+     * Implements a retry logic around creating topic(s) in case it'd fail due to
+     * specific type of exceptions, see {@link TopicAdmin#retryableTopicCreationException(ConnectException)}
      *
-     * @param topicDescription
-     * @param timeoutMs
-     * @param backOffMs
-     * @param time
-     * @return the same as {@link TopicAdmin#createTopics(NewTopic...)}
+     * @param topicDescription the specifications of the topic
+     * @param timeoutMs        Timeout in milliseconds
+     * @param backOffMs        Time for delay after initial failed attempt in milliseconds
+     * @param time             {@link Time} instance
+     * @return the names of the topics that were created by this operation; never null but possibly empty,
+     * the same as {@link TopicAdmin#createTopics(NewTopic...)}
      */
     public Set<String> createTopicsWithRetry(NewTopic topicDescription, long timeoutMs, long backOffMs, Time time) {
         Timer timer = time.timer(timeoutMs);
