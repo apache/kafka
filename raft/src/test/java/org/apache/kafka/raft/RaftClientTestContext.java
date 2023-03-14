@@ -185,6 +185,10 @@ public final class RaftClientTestContext {
                 records
             );
             log.appendAsLeader(batch, epoch);
+            // Need to flush the log to update the last flushed offset. This is always correct
+            // because append operation was done in the Builder which represent the state of the
+            // log before the replica starts.
+            log.flush(false);
             return this;
         }
 
@@ -654,10 +658,9 @@ public final class RaftClientTestContext {
         List<RaftRequest.Outbound> sentMessages = channel.drainSendQueue();
         assertEquals(1, sentMessages.size());
 
-        // TODO: Use more specific type
-        RaftMessage raftMessage = sentMessages.get(0);
-        assertFetchRequestData(raftMessage, epoch, fetchOffset, lastFetchedEpoch);
-        return raftMessage.correlationId();
+        RaftRequest.Outbound raftRequest = sentMessages.get(0);
+        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch);
+        return raftRequest.correlationId();
     }
 
     FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
@@ -955,13 +958,15 @@ public final class RaftClientTestContext {
     }
 
     void assertFetchRequestData(
-        RaftMessage message,
+        RaftRequest.Outbound message,
         int epoch,
         long fetchOffset,
         int lastFetchedEpoch
     ) {
         assertTrue(
-            message.data() instanceof FetchRequestData, "Unexpected request type " + message.data());
+            message.data() instanceof FetchRequestData,
+            "unexpected request type " + message.data()
+        );
         FetchRequestData request = (FetchRequestData) message.data();
         assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
@@ -975,6 +980,18 @@ public final class RaftClientTestContext {
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
         assertEquals(localId.orElse(-1), request.replicaId());
+
+        // Assert that voters have flushed up to the fetch offset
+        if (localId.isPresent() && voters.contains(localId.getAsInt())) {
+            assertTrue(
+                log.lastFlushedOffset() + 1 >= fetchOffset,
+                String.format(
+                    "expected voter to flush (%s) up to the fetch offset (%s)",
+                    log.lastFlushedOffset(),
+                    fetchOffset
+                )
+            );
+        }
     }
 
     FetchRequestData fetchRequest(
