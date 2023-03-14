@@ -523,6 +523,9 @@ public class ExactlyOnceWorkerSourceTaskTest {
         // Test that the task handles an empty list of records
         createWorkerTask();
 
+        // Make sure the task returns empty batches from poll before we start polling it
+        pollRecords.set(Collections.emptyList());
+
         when(offsetWriter.beginFlush()).thenReturn(false);
 
         startTaskThread();
@@ -720,6 +723,87 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @Test
+    public void testMixedConnectorTransactionBoundaryCommitLastRecordAbortBatch() throws Exception {
+        // We fail tasks that try to abort and commit a transaction for the same record or same batch
+        // But we don't fail if they try to commit the last record of a batch and abort the entire batch
+        // Instead, we give precedence to the record-based operation
+
+        Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.CONNECTOR);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        createWorkerTask();
+
+        expectPossibleTopicCreation();
+        expectTaskGetTopic();
+        expectApplyTransformationChain();
+        expectConvertHeadersAndKeyValue();
+        when(offsetWriter.beginFlush())
+                .thenReturn(true)
+                .thenReturn(false);
+
+        workerTask.initialize(TASK_CONFIG);
+
+        TransactionContext transactionContext = workerTask.sourceTaskContext.transactionContext();
+
+        // Request that the batch be aborted
+        transactionContext.abortTransaction();
+        // Request that the last record in the batch be committed
+        transactionContext.commitTransaction(RECORDS.get(RECORDS.size() - 1));
+
+        workerTask.toSend = RECORDS;
+        assertTrue(workerTask.sendRecords());
+
+        verifyTransactions(2, 1);
+        verifySends(RECORDS.size());
+        // We never abort transactions in this test!
+        verify(producer, never()).abortTransaction();
+
+        verifyPossibleTopicCreation();
+    }
+
+    @Test
+    public void testMixedConnectorTransactionBoundaryAbortLastRecordCommitBatch() throws Exception {
+        // We fail tasks that try to abort and commit a transaction for the same record or same batch
+        // But we don't fail if they try to abort the last record of a batch and commit the entire batch
+        // Instead, we give precedence to the record-based operation
+
+        Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.CONNECTOR);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        createWorkerTask();
+
+        expectPossibleTopicCreation();
+        expectTaskGetTopic();
+        expectApplyTransformationChain();
+        expectConvertHeadersAndKeyValue();
+        when(offsetWriter.beginFlush())
+                .thenReturn(true)
+                .thenReturn(false);
+
+        workerTask.initialize(TASK_CONFIG);
+
+        TransactionContext transactionContext = workerTask.sourceTaskContext.transactionContext();
+
+        // Request that the last record in the batch be aborted
+        transactionContext.abortTransaction(RECORDS.get(RECORDS.size() - 1));
+        // Request that the batch be committed
+        transactionContext.commitTransaction();
+
+        workerTask.toSend = RECORDS;
+        assertTrue(workerTask.sendRecords());
+
+        verify(offsetWriter, times(2)).beginFlush();
+        verify(sourceTask, times(2)).commit();
+        // We open a transaction once for the aborted batch, and once to commit offsets for that batch
+        verify(producer, times(2)).beginTransaction();
+        verify(producer, times(1)).commitTransaction();
+        verify(offsetWriter, times(1)).doFlush(any());
+        verify(producer, times(1)).abortTransaction();
+
+        verifySends(RECORDS.size());
+
+        verifyPossibleTopicCreation();
+    }
+
+    @Test
     public void testCommitFlushSyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.beginFlush()).thenReturn(true);
@@ -818,12 +902,16 @@ public class ExactlyOnceWorkerSourceTaskTest {
         assertFalse(workerTask.sendRecords());
         assertEquals(Arrays.asList(record2, record3), workerTask.toSend);
         verify(producer).beginTransaction();
+        // When using poll-based transaction boundaries, we do not commit transactions while retrying delivery for a batch
+        verify(producer, never()).commitTransaction();
         verifySends(2);
         verifyPossibleTopicCreation();
 
         // Next they all succeed
         assertTrue(workerTask.sendRecords());
         assertNull(workerTask.toSend);
+        // After the entire batch is successfully dispatched to the producer, we can finally commit the transaction
+        verify(producer, times(1)).commitTransaction();
         verifySends(4);
 
         verify(offsetWriter).offset(PARTITION, offset(1));
