@@ -737,7 +737,7 @@ public class Worker {
                     FenceProducersOptions fencingOptions = new FenceProducersOptions()
                             .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
                     return admin.fenceProducers(transactionalIds, fencingOptions).all().whenComplete((ignored, error) -> {
-                        if (error != null)
+                        if (error == null)
                             log.debug("Finished fencing out {} task producers for source connector {}", numTasks, connName);
                         Utils.closeQuietly(admin, "Zombie fencing admin for connector " + connName);
                     });
