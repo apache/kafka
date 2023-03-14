@@ -341,7 +341,7 @@ class ControllerServer(
 
       // Install all metadata publishers.
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
-        "all of the metadata publishers to be installed",
+        "the controller metadata publishers to be installed",
         sharedServer.loader.installPublishers(publishers), startupDeadline, time)
     } catch {
       case e: Throwable =>
