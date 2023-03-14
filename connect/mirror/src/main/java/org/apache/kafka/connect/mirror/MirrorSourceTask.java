@@ -303,6 +303,7 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     static class PartitionState {
+        long previousUpstreamOffset = -1L;
         long previousDownstreamOffset = -1L;
         long lastSyncDownstreamOffset = -1L;
         long maxOffsetLag;
@@ -319,11 +320,13 @@ public class MirrorSourceTask extends SourceTask {
             // the OffsetSync::translateDownstream method will translate this offset 1 past the last sync, so add 1.
             // TODO: share common implementation to enforce this relationship
             boolean translatedOffsetTooStale = downstreamOffset - (lastSyncDownstreamOffset + 1) >= maxOffsetLag;
+            boolean skippedUpstreamRecord = upstreamOffset - previousUpstreamOffset != 1L;
             boolean truncatedDownstreamTopic = downstreamOffset < previousDownstreamOffset;
-            if (noPreviousSyncThisLifetime || translatedOffsetTooStale || truncatedDownstreamTopic) {
+            if (noPreviousSyncThisLifetime || translatedOffsetTooStale || skippedUpstreamRecord || truncatedDownstreamTopic) {
                 lastSyncDownstreamOffset = downstreamOffset;
                 shouldSyncOffsets = true;
             }
+            previousUpstreamOffset = upstreamOffset;
             previousDownstreamOffset = downstreamOffset;
             return shouldSyncOffsets;
         }
