@@ -26,7 +26,10 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.test.TestSslUtils
 
 import scala.jdk.CollectionConverters._
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable.ArrayBuffer
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -78,5 +81,14 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
       // Create client credentials after starting brokers so that dynamic credential creation is also tested
       createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
       createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testAuthentications(quorum: String): Unit = {
+    val successfulAuths = TestUtils.totalMetricValue(brokers.head, "successful-authentication-total")
+    assertTrue(successfulAuths > 0, "No successful authentications")
+    val failedAuths = TestUtils.totalMetricValue(brokers.head, "failed-authentication-total")
+    assertEquals(0, failedAuths)
   }
 }

@@ -46,7 +46,7 @@ public enum ScramMechanism {
         this.type = type;
         this.mechanismName = "SCRAM-" + hashAlgorithm;
         this.hashAlgorithm = hashAlgorithm;
-        this.macAlgorithm  = macAlgorithm;
+        this.macAlgorithm = macAlgorithm;
         this.minIterations = minIterations;
         this.maxIterations = maxIterations;
     }

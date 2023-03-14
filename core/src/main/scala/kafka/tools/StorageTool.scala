@@ -117,7 +117,9 @@ object StorageTool extends Logging {
       help("The cluster ID to use.")
     formatParser.addArgument("--add-scram", "-S").
       action(append()).
-      help("Additional Bootstrap Metadata to add to the cluster.")
+      help("""A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
+              |'SCRAM-SHA-256=[user=alice,password=alice-secret]'
+              |'SCRAM-SHA-512=[user=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
     formatParser.addArgument("--ignore-formatted", "-g").
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
