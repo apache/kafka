@@ -988,11 +988,12 @@ public final class RaftClientTestContext {
 
         // Assert that voters have flushed up to the fetch offset
         if (localId.isPresent() && voters.contains(localId.getAsInt())) {
-            assertTrue(
-                log.lastFlushedOffset() + 1 >= fetchOffset,
+            assertEquals(
+                log.firstUnflushedOffset(),
+                fetchOffset,
                 String.format(
-                    "expected voter to flush (%s) up to the fetch offset (%s)",
-                    log.lastFlushedOffset(),
+                    "expected voters have the fetch offset (%s) be the same as the unflushed offset (%s)",
+                    log.firstUnflushedOffset(),
                     fetchOffset
                 )
             );
