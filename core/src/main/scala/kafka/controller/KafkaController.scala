@@ -2322,7 +2322,7 @@ class KafkaController(val config: KafkaConfig,
             val aliveOriginalReplicas = replicaAssignment.originReplicas.toSet.intersect(controllerContext.liveBrokerIds);
             if (aliveOriginalReplicas.size >= config.liMinOriginalAliveReplicas) {
               // If there are enough original replicas alive (to maintain minISR), we allow the cancellation to go through
-              Right(aliveOriginalReplicas.toSeq)
+              Right(replicaAssignment.originReplicas)
             } else {
               // If there are not enough alive replicas in the original set, we don't allow the cancellation to go though.
               Left(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
