@@ -45,7 +45,13 @@ public class MirrorConnectorsIntegrationTransactionsTest extends MirrorConnector
         backupBrokerProps.put("transaction.state.log.min.isr", "1");
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "embedded-kafka-0");
-        super.startClusters();
+        startClusters(new HashMap<String, String>() {{
+            put("topics", "test-topic-.*, primary.test-topic-.*, backup.test-topic-.*");
+            put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".enabled", "true");
+            put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "true");
+            // This is not necessary for this test, but is not tested elsewhere.
+            put("offset.lag.max", "0");
+        }});
     }
 
     /**
