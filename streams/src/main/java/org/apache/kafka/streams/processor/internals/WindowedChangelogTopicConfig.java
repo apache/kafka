@@ -43,8 +43,9 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
     }
 
     /**
-     * Get the configured properties for this topic. If retentionMs is set then
-     * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
+     * Get the configured properties for this topic. If no retentionMs override is provided from
+     * the topic configs, then we add additionalRetentionMs to work out the desired retention
+     * when cleanup.policy=compact,delete
      *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic

@@ -46,8 +46,9 @@ public class VersionedChangelogTopicConfig extends InternalTopicConfig {
     }
 
     /**
-     * Get the configured properties for this topic. If {@code minCompactionLagMs} is set then
-     * we add {@code VERSIONED_STORE_CHANGE_LOG_ADDITIONAL_COMPACTION_LAG_MS} to work out the
+     * Get the configured properties for this topic. If no {@code minCompactionLagMs} is
+     * provided from the topic configs, then we add
+     * {@code VERSIONED_STORE_CHANGE_LOG_ADDITIONAL_COMPACTION_LAG_MS} to work out the
      * desired min compaction lag for cleanup.policy=compact
      *
      * @param windowStoreAdditionalRetentionMs added to retention for window store changelog
