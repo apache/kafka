@@ -42,15 +42,22 @@ import scala.jdk.CollectionConverters._
 
 /**
  * Migration client in KRaft controller responsible for handling communication to Zookeeper and
- * the ZkBrokers present in the cluster.
+ * the ZkBrokers present in the cluster. Methods that directly use KafkaZkClient should use the wrapZkException
+ * wrapper function in order to translate KeeperExceptions into something usable by the caller.
  */
 class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Logging {
 
+  /**
+   * Wrap a function such that any KeeperExceptions is captured and converted to a MigrationClientException.
+   * Any authentication related exception is converted to a MigrationClientAuthException which may be treated
+   * differently by the caller.
+   */
   @throws(classOf[MigrationClientException])
-  def wrapZkException[T](fn: => T): T = {
+  private def wrapZkException[T](fn: => T): T = {
     try {
       fn
     } catch {
+      case e @ (_: MigrationClientException | _: MigrationClientAuthException) => throw e
       case e @ (_: AuthFailedException | _: NoAuthException | _: SessionClosedRequireAuthException) =>
         // We don't expect authentication errors to be recoverable, so treat them differently
         throw new MigrationClientAuthException(e)
@@ -99,7 +106,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   def migrateTopics(
     recordConsumer: Consumer[util.List[ApiMessageAndVersion]],
     brokerIdConsumer: Consumer[Integer]
-  ): Unit = {
+  ): Unit = wrapZkException {
     val topics = zkClient.getAllTopicsInCluster()
     val topicConfigs = zkClient.getEntitiesConfigs(ConfigType.Topic, topics)
     val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
@@ -153,7 +160,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def migrateBrokerConfigs(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+  def migrateBrokerConfigs(
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
+  ): Unit = wrapZkException {
     val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
     val batch = new util.ArrayList[ApiMessageAndVersion]()
     zkClient.getEntitiesConfigs(ConfigType.Broker, brokerEntities.toSet).foreach { case (broker, props) =>
@@ -175,7 +184,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def migrateClientQuotas(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+  def migrateClientQuotas(
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
+  ): Unit = wrapZkException {
     val adminZkClient = new AdminZkClient(zkClient)
 
     def migrateEntityType(entityType: String): Unit = {
@@ -217,7 +228,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     migrateEntityType(ConfigType.Ip)
   }
 
-  def migrateProducerId(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+  def migrateProducerId(
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
+  ): Unit = wrapZkException {
     val (dataOpt, _) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
     dataOpt match {
       case Some(data) =>
@@ -233,7 +246,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   override def readAllMetadata(
     batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
     brokerIdConsumer: Consumer[Integer]
-  ): Unit = wrapZkException {
+  ): Unit = {
     migrateTopics(batchConsumer, brokerIdConsumer)
     migrateBrokerConfigs(batchConsumer)
     migrateClientQuotas(batchConsumer)
@@ -241,7 +254,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   }
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
-    zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava
+    zkClient.getSortedBrokerList.map(Integer.valueOf).to(collection.mutable.Set).asJava
   }
 
   override def readBrokerIdsFromTopicAssignments(): util.Set[Integer] = wrapZkException {

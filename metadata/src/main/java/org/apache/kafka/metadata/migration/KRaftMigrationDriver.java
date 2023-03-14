@@ -90,10 +90,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
         this.time = Time.SYSTEM;
-        this.log = LoggerFactory.getLogger(KRaftMigrationDriver.class);
+        LogContext logContext = new LogContext(String.format("[KRaftMigrationDriver nodeId=%d] ", nodeId));
+        this.log = logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, new LogContext("KRaftMigrationDriver "), "kraft-migration");
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "kraft-migration");
         this.image = MetadataImage.EMPTY;
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
@@ -149,14 +150,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
 
         // First check the brokers registered in ZK
-        Set<Integer> zkBrokerRegistrations = new HashSet<>(zkMigrationClient.readBrokerIds());
+        Set<Integer> zkBrokerRegistrations = zkMigrationClient.readBrokerIds();
         if (imageDoesNotContainAllBrokers(image, zkBrokerRegistrations)) {
             log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokerRegistrations);
             return false;
         }
 
         // Once all of those are found, check the topic assignments. This is much more expensive than listing /brokers
-        Set<Integer> zkBrokersWithAssignments = new HashSet<>(zkMigrationClient.readBrokerIdsFromTopicAssignments());
+        Set<Integer> zkBrokersWithAssignments = zkMigrationClient.readBrokerIdsFromTopicAssignments();
         if (imageDoesNotContainAllBrokers(image, zkBrokersWithAssignments)) {
             log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokersWithAssignments);
             return false;
@@ -292,9 +293,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void handleException(Throwable e) {
             if (e instanceof MigrationClientAuthException) {
-                KRaftMigrationDriver.this.faultHandler.handleFault("Encountered client auth error in " + this, e);
+                KRaftMigrationDriver.this.faultHandler.handleFault("Encountered ZooKeeper authentication in " + this, e);
             } else if (e instanceof MigrationClientException) {
-                log.debug(String.format("Encountered client error during event %s. Will retry.", this), e.getCause());
+                log.info(String.format("Encountered ZooKeeper error during event %s. Will retry.", this), e.getCause());
             } else if (e instanceof RejectedExecutionException) {
                 log.debug("Not processing {} because the event queue is closed.", this);
             } else {
