@@ -81,6 +81,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class RaftClientTestContext {
@@ -189,6 +190,10 @@ public final class RaftClientTestContext {
             // because append operation was done in the Builder which represent the state of the
             // log before the replica starts.
             log.flush(false);
+
+            // Reset the value of this method since "flush" before the replica start should not
+            // count when checking for flushes by the KRaft client.
+            log.flushedSinceLastChecked();
             return this;
         }
 
@@ -991,6 +996,8 @@ public final class RaftClientTestContext {
                     fetchOffset
                 )
             );
+        } else {
+            assertFalse(log.flushedSinceLastChecked(), "KRaft client should not explicitly flush when it is an observer");
         }
     }
 

@@ -66,6 +66,7 @@ public class MockLog implements ReplicatedLog {
     private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
     private long lastFlushedOffset = 0;
+    private boolean flushedSinceLastChecked = false;
 
     public MockLog(
         TopicPartition topicPartition,
@@ -329,6 +330,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public void flush(boolean forceFlushActiveSegment) {
+        flushedSinceLastChecked = true;
         lastFlushedOffset = endOffset().offset;
     }
 
@@ -340,6 +342,15 @@ public class MockLog implements ReplicatedLog {
     @Override
     public long lastFlushedOffset() {
         return lastFlushedOffset;
+    }
+
+    /**
+     * Returns true if the log was flushed since the last time this method was called.
+     */
+    public boolean flushedSinceLastChecked() {
+        boolean oldValue = flushedSinceLastChecked;
+        flushedSinceLastChecked = false;
+        return oldValue;
     }
 
     /**
