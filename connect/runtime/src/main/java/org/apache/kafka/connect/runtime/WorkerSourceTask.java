@@ -225,15 +225,15 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             // We continue with the offset commit process here instead of simply returning immediately
             // in order to invoke SourceTask::commit and record metrics for a successful offset commit
         } else {
-            log.info("{} Committing offsets for {} acknowledged messages", this, committableOffsets.numCommittableMessages());
-            if (committableOffsets.hasPending()) {
+            log.info("{} Committing offsets for {} acknowledged messages", this, offsetsToCommit.numCommittableMessages());
+            if (offsetsToCommit.hasPending()) {
                 log.debug("{} There are currently {} pending messages spread across {} source partitions whose offsets will not be committed. "
                                 + "The source partition with the most pending messages is {}, with {} pending messages",
                         this,
-                        committableOffsets.numUncommittableMessages(),
-                        committableOffsets.numDeques(),
-                        committableOffsets.largestDequePartition(),
-                        committableOffsets.largestDequeSize()
+                        offsetsToCommit.numUncommittableMessages(),
+                        offsetsToCommit.numDeques(),
+                        offsetsToCommit.largestDequePartition(),
+                        offsetsToCommit.largestDequeSize()
                 );
             } else {
                 log.debug("{} There are currently no pending messages for this offset commit; "
