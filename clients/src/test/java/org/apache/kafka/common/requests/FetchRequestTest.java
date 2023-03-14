@@ -37,6 +37,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FetchRequestTest {
 
@@ -227,17 +228,9 @@ public class FetchRequestTest {
     public void testFetchRequestSimpleBuilderUpgrade(short version) {
         FetchRequestData fetchRequestData = new FetchRequestData().setReplicaId(1);
         FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
-        fetchRequestData = builder.build(version).data();
-
-        assertEquals(1, FetchRequest.replicaId(fetchRequestData));
-
-        if (version < 15) {
-            assertEquals(1, fetchRequestData.replicaId());
-            assertEquals(-1, fetchRequestData.replicaState().replicaId());
-        } else {
-            assertEquals(-1, fetchRequestData.replicaId());
-            assertEquals(1, fetchRequestData.replicaState().replicaId());
-        }
+        assertThrows(UnsupportedOperationException.class, () -> {
+            builder.build(version);
+        });
     }
 
     @Test

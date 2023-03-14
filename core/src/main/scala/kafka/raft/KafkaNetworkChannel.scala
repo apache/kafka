@@ -22,7 +22,6 @@ import org.apache.kafka.clients.{ClientResponse, KafkaClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.FetchRequest.SimpleBuilder
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig.InetAddressSpec
@@ -43,14 +42,7 @@ object KafkaNetworkChannel {
       case endEpochRequest: EndQuorumEpochRequestData =>
         new EndQuorumEpochRequest.Builder(endEpochRequest)
       case fetchRequest: FetchRequestData =>
-        // Since we already have the request, we go through a simplified builder
-        new AbstractRequest.Builder[FetchRequest](ApiKeys.FETCH) {
-          override def build(version: Short): FetchRequest = {
-            val builder = new SimpleBuilder(fetchRequest)
-            new FetchRequest(builder.build(version).data(), version)
-          }
-          override def toString: String = fetchRequest.toString
-        }
+        new FetchRequest.SimpleBuilder(fetchRequest)
       case fetchSnapshotRequest: FetchSnapshotRequestData =>
         new FetchSnapshotRequest.Builder(fetchSnapshotRequest)
       case _ =>

@@ -131,6 +131,8 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
+    // It is only used by KafkaRaftClient for downgrading the FetchRequest. Notice that, it will throw
+    // UnsupportedOperationException if it is used for upgrading.
     public static class SimpleBuilder extends AbstractRequest.Builder<FetchRequest> {
         private final FetchRequestData fetchRequestData;
         public SimpleBuilder(FetchRequestData fetchRequestData) {
@@ -140,14 +142,14 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public FetchRequest build(short version) {
+            if (fetchRequestData.replicaId() >= 0) {
+                throw new UnsupportedOperationException();
+            }
+
             int replicaId = FetchRequest.replicaId(fetchRequestData);
-            long replicaEpoch = fetchRequestData.replicaState().replicaEpoch();
             if (version < 15) {
                 fetchRequestData.setReplicaId(replicaId);
                 fetchRequestData.setReplicaState(new ReplicaState());
-            } else {
-                fetchRequestData.setReplicaState(new ReplicaState().setReplicaId(replicaId).setReplicaEpoch(replicaEpoch));
-                fetchRequestData.setReplicaId(-1);
             }
             return new FetchRequest(fetchRequestData, version);
         }

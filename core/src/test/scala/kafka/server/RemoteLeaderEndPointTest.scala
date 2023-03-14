@@ -25,14 +25,16 @@ import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.Mockito.{mock, when}
 
 import java.util
@@ -49,6 +51,7 @@ class RemoteLeaderEndPointTest {
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     var blockingSend: MockBlockingSender = _
     var endPoint: LeaderEndPoint = _
+    var currentBrokerEpoch = 1L
 
     @BeforeEach
     def setUp(): Unit = {
@@ -61,7 +64,7 @@ class RemoteLeaderEndPointTest {
         blockingSend = new MockBlockingSender(offsets = new util.HashMap[TopicPartition, EpochEndOffset](),
             sourceBroker = sourceBroker, time = time)
         endPoint = new RemoteLeaderEndPoint(logPrefix, blockingSend, fetchSessionHandler,
-            config, replicaManager, QuotaFactory.UnboundedQuota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => 1)
+            config, replicaManager, QuotaFactory.UnboundedQuota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => currentBrokerEpoch)
     }
 
     @Test
@@ -120,17 +123,23 @@ class RemoteLeaderEndPointTest {
         assertThrows(classOf[UnknownLeaderEpochException], () => endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch + 1))
     }
 
-    @Test
-    def testBrokerEpochSupplier(): Unit = {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+    def testBrokerEpochSupplier(version: Short): Unit = {
         val tp = new TopicPartition("topic1", 0)
         val topicId1 = Uuid.randomUuid()
-        val log: UnifiedLog = mock(classOf[UnifiedLog])
+        val log = mock(classOf[UnifiedLog])
         val partitionMap = Map(
             tp -> PartitionFetchState(Some(topicId1), 150, None, 0, None, state = Fetching, lastFetchedEpoch = None))
         when(replicaManager.localLogOrException(tp)).thenReturn(log)
         when(log.logStartOffset).thenReturn(1)
         val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = endPoint.buildFetch(partitionMap)
         assertTrue(partitionsWithError.isEmpty)
-        assertEquals(1L, fetchRequestOpt.get.fetchRequest.build(15).replicaEpoch())
+        assertEquals(if (version < 15) -1L else 1L, fetchRequestOpt.get.fetchRequest.build(version).replicaEpoch())
+
+        currentBrokerEpoch = 2L
+        val ResultWithPartitions(newFetchRequestOpt, newPartitionsWithError) = endPoint.buildFetch(partitionMap)
+        assertTrue(newPartitionsWithError.isEmpty)
+        assertEquals(if (version < 15) -1L else 2L, newFetchRequestOpt.get.fetchRequest.build(version).replicaEpoch())
     }
 }

@@ -1441,9 +1441,10 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
     }
 
+    // This test mainly focuses on whether the leader state is correctly updated under different fetch version.
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
-    public void testFetchRequestVersionHandling(short version) throws Exception {
+    public void testLeaderStateUpdateWithDifferentFetchRequestVersions(short version) throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
@@ -1451,26 +1452,34 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
-        int maxWaitTimeMs = 50;
-        FetchRequestData fetchRequestData = context.fetchRequest(epoch, otherNodeId, 2L, epoch, maxWaitTimeMs);
+        // First, test with a correct fetch request.
+        FetchRequestData fetchRequestData = context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0);
         FetchRequestData downgradedRequest = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
         context.deliverRequest(downgradedRequest);
         context.client.poll();
-        assertEquals(0, context.channel.drainSendQueue().size());
-        // For the first attempt to fetch offset at 2, it should fail because of divergent log, so the highWatermark will
-        // not move.
-        assertEquals(0L, context.log.highWatermark().offset);
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(1L, context.log.highWatermark().offset);
 
-        context.log.appendAsLeader(
-                context.buildBatch(context.log.endOffset().offset, epoch, singletonList("raft")),
-                epoch
-        );
+        // Next, create a fetch request that is designed to be divergent.
+        int maxWaitTimeMs = 50;
+        fetchRequestData = context.fetchRequest(epoch, otherNodeId, 2L, epoch, maxWaitTimeMs);
+        downgradedRequest = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
+        context.deliverRequest(downgradedRequest);
+        context.client.poll();
+        // As the request is divergent, there will be no response immediately. The client will attempt to complete the
+        // request again after 50 ms.
+        assertEquals(0, context.channel.drainSendQueue().size());
+        assertEquals(1L, context.log.highWatermark().offset);
+
+        // After adding a new record, the inflight divergent request becomes valid.
+        context.client.scheduleAppend(epoch, Arrays.asList("bar"));
+        context.client.poll();
 
         context.time.sleep(maxWaitTimeMs);
         context.client.poll();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        // The client will try to fetch again after maxWaitTimeMs, then it should be able to update the highWatermark.
-        assertEquals(1L, context.log.highWatermark().offset);
+        // A valid request should be able to update the highWatermark now.
+        assertEquals(2L, context.log.highWatermark().offset);
     }
 
     @Test
