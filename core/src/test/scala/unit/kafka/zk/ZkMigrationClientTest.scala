@@ -53,18 +53,23 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   private val SECRET = "secret"
 
-  private val encoderConfig: KafkaConfig = {
+  private val encoder: PasswordEncoder = {
     val encoderProps = new Properties()
     encoderProps.put(KafkaConfig.ZkConnectProp, "localhost:1234") // Get around the config validation
     encoderProps.put(KafkaConfig.PasswordEncoderSecretProp, SECRET) // Zk secret to encrypt the
-    new KafkaConfig(encoderProps)
+    val encoderConfig = new KafkaConfig(encoderProps)
+    PasswordEncoder.encrypting(encoderConfig.passwordEncoderSecret.get,
+      encoderConfig.passwordEncoderKeyFactoryAlgorithm,
+      encoderConfig.passwordEncoderCipherAlgorithm,
+      encoderConfig.passwordEncoderKeyLength,
+      encoderConfig.passwordEncoderIterations)
   }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     zkClient.createControllerEpochRaw(1)
-    migrationClient = new ZkMigrationClient(zkClient, encoderConfig)
+    migrationClient = new ZkMigrationClient(zkClient, encoder)
     migrationState = initialMigrationState
     migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
    }
@@ -89,14 +94,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     val brokers = new java.util.ArrayList[Integer]()
     val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
 
-    val encoder = PasswordEncoder.encrypting(encoderConfig.passwordEncoderSecret.get,
-      encoderConfig.passwordEncoderKeyFactoryAlgorithm,
-      encoderConfig.passwordEncoderCipherAlgorithm,
-      encoderConfig.passwordEncoderKeyLength,
-      encoderConfig.passwordEncoderIterations)
-
     // Create some configs and persist in Zk.
-    val SECRET = "password"
     val props = new Properties()
     props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
     props.put(KafkaConfig.SslKeystorePasswordProp, encoder.encode(new Password(SECRET))) // sensitive config

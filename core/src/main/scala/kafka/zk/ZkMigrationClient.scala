@@ -18,7 +18,7 @@ package kafka.zk
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, KafkaConfig, ZkAdminManager}
+import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, ZkAdminManager}
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
@@ -47,7 +47,7 @@ import scala.jdk.CollectionConverters._
  */
 class ZkMigrationClient(
   zkClient: KafkaZkClient,
-  kafkaConfig: KafkaConfig
+  zkConfigEncoder: PasswordEncoder
 ) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
@@ -139,14 +139,6 @@ class ZkMigrationClient(
 
   def migrateBrokerConfigs(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
     val batch = new util.ArrayList[ApiMessageAndVersion]()
-    val zkPasswordEncoder = kafkaConfig.passwordEncoderSecret match {
-      case Some(secret) => PasswordEncoder.encrypting(secret,
-        kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
-        kafkaConfig.passwordEncoderCipherAlgorithm,
-        kafkaConfig.passwordEncoderKeyLength,
-        kafkaConfig.passwordEncoderIterations)
-      case None => PasswordEncoder.noop()
-    }
 
     val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
     zkClient.getEntitiesConfigs(ConfigType.Broker, brokerEntities.toSet).foreach { case (broker, props) =>
@@ -157,7 +149,7 @@ class ZkMigrationClient(
       }
       props.asScala.foreach { case (key, value) =>
         val newValue = if (DynamicBrokerConfig.isPasswordConfig(key))
-          zkPasswordEncoder.decode(value).value
+          zkConfigEncoder.decode(value).value
         else
           value
 
