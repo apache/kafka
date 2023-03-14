@@ -468,7 +468,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                     protected boolean shouldCommitTransactionForBatch(long currentTimeMs) {
                         if (transactionContext.shouldAbortBatch()) {
                             log.info("Aborting transaction for batch as requested by connector");
-                            abortTransaction();
+                            maybeAbortTransaction();
                             // We abort the transaction, which causes all the records up to this point to be dropped, but we still want to
                             // commit offsets so that the task doesn't see the same records all over again
                             return true;
@@ -481,7 +481,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                         if (transactionContext.shouldAbortOn(record)) {
                             log.info("Aborting transaction for record on topic {} as requested by connector", record.topic());
                             log.trace("Last record in aborted transaction: {}", record);
-                            abortTransaction();
+                            maybeAbortTransaction();
                             // We abort the transaction, which causes all the records up to this point to be dropped, but we still want to
                             // commit offsets so that the task doesn't see the same records all over again
                             return true;
@@ -489,7 +489,11 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                         return transactionContext.shouldCommitOn(record);
                     }
 
-                    private void abortTransaction() {
+                    private void maybeAbortTransaction() {
+                        if (!transactionOpen) {
+                            log.warn("Ignoring request by task to abort transaction as the current transaction is empty");
+                            return;
+                        }
                         producer.abortTransaction();
                         transactionMetrics.abortTransaction();
                         transactionOpen = false;

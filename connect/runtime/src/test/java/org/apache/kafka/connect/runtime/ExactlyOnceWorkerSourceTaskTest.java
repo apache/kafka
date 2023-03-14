@@ -17,8 +17,8 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -138,7 +138,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
     @Mock private TransformationChain<SourceRecord> transformationChain;
-    @Mock private KafkaProducer<byte[], byte[]> producer;
+    @Mock private Producer<byte[], byte[]> producer;
     @Mock private TopicAdmin admin;
     @Mock private CloseableOffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
@@ -885,6 +885,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        List<SourceRecord> records = Arrays.asList(record1, record2, record3);
 
         expectTopicCreation(TOPIC);
 
@@ -898,10 +899,13 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         expectSendRecordOnce(true);
         expectSendRecordOnce(false);
 
+        // We commit the transaction after the batch has been successfully dispatched to the producer
+        expectFlush(false, new AtomicInteger(), records.size());
+
         PowerMock.replayAll();
 
         // Try to send 3, make first pass, second fail. Should save last two
-        workerTask.toSend = Arrays.asList(record1, record2, record3);
+        workerTask.toSend = records;
         workerTask.sendRecords();
         assertEquals(Arrays.asList(record2, record3), workerTask.toSend);
 
@@ -1187,20 +1191,15 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         return false;
     }
 
-    private enum FlushOutcome {
-        SUCCEED,
-        SUCCEED_ANY_TIMES,
-        FAIL_FLUSH_CALLBACK,
-        FAIL_TRANSACTION_COMMIT
+    private void expectFlush(boolean anyTimes, AtomicInteger flushCount) {
+        expectFlush(anyTimes, flushCount, RECORDS.size());
     }
 
-    private CountDownLatch expectFlush(boolean anyTimes, AtomicInteger flushCount) {
-        CountDownLatch result = new CountDownLatch(1);
+    private void expectFlush(boolean anyTimes, AtomicInteger flushCount, int batchSize) {
         org.easymock.IExpectationSetters<Boolean> flushBegin = EasyMock
                 .expect(offsetWriter.beginFlush())
                 .andAnswer(() -> {
                     flushCount.incrementAndGet();
-                    result.countDown();
                     return true;
                 });
         if (anyTimes) {
@@ -1220,10 +1219,9 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
             // The worker task doesn't actually use the returned future
             offsetFlush.andReturn(null);
             expectCall(producer::commitTransaction);
-            expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject()));
+            expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject())).times(batchSize);
             expectCall(sourceTask::commit);
         }
-        return result;
     }
 
     private void assertTransactionMetrics(int minimumMaxSizeExpected) {
