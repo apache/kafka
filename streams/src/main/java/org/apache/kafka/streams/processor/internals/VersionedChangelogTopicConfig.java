@@ -36,10 +36,13 @@ public class VersionedChangelogTopicConfig extends InternalTopicConfig {
     }
     private static final long VERSIONED_STORE_CHANGE_LOG_ADDITIONAL_COMPACTION_LAG_MS = 24 * 60 * 60 * 1000L;
 
-    private Long minCompactionLagMs;
+    private final long minCompactionLagMs;
 
-    VersionedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    VersionedChangelogTopicConfig(final String name,
+                                  final Map<String, String> topicConfigs,
+                                  final long minCompactionLagMs) {
         super(name, topicConfigs);
+        this.minCompactionLagMs = minCompactionLagMs;
     }
 
     /**
@@ -63,7 +66,7 @@ public class VersionedChangelogTopicConfig extends InternalTopicConfig {
 
         topicConfig.putAll(topicConfigs);
 
-        if (minCompactionLagMs != null) {
+        if (!topicConfigs.containsKey(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG)) {
             long compactionLagValue;
             try {
                 compactionLagValue = Math.addExact(minCompactionLagMs, VERSIONED_STORE_CHANGE_LOG_ADDITIONAL_COMPACTION_LAG_MS);
@@ -74,12 +77,6 @@ public class VersionedChangelogTopicConfig extends InternalTopicConfig {
         }
 
         return topicConfig;
-    }
-
-    void setMinCompactionLagMs(final long minCompactionLagMs) {
-        if (!topicConfigs.containsKey(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG)) {
-            this.minCompactionLagMs = minCompactionLagMs;
-        }
     }
 
     @Override

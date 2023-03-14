@@ -1307,12 +1307,10 @@ public class InternalTopologyBuilder {
     private <S extends StateStore> InternalTopicConfig createChangelogTopicConfig(final StateStoreFactory<S> factory,
                                                                                   final String name) {
         if (factory.isVersionedStore()) {
-            final VersionedChangelogTopicConfig config = new VersionedChangelogTopicConfig(name, factory.logConfig());
-            config.setMinCompactionLagMs(factory.historyRetention());
+            final VersionedChangelogTopicConfig config = new VersionedChangelogTopicConfig(name, factory.logConfig(), factory.historyRetention());
             return config;
         } else if (factory.isWindowStore()) {
-            final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig());
-            config.setRetentionMs(factory.retentionPeriod());
+            final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig(), factory.retentionPeriod());
             return config;
         } else {
             return new UnwindowedUnversionedChangelogTopicConfig(name, factory.logConfig());

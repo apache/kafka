@@ -35,10 +35,11 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
         WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
 
-    private Long retentionMs;
+    private final long retentionMs;
 
-    WindowedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    WindowedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs, final long retentionMs) {
         super(name, topicConfigs);
+        this.retentionMs = retentionMs;
     }
 
     /**
@@ -57,7 +58,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
 
         topicConfig.putAll(topicConfigs);
 
-        if (retentionMs != null) {
+        if (!topicConfigs.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
             long retentionValue;
             try {
                 retentionValue = Math.addExact(retentionMs, additionalRetentionMs);
@@ -68,12 +69,6 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
         }
 
         return topicConfig;
-    }
-
-    void setRetentionMs(final long retentionMs) {
-        if (!topicConfigs.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
-            this.retentionMs = retentionMs;
-        }
     }
 
     @Override
