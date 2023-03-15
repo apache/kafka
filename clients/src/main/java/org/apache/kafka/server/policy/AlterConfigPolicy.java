@@ -19,9 +19,11 @@ package org.apache.kafka.server.policy;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * <p>An interface for enforcing a policy on alter configs requests.
@@ -43,14 +45,17 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
         private final ConfigResource resource;
         private final Map<String, String> configs;
 
+        private final KafkaPrincipal principal;
+
         /**
          * Create an instance of this class with the provided parameters.
          *
          * This constructor is public to make testing of <code>AlterConfigPolicy</code> implementations easier.
          */
-        public RequestMetadata(ConfigResource resource, Map<String, String> configs) {
+        public RequestMetadata(ConfigResource resource, Map<String, String> configs, KafkaPrincipal principal) {
             this.resource = resource;
             this.configs = configs;
+            this.principal = principal;
         }
 
         /**
@@ -62,6 +67,10 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
         public ConfigResource resource() {
             return resource;
+        }
+
+        public KafkaPrincipal principal() {
+            return principal;
         }
 
         @Override

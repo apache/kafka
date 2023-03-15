@@ -299,7 +299,7 @@ class KafkaApisTest {
     authorizeResource(authorizer, operation, ResourceType.TOPIC, resourceName, AuthorizationResult.ALLOWED)
 
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
-    when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false)))
+    when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false), any()))
       .thenAnswer(_ => {
         Map(configResource -> alterConfigHandler.apply())
       })
@@ -335,7 +335,7 @@ class KafkaApisTest {
     assertEquals(Map(resourceName -> expectedError), responseMap)
 
     verify(controller).isActive
-    verify(adminManager).alterConfigs(any(), ArgumentMatchers.eq(false))
+    verify(adminManager).alterConfigs(any(), ArgumentMatchers.eq(false), any())
   }
 
   @Test
@@ -451,7 +451,7 @@ class KafkaApisTest {
     when(controller.isActive).thenReturn(false)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false)))
+    when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false), any()))
       .thenReturn(Map(authorizedResource -> ApiError.NONE))
 
     createKafkaApis(authorizer = Some(authorizer)).handleAlterConfigsRequest(request)
@@ -460,7 +460,7 @@ class KafkaApisTest {
     verifyAlterConfigResult(response, Map(authorizedTopic -> Errors.NONE,
         unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED))
     verify(authorizer, times(2)).authorize(any(), any())
-    verify(adminManager).alterConfigs(any(), anyBoolean())
+    verify(adminManager).alterConfigs(any(), anyBoolean(), any())
   }
 
   @Test
@@ -616,7 +616,7 @@ class KafkaApisTest {
     when(controller.isActive).thenReturn(true)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
+    when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false), any()))
       .thenReturn(Map(authorizedResource -> ApiError.NONE))
 
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
@@ -628,7 +628,7 @@ class KafkaApisTest {
     ))
 
     verify(authorizer, times(2)).authorize(any(), any())
-    verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
+    verify(adminManager).incrementalAlterConfigs(any(), anyBoolean(), any())
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {

@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.server.config.ConfigSynonym;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
@@ -146,27 +147,29 @@ public class ConfigurationControlManagerTest {
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
-                entry("baz", entry(SUBTRACT, "abc")),
-                entry("quux", entry(SET, "abc")))),
-                entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
-                true);
+                        entry("baz", entry(SUBTRACT, "abc")),
+                        entry("quux", entry(SET, "abc")))),
+                    entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
+                true,
+                null);
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123"), CONFIG_RECORD.highestSupportedVersion())),
-                toMap(entry(BROKER0, new ApiError(Errors.INVALID_CONFIG,
-                            "Can't SUBTRACT to key baz because its type is not LIST.")),
-                    entry(MYTOPIC, ApiError.NONE))), result);
+            toMap(entry(BROKER0, new ApiError(Errors.INVALID_CONFIG,
+                    "Can't SUBTRACT to key baz because its type is not LIST.")),
+                entry(MYTOPIC, ApiError.NONE))), result);
 
         RecordTestUtils.replayAll(manager, result.records());
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
+                    new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                        setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
-                entry("abc", entry(DELETE, "xyz"))))),
-                true));
+                    entry("abc", entry(DELETE, "xyz"))))),
+                true,
+                null));
     }
 
     @Test
@@ -177,7 +180,7 @@ public class ConfigurationControlManagerTest {
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
 
         ControllerResult<ApiError> result = manager.
-            incrementalAlterConfig(MYTOPIC, keyToOps, true);
+            incrementalAlterConfig(MYTOPIC, keyToOps, true, null);
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -190,7 +193,7 @@ public class ConfigurationControlManagerTest {
                     new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                         setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 ApiError.NONE),
-            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true));
+            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true, null));
     }
 
     @Test
@@ -200,18 +203,18 @@ public class ConfigurationControlManagerTest {
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
-            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true);
+            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true, null);
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123,456,789"), CONFIG_RECORD.highestSupportedVersion())),
-                toMap(entry(MYTOPIC, ApiError.NONE))), result);
+            toMap(entry(MYTOPIC, ApiError.NONE))), result);
 
         RecordTestUtils.replayAll(manager, result.records());
 
         // It's ok for the appended value to be already present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true, null);
         assertEquals(
             ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -219,17 +222,17 @@ public class ConfigurationControlManagerTest {
         RecordTestUtils.replayAll(manager, result.records());
 
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true, null);
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
+                    new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                        setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
-                result);
+            result);
         RecordTestUtils.replayAll(manager, result.records());
 
         // It's ok for the deleted value not to be present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true, null);
         assertEquals(
             ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -249,9 +252,9 @@ public class ConfigurationControlManagerTest {
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
-                entry("quux", entry(SET, "1")))),
-                entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
-                false);
+                        entry("quux", entry(SET, "1")))),
+                    entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
+                false, null);
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
@@ -297,44 +300,46 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigsWithPolicy() {
         MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(asList(
-            new RequestMetadata(MYTOPIC, Collections.emptyMap()),
+            new RequestMetadata(MYTOPIC, Collections.emptyMap(),
+                new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")),
             new RequestMetadata(BROKER0, toMap(
                 entry("foo.bar", "123"),
                 entry("quux", "456"),
-                entry("broker.config.to.remove", null)))));
+                entry("broker.config.to.remove", null)),
+                new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin"))));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(policy)).
             build();
         // Existing configs should not be passed to the policy
         manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                setName("broker.config").setValue("123"));
+            setName("broker.config").setValue("123"));
         manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
-                setName("topic.config").setValue("123"));
+            setName("topic.config").setValue("123"));
         manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                setName("broker.config.to.remove").setValue("123"));
+            setName("broker.config.to.remove").setValue("123"));
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
+                    new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                        setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                    new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                        setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                    new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                        setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
                 ),
                 toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
-                    "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
-                    "type=TOPIC, name='mytopic'), configs={}). Got: " +
-                    "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
-                    "type=TOPIC, name='mytopic'), configs={foo.bar=123})")),
-                entry(BROKER0, ApiError.NONE))),
+                        "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
+                            "type=TOPIC, name='mytopic'), configs={}). Got: " +
+                            "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
+                            "type=TOPIC, name='mytopic'), configs={foo.bar=123})")),
+                    entry(BROKER0, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
-                entry("foo.bar", entry(SET, "123")))),
-                entry(BROKER0, toMap(
+                        entry("foo.bar", entry(SET, "123")))),
+                    entry(BROKER0, toMap(
                         entry("foo.bar", entry(SET, "123")),
                         entry("quux", entry(SET, "456")),
                         entry("broker.config.to.remove", entry(DELETE, null))
-                ))),
-                true));
+                    ))),
+                true, null));
     }
 
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
@@ -358,6 +363,56 @@ public class ConfigurationControlManagerTest {
         }
     }
 
+    private final static String ADMIN = "admin";
+    private final static KafkaPrincipal ADMIN_PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, ADMIN);
+    private final static KafkaPrincipal USER_PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user");
+
+    private static final class OnlyAdminAllowedPolicy implements AlterConfigPolicy {
+
+        @Override
+        public void validate(RequestMetadata requestMetadata) throws PolicyViolationException {
+            if (!requestMetadata.principal().getName().equals(ADMIN)) {
+                throw new PolicyViolationException("only `admin` users are allowed to modify the policies!");
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            // empty
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // empty
+        }
+    }
+
+    @Test
+    public void testAdminAllowedAlterConfigs() {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            setAlterConfigPolicy(Optional.of(new OnlyAdminAllowedPolicy())).
+            build();
+        List<ApiMessageAndVersion> expectedRecords1 = asList(
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(TOPIC.id()).setResourceName("mytopic").
+                setName("abc").setValue("456"), CONFIG_RECORD.highestSupportedVersion()),
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(TOPIC.id()).setResourceName("mytopic").
+                setName("def").setValue("901"), CONFIG_RECORD.highestSupportedVersion()));
+        assertEquals(ControllerResult.atomicOf(Collections.emptyList(),
+                toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION, "only `admin` users are allowed to modify the policies!")))),
+            manager.legacyAlterConfigs(
+                toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
+                true, USER_PRINCIPAL));
+
+        assertEquals(ControllerResult.atomicOf(
+                expectedRecords1, toMap(entry(MYTOPIC, ApiError.NONE))),
+            manager.legacyAlterConfigs(
+                toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
+                true, ADMIN_PRINCIPAL));
+    }
+
     @Test
     public void testLegacyAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
@@ -375,20 +430,20 @@ public class ConfigurationControlManagerTest {
                 expectedRecords1, toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(
                 toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
-                true));
+                true, null));
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
         assertEquals(ControllerResult.atomicOf(asList(
-            new ApiMessageAndVersion(
-                new ConfigRecord()
-                    .setResourceType(TOPIC.id())
-                    .setResourceName("mytopic")
-                    .setName("abc")
-                    .setValue(null),
-                CONFIG_RECORD.highestSupportedVersion())),
-            toMap(entry(MYTOPIC, ApiError.NONE))),
+                    new ApiMessageAndVersion(
+                        new ConfigRecord()
+                            .setResourceType(TOPIC.id())
+                            .setResourceName("mytopic")
+                            .setName("abc")
+                            .setValue(null),
+                        CONFIG_RECORD.highestSupportedVersion())),
+                toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
-                true));
+                true, null));
     }
 }

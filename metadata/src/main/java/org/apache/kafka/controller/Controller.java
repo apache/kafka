@@ -43,6 +43,7 @@ import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -251,7 +252,8 @@ public interface Controller extends AclMutator, AutoCloseable {
     CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         ControllerRequestContext context,
         Map<ConfigResource, Map<String, String>> newConfigs,
-        boolean validateOnly
+        boolean validateOnly,
+        KafkaPrincipal principal
     );
 
     /**

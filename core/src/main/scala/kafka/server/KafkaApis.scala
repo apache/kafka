@@ -2741,7 +2741,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
-    val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+    val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly, originalRequest.context.principal())
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
@@ -2876,13 +2876,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))
     } else {
-      sendResponse(Some(processIncrementalAlterConfigsRequest(request, remaining)))
+      sendResponse(Some(processIncrementalAlterConfigsRequest(request, remaining, request.context.principal())))
     }
   }
 
   def processIncrementalAlterConfigsRequest(
     originalRequest: RequestChannel.Request,
-    data: IncrementalAlterConfigsRequestData
+    data: IncrementalAlterConfigsRequestData,
+    principal: KafkaPrincipal
   ): IncrementalAlterConfigsResponseData = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(originalRequest))
     val configs = data.resources.iterator.asScala.map { alterConfigResource =>
@@ -2904,7 +2905,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, data.validateOnly)
+    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, data.validateOnly, principal)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }

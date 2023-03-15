@@ -74,6 +74,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1897,7 +1898,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges, false);
+                configurationControl.incrementalAlterConfigs(configChanges, false, context.principal());
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1934,14 +1935,15 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         ControllerRequestContext context,
-        Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly
+        Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly,
+        KafkaPrincipal principal
     ) {
         if (newConfigs.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
         return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs, false);
+                configurationControl.legacyAlterConfigs(newConfigs, false, context.principal());
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
