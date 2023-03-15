@@ -616,7 +616,7 @@ public class KafkaRaftClientTest {
 
         // Leader change record appended
         assertEquals(1L, context.log.endOffset().offset);
-        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
@@ -656,7 +656,7 @@ public class KafkaRaftClientTest {
 
         // Leader change record appended
         assertEquals(1L, context.log.endOffset().offset);
-        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
@@ -2156,7 +2156,7 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
-        assertEquals(2L, context.log.lastFlushedOffset());
+        assertEquals(2L, context.log.firstUnflushedOffset());
     }
 
     @Test
@@ -2339,6 +2339,7 @@ public class KafkaRaftClientTest {
         // Poll again to complete truncation
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.firstUnflushedOffset());
 
         // Now we should be fetching
         context.client.poll();

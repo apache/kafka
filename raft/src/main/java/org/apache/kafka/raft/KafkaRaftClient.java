@@ -1141,7 +1141,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Records records
     ) {
         LogAppendInfo info = log.appendAsFollower(records);
-        log.flush(false);
+        if (quorum.isVoter()) {
+            // the leader only requires that voters have flushed their log before sending
+            // a Fetch request
+            log.flush(false);
+        }
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
