@@ -27,11 +27,11 @@ import kafka.utils.Implicits._
 import kafka.utils.{Exit, Logging, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, Producer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.clients.tools.RecordReader
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.tools.RecordReader
 
 import scala.annotation.nowarn
 

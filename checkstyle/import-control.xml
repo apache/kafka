@@ -337,10 +337,6 @@
       <allow pkg="org.apache.kafka.clients.consumer.internals" />
       <allow pkg="org.apache.kafka.clients.consumer" />
     </subpackage>
-
-    <subpackage name="tools">
-      <allow pkg="org.apache.kafka.clients.producer" />
-    </subpackage>
   </subpackage>
 
   <subpackage name="coordinator">
