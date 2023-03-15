@@ -19,10 +19,12 @@ package kafka.zk
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.coordinator.transaction.ProducerIdManager
-import kafka.server.{ConfigType, QuorumTestHarness, ZkAdminManager}
+import kafka.server.{ConfigType, KafkaConfig, QuorumTestHarness, ZkAdminManager}
+import kafka.utils.PasswordEncoder
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.internals.QuotaConfigs
+import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, ProducerIdsRecord}
 import org.apache.kafka.common.quota.ClientQuotaEntity
@@ -49,12 +51,25 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   private var migrationState: ZkMigrationLeadershipState = _
 
+  private val SECRET = "secret"
+
+  private val encoder: PasswordEncoder = {
+    val encoderProps = new Properties()
+    encoderProps.put(KafkaConfig.ZkConnectProp, "localhost:1234") // Get around the config validation
+    encoderProps.put(KafkaConfig.PasswordEncoderSecretProp, SECRET) // Zk secret to encrypt the
+    val encoderConfig = new KafkaConfig(encoderProps)
+    PasswordEncoder.encrypting(encoderConfig.passwordEncoderSecret.get,
+      encoderConfig.passwordEncoderKeyFactoryAlgorithm,
+      encoderConfig.passwordEncoderCipherAlgorithm,
+      encoderConfig.passwordEncoderKeyLength,
+      encoderConfig.passwordEncoderIterations)
+  }
+
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     zkClient.createControllerEpochRaw(1)
-
-    migrationClient = new ZkMigrationClient(zkClient)
+    migrationClient = new ZkMigrationClient(zkClient, encoder)
     migrationState = initialMigrationState
     migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
    }
@@ -72,6 +87,37 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
     assertEquals(0, brokers.size())
     assertEquals(0, batches.size())
+  }
+
+  @Test
+  def testMigrationBrokerConfigs(): Unit = {
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+
+    // Create some configs and persist in Zk.
+    val props = new Properties()
+    props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
+    props.put(KafkaConfig.SslKeystorePasswordProp, encoder.encode(new Password(SECRET))) // sensitive config
+    zkClient.setOrCreateEntityConfigs(ConfigType.Broker, "1", props)
+
+    migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(0, brokers.size())
+    assertEquals(1, batches.size())
+    assertEquals(2, batches.get(0).size)
+
+    batches.get(0).forEach(record => {
+      val message = record.message().asInstanceOf[ConfigRecord]
+      val name = message.name
+      val value = message.value
+
+      assertTrue(props.containsKey(name))
+      // If the config is senstive, compare it to the decoded value.
+      if (name == KafkaConfig.SslKeystorePasswordProp) {
+        assertEquals(SECRET, value)
+      } else {
+        assertEquals(props.getProperty(name), value)
+      }
+    })
   }
 
   @Test

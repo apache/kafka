@@ -22,7 +22,7 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
-import kafka.utils.TestUtils
+import kafka.utils.{PasswordEncoder, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult, AlterConfigOp, AlterConfigsResult, ConfigEntry, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
@@ -88,7 +88,18 @@ class ZkMigrationIntegrationTest {
     admin.alterClientQuotas(quotas)
 
     val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-    val migrationClient = new ZkMigrationClient(zkClient)
+    val kafkaConfig = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying.servers.head.config
+    val zkConfigEncoder = kafkaConfig.passwordEncoderSecret match {
+      case Some(secret) =>
+        PasswordEncoder.encrypting(secret,
+          kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
+          kafkaConfig.passwordEncoderCipherAlgorithm,
+          kafkaConfig.passwordEncoderKeyLength,
+          kafkaConfig.passwordEncoderIterations)
+      case None => PasswordEncoder.noop()
+    }
+
+    val migrationClient = new ZkMigrationClient(zkClient, zkConfigEncoder)
     var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
     migrationState = migrationState.withNewKRaftController(3000, 42)
     migrationState = migrationClient.claimControllerLeadership(migrationState)
