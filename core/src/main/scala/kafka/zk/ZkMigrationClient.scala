@@ -254,7 +254,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   }
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
-    zkClient.getSortedBrokerList.map(Integer.valueOf).to(collection.mutable.Set).asJava
+    new util.HashSet[Integer](zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava)
   }
 
   override def readBrokerIdsFromTopicAssignments(): util.Set[Integer] = wrapZkException {
