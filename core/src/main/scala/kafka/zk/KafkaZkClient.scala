@@ -548,8 +548,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
    */
   def getAllTopicsInCluster(registerWatch: Boolean = false): Set[String] = {
     val getChildrenResponse = retryRequestUntilConnected(
-      if (paginateTopics) GetChildrenPaginatedRequest(TopicsZNode.path, registerWatch)
-        else GetChildrenRequest(TopicsZNode.path, registerWatch))
+      if (paginateTopics) {
+        debug(s"upgrading GetChildrenRequest to GetChildrenPaginatedRequest for '${TopicsZNode.path}'")
+        GetChildrenPaginatedRequest(TopicsZNode.path, registerWatch)
+      } else {
+        GetChildrenRequest(TopicsZNode.path, registerWatch)
+      }
+    )
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children.toSet
       case Code.NONODE => Set.empty
@@ -893,12 +898,29 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
    * @return list of child node names
    */
   def getChildren(path : String): Seq[String] = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path, registerWatch = true))
+    val getChildrenResponse = retryRequestUntilConnected(
+      if (shouldPaginate(path)) {
+        debug(s"upgrading GetChildrenRequest to GetChildrenPaginatedRequest for '${path}'")
+        GetChildrenPaginatedRequest(path, registerWatch = true)
+      } else {
+        GetChildrenRequest(path, registerWatch = true)
+      }
+    )
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children
       case Code.NONODE => Seq.empty
       case _ => throw getChildrenResponse.resultException.get
     }
+  }
+
+  /**
+   * Returns true if ZK pagination is enabled and the specified path may have an excessive number of children.
+   * (Sole concerns currently are /brokers/topics and /config/topics, both of which are nominally unbounded.)
+   * @param path Zookeeper path to enumerate
+   * @return whether to use GetChildrenPaginated for the request due to possible excessive response size
+   */
+  private def shouldPaginate(path : String): Boolean = {
+    paginateTopics && path.endsWith("/topics")
   }
 
   /**
