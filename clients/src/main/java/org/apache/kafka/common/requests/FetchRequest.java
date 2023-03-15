@@ -143,7 +143,7 @@ public class FetchRequest extends AbstractRequest {
         @Override
         public FetchRequest build(short version) {
             if (fetchRequestData.replicaId() >= 0) {
-                throw new IllegalStateException("The fetch request should be filled replica id in the replicaState");
+                throw new IllegalStateException("The replica id should be placed in the replicaState of a fetchRequestData");
             }
 
             if (version < 15) {

@@ -206,7 +206,7 @@ public class FetchRequestTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
-    public void testFetchRequestSimpleBuilderFetchStateDowngrade(short version) {
+    public void testFetchRequestSimpleBuilderReplicaStateDowngrade(short version) {
         FetchRequestData fetchRequestData = new FetchRequestData();
         fetchRequestData.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
         FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
