@@ -960,10 +960,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         int replicaId = FetchRequest.replicaId(request);
-        FetchResponseData response = tryCompleteFetchRequest(
-            replicaId,
-            fetchPartition,
-            currentTimeMs);
+        FetchResponseData response = tryCompleteFetchRequest(replicaId, fetchPartition, currentTimeMs);
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
 
@@ -988,14 +985,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Errors error = Errors.forException(cause);
                 if (error != Errors.REQUEST_TIMED_OUT) {
                     logger.debug("Failed to handle fetch from {} at {} due to {}",
-                            replicaId, fetchPartition.fetchOffset(), error);
+                        replicaId, fetchPartition.fetchOffset(), error);
                     return buildEmptyFetchResponse(error, Optional.empty());
                 }
             }
 
             // FIXME: `completionTimeMs`, which can be null
             logger.trace("Completing delayed fetch from {} starting at offset {} at {}",
-                    replicaId, fetchPartition.fetchOffset(), completionTimeMs);
+                replicaId, fetchPartition.fetchOffset(), completionTimeMs);
 
             return tryCompleteFetchRequest(replicaId, fetchPartition, time.milliseconds());
         });

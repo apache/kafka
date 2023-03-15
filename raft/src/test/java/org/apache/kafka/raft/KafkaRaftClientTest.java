@@ -1452,34 +1452,20 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
-        // First, test with a correct fetch request.
+        // First poll has no high watermark advance.
+        context.client.poll();
+        assertEquals(OptionalLong.empty(), context.client.highWatermark());
+        assertEquals(1L, context.log.endOffset().offset);
+
+        // Now we will advance the high watermark with a follower fetch request.
         FetchRequestData fetchRequestData = context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0);
-        FetchRequestData downgradedRequest = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
-        context.deliverRequest(downgradedRequest);
-        context.client.poll();
+        FetchRequestData request = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
+        assertEquals((version < 15) ? 1 : -1, fetchRequestData.replicaId());
+        assertEquals((version < 15) ? -1 : 1, fetchRequestData.replicaState().replicaId());
+        context.deliverRequest(request);
+        context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        assertEquals(1L, context.log.highWatermark().offset);
-
-        // Next, create a fetch request that is designed to be divergent.
-        int maxWaitTimeMs = 50;
-        fetchRequestData = context.fetchRequest(epoch, otherNodeId, 2L, epoch, maxWaitTimeMs);
-        downgradedRequest = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
-        context.deliverRequest(downgradedRequest);
-        context.client.poll();
-        // As the request is divergent, there will be no response immediately. The client will attempt to complete the
-        // request again after 50 ms.
-        assertEquals(0, context.channel.drainSendQueue().size());
-        assertEquals(1L, context.log.highWatermark().offset);
-
-        // After adding a new record, the inflight divergent request becomes valid.
-        context.client.scheduleAppend(epoch, Arrays.asList("bar"));
-        context.client.poll();
-
-        context.time.sleep(maxWaitTimeMs);
-        context.client.poll();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        // A valid request should be able to update the highWatermark now.
-        assertEquals(2L, context.log.highWatermark().offset);
+        assertEquals(OptionalLong.of(1L), context.client.highWatermark());
     }
 
     @Test

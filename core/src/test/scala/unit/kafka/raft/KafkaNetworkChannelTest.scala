@@ -172,15 +172,15 @@ class KafkaNetworkChannelTest {
     sendTestRequest(ApiKeys.FETCH, destinationId)
     channel.pollOnce()
 
-    assertEquals(1, client.requests().size())
-    val request = client.requests().peek().requestBuilder().build(version)
+    assertEquals(1, client.requests.size)
+    val request = client.requests.peek.requestBuilder.build(version)
 
     if (version < 15) {
-      assertTrue(request.asInstanceOf[FetchRequest].data().replicaId() == 1)
-      assertTrue(request.asInstanceOf[FetchRequest].data().replicaState().replicaId() == -1)
+      assertTrue(request.asInstanceOf[FetchRequest].data.replicaId == 1)
+      assertTrue(request.asInstanceOf[FetchRequest].data.replicaState.replicaId == -1)
     } else {
-      assertTrue(request.asInstanceOf[FetchRequest].data().replicaId() == -1)
-      assertTrue(request.asInstanceOf[FetchRequest].data().replicaState().replicaId() == 1)
+      assertTrue(request.asInstanceOf[FetchRequest].data.replicaId == -1)
+      assertTrue(request.asInstanceOf[FetchRequest].data.replicaState.replicaId == 1)
     }
   }
 

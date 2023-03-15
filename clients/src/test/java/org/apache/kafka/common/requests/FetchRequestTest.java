@@ -206,7 +206,7 @@ public class FetchRequestTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
-    public void testFetchRequestSimpleBuilderDowngrade(short version) {
+    public void testFetchRequestSimpleBuilderFetchStateDowngrade(short version) {
         FetchRequestData fetchRequestData = new FetchRequestData();
         fetchRequestData.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
         FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
@@ -225,10 +225,10 @@ public class FetchRequestTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
-    public void testFetchRequestSimpleBuilderUpgrade(short version) {
+    public void testFetchRequestSimpleBuilderReplicaIdNotSupported(short version) {
         FetchRequestData fetchRequestData = new FetchRequestData().setReplicaId(1);
         FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
-        assertThrows(UnsupportedOperationException.class, () -> {
+        assertThrows(IllegalStateException.class, () -> {
             builder.build(version);
         });
     }
