@@ -28,6 +28,12 @@ import java.util.Optional;
  */
 public enum ZkMigrationState {
     /**
+     * This is a synthetic value used internally by the controller to indicate that no decision has
+     * been made about the state of a ZK migration. This value should _not_ be written into the log.
+     */
+    UNINITIALIZED((byte) -1),
+
+    /**
      * The cluster was created in KRaft mode. A cluster that was created in ZK mode can never attain
      * this state; the endpoint of migration is POST_MIGRATION, instead.
      */

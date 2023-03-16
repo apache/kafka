@@ -57,12 +57,12 @@ public class KRaftMigrationDriverTest {
 
         @Override
         public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public OffsetAndEpoch completeMigration() {
-            return new OffsetAndEpoch(100, 1);
+        public CompletableFuture<OffsetAndEpoch> completeMigration() {
+            return CompletableFuture.completedFuture(new OffsetAndEpoch(100, 1));
         }
 
         @Override

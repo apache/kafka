@@ -34,6 +34,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
@@ -44,6 +45,7 @@ import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
+@Timeout(120)
 class ZkMigrationIntegrationTest {
 
   val log = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
@@ -64,6 +66,11 @@ class ZkMigrationIntegrationTest {
     }
   }
 
+  /**
+   * Test ZkMigrationClient against a real ZooKeeper-backed Kafka cluster. This test creates a ZK cluster
+   * and modifies data using AdminClient. The ZkMigrationClient is then used to read the metadata from ZK
+   * as would happen during a migration. The generated records are then verified.
+   */
   @ClusterTest(brokers = 3, clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0)
   def testMigrate(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.createAdminClient()

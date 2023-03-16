@@ -33,8 +33,9 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
+import org.apache.kafka.server.util.Deadline;
+import org.apache.kafka.server.util.FutureUtils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -42,8 +43,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -59,7 +60,15 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class KRaftMigrationDriver implements MetadataPublisher {
     private final static Consumer<Throwable> NO_OP_HANDLER = ex -> { };
 
+    /**
+     * When waiting for the metadata layer to commit batches, we block the migration driver thread for this
+     * amount of time. A large value is selected to avoid timeouts in the common case, but prevent us from
+     * blocking indefinitely.
+     */
+    private final static int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
+
     private final Time time;
+    private final LogContext logContext;
     private final Logger log;
     private final int nodeId;
     private final MigrationClient zkMigrationClient;
@@ -90,10 +99,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
         this.time = Time.SYSTEM;
-        this.log = LoggerFactory.getLogger(KRaftMigrationDriver.class);
+        this.logContext = new LogContext(String.format("[KRaftMigrationDriver nodeId=%d] ", nodeId));
+        this.log = this.logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, new LogContext("KRaftMigrationDriver"), "kraft-migration");
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "kraft-migration");
         this.image = MetadataImage.EMPTY;
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
@@ -344,7 +354,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     break;
                 default:
                     if (!isActive) {
-                        apply("KRaftLeaderEvent is not active", state -> ZkMigrationLeadershipState.EMPTY);
+                        apply("KRaftLeaderEvent is not active", state ->
+                            state.withNewKRaftController(
+                                leaderAndEpoch.leaderId().orElse(ZkMigrationLeadershipState.EMPTY.kraftControllerId()),
+                                leaderAndEpoch.epoch())
+                        );
                         transitionTo(MigrationDriverState.INACTIVE);
                     } else {
                         // Apply the new KRaft state
@@ -435,15 +449,19 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                             log.info("Migrating {} records from ZK", batch.size());
                         }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
+                        FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, KRaftMigrationDriver.this.logContext.logPrefix(),
+                            "the metadata layer to commit migration record batch",
+                            future, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
                         count.addAndGet(batch.size());
-                        future.get();
-                    } catch (InterruptedException e) {
+                    } catch (Throwable e) {
                         throw new RuntimeException(e);
-                    } catch (ExecutionException e) {
-                        throw new RuntimeException(e.getCause());
                     }
                 }, brokersInMetadata::add);
-                OffsetAndEpoch offsetAndEpochAfterMigration = zkRecordConsumer.completeMigration();
+                CompletableFuture<OffsetAndEpoch> completeMigrationFuture = zkRecordConsumer.completeMigration();
+                OffsetAndEpoch offsetAndEpochAfterMigration = FutureUtils.waitWithLogging(
+                    KRaftMigrationDriver.this.log, KRaftMigrationDriver.this.logContext.logPrefix(),
+                    "the metadata layer to complete the migration",
+                    completeMigrationFuture, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
                 log.info("Completed migration of metadata from Zookeeper to KRaft. A total of {} metadata records were " +
                          "generated. The current metadata offset is now {} with an epoch of {}. Saw {} brokers in the " +
                          "migrated metadata {}.",
@@ -455,7 +473,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 ZkMigrationLeadershipState newState = migrationLeadershipState.withKRaftMetadataOffsetAndEpoch(
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch());
-                apply("Migrate metadata from Zk", state -> zkMigrationClient.setMigrationRecoveryState(newState));
+                apply("Finished migrating ZK data", state -> zkMigrationClient.setMigrationRecoveryState(newState));
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();

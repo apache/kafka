@@ -110,6 +110,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
@@ -130,6 +131,8 @@ import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
 
 /**
@@ -573,6 +576,11 @@ public final class QuorumController implements Controller {
         return configurationControl;
     }
 
+    // Visible for testing
+    MigrationControlManager migrationControl() {
+        return zkMigrationControlManager;
+    }
+
     public ZkRecordConsumer zkRecordConsumer() {
         return zkRecordConsumer;
     }
@@ -589,6 +597,26 @@ public final class QuorumController implements Controller {
             queue.append(event);
         }
         return event.future();
+    }
+
+    enum ControllerOperationFlag {
+        /**
+         * A flag that signifies that this operation should not update the event queue time metric.
+         * We use this when the event was not appended to the queue.
+         */
+        DOES_NOT_UPDATE_QUEUE_TIME,
+
+        /**
+         * A flag that signifies that this operation can be processed when in pre-migration mode.
+         * Operations without this flag will always return NOT_CONTROLLER when invoked in premigration
+         * mode.
+         * <p>
+         * In pre-migration mode, we are still waiting to load the metadata from Apache
+         * ZooKeeper into the metadata log. Therefore, the metadata log is mostly empty,
+         * even though the cluster really does have metadata. Very few operations should
+         * use this flag.
+         */
+        RUNS_IN_PREMIGRATION
     }
 
     interface ControllerWriteOperation<T> {
@@ -628,19 +656,19 @@ public final class QuorumController implements Controller {
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private final boolean deferred;
+        private final EnumSet<ControllerOperationFlag> flags;
         private OptionalLong startProcessingTimeNs = OptionalLong.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
-        ControllerWriteEvent(String name, ControllerWriteOperation<T> op) {
-            this(name, op, false);
-        }
-
-        ControllerWriteEvent(String name, ControllerWriteOperation<T> op, boolean deferred) {
+        ControllerWriteEvent(
+            String name,
+            ControllerWriteOperation<T> op,
+            EnumSet<ControllerOperationFlag> flags
+        ) {
             this.name = name;
             this.future = new CompletableFuture<T>();
             this.op = op;
-            this.deferred = deferred;
+            this.flags = flags;
             this.resultAndOffset = null;
         }
 
@@ -651,13 +679,18 @@ public final class QuorumController implements Controller {
         @Override
         public void run() throws Exception {
             long now = time.nanoseconds();
-            if (!deferred) {
+            if (!flags.contains(DOES_NOT_UPDATE_QUEUE_TIME)) {
                 // We exclude deferred events from the event queue time metric to prevent
                 // incorrectly including the deferral time in the queue time.
                 controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
             }
             int controllerEpoch = curClaimEpoch;
-            if (!isActiveController()) {
+            if (!isActiveController(controllerEpoch)) {
+                throw newNotControllerException();
+            }
+            if (zkMigrationControlManager.inPreMigrationMode() && !flags.contains(RUNS_IN_PREMIGRATION)) {
+                log.info("Cannot run write operation {} in premigration mode. Returning " +
+                        "NOT_CONTROLLER.", name);
                 throw newNotControllerException();
             }
             startProcessingTimeNs = OptionalLong.of(now);
@@ -818,10 +851,21 @@ public final class QuorumController implements Controller {
         }
     }
 
-    <T> CompletableFuture<T> appendWriteEvent(String name,
-                                              OptionalLong deadlineNs,
-                                              ControllerWriteOperation<T> op) {
-        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+    <T> CompletableFuture<T> appendWriteEvent(
+            String name,
+            OptionalLong deadlineNs,
+            ControllerWriteOperation<T> op
+    ) {
+        return appendWriteEvent(name, deadlineNs, op, EnumSet.noneOf(ControllerOperationFlag.class));
+    }
+
+    <T> CompletableFuture<T> appendWriteEvent(
+            String name,
+            OptionalLong deadlineNs,
+            ControllerWriteOperation<T> op,
+            EnumSet<ControllerOperationFlag> flags
+    ) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op, flags);
         if (deadlineNs.isPresent()) {
             queue.appendWithDeadline(deadlineNs.getAsLong(), event);
         } else {
@@ -850,15 +894,8 @@ public final class QuorumController implements Controller {
         }
         @Override
         public void beginMigration() {
+            log.info("Starting ZK Migration");
             // TODO use KIP-868 transaction
-            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Begin ZK Migration",
-                new MigrationWriteOperation(
-                    Collections.singletonList(
-                        new ApiMessageAndVersion(
-                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value()),
-                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION)
-                    )));
-            queue.append(event);
         }
 
         @Override
@@ -869,19 +906,30 @@ public final class QuorumController implements Controller {
                 return future;
             }
             ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>("ZK Migration Batch",
-                new MigrationWriteOperation(recordBatch));
+                new MigrationWriteOperation(recordBatch), EnumSet.of(RUNS_IN_PREMIGRATION));
             queue.append(batchEvent);
             return batchEvent.future;
         }
 
         @Override
-        public OffsetAndEpoch completeMigration() {
-            // TODO write migration record, use KIP-868 transaction
-            return highestMigrationRecordOffset;
+        public CompletableFuture<OffsetAndEpoch> completeMigration() {
+            log.info("Completing ZK Migration");
+            // TODO use KIP-868 transaction
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Complete ZK Migration",
+                new MigrationWriteOperation(
+                    Collections.singletonList(
+                        new ApiMessageAndVersion(
+                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.MIGRATION.value()),
+                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION)
+                    )),
+                EnumSet.of(RUNS_IN_PREMIGRATION));
+            queue.append(event);
+            return event.future.thenApply(__ -> highestMigrationRecordOffset);
         }
 
         @Override
         public void abortMigration() {
+            log.error("Aborting ZK Migration");
             // TODO use KIP-868 transaction
         }
     }
@@ -1088,7 +1136,11 @@ public final class QuorumController implements Controller {
     }
 
     private boolean isActiveController() {
-        return curClaimEpoch != -1;
+        return isActiveController(curClaimEpoch);
+    }
+
+    private boolean isActiveController(int claimEpoch) {
+        return claimEpoch != -1;
     }
 
     private void updateWriteOffset(long offset) {
@@ -1127,7 +1179,8 @@ public final class QuorumController implements Controller {
             // of the queue rather than the end (hence prepend rather than append). It's also
             // important not to use prepend for anything else, to preserve the ordering here.
             queue.prepend(new ControllerWriteEvent<>("completeActivation[" + epoch + "]",
-                    new CompleteActivationEvent()));
+                new CompleteActivationEvent(),
+                EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION)));
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while claiming leadership", e);
         }
@@ -1145,9 +1198,55 @@ public final class QuorumController implements Controller {
                         "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
                 records.addAll(bootstrapMetadata.records());
-            } else if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-                log.info("No metadata.version feature level record was found in the log. " +
-                        "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
+
+                // Initialize the log with a ZkMigrationState
+                if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
+                    if (zkMigrationEnabled) {
+                        log.info("Writing ZkMigrationState of PRE_MIGRATION to the log, since migrations are enabled.");
+                        records.add(new ApiMessageAndVersion(
+                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value()),
+                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
+                        ));
+                    } else {
+                        log.debug("Writing ZkMigrationState of NONE to the log, since migrations are not enabled.");
+                        records.add(new ApiMessageAndVersion(
+                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.NONE.value()),
+                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
+                        ));
+                    }
+                }
+            } else {
+                // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
+                if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
+                    log.info("No metadata.version feature level record was found in the log. " +
+                            "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
+                }
+
+                if (featureControl.metadataVersion().isMigrationSupported()) {
+                    // If there are records in the log, we cannot be in the middle of a migration
+                    switch (zkMigrationControlManager.zkMigrationState()) {
+                        case UNINITIALIZED:
+                            log.debug("Writing a ZkMigrationState of NONE to the log to indicate this cluster was not migrated from ZK.");
+                            records.add(new ApiMessageAndVersion(
+                                    new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.NONE.value()),
+                                    ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
+                            ));
+                            break;
+                        case NONE:
+                            log.debug("Read a ZkMigrationState of NONE from the log indicating this cluster was never migrated from ZK.");
+                            if (zkMigrationEnabled) {
+                                log.error("Should not have ZK migrations enabled on a cluster that was created in KRaft mode");
+                            }
+                            break;
+                        case POST_MIGRATION:
+                            log.debug("Read a ZkMigrationState of POST_MIGRATION from the log indicating this cluster was previously migrated from ZK.");
+                            break;
+                        default:
+                            // Once we have support for metadata transactions, this failure case will only exist for
+                            // errant ZkMigrationStateRecord that are encountered outside a transaction.
+                            throw fatalFaultHandler.handleFault("Detected an in-progress migration during startup, cannot continue.");
+                    }
+                }
             }
             return ControllerResult.atomicOf(records, null);
         }
@@ -1206,9 +1305,16 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private <T> void scheduleDeferredWriteEvent(String name, long deadlineNs,
-                                                ControllerWriteOperation<T> op) {
-        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op, true);
+    private <T> void scheduleDeferredWriteEvent(
+            String name,
+            long deadlineNs,
+            ControllerWriteOperation<T> op,
+            EnumSet<ControllerOperationFlag> flags
+    ) {
+        if (!flags.contains(DOES_NOT_UPDATE_QUEUE_TIME)) {
+            throw new RuntimeException("deferred events should not update the queue time.");
+        }
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op, flags);
         queue.scheduleDeferred(name, new EarliestDeadlineFunction(deadlineNs), event);
         event.future.exceptionally(e -> {
             if (e instanceof UnknownServerException && e.getCause() != null &&
@@ -1224,7 +1330,7 @@ public final class QuorumController implements Controller {
             log.error("Unexpected exception while executing deferred write event {}. " +
                 "Rescheduling for a minute from now.", name, e);
             scheduleDeferredWriteEvent(name,
-                deadlineNs + NANOSECONDS.convert(1, TimeUnit.MINUTES), op);
+                deadlineNs + NANOSECONDS.convert(1, TimeUnit.MINUTES), op, flags);
             return null;
         });
     }
@@ -1237,13 +1343,15 @@ public final class QuorumController implements Controller {
             cancelMaybeFenceReplicas();
             return;
         }
-        scheduleDeferredWriteEvent(MAYBE_FENCE_REPLICAS, nextCheckTimeNs, () -> {
-            ControllerResult<Void> result = replicationControl.maybeFenceOneStaleBroker();
-            // This following call ensures that if there are multiple brokers that
-            // are currently stale, then fencing for them is scheduled immediately
-            rescheduleMaybeFenceStaleBrokers();
-            return result;
-        });
+        scheduleDeferredWriteEvent(MAYBE_FENCE_REPLICAS, nextCheckTimeNs,
+            () -> {
+                ControllerResult<Void> result = replicationControl.maybeFenceOneStaleBroker();
+                // This following call ensures that if there are multiple brokers that
+                // are currently stale, then fencing for them is scheduled immediately
+                rescheduleMaybeFenceStaleBrokers();
+                return result;
+            },
+            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
     }
 
     private void cancelMaybeFenceReplicas() {
@@ -1255,7 +1363,8 @@ public final class QuorumController implements Controller {
     private void maybeScheduleNextBalancePartitionLeaders() {
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
             leaderImbalanceCheckIntervalNs.isPresent() &&
-            replicationControl.arePartitionLeadersImbalanced()) {
+            replicationControl.arePartitionLeadersImbalanced() &&
+            zkMigrationControlManager.inPreMigrationMode()) {
 
             log.debug(
                 "Scheduling write event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
@@ -1281,7 +1390,7 @@ public final class QuorumController implements Controller {
                 // generated by a ControllerWriteEvent have been applied.
 
                 return result;
-            }, true);
+            }, EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME));
 
             long delayNs = time.nanoseconds();
             if (imbalancedScheduled == ImbalanceSchedule.DEFERRED) {
@@ -1329,7 +1438,7 @@ public final class QuorumController implements Controller {
                         null
                     );
                 },
-                true
+                EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION)
             );
 
             long delayNs = time.nanoseconds() + maxIdleIntervalNs.getAsLong();
@@ -1423,7 +1532,7 @@ public final class QuorumController implements Controller {
                 // NoOpRecord is an empty record and doesn't need to be replayed
                 break;
             case ZK_MIGRATION_STATE_RECORD:
-                // TODO handle this
+                zkMigrationControlManager.replay((ZkMigrationStateRecord) message);
                 break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
@@ -1556,6 +1665,8 @@ public final class QuorumController implements Controller {
      */
     private final AclControlManager aclControlManager;
 
+    private final MigrationControlManager zkMigrationControlManager;
+
     /**
      * Tracks replaying the log.
      * This must be accessed only by the event queue thread.
@@ -1659,6 +1770,11 @@ public final class QuorumController implements Controller {
      */
     private final int maxRecordsPerBatch;
 
+    /**
+     * True if the controller was configured to allow Zookeeper migrations.
+     */
+    private final boolean zkMigrationEnabled;
+
     private QuorumController(
         FaultHandler fatalFaultHandler,
         LogContext logContext,
@@ -1760,6 +1876,8 @@ public final class QuorumController implements Controller {
         this.curClaimEpoch = -1;
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();
         this.zkRecordConsumer = new MigrationRecordConsumer();
+        this.zkMigrationEnabled = zkMigrationEnabled;
+        this.zkMigrationControlManager = new MigrationControlManager(snapshotRegistry, logContext);
         updateWriteOffset(-1);
 
         resetToEmptyState();
@@ -1811,7 +1929,7 @@ public final class QuorumController implements Controller {
         int brokerId
     ) {
         return appendWriteEvent("unregisterBroker", context.deadlineNs(),
-            () -> replicationControl.unregisterBroker(brokerId));
+            () -> replicationControl.unregisterBroker(brokerId), EnumSet.of(RUNS_IN_PREMIGRATION));
     }
 
     @Override
@@ -1986,7 +2104,8 @@ public final class QuorumController implements Controller {
                             maybeUpdateControlledShutdownOffset(brokerId, offset);
                     }
                 }
-            });
+            },
+            EnumSet.of(RUNS_IN_PREMIGRATION));
     }
 
     @Override
@@ -1994,13 +2113,15 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
-        return appendWriteEvent("registerBroker", context.deadlineNs(), () -> {
-            ControllerResult<BrokerRegistrationReply> result = clusterControl.
-                registerBroker(request, writeOffset + 1, featureControl.
-                    finalizedFeatures(Long.MAX_VALUE));
-            rescheduleMaybeFenceStaleBrokers();
-            return result;
-        });
+        return appendWriteEvent("registerBroker", context.deadlineNs(),
+            () -> {
+                ControllerResult<BrokerRegistrationReply> result = clusterControl.
+                    registerBroker(request, writeOffset + 1, featureControl.
+                        finalizedFeatures(Long.MAX_VALUE));
+                rescheduleMaybeFenceStaleBrokers();
+                return result;
+            },
+            EnumSet.of(RUNS_IN_PREMIGRATION));
     }
 
     @Override

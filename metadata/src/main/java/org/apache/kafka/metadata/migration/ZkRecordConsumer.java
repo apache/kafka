@@ -21,10 +21,11 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 
 public interface ZkRecordConsumer {
     void beginMigration();
     CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch);
-    OffsetAndEpoch completeMigration();
+    CompletableFuture<OffsetAndEpoch> completeMigration();
     void abortMigration();
 }

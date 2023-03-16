@@ -90,6 +90,7 @@ import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -1319,5 +1320,39 @@ public class QuorumControllerTest {
                         ControllerResult.atomicOf(Arrays.asList(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
                         2,
                         appender)).getMessage());
+    }
+
+    @Test
+    public void testBootstrapZkMigrationRecord() throws Exception {
+        assertEquals(ZkMigrationState.PRE_MIGRATION,
+            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, true));
+
+        assertEquals(ZkMigrationState.NONE,
+            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, false));
+
+        assertEquals(ZkMigrationState.UNINITIALIZED,
+            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true));
+
+        assertEquals(ZkMigrationState.UNINITIALIZED,
+            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, false));
+    }
+
+    public ZkMigrationState checkBootstrapZkMigrationRecord(
+        MetadataVersion metadataVersion,
+        boolean migrationEnabled
+    ) throws Exception {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder -> {
+                    controllerBuilder.setZkMigrationEnabled(migrationEnabled);
+                }).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test")).
+                build();
+        ) {
+            QuorumController active = controlEnv.activeController();
+            return active.appendReadEvent("read migration state", OptionalLong.empty(),
+                () -> active.migrationControl().zkMigrationState()).get(30, TimeUnit.SECONDS);
+        }
     }
 }

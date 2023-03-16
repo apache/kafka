@@ -17,22 +17,69 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineObject;
+import org.slf4j.Logger;
+
+import java.util.Optional;
 
 public class MigrationControlManager {
     private final TimelineObject<ZkMigrationState> zkMigrationState;
 
-    MigrationControlManager(SnapshotRegistry snapshotRegistry) {
-        zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
+    private final Logger log;
+
+    MigrationControlManager(
+        SnapshotRegistry snapshotRegistry,
+        LogContext logContext
+    ) {
+        zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.UNINITIALIZED);
+        log = logContext.logger(MigrationControlManager.class);
     }
 
     ZkMigrationState zkMigrationState() {
         return zkMigrationState.get();
     }
 
+    boolean inPreMigrationMode() {
+        return zkMigrationState.get() == ZkMigrationState.PRE_MIGRATION;
+    }
+
     void replay(ZkMigrationStateRecord record) {
-        zkMigrationState.set(ZkMigrationState.of(record.zkMigrationState()));
+        ZkMigrationState recordState = ZkMigrationState.of(record.zkMigrationState());
+        // From uninitialized, only allow PRE_MIGRATION
+        if (zkMigrationState.get().equals(ZkMigrationState.UNINITIALIZED)) {
+            if (recordState.equals(ZkMigrationState.PRE_MIGRATION) || recordState.equals(ZkMigrationState.NONE)) {
+                log.info("Initializing ZK migration state as {}", recordState);
+                zkMigrationState.set(recordState);
+            } else {
+                throw new IllegalStateException("The first migration state seen can only be PRE_MIGRATION or NONE, not " + recordState.name());
+            }
+        } else {
+            switch (zkMigrationState.get()) {
+                case NONE:
+                    throw new IllegalStateException("Cannot ever change migration state from NONE");
+                case PRE_MIGRATION:
+                    if (recordState.equals(ZkMigrationState.MIGRATION)) {
+                        log.info("Transitioning ZK migration state to {}", recordState);
+                        zkMigrationState.set(recordState);
+                    } else {
+                        throw new IllegalStateException("Cannot change migration state from PRE_MIGRATION to " + recordState);
+                    }
+                    break;
+                case MIGRATION:
+                    if (recordState.equals(ZkMigrationState.POST_MIGRATION)) {
+                        log.info("Transitioning ZK migration state to {}", recordState);
+                        zkMigrationState.set(recordState);
+                    } else {
+                        throw new IllegalStateException("Cannot change migration state from MIGRATION to " + recordState);
+                    }
+                    break;
+                case POST_MIGRATION:
+                    throw new IllegalStateException("Cannot ever change migration state from POST_MIGRATION");
+            }
+        }
+
     }
 }
