@@ -18,8 +18,8 @@ package kafka.zk
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.server.{ConfigEntityName, ConfigType, ZkAdminManager}
-import kafka.utils.Logging
+import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, ZkAdminManager}
+import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
 import org.apache.kafka.common.config.ConfigResource
@@ -45,7 +45,10 @@ import scala.jdk.CollectionConverters._
  * Migration client in KRaft controller responsible for handling communication to Zookeeper and
  * the ZkBrokers present in the cluster.
  */
-class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Logging {
+class ZkMigrationClient(
+  zkClient: KafkaZkClient,
+  zkConfigEncoder: PasswordEncoder
+) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     zkClient.createTopLevelPaths()
@@ -135,20 +138,26 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   }
 
   def migrateBrokerConfigs(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
-    val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
     val batch = new util.ArrayList[ApiMessageAndVersion]()
+
+    val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
     zkClient.getEntitiesConfigs(ConfigType.Broker, brokerEntities.toSet).foreach { case (broker, props) =>
       val brokerResource = if (broker == ConfigEntityName.Default) {
         ""
       } else {
         broker
       }
-      props.forEach { case (key: Object, value: Object) =>
+      props.asScala.foreach { case (key, value) =>
+        val newValue = if (DynamicBrokerConfig.isPasswordConfig(key))
+          zkConfigEncoder.decode(value).value
+        else
+          value
+
         batch.add(new ApiMessageAndVersion(new ConfigRecord()
           .setResourceType(ConfigResource.Type.BROKER.id)
           .setResourceName(brokerResource)
-          .setName(key.toString)
-          .setValue(value.toString), 0.toShort))
+          .setName(key)
+          .setValue(newValue), 0.toShort))
       }
     }
     if (!batch.isEmpty) {
