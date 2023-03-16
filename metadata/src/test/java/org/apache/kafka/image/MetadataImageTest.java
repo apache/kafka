@@ -44,7 +44,8 @@ public class MetadataImageTest {
             ClientQuotasImageTest.IMAGE1,
             ProducerIdsImageTest.IMAGE1,
             AclsImageTest.IMAGE1,
-            ScramImageTest.IMAGE1);
+            ScramImageTest.IMAGE1,
+            ZkMigrationImage.EMPTY);
 
         DELTA1 = new MetadataDelta.Builder().
                 setImage(IMAGE1).
@@ -67,7 +68,8 @@ public class MetadataImageTest {
             ClientQuotasImageTest.IMAGE2,
             ProducerIdsImageTest.IMAGE2,
             AclsImageTest.IMAGE2,
-            ScramImageTest.IMAGE2);
+            ScramImageTest.IMAGE2,
+            ZkMigrationImage.EMPTY);
     }
 
     @Test

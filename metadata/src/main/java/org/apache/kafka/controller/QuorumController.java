@@ -1199,8 +1199,8 @@ public final class QuorumController implements Controller {
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
                 records.addAll(bootstrapMetadata.records());
 
-                // Initialize the log with a ZkMigrationState
                 if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
+                    // Initialize the log with a ZkMigrationState
                     if (zkMigrationEnabled) {
                         log.info("Writing ZkMigrationState of PRE_MIGRATION to the log, since migrations are enabled.");
                         records.add(new ApiMessageAndVersion(
@@ -1219,26 +1219,31 @@ public final class QuorumController implements Controller {
                 // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
                 if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
                     log.info("No metadata.version feature level record was found in the log. " +
-                            "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
+                        "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
                 }
 
                 if (featureControl.metadataVersion().isMigrationSupported()) {
-                    // If there are records in the log, we cannot be in the middle of a migration
                     switch (zkMigrationControlManager.zkMigrationState()) {
                         case UNINITIALIZED:
+                            // No ZkMigrationState record seen, put a NONE in the log
                             log.debug("Writing a ZkMigrationState of NONE to the log to indicate this cluster was not migrated from ZK.");
+                            if (zkMigrationEnabled) {
+                                log.error("Should not have ZK migrations enabled on a cluster that was created in KRaft mode");
+                            }
                             records.add(new ApiMessageAndVersion(
-                                    new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.NONE.value()),
-                                    ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
+                                new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.NONE.value()),
+                                ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
                             ));
                             break;
                         case NONE:
+                            // This is a non-migrated KRaft cluster
                             log.debug("Read a ZkMigrationState of NONE from the log indicating this cluster was never migrated from ZK.");
                             if (zkMigrationEnabled) {
                                 log.error("Should not have ZK migrations enabled on a cluster that was created in KRaft mode");
                             }
                             break;
                         case POST_MIGRATION:
+                            // This is a migrated KRaft cluster
                             log.debug("Read a ZkMigrationState of POST_MIGRATION from the log indicating this cluster was previously migrated from ZK.");
                             break;
                         default:

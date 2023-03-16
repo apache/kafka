@@ -4363,7 +4363,8 @@ class ReplicaManagerTest {
       ClientQuotasImage.EMPTY,
       ProducerIdsImage.EMPTY,
       AclsImage.EMPTY,
-      ScramImage.EMPTY
+      ScramImage.EMPTY,
+      ZkMigrationImage.EMPTY
     )
   }
 
