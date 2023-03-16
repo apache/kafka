@@ -81,7 +81,6 @@ object Kafka extends Logging {
       new KafkaRaftServer(
         config,
         Time.SYSTEM,
-        threadNamePrefix = None
       )
     }
   }

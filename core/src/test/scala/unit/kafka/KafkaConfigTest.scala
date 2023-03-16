@@ -112,8 +112,8 @@ class KafkaTest {
   }
 
   @Test
-  def testColocatedRoleNodeIdValidation(): Unit = {
-    // Ensure that validation is happening at startup to check that colocated processes use their node.id as a voter in controller.quorum.voters 
+  def testCombinedRoleNodeIdValidation(): Unit = {
+    // Ensure that validation is happening at startup to check that combined processes use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
@@ -125,6 +125,16 @@ class KafkaTest {
     // Ensure that with a valid config no exception is thrown
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
     KafkaConfig.fromProps(propertiesFile)
+  }
+
+  @Test
+  def testIsKRaftCombinedMode(): Unit = {
+    val propertiesFile = new Properties
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    val config = KafkaConfig.fromProps(propertiesFile)
+    assertTrue(config.isKRaftCombinedMode)
   }
 
   @Test

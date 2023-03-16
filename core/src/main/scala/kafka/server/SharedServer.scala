@@ -88,7 +88,6 @@ class SharedServer(
   val metaProps: MetaProperties,
   val time: Time,
   private val _metrics: Metrics,
-  val threadNamePrefix: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val faultHandlerFactory: FaultHandlerFactory
 ) extends Logging {
@@ -243,7 +242,7 @@ class SharedServer(
           KafkaRaftServer.MetadataTopicId,
           time,
           metrics,
-          threadNamePrefix,
+          Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
           raftManagerFaultHandler
         )
@@ -252,7 +251,7 @@ class SharedServer(
         val loaderBuilder = new MetadataLoader.Builder().
           setNodeId(metaProps.nodeId).
           setTime(time).
-          setThreadNamePrefix(threadNamePrefix.getOrElse("")).
+          setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
           setHighWaterMarkAccessor(() => raftManager.client.highWatermark())
         if (brokerMetrics != null) {
@@ -270,6 +269,7 @@ class SharedServer(
           setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
           setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
           setDisabledReason(snapshotsDiabledReason).
+          setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           build()
         raftManager.register(loader)
         try {

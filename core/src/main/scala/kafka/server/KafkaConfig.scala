@@ -1718,7 +1718,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     distinctRoles
   }
 
-  def isKRaftCoResidentMode: Boolean = {
+  def isKRaftCombinedMode: Boolean = {
     processRoles == Set(BrokerRole, ControllerRole)
   }
 
@@ -2280,8 +2280,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateControllerListenerExistsForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
-    } else if (isKRaftCoResidentMode) {
-      // KRaft colocated broker and controller
+    } else if (isKRaftCombinedMode) {
+      // KRaft combined broker and controller
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
