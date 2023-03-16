@@ -18,6 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -79,10 +80,6 @@ public class AlterPartitionRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public AlterPartitionRequestData data() {
-            return this.data;
-        }
-
         @Override
         public AlterPartitionRequest build(short version) {
             if (version < 3) {
@@ -106,7 +103,7 @@ public class AlterPartitionRequest extends AbstractRequest {
         }
     }
 
-    public static List<AlterPartitionRequestData.BrokerState> newIsrToSimpleNewIsrWithBrokerEpochs(List<Integer> newIsr) {
-        return newIsr.stream().map(brokerId -> new AlterPartitionRequestData.BrokerState().setBrokerId(brokerId)).collect(Collectors.toList());
+    public static List<BrokerState> newIsrToSimpleNewIsrWithBrokerEpochs(List<Integer> newIsr) {
+        return newIsr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).collect(Collectors.toList());
     }
 }

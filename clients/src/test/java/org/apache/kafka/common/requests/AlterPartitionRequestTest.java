@@ -51,7 +51,6 @@ class AlterPartitionRequestTest {
         newIsrWithBrokerEpoch.add(new BrokerState().setBrokerId(2).setBrokerEpoch(1002));
         newIsrWithBrokerEpoch.add(new BrokerState().setBrokerId(3).setBrokerEpoch(1003));
 
-        topicData.setPartitions(new LinkedList<>());
         topicData.partitions().add(new PartitionData()
             .setPartitionIndex(0)
             .setLeaderEpoch(1)
@@ -60,7 +59,7 @@ class AlterPartitionRequestTest {
 
         request.topics().add(topicData);
 
-        AlterPartitionRequest.Builder builder = new AlterPartitionRequest.Builder(request, version >= 2);
+        AlterPartitionRequest.Builder builder = new AlterPartitionRequest.Builder(request, version > 1);
         AlterPartitionRequest alterPartitionRequest = builder.build(version);
         assertEquals(1, alterPartitionRequest.data().topics().size());
         assertEquals(1, alterPartitionRequest.data().topics().get(0).partitions().size());

@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
@@ -105,6 +106,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map.Entry;
@@ -1169,7 +1171,30 @@ public class ReplicationControlManager {
             }
         }
 
+        List<BrokerEpochMismatchReplica> brokerEpochMismatchReplicas =
+            brokerEpochMismatchReplicasForIsr(partitionData.newIsrWithEpochs());
+        if (!brokerEpochMismatchReplicas.isEmpty()) {
+            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
+                    "it specified some invalid ISR members {} that the broker epochs mismatch.",
+                    brokerId, topic.name, partitionId, brokerEpochMismatchReplicas);
+
+            return INELIGIBLE_REPLICA;
+        }
+
         return Errors.NONE;
+    }
+
+    private List<BrokerEpochMismatchReplica> brokerEpochMismatchReplicasForIsr(List<BrokerState> brokerStates) {
+        List<BrokerEpochMismatchReplica> mismatchReplicas = new LinkedList<>();
+        brokerStates.forEach(brokerState -> {
+            if (brokerState.brokerEpoch() != -1 && brokerState.brokerEpoch() != clusterControl.getBrokerEpoch(brokerState.brokerId())) {
+                mismatchReplicas.add(new BrokerEpochMismatchReplica(
+                    brokerState,
+                    clusterControl.getBrokerEpoch(brokerState.brokerId()))
+                );
+            }
+        });
+        return mismatchReplicas;
     }
 
     private List<IneligibleReplica> ineligibleReplicasForIsr(int[] replicas) {
@@ -1946,6 +1971,26 @@ public class ReplicationControlManager {
         @Override
         public String toString() {
             return replicaId + " (" + reason + ")";
+        }
+    }
+
+
+    private static final class BrokerEpochMismatchReplica {
+        private final BrokerState brokerState;
+        private final Long expectedBrokerEpoch;
+
+        private BrokerEpochMismatchReplica(BrokerState brokerState, Long expectedBrokerEpoch) {
+            this.brokerState = brokerState;
+            this.expectedBrokerEpoch = expectedBrokerEpoch;
+        }
+
+        @Override
+        public String toString() {
+            return "BrokerEpochMismatchReplica("
+                + "brokerId=" + brokerState.brokerId()
+                + ", brokerEpoch=" + brokerState.brokerEpoch()
+                + ", expectedBrokerEpoch=" + expectedBrokerEpoch
+                + ")";
         }
     }
 }

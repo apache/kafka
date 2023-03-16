@@ -976,6 +976,17 @@ public class ReplicationControlManagerTest {
             replicationControl, leaderId, ctx.currentBrokerEpoch(leaderId),
             topicIdPartition.topicId(), invalidRecoveryRequest);
         assertAlterPartitionResponse(invalidRecoveryResult, topicIdPartition, Errors.INVALID_REQUEST);
+
+        // Stale ISR broker epoch request.
+        PartitionData staleIsrBrokerEpochRequest = newAlterPartition(
+            replicationControl,
+            topicIdPartition,
+            asList(new BrokerState().setBrokerEpoch(99).setBrokerId(0), new BrokerState().setBrokerEpoch(101).setBrokerId(1)),
+            LeaderRecoveryState.RECOVERED);
+        ControllerResult<AlterPartitionResponseData> staleIsrBrokerEpochResult = sendAlterPartition(
+            replicationControl, leaderId, ctx.currentBrokerEpoch(leaderId),
+            topicIdPartition.topicId(), staleIsrBrokerEpochRequest);
+        assertAlterPartitionResponse(staleIsrBrokerEpochResult, topicIdPartition, INELIGIBLE_REPLICA);
     }
 
     private PartitionData newAlterPartition(
@@ -1513,8 +1524,8 @@ public class ReplicationControlManagerTest {
                         setLeaderEpoch(0).
                         setNewIsrWithEpochs(generateIsrWithTestDefaultEpoch(asList(3, 0, 2, 1)))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
-                requestContext,
-                new AlterPartitionRequest.Builder(alterPartitionRequestData, version > 1).build(version).data());
+            requestContext,
+            new AlterPartitionRequest.Builder(alterPartitionRequestData, version > 1).build(version).data());
         Errors expectedError = version > 1 ? NEW_LEADER_ELECTED : FENCED_LEADER_EPOCH;
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
             new AlterPartitionResponseData.TopicData().
@@ -1605,6 +1616,75 @@ public class ReplicationControlManagerTest {
                         .setPartitionEpoch(2)
                         .setErrorCode(NONE.code()))))),
             alterPartitionResult.response());
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testAlterPartitionShouldRejectRebootBrokers(short version) throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+        Uuid fooId = ctx.createTestTopic(
+            "foo",
+            new int[][] {new int[] {1, 2, 3, 4}}
+        ).topicId();
+        ctx.alterPartition(new TopicIdPartition(fooId, 0), 1, generateIsrWithTestDefaultEpoch(asList(1, 2, 3)), LeaderRecoveryState.RECOVERED);
+
+        // First, the leader is constructing an AlterPartition request.
+        AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData()
+            .setBrokerId(1)
+            .setBrokerEpoch(101)
+            .setTopics(asList(new TopicData()
+                .setTopicName(version <= 1 ? "foo" : "")
+                .setTopicId(version > 1 ? fooId : Uuid.ZERO_UUID)
+                .setPartitions(asList(new PartitionData()
+                    .setPartitionIndex(0)
+                    .setPartitionEpoch(1)
+                    .setLeaderEpoch(1)
+                    .setNewIsrWithEpochs(generateIsrWithTestDefaultEpoch(asList(1, 2, 3, 4)))))));
+
+        // The broker 4 has failed silently and now registers again.
+        long newEpoch = generateTestDefaultBrokerEpoch(4) + 1000;
+        RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
+            setBrokerEpoch(newEpoch).setBrokerId(4).setRack(null);
+        brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
+            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+            setPort((short) 9092 + 4).
+            setName("PLAINTEXT").
+            setHost("localhost"));
+        ctx.replay(Collections.singletonList(new ApiMessageAndVersion(brokerRecord, (short) 0)));
+
+        // Unfence the broker 4.
+        ControllerResult<BrokerHeartbeatReply> result = ctx.replicationControl.
+            processBrokerHeartbeat(new BrokerHeartbeatRequestData().
+                setBrokerId(4).setBrokerEpoch(newEpoch).
+                setCurrentMetadataOffset(1).
+                setWantFence(false).setWantShutDown(false), 0);
+        assertEquals(new BrokerHeartbeatReply(true, false, false, false),
+            result.response());
+        ctx.replay(result.records());
+
+        ControllerRequestContext requestContext =
+            anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
+
+        ControllerResult<AlterPartitionResponseData> alterPartitionResult =
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, version > 1).build(version).data());
+
+        // The late arrived AlterPartition request should be rejected when version >= 3.
+        if (version >= 3) {
+            assertEquals(
+                new AlterPartitionResponseData()
+                    .setTopics(asList(new AlterPartitionResponseData.TopicData()
+                        .setTopicName(version <= 1 ? "foo" : "")
+                        .setTopicId(version > 1 ? fooId : Uuid.ZERO_UUID)
+                        .setPartitions(asList(new AlterPartitionResponseData.PartitionData()
+                            .setPartitionIndex(0)
+                            .setErrorCode(INELIGIBLE_REPLICA.code()))))),
+                alterPartitionResult.response());
+        } else {
+            assertEquals((short) 0, alterPartitionResult.response().errorCode());
+        }
     }
 
     @ParameterizedTest
