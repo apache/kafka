@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
+import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -455,7 +456,7 @@ public class QuorumControllerTest {
                 .setPartitionIndex(imbalancedPartitionId)
                 .setLeaderEpoch(partitionRegistration.leaderEpoch)
                 .setPartitionEpoch(partitionRegistration.partitionEpoch)
-                .setNewIsr(Arrays.asList(1, 2, 3));
+                .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 2, 3)));
 
             AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
                 .setTopicName("foo");
@@ -466,7 +467,8 @@ public class QuorumControllerTest {
                 .setBrokerEpoch(brokerEpochs.get(partitionRegistration.leader));
             alterPartitionRequest.topics().add(topicData);
 
-            active.alterPartition(ANONYMOUS_CONTEXT, alterPartitionRequest).get();
+            short version = ANONYMOUS_CONTEXT.requestHeader().requestApiVersion();
+            active.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest.Builder(alterPartitionRequest, version > 1).build(version).data()).get();
 
             // Check that partitions are balanced
             AtomicLong lastHeartbeat = new AtomicLong(active.time().milliseconds());
@@ -911,7 +913,7 @@ public class QuorumControllerTest {
                         .setPartitionIndex(partitionIndex)
                         .setLeaderEpoch(partitionRegistration.leaderEpoch)
                         .setPartitionEpoch(partitionRegistration.partitionEpoch)
-                        .setNewIsr(Arrays.asList(0, 1));
+                        .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(0, 1)));
                 })
                 .collect(Collectors.toList());
 
@@ -928,8 +930,9 @@ public class QuorumControllerTest {
             logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
 
             int oldClaimEpoch = controller.curClaimEpoch();
+            short version = ANONYMOUS_CONTEXT.requestHeader().requestApiVersion();
             assertThrows(ExecutionException.class,
-                () -> controller.alterPartition(ANONYMOUS_CONTEXT, alterPartitionRequest).get());
+                () -> controller.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest.Builder(alterPartitionRequest, version > 1).build(version).data()).get());
 
             // Wait for the controller to become active again
             assertSame(controller, controlEnv.activeController());

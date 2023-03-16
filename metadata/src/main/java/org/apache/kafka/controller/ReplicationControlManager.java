@@ -74,6 +74,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
@@ -956,6 +957,12 @@ public class ReplicationControlManager {
 
             TopicControlInfo topic = topics.get(topicId);
             for (AlterPartitionRequestData.PartitionData partitionData : topicData.partitions()) {
+                if (requestVersion < 3) {
+                    partitionData.setNewIsrWithEpochs(
+                        AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(partitionData.newIsr())
+                    );
+                }
+
                 int partitionId = partitionData.partitionIndex();
                 PartitionRegistration partition = topic.parts.get(partitionId);
 
@@ -986,7 +993,7 @@ public class ReplicationControlManager {
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
-                builder.setTargetIsr(partitionData.newIsr());
+                builder.setTargetIsrWithBrokerStates(partitionData.newIsrWithEpochs());
                 builder.setTargetLeaderRecoveryState(
                     LeaderRecoveryState.of(partitionData.leaderRecoveryState()));
                 Optional<ApiMessageAndVersion> record = builder.build();
@@ -1110,11 +1117,15 @@ public class ReplicationControlManager {
 
             return INVALID_UPDATE_VERSION;
         }
-        int[] newIsr = Replicas.toArray(partitionData.newIsr());
+
+        int[] newIsr = partitionData.newIsrWithEpochs().stream()
+            .map(brokerState -> brokerState.brokerId()).collect(Collectors.toList())
+            .stream().mapToInt(Integer::intValue).toArray();
+
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR {}.", brokerId,
-                    topic.name, partitionId, partitionData.newIsr());
+                    topic.name, partitionId, partitionData.newIsrWithEpochs());
 
             return INVALID_REQUEST;
         }
@@ -1122,7 +1133,7 @@ public class ReplicationControlManager {
             // The ISR must always include the current leader.
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR {} that doesn't include itself.",
-                    brokerId, topic.name, partitionId, partitionData.newIsr());
+                    brokerId, topic.name, partitionId, partitionData.newIsrWithEpochs());
 
             return INVALID_REQUEST;
         }
@@ -1131,7 +1142,7 @@ public class ReplicationControlManager {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the ISR {} had more than one replica while the leader was still " +
                     "recovering from an unclean leader election {}.",
-                    brokerId, topic.name, partitionId, partitionData.newIsr(),
+                    brokerId, topic.name, partitionId, partitionData.newIsrWithEpochs(),
                     leaderRecoveryState);
 
             return INVALID_REQUEST;
@@ -1149,7 +1160,7 @@ public class ReplicationControlManager {
         if (!ineligibleReplicas.isEmpty()) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified ineligible replicas {} in the new ISR {}.",
-                    brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsr());
+                    brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsrWithEpochs());
 
             if (requestApiVersion > 1) {
                 return INELIGIBLE_REPLICA;

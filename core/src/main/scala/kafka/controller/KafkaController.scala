@@ -2324,12 +2324,18 @@ class KafkaController(val config: KafkaConfig,
 
         case Some(topicName) =>
           topicReq.partitions.forEach { partitionReq =>
+            var isr = List[Int]()
+            if (alterPartitionRequestVersion >= 3) {
+              isr = partitionReq.newIsrWithEpochs.asScala.toList.map(brokerState => brokerState.brokerId())
+            } else {
+              isr = partitionReq.newIsr.asScala.toList.map(_.toInt)
+            }
             partitionsToAlter.put(
               new TopicPartition(topicName, partitionReq.partitionIndex),
               LeaderAndIsr(
                 alterPartitionRequest.brokerId,
                 partitionReq.leaderEpoch,
-                partitionReq.newIsr.asScala.toList.map(_.toInt),
+                isr,
                 LeaderRecoveryState.of(partitionReq.leaderRecoveryState),
                 partitionReq.partitionEpoch
               )
