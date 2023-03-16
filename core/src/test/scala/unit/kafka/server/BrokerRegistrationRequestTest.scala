@@ -22,6 +22,7 @@ import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.clients.ClientResponse
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -35,7 +36,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{Tag, Timeout}
 
-import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 
 /**
  * This test simulates a broker registering with the KRaft quorum under different configurations.

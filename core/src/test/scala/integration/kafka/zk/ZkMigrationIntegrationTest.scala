@@ -23,24 +23,25 @@ import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult, AlterConfigOp, AlterConfigsResult, ConfigEntry, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult, AlterConfigOp, AlterConfigsResult, ConfigEntry, CreateTopicsOptions, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
 import java.util
 import java.util.Properties
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ExecutionException, TimeUnit}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -262,5 +263,24 @@ class ZkMigrationIntegrationTest {
       val producerIdBlock = readProducerIdBlock(zkClient)
       assertTrue(firstProducerIdBlock.firstProducerId() < producerIdBlock.firstProducerId())
     }
+  }
+
+  /**
+   * Start a KRaft cluster with migrations enabled, verify that the controller does not accept metadata changes
+   * through the RPCs
+   */
+  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
+    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
+  def testPreMigrationMode(clusterInstance: ClusterInstance): Unit = {
+    val adminClient = clusterInstance.createAdminClient()
+    val result = adminClient.createTopics(
+      java.util.Collections.singleton(new NewTopic("test", 10, 1.asInstanceOf[Short])),
+      new CreateTopicsOptions().timeoutMs(1000)
+    )
+
+    assertEquals(
+      classOf[TimeoutException],
+      assertThrows(classOf[ExecutionException], () => result.all().get(5, TimeUnit.MINUTES)).getCause.getClass
+    )
   }
 }
