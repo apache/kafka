@@ -351,10 +351,11 @@ public class KRaftMigrationDriverTest {
             MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
             image = delta.apply(provenance);
 
-            // Publish a delta with this node (3000) as the leader
+            // Notify the driver that it is the leader
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            // Publish metadata of all the ZK brokers being ready
             driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
                 new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
-
             Assertions.assertTrue(claimLeaderAttempts.await(1, TimeUnit.MINUTES));
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.ZK_MIGRATION),
                 "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
