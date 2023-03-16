@@ -28,7 +28,12 @@ public interface ConfigPropertyFilter extends Configurable, AutoCloseable {
 
     boolean shouldReplicateConfigProperty(String prop);
 
-    boolean shouldReplicateSourceDefault(ConfigEntry.ConfigSource source);
+    /**
+     * Specifies whether to replicate topic configurations with default values
+     */
+    default boolean shouldReplicateSourceDefault(String prop) {
+        return false;
+    }
 
     default void close() {
         //nop

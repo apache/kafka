@@ -67,7 +67,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     }
 
     @Override
-    public boolean shouldReplicateSourceDefault(ConfigEntry.ConfigSource source) {
+    public boolean shouldReplicateSourceDefault(String prop) {
         return useDefaultsFrom == "source";
     }
 

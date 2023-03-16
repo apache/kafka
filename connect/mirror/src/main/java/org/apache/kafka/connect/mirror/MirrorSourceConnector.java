@@ -67,7 +67,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,7 +99,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
     private Admin offsetSyncsAdminClient;
-    private String useIncrementalAlterConfigs;
+    private volatile String useIncrementalAlterConfigs;
     private AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
 
     public MirrorSourceConnector() {
@@ -120,6 +119,7 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
+        this.useIncrementalAlterConfigs = MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT;
     }
 
     // visible for testing the deprecated setting "use.incremental.alter.configs"
@@ -130,7 +130,8 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.configPropertyFilter = configPropertyFilter;
         this.useIncrementalAlterConfigs = useIncrementalAlterConfigs;
-        this.targetAdminClient = targetAdmin;
+        this.targetAdminClient = targetAdmin;                      
+    }
         
     // visible for testing
     MirrorSourceConnector(Admin sourceAdminClient, Admin targetAdminClient) {
@@ -519,7 +520,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private void updateTopicConfigs(Map<String, Config> topicConfigs) {
         if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
-            alterConfigs(topicConfigs);
+            deprecatedAlterConfigs(topicConfigs);
         } else {
             incrementalAlterConfigs(topicConfigs);
         }
@@ -528,7 +529,7 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
     @SuppressWarnings("deprecation")
-    void alterConfigs(Map<String, Config> topicConfigs) {
+    void deprecatedAlterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
@@ -541,13 +542,14 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // visible for testing
+    @SuppressWarnings("deprecation")
     void incrementalAlterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
             Collection<AlterConfigOp> ops = new ArrayList<>();
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topicConfig.getKey());
             for (ConfigEntry config : topicConfig.getValue().entries()) {
-                if (config.isDefault() && !shouldReplicateSourceDefault(config.source())) {
+                if (config.isDefault() && !shouldReplicateSourceDefault(config.name())) {
                     ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.DELETE));
                 } else {
                     ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.SET));
@@ -562,8 +564,10 @@ public class MirrorSourceConnector extends SourceConnector {
                         && e instanceof UnsupportedVersionException) {
                     //Fallback logic
                     log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. Therefore using deprecated AlterConfigs API for syncing topic configurations", sourceAndTarget.target(), e);
-                    alterConfigs(topicConfigs);
                     useIncrementalAlterConfigs = MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG;
+                } else if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG)
+                        && e instanceof UnsupportedVersionException) {
+                    log.error("{} was set to \"required\" however the target cluster {} is not compatible with IncrementalAlterConfigs API", MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG, sourceAndTarget.target(), e);
                 } else {
                     log.warn("Could not alter configuration of topic {}.", k.name(), e);
                 }
@@ -597,7 +601,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     Config targetConfig(Config sourceConfig) {
         List<ConfigEntry> entries;
-        if (useIncrementalAlterConfigs == MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG) {
+        if (Objects.equals(useIncrementalAlterConfigs, MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
             entries = sourceConfig.entries().stream()
                     .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
                     .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
@@ -643,8 +647,8 @@ public class MirrorSourceConnector extends SourceConnector {
         return configPropertyFilter.shouldReplicateConfigProperty(property);
     }
 
-    boolean shouldReplicateSourceDefault(ConfigEntry.ConfigSource configSource) {
-        return configPropertyFilter.shouldReplicateSourceDefault(configSource);
+    boolean shouldReplicateSourceDefault(String property) {
+        return configPropertyFilter.shouldReplicateSourceDefault(property);
     }
     // Recurse upstream to detect cycles, i.e. whether this topic is already on the target cluster
     boolean isCycle(String topic) {

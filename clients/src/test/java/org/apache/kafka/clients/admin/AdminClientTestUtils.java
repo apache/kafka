@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -87,9 +86,20 @@ public class AdminClientTestUtils {
      */
     public static AlterConfigsResult alterConfigsResult(ConfigResource cr, Throwable t) {
         KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-        Map<ConfigResource, KafkaFuture<Void>> futures = new HashMap<>();
-        futures.put(cr, future);
+        Map<ConfigResource, KafkaFuture<Void>> futures = Collections.singletonMap(cr, future);
         future.completeExceptionally(t);
+        return new AlterConfigsResult(futures);
+    }
+
+    /**
+     * Helper to create a AlterConfigsResult instance for a given ConfigResource.
+     * AlterConfigsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static AlterConfigsResult alterConfigsResult(ConfigResource cr) {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        Map<ConfigResource, KafkaFuture<Void>> futures = Collections.singletonMap(cr, future);
+        future.complete(null);
         return new AlterConfigsResult(futures);
     }
 
