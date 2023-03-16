@@ -34,7 +34,6 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -90,10 +89,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
         this.time = Time.SYSTEM;
-        this.log = LoggerFactory.getLogger(KRaftMigrationDriver.class);
+        LogContext logContext = new LogContext(String.format("[KRaftMigrationDriver nodeId=%d] ", nodeId));
+        this.log = logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, new LogContext("KRaftMigrationDriver"), "kraft-migration");
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "kraft-migration");
         this.image = MetadataImage.EMPTY;
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
@@ -132,26 +132,45 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         return true;
     }
 
+    private boolean imageDoesNotContainAllBrokers(MetadataImage image, Set<Integer> brokerIds) {
+        for (BrokerRegistration broker : image.cluster().brokers().values()) {
+            if (broker.isMigratingZkBroker()) {
+                brokerIds.remove(broker.id());
+            }
+        }
+        return !brokerIds.isEmpty();
+    }
+
     private boolean areZkBrokersReadyForMigration() {
         if (image == MetadataImage.EMPTY) {
             // TODO maybe add WAIT_FOR_INITIAL_METADATA_PUBLISH state to avoid this kind of check?
             log.info("Waiting for initial metadata publish before checking if Zk brokers are registered.");
             return false;
         }
-        Set<Integer> zkRegisteredZkBrokers = zkMigrationClient.readBrokerIdsFromTopicAssignments();
-        for (BrokerRegistration broker : image.cluster().brokers().values()) {
-            if (broker.isMigratingZkBroker()) {
-                zkRegisteredZkBrokers.remove(broker.id());
-            }
-        }
-        if (zkRegisteredZkBrokers.isEmpty()) {
-            return true;
-        } else {
-            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkRegisteredZkBrokers);
+
+        // First check the brokers registered in ZK
+        Set<Integer> zkBrokerRegistrations = zkMigrationClient.readBrokerIds();
+        if (imageDoesNotContainAllBrokers(image, zkBrokerRegistrations)) {
+            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokerRegistrations);
             return false;
         }
+
+        // Once all of those are found, check the topic assignments. This is much more expensive than listing /brokers
+        Set<Integer> zkBrokersWithAssignments = zkMigrationClient.readBrokerIdsFromTopicAssignments();
+        if (imageDoesNotContainAllBrokers(image, zkBrokersWithAssignments)) {
+            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokersWithAssignments);
+            return false;
+        }
+
+        return true;
     }
 
+    /**
+     * Apply a function which transforms our internal migration state.
+     *
+     * @param name  A descriptive name of the function that is being applied
+     * @param stateMutator  A function which performs some migration operations and possibly transforms our internal state
+     */
     private void apply(String name, Function<ZkMigrationLeadershipState, ZkMigrationLeadershipState> stateMutator) {
         ZkMigrationLeadershipState beforeState = this.migrationLeadershipState;
         ZkMigrationLeadershipState afterState = stateMutator.apply(beforeState);
@@ -269,14 +288,23 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     // Events handled by Migration Driver.
     abstract class MigrationEvent implements EventQueue.Event {
+        @SuppressWarnings("ThrowableNotThrown")
         @Override
         public void handleException(Throwable e) {
-            if (e instanceof RejectedExecutionException) {
-                log.info("Not processing {} because the event queue is closed.", this);
+            if (e instanceof MigrationClientAuthException) {
+                KRaftMigrationDriver.this.faultHandler.handleFault("Encountered ZooKeeper authentication in " + this, e);
+            } else if (e instanceof MigrationClientException) {
+                log.info(String.format("Encountered ZooKeeper error during event %s. Will retry.", this), e.getCause());
+            } else if (e instanceof RejectedExecutionException) {
+                log.debug("Not processing {} because the event queue is closed.", this);
             } else {
-                KRaftMigrationDriver.this.faultHandler.handleFault(
-                    "Unhandled error in " + this.getClass().getSimpleName(), e);
+                KRaftMigrationDriver.this.faultHandler.handleFault("Unhandled error in " + this, e);
             }
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName();
         }
     }
 
@@ -381,23 +409,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class BecomeZkControllerEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            switch (migrationState) {
-                case BECOME_CONTROLLER:
-                    // TODO: Handle unhappy path.
-                    apply("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
-                    if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
-                        // We could not claim leadership, stay in BECOME_CONTROLLER to retry
+            if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
+                apply("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
+                if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
+                    log.debug("Unable to claim leadership, will retry until we learn of a different KRaft leader");
+                } else {
+                    if (!migrationLeadershipState.zkMigrationComplete()) {
+                        transitionTo(MigrationDriverState.ZK_MIGRATION);
                     } else {
-                        if (!migrationLeadershipState.zkMigrationComplete()) {
-                            transitionTo(MigrationDriverState.ZK_MIGRATION);
-                        } else {
-                            transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
-                        }
+                        transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
                     }
-                    break;
-                default:
-                    // Ignore the event as we're not trying to become controller anymore.
-                    break;
+                }
             }
         }
     }
