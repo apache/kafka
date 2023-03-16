@@ -213,7 +213,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
         this.eventQueue = new KafkaEventQueue(time, logContext,
-                threadNamePrefix + "metadata-loader",
+                threadNamePrefix + "metadata-loader-",
                 new ShutdownEvent());
     }
 

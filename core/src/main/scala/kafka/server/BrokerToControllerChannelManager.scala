@@ -236,7 +236,7 @@ class BrokerToControllerChannelManagerImpl(
         logContext
       )
     }
-    val threadName = s"${threadNamePrefix}-to-controller-${channelName}-channel-manager"
+    val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
 
     val controllerInformation = controllerNodeProvider.getControllerInfo()
     new BrokerToControllerRequestThread(

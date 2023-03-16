@@ -192,7 +192,7 @@ class BrokerLifecycleManager(
    */
   private[server] val eventQueue = new KafkaEventQueue(time,
     logContext,
-    threadNamePrefix + "lifecycle-manager",
+    threadNamePrefix + "lifecycle-manager-",
     new ShutdownEvent())
 
   /**
