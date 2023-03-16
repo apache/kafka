@@ -49,8 +49,6 @@ public class MirrorConnectorsIntegrationTransactionsTest extends MirrorConnector
                 put("topics", "test-topic-.*, primary.test-topic-.*, backup.test-topic-.*");
                 put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".enabled", "true");
                 put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "true");
-                // This is not necessary for this test, but is not tested elsewhere.
-                put("offset.lag.max", "0");
             }});
     }
 
