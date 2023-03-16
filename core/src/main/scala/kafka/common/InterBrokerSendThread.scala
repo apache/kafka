@@ -98,6 +98,12 @@ abstract class InterBrokerSendThread(
     pollOnce(Long.MaxValue)
   }
 
+  /**
+   * invoked when the request is added to network client
+   * @param request to be added to network client
+   */
+  protected def inflight(request: AbstractRequest.Builder[_]): Unit = {}
+
   private def sendRequests(now: Long, maxTimeoutMs: Long): Long = {
     var pollTimeout = maxTimeoutMs
     for (node <- unsentRequests.nodes.asScala) {
@@ -107,6 +113,7 @@ abstract class InterBrokerSendThread(
         if (networkClient.ready(node, now)) {
           networkClient.send(request, now)
           requestIterator.remove()
+          inflight(request.requestBuilder())
         } else
           pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(node, now))
       }

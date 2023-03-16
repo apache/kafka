@@ -325,10 +325,17 @@ class BrokerToControllerRequestThread(
       updateControllerAddress(controllerInformation.node.orNull)
       controllerInformation.node.foreach(n => metadataUpdater.setNodes(Seq(n).asJava))
       networkClient = networkClientFactory(controllerInformation)
+      val iter = inflightRequests.iterator()
+      while (iter.hasNext) {
+        requestQueue.putFirst(iter.next())
+        iter.remove()
+      }
     }
   }
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
+  private val requestMap = new java.util.concurrent.ConcurrentHashMap[ AbstractRequest.Builder[_], BrokerToControllerQueueItem]()
+  private val inflightRequests = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
 
   // Used for testing
@@ -357,6 +364,11 @@ class BrokerToControllerRequestThread(
     requestQueue.size
   }
 
+  override protected def inflight(request: AbstractRequest.Builder[_]): Unit = {
+    val r = requestMap.remove(request)
+    if (r != null) inflightRequests.add(r)
+  }
+
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     val currentTimeMs = time.milliseconds()
     val requestIter = requestQueue.iterator()
@@ -369,6 +381,7 @@ class BrokerToControllerRequestThread(
         val controllerAddress = activeControllerAddress()
         if (controllerAddress.isDefined) {
           requestIter.remove()
+          requestMap.put(request.request, request)
           return Some(RequestAndCompletionHandler(
             time.milliseconds(),
             controllerAddress.get,
@@ -382,6 +395,8 @@ class BrokerToControllerRequestThread(
   }
 
   private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+    requestMap.remove(queueItem.request)
+    inflightRequests.remove(queueItem)
     debug(s"Request ${queueItem.request} received $response")
     if (response.authenticationException != null) {
       error(s"Request ${queueItem.request} failed due to authentication error with controller",
