@@ -28,7 +28,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
 import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -245,7 +245,15 @@ class ControllerServer(
 
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
-        val migrationClient = new ZkMigrationClient(zkClient)
+        val zkConfigEncoder = config.passwordEncoderSecret match {
+          case Some(secret) => PasswordEncoder.encrypting(secret,
+            config.passwordEncoderKeyFactoryAlgorithm,
+            config.passwordEncoderCipherAlgorithm,
+            config.passwordEncoderKeyLength,
+            config.passwordEncoderIterations)
+          case None => PasswordEncoder.noop()
+        }
+        val migrationClient = new ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
         val migrationDriver = new KRaftMigrationDriver(
           config.nodeId,

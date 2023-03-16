@@ -36,6 +36,8 @@ import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -45,11 +47,12 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class KRaftMigrationDriverTest {
-    class NoOpRecordConsumer implements ZkRecordConsumer {
+    static class NoOpRecordConsumer implements ZkRecordConsumer {
         @Override
         public void beginMigration() {
 
@@ -71,7 +74,7 @@ public class KRaftMigrationDriverTest {
         }
     }
 
-    class CapturingMigrationClient implements MigrationClient {
+    static class CapturingMigrationClient implements MigrationClient {
 
         private final Set<Integer> brokerIds;
         public final Map<ConfigResource, Map<String, String>> capturedConfigs = new HashMap<>();
@@ -162,18 +165,9 @@ public class KRaftMigrationDriverTest {
         public Set<Integer> readBrokerIdsFromTopicAssignments() {
             return brokerIds;
         }
-
-        @Override
-        public ZkMigrationLeadershipState writeMetadataDeltaToZookeeper(
-            MetadataDelta delta,
-            MetadataImage image,
-            ZkMigrationLeadershipState state
-        ) {
-            return state;
-        }
     }
 
-    class CountingMetadataPropagator implements LegacyPropagator {
+    static class CountingMetadataPropagator implements LegacyPropagator {
 
         public int deltas = 0;
         public int images = 0;
@@ -315,5 +309,62 @@ public class KRaftMigrationDriverTest {
         Assertions.assertEquals(1, metadataPropagator.deltas);
 
         driver.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMigrationWithClientException(boolean authException) throws Exception {
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        CountDownLatch claimLeaderAttempts = new CountDownLatch(3);
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3))) {
+            @Override
+            public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
+                if (claimLeaderAttempts.getCount() == 0) {
+                    return super.claimControllerLeadership(state);
+                } else {
+                    claimLeaderAttempts.countDown();
+                    if (authException) {
+                        throw new MigrationClientAuthException(new RuntimeException("Some kind of ZK auth error!"));
+                    } else {
+                        throw new MigrationClientException("Some kind of ZK error!");
+                    }
+                }
+
+            }
+        };
+        MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
+        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
+            3000,
+            new NoOpRecordConsumer(),
+            migrationClient,
+            metadataPropagator,
+            metadataPublisher -> { },
+            faultHandler
+        )) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+
+            driver.start();
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            // Notify the driver that it is the leader
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            // Publish metadata of all the ZK brokers being ready
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+            Assertions.assertTrue(claimLeaderAttempts.await(1, TimeUnit.MINUTES));
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.ZK_MIGRATION),
+                "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+
+            if (authException) {
+                Assertions.assertEquals(MigrationClientAuthException.class, faultHandler.firstException().getCause().getClass());
+            } else {
+                Assertions.assertNull(faultHandler.firstException());
+            }
+        }
     }
 }
