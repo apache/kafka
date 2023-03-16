@@ -19,7 +19,6 @@ package kafka.controller
 import com.yammer.metrics.core.{Gauge, Timer}
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits._
 import kafka.utils._
@@ -37,6 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 
 import java.net.SocketTimeoutException
@@ -54,14 +54,16 @@ class ControllerChannelManager(controllerEpoch: () => Int,
                                time: Time,
                                metrics: Metrics,
                                stateChangeLogger: StateChangeLogger,
-                               threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+                               threadNamePrefix: Option[String] = None) extends Logging {
   import ControllerChannelManager._
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   protected val brokerStateInfo = new mutable.HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  newGauge("TotalQueueSize",
+  metricsGroup.newGauge("TotalQueueSize",
     () => brokerLock synchronized {
       brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
     }
@@ -169,7 +171,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
       case Some(name) => s"$name:Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
     }
 
-    val requestRateAndQueueTimeMetrics = newTimer(
+    val requestRateAndQueueTimeMetrics = metricsGroup.newTimer(
       RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTags(broker.id)
     )
 
@@ -177,13 +179,13 @@ class ControllerChannelManager(controllerEpoch: () => Int,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
-    val queueSizeGauge = newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
+    val queueSizeGauge = metricsGroup.newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
 
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
   }
 
-  private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
+  private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString).asJava
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo): Unit = {
     try {
@@ -195,8 +197,8 @@ class ControllerChannelManager(controllerEpoch: () => Int,
       brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
-      removeMetric(QueueSizeMetricName, brokerMetricTags(brokerState.brokerNode.id))
-      removeMetric(RequestRateAndQueueTimeMetricName, brokerMetricTags(brokerState.brokerNode.id))
+      metricsGroup.removeMetric(QueueSizeMetricName, brokerMetricTags(brokerState.brokerNode.id))
+      metricsGroup.removeMetric(RequestRateAndQueueTimeMetricName, brokerMetricTags(brokerState.brokerNode.id))
       brokerStateInfo.remove(brokerState.brokerNode.id)
     } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)

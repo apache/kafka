@@ -23,8 +23,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.image.loader.LogDeltaManifest;
-import org.apache.kafka.image.loader.SnapshotManifest;
+import org.apache.kafka.image.loader.LoaderManifest;
+import org.apache.kafka.image.loader.LoaderManifestType;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.queue.EventQueue;
@@ -223,16 +223,21 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     @Override
-    public void publishSnapshot(MetadataDelta delta, MetadataImage newImage, SnapshotManifest manifest) {
-        enqueueMetadataChangeEvent(delta, newImage, manifest.provenance(), true, NO_OP_HANDLER);
+    public void onControllerChange(LeaderAndEpoch newLeaderAndEpoch) {
+        eventQueue.append(new KRaftLeaderEvent(newLeaderAndEpoch));
     }
 
     @Override
-    public void publishLogDelta(MetadataDelta delta, MetadataImage newImage, LogDeltaManifest manifest) {
-        if (!leaderAndEpoch.equals(manifest.leaderAndEpoch())) {
-            eventQueue.append(new KRaftLeaderEvent(manifest.leaderAndEpoch()));
-        }
-        enqueueMetadataChangeEvent(delta, newImage, manifest.provenance(), false, NO_OP_HANDLER);
+    public void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage,
+        LoaderManifest manifest
+    ) {
+        enqueueMetadataChangeEvent(delta,
+            newImage,
+            manifest.provenance(),
+            manifest.type() == LoaderManifestType.SNAPSHOT,
+            NO_OP_HANDLER);
     }
 
     /**

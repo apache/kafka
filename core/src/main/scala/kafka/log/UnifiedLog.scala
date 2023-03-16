@@ -20,7 +20,6 @@ package kafka.log
 import com.yammer.metrics.core.MetricName
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
@@ -36,6 +35,7 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
@@ -44,6 +44,7 @@ import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMe
 
 import java.io.{File, IOException}
 import java.nio.file.Files
+import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
@@ -105,9 +106,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  val keepPartitionMetadataFile: Boolean,
                  val remoteStorageSystemEnable: Boolean = false,
                  remoteLogManager: Option[RemoteLogManager] = None,
-                 @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging with KafkaMetricsGroup {
+                 @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging {
 
   import kafka.log.UnifiedLog._
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass) {
+    // For compatibility, metrics are defined to be under `Log` class
+    override def metricName(name: String, tags: util.Map[String, String]): MetricName = {
+      KafkaMetricsGroup.explicitMetricName(getClass.getPackage.getName, "Log", name, tags)
+    }
+  }
 
   this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
 
@@ -420,16 +428,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
 
-  private var metricNames: Map[String, Map[String, String]] = Map.empty
+  private var metricNames: Map[String, java.util.Map[String, String]] = Map.empty
 
   newMetrics()
   private[log] def newMetrics(): Unit = {
-    val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++
-      (if (isFuture) Map("is-future" -> "true") else Map.empty)
-    newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
-    newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
-    newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
-    newGauge(LogMetricNames.Size, () => size, tags)
+    val tags = (Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++
+      (if (isFuture) Map("is-future" -> "true") else Map.empty)).asJava
+    metricsGroup.newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
+    metricsGroup.newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
+    metricsGroup.newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
+    metricsGroup.newGauge(LogMetricNames.Size, () => size, tags)
     metricNames = Map(LogMetricNames.NumLogSegments -> tags,
       LogMetricNames.LogStartOffset -> tags,
       LogMetricNames.LogEndOffset -> tags,
@@ -445,13 +453,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     lock synchronized {
       producerStateManager.removeExpiredProducers(currentTimeMs)
     }
-  }
-
-  // For compatibility, metrics are defined to be under `Log` class
-  override def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
-    val pkg = getClass.getPackage
-    val pkgStr = if (pkg == null) "" else pkg.getName
-    explicitMetricName(pkgStr, "Log", name, tags)
   }
 
   def loadProducerState(lastOffset: Long): Unit = lock synchronized {
@@ -1699,7 +1700,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   private[log] def removeLogMetrics(): Unit = {
     metricNames.foreach {
-      case (name, tags) => removeMetric(name, tags)
+      case (name, tags) => metricsGroup.removeMetric(name, tags)
     }
     metricNames = Map.empty
   }

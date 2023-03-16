@@ -55,7 +55,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
+import org.apache.kafka.server.fault.LoggingFaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.util.KafkaScheduler
@@ -396,7 +396,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             controllerQuorumVotersFuture,
-            fatalFaultHandler = new ProcessTerminatingFaultHandler.Builder().build()
+            fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
@@ -672,7 +672,6 @@ class KafkaServer(
   private def controlledShutdown(): Unit = {
     val socketTimeoutMs = config.controllerSocketTimeoutMs
 
-    // TODO (KAFKA-14447): Handle controlled shutdown for zkBroker when we have KRaft controller.
     def doControlledShutdown(retries: Int): Boolean = {
       if (config.requiresZookeeper &&
         metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
@@ -826,7 +825,6 @@ class KafkaServer(
       _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
       if (config.migrationEnabled && lifecycleManager != null && metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
-        // TODO KAFKA-14447 Only use KRaft controlled shutdown (when in migration mode)
         // For now we'll send the heartbeat with WantShutDown set so the KRaft controller can see a broker
         // shutting down without waiting for the heartbeat to time out.
         info("Notifying KRaft of controlled shutdown")

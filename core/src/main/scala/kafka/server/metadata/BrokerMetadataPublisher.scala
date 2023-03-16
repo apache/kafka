@@ -21,7 +21,6 @@ import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicLong
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
-import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -96,27 +95,27 @@ object BrokerMetadataPublisher extends Logging {
 }
 
 class BrokerMetadataPublisher(
-  conf: KafkaConfig,
+  config: KafkaConfig,
   metadataCache: KRaftMetadataCache,
   logManager: LogManager,
   replicaManager: ReplicaManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  clientQuotaMetadataManager: ClientQuotaMetadataManager,
   var dynamicConfigPublisher: DynamicConfigPublisher,
+  dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
+  scramPublisher: ScramPublisher,
   private val _authorizer: Option[Authorizer],
-  credentialProvider: CredentialProvider,
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
 ) extends MetadataPublisher with Logging {
-  logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
+  logIdent = s"[BrokerMetadataPublisher id=${config.nodeId}] "
 
   import BrokerMetadataPublisher._
 
   /**
    * The broker ID.
    */
-  val brokerId: Int = conf.nodeId
+  val brokerId: Int = config.nodeId
 
   /**
    * True if this is the first time we have published metadata.
@@ -169,7 +168,7 @@ class BrokerMetadataPublisher(
           replicaManager.applyDelta(topicsDelta, newImage)
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error applying topics " +
-            s"delta in ${deltaName}", t)
+            s"delta in $deltaName", t)
         }
         try {
           // Update the group coordinator of local changes
@@ -181,7 +180,7 @@ class BrokerMetadataPublisher(
           )
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
-            s"coordinator with local changes in ${deltaName}", t)
+            s"coordinator with local changes in $deltaName", t)
         }
         try {
           // Update the transaction coordinator of local changes
@@ -192,7 +191,7 @@ class BrokerMetadataPublisher(
             txnCoordinator.onResignation)
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
-            s"coordinator with local changes in ${deltaName}", t)
+            s"coordinator with local changes in $deltaName", t)
         }
         try {
           // Notify the group coordinator about deleted topics.
@@ -208,37 +207,18 @@ class BrokerMetadataPublisher(
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
-            s"coordinator with deleted partitions in ${deltaName}", t)
+            s"coordinator with deleted partitions in $deltaName", t)
         }
       }
 
       // Apply configuration deltas.
-      dynamicConfigPublisher.publish(delta, newImage)
+      dynamicConfigPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply client quotas delta.
-      try {
-        Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
-          clientQuotaMetadataManager.update(clientQuotasDelta)
-        }
-      } catch {
-        case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating client " +
-          s"quotas in ${deltaName}", t)
-      }
+      dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage)
 
-      // Apply changes to SCRAM credentials.
-      Option(delta.scramDelta()).foreach { scramDelta =>
-        scramDelta.changes().forEach {
-          case (mechanism, userChanges) =>
-            userChanges.forEach {
-              case (userName, change) =>
-                if (change.isPresent) {
-                  credentialProvider.updateCredential(mechanism, userName, change.get().toCredential(mechanism))
-                } else {
-                  credentialProvider.removeCredentials(mechanism, userName)
-                }
-            }
-        }
-      }
+      // Apply SCRAM delta.
+      scramPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply changes to ACLs. This needs to be handled carefully because while we are
       // applying these changes, the Authorizer is continuing to return authorization
@@ -246,7 +226,7 @@ class BrokerMetadataPublisher(
       // if the user created a DENY ALL acl and then created an ALLOW ACL for topic foo,
       // we want to apply those changes in that order, not the reverse order! Otherwise
       // there could be a window during which incorrect authorization results are returned.
-      Option(delta.aclsDelta()).foreach( aclsDelta =>
+      Option(delta.aclsDelta()).foreach { aclsDelta =>
         _authorizer match {
           case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta) {
             try {
@@ -257,7 +237,7 @@ class BrokerMetadataPublisher(
               authorizer.loadSnapshot(newImage.acls().acls())
             } catch {
               case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
-                s"authorizer snapshot in ${deltaName}", t)
+                s"authorizer snapshot in $deltaName", t)
             }
           } else {
             try {
@@ -271,11 +251,20 @@ class BrokerMetadataPublisher(
                 })
             } catch {
               case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
-                s"authorizer changes in ${deltaName}", t)
+                s"authorizer changes in $deltaName", t)
             }
           }
           case _ => // No ClusterMetadataAuthorizer is configured. There is nothing to do.
-        })
+        }
+      }
+
+      try {
+        // Propagate the new image to the group coordinator.
+        groupCoordinator.onNewMetadataImage(newImage, delta)
+      } catch {
+        case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
+          s"coordinator with local changes in $deltaName", t)
+      }
 
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
@@ -283,7 +272,7 @@ class BrokerMetadataPublisher(
       publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Uncaught exception while " +
-        s"publishing broker metadata from ${deltaName}", t)
+        s"publishing broker metadata from $deltaName", t)
     } finally {
       _firstPublish = false
     }
@@ -299,7 +288,7 @@ class BrokerMetadataPublisher(
   override def publishedOffset: Long = publishedOffsetAtomic.get()
 
   def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
-    conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
+    config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
   }
 
   /**
@@ -356,7 +345,7 @@ class BrokerMetadataPublisher(
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if
       // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
-      Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable)
+      Option(logManager.cleaner).foreach(config.dynamicConfig.addBrokerReconfigurable)
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting LogManager", t)
     }
@@ -369,14 +358,14 @@ class BrokerMetadataPublisher(
     try {
       // Start the group coordinator.
       groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
-        .getOrElse(conf.offsetsTopicPartitions))
+        .getOrElse(config.offsetsTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }
     try {
       // Start the transaction coordinator.
       txnCoordinator.startup(() => metadataCache.numPartitions(
-        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(conf.transactionTopicPartitions))
+        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }

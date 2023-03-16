@@ -18,13 +18,13 @@ package kafka.log
 
 import com.yammer.metrics.core.Timer
 import kafka.common.LogSegmentOffsetOverflowException
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CompletedTxn, FetchDataInfo, LazyIndex, LogConfig, LogOffsetMetadata, OffsetIndex, OffsetPosition, ProducerStateManager, RollParams, TimeIndex, TimestampOffset, TransactionIndex, TxnIndexSearchResult}
 
@@ -688,6 +688,7 @@ object LogSegment {
   }
 }
 
-object LogFlushStats extends KafkaMetricsGroup {
-  val logFlushTimer: Timer = newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+object LogFlushStats {
+  private val metricsGroup = new KafkaMetricsGroup(LogFlushStats.getClass)
+  val logFlushTimer: Timer = metricsGroup.newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
 }

@@ -19,14 +19,15 @@ package kafka.server
 
 import kafka.network._
 import kafka.utils._
-import kafka.metrics.KafkaMetricsGroup
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
+import java.util.Collections
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -109,11 +110,12 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               time: Time,
                               numThreads: Int,
                               requestHandlerAvgIdleMetricName: String,
-                              logAndThreadNamePrefix : String) extends Logging with KafkaMetricsGroup {
+                              logAndThreadNamePrefix : String) extends Logging {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
-  private val aggregateIdleMeter = newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
+  private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
 
   this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
@@ -151,10 +153,12 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 }
 
-class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
-  val tags: scala.collection.Map[String, String] = name match {
-    case None => Map.empty
-    case Some(topic) => Map("topic" -> topic)
+class BrokerTopicMetrics(name: Option[String]) {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
+  val tags: java.util.Map[String, String] = name match {
+    case None => Collections.emptyMap()
+    case Some(topic) => Map("topic" -> topic).asJava
   }
 
   case class MeterWrapper(metricType: String, eventType: String) {
@@ -167,7 +171,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
         meterLock synchronized {
           meter = lazyMeter
           if (meter == null) {
-            meter = newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
+            meter = metricsGroup.newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
             lazyMeter = meter
           }
         }
@@ -177,7 +181,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
 
     def close(): Unit = meterLock synchronized {
       if (lazyMeter != null) {
-        removeMetric(metricType, tags)
+        metricsGroup.removeMetric(metricType, tags)
         lazyMeter = null
       }
     }

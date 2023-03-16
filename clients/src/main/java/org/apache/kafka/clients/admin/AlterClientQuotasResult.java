@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
