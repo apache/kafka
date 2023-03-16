@@ -984,7 +984,7 @@ public final class RaftClientTestContext {
         assertEquals(epoch, fetchPartition.currentLeaderEpoch());
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
-        assertEquals(localId.orElse(-1), request.replicaId());
+        assertEquals(localId.orElse(-1), request.replicaState().replicaId());
 
         // Assert that voters have flushed up to the fetch offset
         if (localId.isPresent() && voters.contains(localId.getAsInt())) {
@@ -1036,7 +1036,7 @@ public final class RaftClientTestContext {
         return request
             .setMaxWaitMs(maxWaitTimeMs)
             .setClusterId(clusterId)
-            .setReplicaId(replicaId);
+            .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(replicaId));
     }
 
     FetchResponseData fetchResponse(

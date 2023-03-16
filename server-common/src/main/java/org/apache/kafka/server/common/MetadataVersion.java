@@ -168,7 +168,10 @@ public enum MetadataVersion {
     IBP_3_4_IV0(8, "3.4", "IV0", true),
 
     // Support for tiered storage (KIP-405) and SCRAM
-    IBP_3_5_IV0(9, "3.5", "IV0", false);
+    IBP_3_5_IV0(9, "3.5", "IV0", false),
+
+    // Adds replica epoch to Fetch request (KIP-903).
+    IBP_3_5_IV1(10, "3.5", "IV1", false);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";
@@ -292,7 +295,9 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_5_IV0)) {
+        if (this.isAtLeast(IBP_3_5_IV1)) {
+            return 15;
+        } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;
         } else if (this.isAtLeast(IBP_3_1_IV0)) {
             return 13;
