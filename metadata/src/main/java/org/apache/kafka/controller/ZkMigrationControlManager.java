@@ -23,19 +23,18 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineObject;
 import org.slf4j.Logger;
 
-import java.util.Optional;
 
-public class MigrationControlManager {
+public class ZkMigrationControlManager {
     private final TimelineObject<ZkMigrationState> zkMigrationState;
 
     private final Logger log;
 
-    MigrationControlManager(
+    ZkMigrationControlManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext
     ) {
         zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.UNINITIALIZED);
-        log = logContext.logger(MigrationControlManager.class);
+        log = logContext.logger(ZkMigrationControlManager.class);
     }
 
     ZkMigrationState zkMigrationState() {

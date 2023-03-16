@@ -577,7 +577,7 @@ public final class QuorumController implements Controller {
     }
 
     // Visible for testing
-    MigrationControlManager migrationControl() {
+    ZkMigrationControlManager migrationControl() {
         return zkMigrationControlManager;
     }
 
@@ -1670,7 +1670,7 @@ public final class QuorumController implements Controller {
      */
     private final AclControlManager aclControlManager;
 
-    private final MigrationControlManager zkMigrationControlManager;
+    private final ZkMigrationControlManager zkMigrationControlManager;
 
     /**
      * Tracks replaying the log.
@@ -1882,7 +1882,7 @@ public final class QuorumController implements Controller {
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();
         this.zkRecordConsumer = new MigrationRecordConsumer();
         this.zkMigrationEnabled = zkMigrationEnabled;
-        this.zkMigrationControlManager = new MigrationControlManager(snapshotRegistry, logContext);
+        this.zkMigrationControlManager = new ZkMigrationControlManager(snapshotRegistry, logContext);
         updateWriteOffset(-1);
 
         resetToEmptyState();
