@@ -174,6 +174,7 @@ class ReplicaManagerQuotasTest {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         1,
+        1,
         600,
         1,
         1000,
@@ -225,6 +226,7 @@ class ReplicaManagerQuotasTest {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         FetchRequest.CONSUMER_REPLICA_ID,
+        -1,
         600L,
         1,
         1000,
