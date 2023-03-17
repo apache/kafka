@@ -274,6 +274,7 @@ class BrokerToControllerChannelManagerImpl(
       Option(apiVersions.get(activeController.idString))
     }
   }
+  def controllerRequestThread: BrokerToControllerRequestThread = requestThread
 }
 
 abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
@@ -336,7 +337,7 @@ class BrokerToControllerRequestThread(
     Option(activeController.get())
   }
 
-  private def updateControllerAddress(newActiveController: Node): Unit = {
+  def updateControllerAddress(newActiveController: Node): Unit = {
     activeController.set(newActiveController)
   }
 
@@ -370,7 +371,7 @@ class BrokerToControllerRequestThread(
             time.milliseconds(),
             controllerAddress.get,
             request.request,
-            handleResponse(request)
+            handleResponse(controllerAddress.get, request)
           ))
         }
       }
@@ -378,7 +379,7 @@ class BrokerToControllerRequestThread(
     None
   }
 
-  private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+  def handleResponse(controller: Node, queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
     debug(s"Request ${queueItem.request} received $response")
     if (response.authenticationException != null) {
       error(s"Request ${queueItem.request} failed due to authentication error with controller",
@@ -393,9 +394,11 @@ class BrokerToControllerRequestThread(
       requestQueue.putFirst(queueItem)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       debug(s"Request ${queueItem.request} received NOT_CONTROLLER exception. Disconnecting the " +
-        s"connection to the stale controller ${activeControllerAddress().map(_.idString).getOrElse("null")}")
+        s"connection to the stale controller $controller")
       // just close the controller connection and wait for metadata cache update in doWork
-      activeControllerAddress().foreach { controllerAddress =>
+      // don't need to disconnect controller if previous controller is NOT equal to current controller since
+      // it means the network client is reset already
+      activeControllerAddress().filter(_.id() == controller.id()).foreach { controllerAddress =>
         try {
           // We don't care if disconnect has an error, just log it and get a new network client
           networkClient.disconnect(controllerAddress.idString)
