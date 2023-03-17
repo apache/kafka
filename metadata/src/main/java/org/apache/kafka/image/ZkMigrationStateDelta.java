@@ -20,12 +20,12 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 
-public class ZkMigrationDelta {
-    private final ZkMigrationImage image;
+public class ZkMigrationStateDelta {
+    private final ZkMigrationStateImage image;
 
     private ZkMigrationState updatedState;
 
-    public ZkMigrationDelta(ZkMigrationImage image) {
+    public ZkMigrationStateDelta(ZkMigrationStateImage image) {
         this.image = image;
     }
 
@@ -37,7 +37,7 @@ public class ZkMigrationDelta {
         // no-op
     }
 
-    public ZkMigrationImage apply() {
-        return new ZkMigrationImage(updatedState);
+    public ZkMigrationStateImage apply() {
+        return new ZkMigrationStateImage(updatedState);
     }
 }

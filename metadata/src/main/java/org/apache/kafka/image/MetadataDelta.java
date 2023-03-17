@@ -77,7 +77,7 @@ public final class MetadataDelta {
 
     private ScramDelta scramDelta = null;
 
-    private ZkMigrationDelta migrationDelta = null;
+    private ZkMigrationStateDelta migrationDelta = null;
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
@@ -161,8 +161,8 @@ public final class MetadataDelta {
         return scramDelta;
     }
 
-    public ZkMigrationDelta getOrCreateZkMigrationDelta() {
-        if (migrationDelta == null) migrationDelta = new ZkMigrationDelta(image.migration());
+    public ZkMigrationStateDelta getOrCreateZkMigrationDelta() {
+        if (migrationDelta == null) migrationDelta = new ZkMigrationStateDelta(image.migration());
         return migrationDelta;
     }
 
@@ -389,7 +389,7 @@ public final class MetadataDelta {
         } else {
             newScram = scramDelta.apply();
         }
-        ZkMigrationImage newMigration;
+        ZkMigrationStateImage newMigration;
         if (migrationDelta == null) {
             newMigration = image.migration();
         } else {

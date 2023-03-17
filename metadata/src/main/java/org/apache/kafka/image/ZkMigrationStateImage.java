@@ -24,12 +24,12 @@ import org.apache.kafka.metadata.migration.ZkMigrationState;
 
 import java.util.Objects;
 
-public class ZkMigrationImage {
-    public static final ZkMigrationImage EMPTY = new ZkMigrationImage(ZkMigrationState.UNINITIALIZED);
+public class ZkMigrationStateImage {
+    public static final ZkMigrationStateImage EMPTY = new ZkMigrationStateImage(ZkMigrationState.UNINITIALIZED);
 
     private final ZkMigrationState state;
 
-    ZkMigrationImage(ZkMigrationState state) {
+    ZkMigrationStateImage(ZkMigrationState state) {
         this.state = state;
     }
 
@@ -38,7 +38,7 @@ public class ZkMigrationImage {
     }
 
     public boolean isEmpty() {
-        return this.equals(ZkMigrationImage.EMPTY);
+        return this.equals(ZkMigrationStateImage.EMPTY);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
@@ -55,7 +55,7 @@ public class ZkMigrationImage {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ZkMigrationImage that = (ZkMigrationImage) o;
+        ZkMigrationStateImage that = (ZkMigrationStateImage) o;
         return state == that.state;
     }
 

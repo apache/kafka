@@ -40,7 +40,7 @@ public final class MetadataImage {
         ProducerIdsImage.EMPTY,
         AclsImage.EMPTY,
         ScramImage.EMPTY,
-        ZkMigrationImage.EMPTY);
+        ZkMigrationStateImage.EMPTY);
 
     private final MetadataProvenance provenance;
 
@@ -60,7 +60,7 @@ public final class MetadataImage {
 
     private final ScramImage scram;
 
-    private final ZkMigrationImage migration;
+    private final ZkMigrationStateImage zkMigration;
 
     public MetadataImage(
         MetadataProvenance provenance,
@@ -72,7 +72,7 @@ public final class MetadataImage {
         ProducerIdsImage producerIds,
         AclsImage acls,
         ScramImage scram,
-        ZkMigrationImage migration
+        ZkMigrationStateImage migration
     ) {
         this.provenance = provenance;
         this.features = features;
@@ -83,7 +83,7 @@ public final class MetadataImage {
         this.producerIds = producerIds;
         this.acls = acls;
         this.scram = scram;
-        this.migration = migration;
+        this.zkMigration = migration;
     }
 
     public boolean isEmpty() {
@@ -95,7 +95,7 @@ public final class MetadataImage {
             producerIds.isEmpty() &&
             acls.isEmpty() &&
             scram.isEmpty() &&
-            migration.isEmpty();
+            zkMigration.isEmpty();
     }
 
     public MetadataProvenance provenance() {
@@ -142,8 +142,8 @@ public final class MetadataImage {
         return scram;
     }
 
-    public ZkMigrationImage migration() {
-        return migration;
+    public ZkMigrationStateImage migration() {
+        return zkMigration;
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
@@ -157,7 +157,7 @@ public final class MetadataImage {
         producerIds.write(writer, options);
         acls.write(writer, options);
         scram.write(writer, options);
-        migration.write(writer, options);
+        zkMigration.write(writer, options);
         writer.close(true);
     }
 
@@ -174,7 +174,7 @@ public final class MetadataImage {
             producerIds.equals(other.producerIds) &&
             acls.equals(other.acls) &&
             scram.equals(other.scram) &&
-            migration.equals(other.migration);
+            zkMigration.equals(other.zkMigration);
     }
 
     @Override
@@ -189,7 +189,7 @@ public final class MetadataImage {
             producerIds,
             acls,
             scram,
-            migration);
+                zkMigration);
     }
 
     @Override
@@ -204,7 +204,7 @@ public final class MetadataImage {
             ", producerIdsImage=" + producerIds +
             ", acls=" + acls +
             ", scram=" + scram +
-            ", migration=" + migration +
+            ", migration=" + zkMigration +
             ")";
     }
 }
