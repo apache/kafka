@@ -133,6 +133,9 @@ class KafkaTest {
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.ControllerListenerNamesProp, "SASL_PLAINTEXT")
+    propertiesFile.setProperty(KafkaConfig.ListenersProp, "SASL_PLAINTEXT://localhost:9092, PLAINTEXT://localhost:9093")
+    propertiesFile.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9093")
     val config = KafkaConfig.fromProps(propertiesFile)
     assertTrue(config.isKRaftCombinedMode)
   }
