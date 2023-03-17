@@ -34,6 +34,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
@@ -43,7 +44,9 @@ import java.util.concurrent.TimeUnit
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
+@Timeout(120)
 class ZkMigrationIntegrationTest {
 
   val log = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
@@ -85,7 +88,7 @@ class ZkMigrationIntegrationTest {
     quotas.add(new ClientQuotaAlteration(
       new ClientQuotaEntity(Map("ip" -> "8.8.8.8").asJava),
       List(new ClientQuotaAlteration.Op("connection_creation_rate", 10.0)).asJava))
-    admin.alterClientQuotas(quotas)
+    admin.alterClientQuotas(quotas).all().get(60, TimeUnit.SECONDS)
 
     val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
     val kafkaConfig = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying.servers.head.config

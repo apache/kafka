@@ -136,7 +136,7 @@ object BrokerToControllerChannelManager {
     metrics: Metrics,
     config: KafkaConfig,
     channelName: String,
-    threadNamePrefix: Option[String],
+    threadNamePrefix: String,
     retryTimeoutMs: Long
   ): BrokerToControllerChannelManager = {
     new BrokerToControllerChannelManagerImpl(
@@ -174,10 +174,10 @@ class BrokerToControllerChannelManagerImpl(
   metrics: Metrics,
   config: KafkaConfig,
   channelName: String,
-  threadNamePrefix: Option[String],
+  threadNamePrefix: String,
   retryTimeoutMs: Long
 ) extends BrokerToControllerChannelManager with Logging {
-  private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
+  private val logContext = new LogContext(s"[BrokerToControllerChannelManager id=${config.brokerId} name=${channelName}] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val requestThread = newRequestThread
@@ -236,10 +236,7 @@ class BrokerToControllerChannelManagerImpl(
         logContext
       )
     }
-    val threadName = threadNamePrefix match {
-      case None => s"BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
-      case Some(name) => s"$name:BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
-    }
+    val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
 
     val controllerInformation = controllerNodeProvider.getControllerInfo()
     new BrokerToControllerRequestThread(

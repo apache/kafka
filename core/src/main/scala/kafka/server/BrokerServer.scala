@@ -64,7 +64,6 @@ class BrokerServer(
   val sharedServer: SharedServer,
   val initialOfflineDirs: Seq[String],
 ) extends KafkaBroker {
-  val threadNamePrefix = sharedServer.threadNamePrefix
   val config = sharedServer.brokerConfig
   val time = sharedServer.time
   def metrics = sharedServer.metrics
@@ -172,7 +171,7 @@ class BrokerServer(
 
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         isZkBroker = false)
 
       /* start scheduler */
@@ -182,7 +181,8 @@ class BrokerServer(
       /* register broker metrics */
       brokerTopicStats = new BrokerTopicStats
 
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
@@ -213,7 +213,7 @@ class BrokerServer(
         metrics,
         config,
         channelName = "forwarding",
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         retryTimeoutMs = 60000
       )
       clientToControllerChannelManager.start()
@@ -242,7 +242,7 @@ class BrokerServer(
         controllerNodeProvider,
         time = time,
         metrics,
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch
       )
       alterPartitionManager.start()
@@ -261,8 +261,9 @@ class BrokerServer(
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
         zkClient = None,
-        threadNamePrefix = threadNamePrefix,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch)
+        threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
+      )
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -321,7 +322,7 @@ class BrokerServer(
         metrics,
         config,
         "heartbeat",
-        threadNamePrefix,
+        s"broker-${config.nodeId}-",
         config.brokerSessionTimeoutMs / 2 // KAFKA-14392
       )
       lifecycleManager.start(
