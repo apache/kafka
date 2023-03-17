@@ -283,6 +283,7 @@ public class ThreadCache {
     synchronized void clear(final String namespace) {
         final NamedCache cleared = caches.get(namespace);
         if (cleared != null) {
+            sizeInBytes.getAndAdd(-cleared.sizeInBytes());
             cleared.clear();
         }
     }

@@ -588,6 +588,21 @@ public class ProcessorStateManager implements StateManager {
             final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
             changelogReader.unregister(allChangelogs);
         }
+
+        // when the state manager is recycled to be used, future writes may bypass its store's caching
+        // layer if they are from restoration, hence we need to clear the state store's caches just in case
+        // See KAFKA-14172 for details
+        if (!stores.isEmpty()) {
+            log.debug("Clearing all store caches registered in the state manager: {}", stores);
+            for (final StateStoreMetadata metadata : stores.values()) {
+                final StateStore store = metadata.stateStore;
+
+                if (store instanceof CachedStateStore) {
+                    ((CachedStateStore) store).clearCache();
+                }
+                log.trace("Cleared cache {}", store.name());
+            }
+        }
     }
 
     void transitionTaskType(final TaskType newType, final LogContext logContext) {
@@ -640,7 +655,7 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        log.warn("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
+        log.debug("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
         try {
             checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {

@@ -42,24 +42,18 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -71,32 +65,11 @@ import static org.hamcrest.Matchers.is;
  * The intent is not that this test should be merged into the repo but only provided for evidence on how to reproduce.
  * One test fail and two test pass reliably on an i7-8750H CPU @ 2.20GHz × 12 with 32 GiB Memory
  */
-@RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 @SuppressWarnings("deprecation")
-public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
+public class StandbyTaskEOSMultiRebalanceIntegrationTest {
 
-    private static final Logger LOG = LoggerFactory.getLogger(StandbyTaskEOSCachingAndAcceptableLagIntegrationTest.class);
-
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<ConfigSetup[]> data() {
-        return asList(new ConfigSetup[][]{
-                // The default config produces errors.
-                {ConfigSetup.DEFAULT_CONFIG},
-                // Caching disabled and no lag acceptable both works as expected
-                //{ConfigSetup.CACHING_DISABLED}//,
-                //{ConfigSetup.NO_LAG_ACCEPTABLE}
-        });
-    }
-
-    public enum ConfigSetup {
-        DEFAULT_CONFIG,
-        CACHING_DISABLED,
-        NO_LAG_ACCEPTABLE
-    }
-
-    @Parameterized.Parameter
-    public ConfigSetup configSetup;
+    private static final Logger LOG = LoggerFactory.getLogger(StandbyTaskEOSMultiRebalanceIntegrationTest.class);
 
     private final static long TWO_MINUTE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
 
@@ -110,9 +83,6 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
     private KafkaStreams streamInstanceOne;
     private KafkaStreams streamInstanceTwo;
     private KafkaStreams streamInstanceThree;
-
-    private final Map<Integer, Integer> mStore = new HashMap<>();
-
 
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
@@ -229,9 +199,6 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
                 1000L + time
         );
 
-        LOG.info("Allow for some processing of messages by stream one and two and some catching up of standby tasks");
-        Thread.sleep(5000);
-
         LOG.info("Start stream three which will introduce a re-balancing event and hopefully some redistribution of tasks.");
         startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceThree), Duration.ofSeconds(90));
 
@@ -292,16 +259,7 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
                             @Override
                             public KeyValue<Integer, Integer> transform(final Integer key, final Integer unused) {
                                 assertThat("Key and value mus be equal", key.equals(unused));
-                                // Introduce a small delay
-                                if (key > 10000) {
-                                    try {
-                                        Thread.sleep(10);
-                                    } catch (final InterruptedException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                }
                                 Integer id = store.get(key);
-                                Integer mid = mStore.get(key);
                                 // Only assign a new id if the value have not been observed before
                                 if (id == null) {
                                     final int counterKey = 0;
@@ -311,11 +269,6 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
                                     // Partitions assign ids from their own id space
                                     id = newCounter * partitionCount + context.partition();
                                     store.put(key, id);
-
-                                    if (mid != null && !id.equals(mid))
-                                        LOG.warn("{}: in-mem {}-{} does not match disk {}-{} for key {}",
-                                            context.taskId(), mid, (mid - context.partition()) / partitionCount, id, newCounter, key);
-                                    mStore.put(key, id);
                                 }
                                 return KeyValue.pair(key, id);
                             }
@@ -345,22 +298,6 @@ public class StandbyTaskEOSCachingAndAcceptableLagIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        //PRODUCES DUPLICATES
-        switch (configSetup) {
-            case DEFAULT_CONFIG:
-                streamsConfiguration.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 100000); // DEFAULT
-                streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L); //DEFAULT
-                break;
-            case CACHING_DISABLED:
-                streamsConfiguration.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 100000); //DEFAULT
-                streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0); // Caching disabled
-                break;
-            case NO_LAG_ACCEPTABLE:
-                streamsConfiguration.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 0); // No lag accepted
-                streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L); // DEFAULT
-                break;
-        }
 
         return streamsConfiguration;
     }
