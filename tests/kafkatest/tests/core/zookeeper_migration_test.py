@@ -17,16 +17,18 @@ from functools import partial
 import time
 
 from ducktape.utils.util import wait_until
+from ducktape.mark import parametrize
+from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka.config_property import CLUSTER_ID
-from kafkatest.services.kafka.quorum import remote_kraft, ServiceQuorumInfo, zk
+from kafkatest.services.kafka.quorum import isolated_kraft, ServiceQuorumInfo, zk
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import DEV_BRANCH, V_3_4_0
 
 
 class TestMigration(ProduceConsumeValidateTest):
@@ -50,10 +52,10 @@ class TestMigration(ProduceConsumeValidateTest):
 
     def do_migration(self):
         # Start up KRaft controller in migration mode
-        remote_quorum = partial(ServiceQuorumInfo, remote_kraft)
+        remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
         controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
                                   allow_zk_with_kraft=True,
-                                  remote_kafka=self.kafka,
+                                  isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
                                                          ["zookeeper.metadata.migration.enable", "true"]],
                                   quorum_info_provider=remote_quorum)
@@ -115,3 +117,73 @@ class TestMigration(ProduceConsumeValidateTest):
                                         message_validator=is_int, version=DEV_BRANCH)
 
         self.run_produce_consume_validate(core_test_action=self.do_migration)
+
+    @parametrize(metadata_quorum=isolated_kraft)
+    def test_pre_migration_mode_3_4(self, metadata_quorum):
+        """
+        Start a KRaft quorum in 3.4 without migrations enabled. Since we were not correctly writing
+        ZkMigrationStateRecord in 3.4, there will be no ZK migration state in the log.
+
+        When upgrading to 3.5+, the controller should see that there are records in the log and
+        automatically bootstrap a ZkMigrationStateRecord(NONE) into the log (indicating that this
+        cluster was created in KRaft mode).
+
+        This test ensures that even if we enable migrations after the upgrade to 3.5, that no migration
+        is able to take place.
+        """
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
+        self.zk.start()
+
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=3,
+                                  zk=self.zk,
+                                  allow_zk_with_kraft=True,
+                                  version=V_3_4_0,
+                                  server_prop_overrides=[["zookeeper.metadata.migration.enable", "false"]],
+                                  topics={self.topic: {"partitions": self.partitions,
+                                                       "replication-factor": self.replication_factor,
+                                                       'configs': {"min.insync.replicas": 2}}})
+        self.kafka.start()
+
+        # Now reconfigure the cluster as if we're trying to do a migration
+        self.kafka.server_prop_overrides.clear()
+        self.kafka.server_prop_overrides.extend([
+            ["zookeeper.metadata.migration.enable", "true"]
+        ])
+
+        self.logger.info("Performing rolling upgrade.")
+        for node in self.kafka.controller_quorum.nodes:
+            self.logger.info("Stopping controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.stop_node(node)
+            node.version = DEV_BRANCH
+            self.logger.info("Restarting controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
+        for node in self.kafka.nodes:
+            self.logger.info("Stopping broker node %s" % node.account.hostname)
+            self.kafka.stop_node(node)
+            node.version = DEV_BRANCH
+            self.logger.info("Restarting broker node %s" % node.account.hostname)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
+
+        # Check the controller's logs for the error message about the migration state
+        saw_expected_error = False
+        for node in self.kafka.controller_quorum.nodes:
+            with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+                monitor.offset = 0
+                try:
+                    # Shouldn't have to wait too long to see this log message after startup
+                    monitor.wait_until(
+                        "ZkMigrationState is NONE which means this cluster should not be migrated from ZooKeeper",
+                        timeout_sec=10.0, backoff_sec=.25,
+                        err_msg=""
+                    )
+                    saw_expected_error = True
+                    break
+                except TimeoutError:
+                    continue
+
+        assert saw_expected_error, "Did not see expected ERROR log for ZkMigrationState = NONE in the controller logs"
