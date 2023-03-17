@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.metadata.migration.ZkMigrationState;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class MockControllerMetrics implements ControllerMetrics {
@@ -31,6 +33,7 @@ public final class MockControllerMetrics implements ControllerMetrics {
     private volatile long lastAppliedRecordOffset = 0;
     private volatile long lastCommittedRecordOffset = 0;
     private volatile long lastAppliedRecordTimestamp = 0;
+    private volatile ZkMigrationState zkMigrationState = ZkMigrationState.UNINITIALIZED;
 
     private volatile boolean closed = false;
 
@@ -152,6 +155,11 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public long lastAppliedRecordTimestamp() {
         return lastAppliedRecordTimestamp;
+    }
+
+    @Override
+    public void setZkMigrationState(ZkMigrationState state) {
+        zkMigrationState = state;
     }
 
     @Override

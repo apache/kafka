@@ -22,6 +22,7 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
@@ -58,6 +59,9 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "KafkaController", "LastAppliedRecordTimestamp");
     private final static MetricName LAST_APPLIED_RECORD_LAG_MS = getMetricName(
         "KafkaController", "LastAppliedRecordLagMs");
+    private final static MetricName ZK_MIGRATION_STATE = getMetricName(
+        "KafkaController", "ZkMigrationState");
+
 
     private final MetricsRegistry registry;
     private volatile boolean active;
@@ -71,6 +75,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
+    private final AtomicInteger zkMigrationState = new AtomicInteger(-1);
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> fencedBrokerCountGauge;
     private final Gauge<Integer> activeBrokerCountGauge;
@@ -83,6 +88,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Gauge<Long> lastCommittedRecordOffsetGauge;
     private final Gauge<Long> lastAppliedRecordTimestampGauge;
     private final Gauge<Long> lastAppliedRecordLagMsGauge;
+    private final Gauge<Integer> zkMigrationStateGauge;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
@@ -173,6 +179,13 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
                 return time.milliseconds() - lastAppliedRecordTimestamp.get();
             }
         });
+        zkMigrationStateGauge = registry.newGauge(ZK_MIGRATION_STATE, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return zkMigrationState.get();
+            }
+        });
+
     }
 
     @Override
@@ -293,6 +306,10 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         return lastAppliedRecordTimestamp.get();
     }
 
+    public void setZkMigrationState(ZkMigrationState state) {
+        zkMigrationState.set(state.value());
+    }
+
     @Override
     public void close() {
         Arrays.asList(
@@ -309,7 +326,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             LAST_APPLIED_RECORD_OFFSET,
             LAST_COMMITTED_RECORD_OFFSET,
             LAST_APPLIED_RECORD_TIMESTAMP,
-            LAST_APPLIED_RECORD_LAG_MS
+            LAST_APPLIED_RECORD_LAG_MS,
+            ZK_MIGRATION_STATE
         ).forEach(registry::removeMetric);
     }
 

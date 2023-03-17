@@ -34,8 +34,10 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
@@ -138,6 +140,9 @@ final class ControllerMetricsManager {
             case REMOVE_TOPIC_RECORD:
                 replay((RemoveTopicRecord) message);
                 break;
+            case ZK_MIGRATION_STATE_RECORD:
+                replay((ZkMigrationStateRecord) message);
+                break;
             case CONFIG_RECORD:
             case FEATURE_LEVEL_RECORD:
             case CLIENT_QUOTA_RECORD:
@@ -147,7 +152,6 @@ final class ControllerMetricsManager {
             case USER_SCRAM_CREDENTIAL_RECORD:
             case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
             case NO_OP_RECORD:
-            case ZK_MIGRATION_STATE_RECORD:
                 // These record types do not affect metrics
                 break;
             default:
@@ -279,6 +283,10 @@ final class ControllerMetricsManager {
         imbalancedTopicPartitions.removeIf(matchesTopic);
 
         updateTopicAndPartitionMetrics();
+    }
+
+    private void replay(ZkMigrationStateRecord record) {
+        controllerMetrics.setZkMigrationState(ZkMigrationState.of(record.zkMigrationState()));
     }
 
     private void updateBasedOnPartitionState(TopicIdPartition tp, PartitionState partitionState) {

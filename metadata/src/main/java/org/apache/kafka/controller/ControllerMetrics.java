@@ -18,6 +18,8 @@
 package org.apache.kafka.controller;
 
 
+import org.apache.kafka.metadata.migration.ZkMigrationState;
+
 public interface ControllerMetrics extends AutoCloseable {
     void setActive(boolean active);
 
@@ -66,6 +68,8 @@ public interface ControllerMetrics extends AutoCloseable {
     void setLastAppliedRecordTimestamp(long timestamp);
 
     long lastAppliedRecordTimestamp();
+
+    void setZkMigrationState(ZkMigrationState state);
 
     void close();
 }
