@@ -37,7 +37,6 @@ import java.util.Properties;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -120,7 +119,6 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testGenerateRandomPayloadByPayloadFile() {
-        Integer recordSize = null;
         String inputString = "Hello Kafka";
         byte[] byteArray = inputString.getBytes(StandardCharsets.UTF_8);
         List<byte[]> payloadByteList = new ArrayList<>();
@@ -128,31 +126,35 @@ public class ProducerPerformanceTest {
         byte[] payload = null;
         Random random = new Random(0);
 
-        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
+        payload = ProducerPerformance.select(payloadByteList, random);
         assertEquals(inputString, new String(payload));
     }
 
     @Test
-    public void testGenerateRandomPayloadByRecordSize() {
-        Integer recordSize = 100;
-        byte[] payload = new byte[recordSize];
-        List<byte[]> payloadByteList = new ArrayList<>();
+    public void testGenerateRandomPayloadsByRecordSize() throws IOException {
+        Integer recordSize = 1024;
         Random random = new Random(0);
 
-        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
-        for (byte b : payload) {
-            assertNotEquals(0, b);
+        final List<byte[]> bytes = ProducerPerformance.generatePayloads(null, null, recordSize, random);
+        assertEquals(1024 * 10, bytes.size());
+        for (byte[] aByte : bytes) {
+            assertEquals(recordSize, aByte.length);
         }
     }
 
     @Test
-    public void testGenerateRandomPayloadException() {
-        Integer recordSize = null;
-        byte[] payload = null;
-        List<byte[]> payloadByteList = new ArrayList<>();
+    public void testGenerateRandomPayloadsLargerThan10M() throws IOException {
+        Integer recordSize = 11 * 1024 * 1024;
         Random random = new Random(0);
 
-        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random));
+        final List<byte[]> bytes = ProducerPerformance.generatePayloads(null, null, recordSize, random);
+        assertEquals(1, bytes.size());
+        assertEquals(recordSize, bytes.get(0).length);
+    }
+
+    @Test
+    public void testGeneratePayloadsException() {
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generatePayloads(null, null, null, null));
         assertEquals("no payload File Path or record Size provided", thrown.getMessage());
     }
 

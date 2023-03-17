@@ -78,7 +78,11 @@ public class ProducerPerformance {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
 
-            List<byte[]> payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
+            Random random = new Random(0);
+            List<byte[]> payloadByteList = generatePayloads(payloadFilePath, payloadDelimiter, recordSize, random);
+            if (payloadByteList.isEmpty()) {
+                throw new IllegalStateException("no payload bytes generated");
+            }
 
             Properties props = readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
 
@@ -87,12 +91,6 @@ public class ProducerPerformance {
             if (transactionsEnabled)
                 producer.initTransactions();
 
-            /* setup perf test */
-            byte[] payload = null;
-            if (recordSize != null) {
-                payload = new byte[recordSize];
-            }
-            Random random = new Random(0);
             ProducerRecord<byte[], byte[]> record;
             Stats stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
@@ -103,7 +101,7 @@ public class ProducerPerformance {
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
 
-                payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
+                byte[] payload = select(payloadByteList, random);
 
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
@@ -164,17 +162,9 @@ public class ProducerPerformance {
         return new KafkaProducer<>(props);
     }
 
-    static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
-            Random random) {
-        if (!payloadByteList.isEmpty()) {
-            payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
-        } else if (recordSize != null) {
-            for (int j = 0; j < payload.length; ++j)
-                payload[j] = (byte) (random.nextInt(26) + 65);
-        } else {
-            throw new IllegalArgumentException("no payload File Path or record Size provided");
-        }
-        return payload;
+    static byte[] select(List<byte[]> payloadByteList,
+                         Random random) {
+        return payloadByteList.get(random.nextInt(payloadByteList.size()));
     }
     
     static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
@@ -199,6 +189,37 @@ public class ProducerPerformance {
         }
         return props;
     }
+
+
+    static List<byte[]> generatePayloads(String payloadFilePath, String payloadDelimiter, Integer recordSize, Random random) throws IOException {
+        if (payloadFilePath != null) {
+            return readPayloadFile(payloadFilePath, payloadDelimiter);
+        } else if (recordSize != null) {
+            return generateRandomPayloads(recordSize, random);
+        } else {
+            throw new IllegalArgumentException("no payload File Path or record Size provided");
+        }
+    }
+
+
+    private static List<byte[]> generateRandomPayloads(final int recordSize, final Random random) {
+        if (recordSize == 0) {
+            final ArrayList<byte[]> bytes = new ArrayList<>(1);
+            bytes.add(new byte[0]);
+            return bytes;
+        }
+        int approximateTotalSize = 10 * 1024 * 1024;
+        int numberOfCandidates = Math.max(1, approximateTotalSize / Math.max(1, recordSize));
+        List<byte[]> payloads = new ArrayList<>(numberOfCandidates);
+        for (int i = 0; i < numberOfCandidates; i++) {
+            byte[] payload = new byte[recordSize];
+            for (int j = 0; j < payload.length; ++j)
+                payload[j] = (byte) (random.nextInt(26) + 65);
+            payloads.add(payload);
+        }
+        return payloads;
+    }
+
 
     static List<byte[]> readPayloadFile(String payloadFilePath, String payloadDelimiter) throws IOException {
         List<byte[]> payloadByteList = new ArrayList<>();
