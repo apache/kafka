@@ -63,6 +63,15 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * (i.e., history retention) relative to the current observed stream time, then the deletion
      * will not be performed and {@code null} will be returned.
      * <p>
+     * As a consequence of the above, the way to delete a record version is <it>not</it>
+     * to first call {@link #get(Object) #get(key)} or {@link #get(Object, long) #get(key, timestamp)}
+     * and use the returned {@link VersionedRecord#timestamp()} in a call to this
+     * {@code delete(key, timestamp)} method, as the returned timestamp may be older than
+     * the store's grace period (i.e., history retention) and will therefore not take place.
+     * Instead, you should pass a business logic inferred timestamp that specifies when
+     * the delete actually happens. For example, it could be the timestamp of the currently
+     * processed input record or the current stream time.
+     * <p>
      * This operation is semantically equivalent to {@link #get(Object, long) #get(key, timestamp)}
      * followed by {@link #put(Object, Object, long) #put(key, null, timestamp)}, with
      * a caveat that if the deletion timestamp is older than the store's grace period

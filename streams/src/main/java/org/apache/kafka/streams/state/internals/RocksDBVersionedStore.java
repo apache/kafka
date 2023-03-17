@@ -171,7 +171,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
-            // history retention exceeded. check latest value store only
+            // history retention exceeded. we still check the latest value store in case the
+            // latest record version satisfies the timestamp bound, in which case it should
+            // still be returned (i.e., the latest record version per key never expires).
             final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
             if (rawLatestValueAndTimestamp != null) {
                 final long latestTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
@@ -184,7 +186,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 }
             }
 
-            // history retention has elapsed. return null for predictability, even if data
+            // history retention has elapsed and the latest record version (if present) does
+            // not satisfy the timestamp bound. return null for predictability, even if data
             // is still present in segments.
             LOG.warn("Returning null for expired get.");
             return null;

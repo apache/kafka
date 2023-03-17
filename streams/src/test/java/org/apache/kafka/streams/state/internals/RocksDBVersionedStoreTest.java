@@ -384,10 +384,12 @@ public class RocksDBVersionedStoreTest {
         VersionedRecord<String> deleted = deleteFromStore("k1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
         assertThat(deleted.value(), equalTo("v1"));
         assertThat(deleted.timestamp(), equalTo(1L));
+        verifyGetNullFromStore("k1");
 
         // grace period has elapsed, so this delete does not take place
         deleted = deleteFromStore("k2", HISTORY_RETENTION + 9 - GRACE_PERIOD);
         assertThat(deleted, nullValue()); // return value is null even though record exists because delete did not take place
+        verifyGetValueFromStore("k2", "v2", 1L);
 
         verifyExpiredRecordSensor(1);
     }
