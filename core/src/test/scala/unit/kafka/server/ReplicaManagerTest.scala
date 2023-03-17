@@ -2059,7 +2059,6 @@ class ReplicaManagerTest {
   @Test
   def testVerificationForTransactionalPartitions(): Unit = {
     val tp = new TopicPartition(topic, 0)
-    val partitionReplicas = Seq[Integer](0, 1).asJava
     val transactionalId = "txn1"
     val producerId = 24L
     val producerEpoch = 0.toShort
@@ -2082,19 +2081,7 @@ class ReplicaManagerTest {
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
 
     try {
-      val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrPartitionState()
-          .setTopicName(tp.topic)
-          .setPartitionIndex(tp.partition)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(1)
-          .setIsr(partitionReplicas)
-          .setPartitionEpoch(0)
-          .setReplicas(partitionReplicas)
-          .setIsNew(true)).asJava,
-        topicIds.asJava,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp.topic), tp, Seq(0, 1), new LeaderAndIsr(0, 1, List(0, 1), null, 0))
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
       // Append some transactional records. We must set up the metadata cache to handle the append and verification.
@@ -2135,6 +2122,56 @@ class ReplicaManagerTest {
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, transactionalRecords2)
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback])
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+  
+  @Test
+  def testDisabledVerification(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("transaction.partition.verification.enable", "false")
+    val config = KafkaConfig.fromProps(props)
+
+    val tp = new TopicPartition(topic, 0)
+    val transactionalId = "txn1"
+    val producerId = 24L
+    val producerEpoch = 0.toShort
+    val sequence = 0
+
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val metadataCache = mock(classOf[MetadataCache])
+    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
+
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager,
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
+
+    try {
+      val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp.topic), tp, Seq(0, 1), new LeaderAndIsr(0, 1, List(0, 1), null, 0))
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+      
+      when(metadataCache.contains(tp)).thenReturn(true)
+      
+      val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
+        new SimpleRecord(s"message $sequence".getBytes))
+      appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
+
+      // We should not add these partitions to the manager to verify.
+      verify(metadataCache,  times(0)).getTopicMetadata(any(), any(), any(), any())
+      verify(metadataCache, times(0)).getAliveBrokerNode(any(), any())
+      verify(metadataCache, times(0)).getAliveBrokerNode(any(), any())
+      verify(addPartitionsToTxnManager, times(0)).addTxnData(any(), any(), any())
     } finally {
       replicaManager.shutdown()
     }

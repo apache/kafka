@@ -626,7 +626,7 @@ class ReplicaManager(val config: KafkaConfig,
       val sTime = time.milliseconds
       
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) = 
-        if (transactionStatePartition.isEmpty)
+        if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
           (entriesPerPartition, Map.empty)
         else
           entriesPerPartition.partition { case (topicPartition, records) =>
