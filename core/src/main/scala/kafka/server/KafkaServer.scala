@@ -29,7 +29,7 @@ import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsReporter
 import kafka.log.remote.RemoteLogManager
-import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
+import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, NetworkUtils, RequestChannel, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
@@ -609,6 +609,10 @@ class KafkaServer(
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
+    val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+    val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+    val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, networkClient, time)
+
     new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -623,7 +627,8 @@ class KafkaServer(
       brokerTopicStats = brokerTopicStats,
       isShuttingDown = isShuttingDown,
       zkClient = Some(zkClient),
-      threadNamePrefix = threadNamePrefix)
+      threadNamePrefix = threadNamePrefix,
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
   }
 
   private def initZkClient(time: Time): Unit = {

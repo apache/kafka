@@ -62,9 +62,9 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
                 topicPartitionsToError.put(new TopicPartition(topic.name(), partition), Errors.INVALID_PRODUCER_EPOCH)
               }
             }
-            val callback = currentNodeAndTransactionData.callbacks(transactionData.transactionalId())
-            currentNodeAndTransactionData.transactionData.remove(transactionData.transactionalId())
-            callback(topicPartitionsToError.toMap)
+            val oldCallback = currentNodeAndTransactionData.callbacks(transactionData.transactionalId())
+            currentNodeAndTransactionData.transactionData.remove(transactionData)
+            oldCallback(topicPartitionsToError.toMap)
           } else {
             // We should never see a request on the same epoch since we haven't finished handling the one in queue
             throw new InvalidRecordException("Received a second request from the same connection without finishing the first.")
@@ -102,7 +102,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
             callback(buildErrorMap(txnId, transactionDataAndCallbacks.transactionData, addPartitionsToTxnResponseData.errorCode()))
           }
         } else {
-          val unverified = new mutable.HashMap[TopicPartition, Errors]()
+          val unverified = mutable.Map[TopicPartition, Errors]()
           addPartitionsToTxnResponseData.resultsByTransaction().forEach { transactionResult =>
             transactionResult.topicResults().forEach { topicResult =>
               topicResult.resultsByPartition().forEach { partitionResult =>
@@ -120,9 +120,11 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
             }
             val callback = transactionDataAndCallbacks.callbacks(transactionResult.transactionalId())
             callback(unverified.toMap)
+            unverified.clear()
           }
         }
       }
+      wakeup()
     }
     
     private def buildErrorMap(transactionalId: String, addPartitionsToTxnCollection: AddPartitionsToTxnTransactionCollection, errorCode: Short): Map[TopicPartition, Errors] = {
@@ -137,12 +139,18 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     }
   }
 
+  override def shutdown(): Unit = {
+    super.shutdown()
+    networkClient.close()
+  }
+
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     
     // build and add requests to queue
     val buffer = mutable.Buffer[RequestAndCompletionHandler]()
     val currentTimeMs = time.milliseconds()
     inflightNodes.synchronized {
+      val removedNodes = mutable.Set[Node]()
       nodesToTransactions.foreach { case (node, transactionDataAndCallbacks) =>
         if (!inflightNodes.contains(node)) {
           buffer += RequestAndCompletionHandler(
@@ -152,10 +160,11 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
             new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
           )
 
-          inflightNodes.add(node)
+          removedNodes.add(node)
         }
       }
-      nodesToTransactions.clear() // Clear before we give up the lock so that no new data is removed.
+      inflightNodes.addAll(removedNodes)
+      removedNodes.foreach(nodesToTransactions.remove(_))
     }
     buffer
   }

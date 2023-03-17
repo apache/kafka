@@ -23,7 +23,6 @@ import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.remote.RemoteLogManager
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.NetworkUtils
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
@@ -31,7 +30,6 @@ import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction}
@@ -53,7 +51,7 @@ import org.apache.kafka.common.replica._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
@@ -197,7 +195,7 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedDeleteRecordsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedDeleteRecords]] = None,
                      delayedElectLeaderPurgatoryParam: Option[DelayedOperationPurgatory[DelayedElectLeader]] = None,
                      threadNamePrefix: Option[String] = None,
-                     ) extends Logging with KafkaMetricsGroup {
+                     addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None) extends Logging with KafkaMetricsGroup {
 
   val delayedProducePurgatory = delayedProducePurgatoryParam.getOrElse(
     DelayedOperationPurgatory[DelayedProduce](
@@ -230,14 +228,10 @@ class ReplicaManager(val config: KafkaConfig,
 
   @volatile private var isInControlledShutdown = false
 
-  private val logContext = new LogContext(s"[ReplicaManager broker=$localBrokerId] ")
-  this.logIdent = logContext.logPrefix()
+  this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
   protected val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
   private var logDirFailureHandler: LogDirFailureHandler = _
-  
-  private val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, logContext)
-  private val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, networkClient, time)
 
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
     override def doWork(): Unit = {
@@ -317,7 +311,7 @@ class ReplicaManager(val config: KafkaConfig,
     val haltBrokerOnFailure = metadataCache.metadataVersion().isLessThan(IBP_1_0_IV0)
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
-    addPartitionsToTxnManager.start()
+    addPartitionsToTxnManager.foreach(_.start())
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
@@ -714,11 +708,11 @@ class ReplicaManager(val config: KafkaConfig,
           responseCallback(produceResponseStatus)
         }
       }
-      if (notYetVerifiedEntriesPerPartition.isEmpty) {
+      if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
         appendEntries(verifiedEntriesPerPartition)(Map.empty)
       } else {
         // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
-        val (error, node) = getCoordinator(transactionStatePartition.get)
+        val (error, node) = getTransactionCoordinator(transactionStatePartition.get)
 
         if (error != Errors.NONE) {
           throw error.exception() // TODO: handle these exceptions -- can throw coordinator not available -- which is retriable
@@ -741,7 +735,7 @@ class ReplicaManager(val config: KafkaConfig,
           .setVerifyOnly(true)
           .setTopics(topicCollection)
 
-        addPartitionsToTxnManager.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_)))
+        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
@@ -2020,8 +2014,7 @@ class ReplicaManager(val config: KafkaConfig,
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
     removeAllTopicMetrics()
-    addPartitionsToTxnManager.shutdown()
-    networkClient.close()
+    addPartitionsToTxnManager.foreach(_.shutdown())
     info("Shut down completely")
   }
 
@@ -2361,7 +2354,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getCoordinator(partition: Int): (Errors, Node) = {
+  def getTransactionCoordinator(partition: Int): (Errors, Node) = {
     val listenerName = config.interBrokerListenerName
 
     val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), listenerName)

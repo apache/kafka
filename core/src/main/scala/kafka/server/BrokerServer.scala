@@ -22,12 +22,13 @@ import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
-import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.network.{DataPlaneAcceptor, NetworkUtils, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -263,6 +264,10 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
+      val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+      val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, networkClient, time)
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -277,7 +282,8 @@ class BrokerServer(
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
         zkClient = None,
-        threadNamePrefix = threadNamePrefix)
+        threadNamePrefix = threadNamePrefix,
+        addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
 
       /* start token manager */
       if (config.tokenAuthEnabled) {

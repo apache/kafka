@@ -67,6 +67,9 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction}
+import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.ArgumentMatchers
@@ -2053,6 +2056,146 @@ class ReplicaManagerTest {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, produceResult.get.error)
   }
 
+  @Test
+  def testVerificationForTransactionalPartitions(): Unit = {
+    val tp = new TopicPartition(topic, 0)
+    val partitionReplicas = Seq[Integer](0, 1).asJava
+    val transactionalId = "txn1"
+    val producerId = 24L
+    val producerEpoch = 0.toShort
+    val sequence = 0
+    
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val metadataCache = mock(classOf[MetadataCache])
+    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
+
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager,
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
+
+    try {
+      val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp.topic)
+          .setPartitionIndex(tp.partition)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(1)
+          .setIsr(partitionReplicas)
+          .setPartitionEpoch(0)
+          .setReplicas(partitionReplicas)
+          .setIsNew(true)).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+
+      // Append some transactional records. We must set up the metadata cache to handle the append and verification.
+      val metadataResponseTopic = Seq(new MetadataResponseTopic()
+        .setName(Topic.TRANSACTION_STATE_TOPIC_NAME)
+        .setPartitions(Seq(
+          new MetadataResponsePartition()
+            .setPartitionIndex(0)
+            .setLeaderId(0)).asJava))
+      val node = new Node(0, "host1", 0)
+
+      when(metadataCache.contains(tp)).thenReturn(true)
+      when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).thenReturn(metadataResponseTopic)
+      when(metadataCache.getAliveBrokerNode(0, config.interBrokerListenerName)).thenReturn(Some(node))
+      when(metadataCache.getAliveBrokerNode(1, config.interBrokerListenerName)).thenReturn(None)
+      
+      // We will attempt to schedule to the request handler thread using a non request handler thread. Set this to avoid error.
+      KafkaRequestHandler.setBypassThreadCheck(true)
+      
+      val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
+        new SimpleRecord(s"message $sequence".getBytes))
+      appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
+      
+      val transactionToAdd = new AddPartitionsToTxnTransaction()
+        .setTransactionalId(transactionalId)
+        .setProducerId(producerId)
+        .setProducerEpoch(producerEpoch)
+        .setVerifyOnly(true)
+        .setTopics(new AddPartitionsToTxnTopicCollection(
+          Seq(new AddPartitionsToTxnTopic().setName(tp.topic).setPartitions(Collections.singletonList(tp.partition))).iterator.asJava
+        ))
+      
+      // We should add these partitions to the manager to verify.
+      verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback])
+      
+      // If we don't supply a transaction coordinator partition, we do not verify, so counter stays the same.
+      val transactionalRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
+        new SimpleRecord(s"message $sequence".getBytes))
+      appendRecords(replicaManager, tp, transactionalRecords2)
+      verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback])
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testGetTransactionCoordinator(): Unit = {
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    
+    val metadataCache = mock(classOf[MetadataCache])
+    
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+      
+    try {
+      val txnCoordinatorPartition0 = 0
+      val txnCoordinatorPartition1 = 1
+
+      // Before we set up the metadata cache, return nothing for the topic.
+      when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).thenReturn(Seq())
+      assertEquals((Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode), replicaManager.getTransactionCoordinator(txnCoordinatorPartition0))
+      
+      // Return an error response.
+      when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).
+        thenReturn(Seq(new MetadataResponseTopic().setErrorCode(Errors.UNSUPPORTED_VERSION.code)))
+      assertEquals((Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode), replicaManager.getTransactionCoordinator(txnCoordinatorPartition0))
+
+      val metadataResponseTopic = Seq(new MetadataResponseTopic()
+        .setName(Topic.TRANSACTION_STATE_TOPIC_NAME)
+        .setPartitions(Seq(
+          new MetadataResponsePartition()
+            .setPartitionIndex(0)
+            .setLeaderId(0),
+          new MetadataResponsePartition()
+            .setPartitionIndex(1)
+            .setLeaderId(1)).asJava))
+      val node0 = new Node(0, "host1", 0)
+
+      when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).thenReturn(metadataResponseTopic)
+      when(metadataCache.getAliveBrokerNode(0, config.interBrokerListenerName)).thenReturn(Some(node0))
+      when(metadataCache.getAliveBrokerNode(1, config.interBrokerListenerName)).thenReturn(None)
+      
+      assertEquals((Errors.NONE, node0), replicaManager.getTransactionCoordinator(txnCoordinatorPartition0))
+      assertEquals((Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode), replicaManager.getTransactionCoordinator(txnCoordinatorPartition1))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
   private def sendProducerAppend(
     replicaManager: ReplicaManager,
     topicPartition: TopicPartition,
@@ -2296,7 +2439,9 @@ class ReplicaManagerTest {
                             partition: TopicPartition,
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
-                            requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
+                            requiredAcks: Short = -1,
+                            transactionalId: String = null,
+                            transactionStatePartition: Option[Int] = None): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
@@ -2310,7 +2455,9 @@ class ReplicaManagerTest {
       internalTopicsAllowed = false,
       origin = origin,
       entriesPerPartition = Map(partition -> records),
-      responseCallback = appendCallback)
+      responseCallback = appendCallback,
+      transactionalId = transactionalId,
+      transactionStatePartition = transactionStatePartition)
 
     result
   }

@@ -40,17 +40,23 @@ object KafkaRequestHandler {
   // TODO: we may want to pass more request context, e.g. processor id (see RequestChannel.Request)
   private val threadRequestChannel = new ThreadLocal[RequestChannel]
 
+  // For testing
+  private var bypassThreadCheck = false
+  def setBypassThreadCheck(bypassCheck: Boolean): Unit = {
+    bypassThreadCheck = bypassCheck
+  }
+
   /**
    * Wrap callback to schedule it on a request thread.
    * NOTE: this function must be called on a request thread.
    * @param fun Callback function to execute
    * @return Wrapped callback that would execute `fun` on a request thread
    */
-  def  wrap[T](fun: T => Unit): T => Unit = {
+  def wrap[T](fun: T => Unit): T => Unit = {
     val requestChannel = threadRequestChannel.get()
     if (requestChannel == null) {
-      // This is a bug, do best effort in production.
-      assert(assertion = false, "Not on request thread!!!")
+      if (!bypassThreadCheck)
+        throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
       T => fun(T)
     } else {
       T => {

@@ -2198,6 +2198,8 @@ class KafkaApisTest {
         responseCallback.capture(),
         any(),
         any(),
+        any(),
+        any(),
         any())
       ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
@@ -2215,6 +2217,58 @@ class KafkaApisTest {
       assertEquals(1, topicProduceResponse.partitionResponses.size)
       val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
+    }
+  }
+
+  @Test
+  def testTransactionalParametersSetCorrectly(): Unit = {
+    val topic = "topic"
+    val transactionalId = "txn1"
+    val transactionCoordinatorPartition = 35
+
+    addTopicToMetadataCache(topic, numPartitions = 2)
+
+    for (version <- 3 to ApiKeys.PRODUCE.latestVersion) {
+
+      reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+
+      val tp = new TopicPartition("topic", 0)
+
+      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+            .setName(tp.topic).setPartitionData(Collections.singletonList(
+            new ProduceRequestData.PartitionProduceData()
+              .setIndex(tp.partition)
+              .setRecords(MemoryRecords.withTransactionalRecords(CompressionType.NONE, 0, 0, 0, new SimpleRecord("test".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTransactionalId(transactionalId)
+        .setTimeoutMs(5000))
+        .build(version.toShort)
+      val request = buildRequest(produceRequest)
+
+      val kafkaApis = createKafkaApis()
+      
+      when(txnCoordinator.partitionFor(
+        ArgumentMatchers.eq(transactionalId))
+      ).thenReturn(transactionCoordinatorPartition)
+      
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      
+      verify(replicaManager).appendRecords(anyLong,
+        anyShort,
+        ArgumentMatchers.eq(false),
+        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
+        responseCallback.capture(),
+        any(),
+        any(),
+        any(),
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.eq(Some(transactionCoordinatorPartition)))
     }
   }
 
@@ -2339,7 +2393,9 @@ class KafkaApisTest {
       responseCallback.capture(),
       any(),
       any(),
-      ArgumentMatchers.eq(requestLocal))
+      ArgumentMatchers.eq(requestLocal),
+      any(),
+      any())
     ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
     createKafkaApis().handleWriteTxnMarkersRequest(request, requestLocal)
@@ -2469,7 +2525,9 @@ class KafkaApisTest {
       responseCallback.capture(),
       any(),
       any(),
-      ArgumentMatchers.eq(requestLocal))
+      ArgumentMatchers.eq(requestLocal),
+      any(),
+      any())
     ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
     createKafkaApis().handleWriteTxnMarkersRequest(request, requestLocal)
@@ -2501,7 +2559,9 @@ class KafkaApisTest {
       any(),
       any(),
       any(),
-      ArgumentMatchers.eq(requestLocal))
+      ArgumentMatchers.eq(requestLocal),
+      any(),
+      any())
   }
 
   @Test
