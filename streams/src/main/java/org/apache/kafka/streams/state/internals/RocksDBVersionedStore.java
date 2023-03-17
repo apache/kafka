@@ -133,8 +133,23 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> delete(final Bytes key, final long timestamp) {
+        if (timestamp < observedStreamTime - gracePeriod) {
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            LOG.warn("Skipping record for expired delete.");
+            return null;
+        }
+
         final VersionedRecord<byte[]> existingRecord = get(key, timestamp);
-        put(key, null, timestamp);
+
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
+        doPut(
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            null,
+            timestamp
+        );
+
         return existingRecord;
     }
 
@@ -156,9 +171,22 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
-            LOG.warn("Returning null for expired get.");
+            // history retention exceeded. check latest value store only
+            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+            if (rawLatestValueAndTimestamp != null) {
+                final long latestTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                if (latestTimestamp <= asOfTimestamp) {
+                    // latest value satisfies timestamp bound
+                    return new VersionedRecord<>(
+                        LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
+                        latestTimestamp
+                    );
+                }
+            }
+
             // history retention has elapsed. return null for predictability, even if data
-            // is still present in store.
+            // is still present in segments.
+            LOG.warn("Returning null for expired get.");
             return null;
         }
 
