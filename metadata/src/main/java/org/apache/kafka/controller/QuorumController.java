@@ -316,10 +316,10 @@ public final class QuorumController implements Controller {
             }
 
             if (threadNamePrefix == null) {
-                threadNamePrefix = String.format("Node%d_", nodeId);
+                threadNamePrefix = String.format("quorum-controller-%d-", nodeId);
             }
             if (logContext == null) {
-                logContext = new LogContext(String.format("[Controller %d] ", nodeId));
+                logContext = new LogContext(String.format("[QuorumController id=%d] ", nodeId));
             }
             if (controllerMetrics == null) {
                 controllerMetrics = (ControllerMetrics) Class.forName(
@@ -328,7 +328,7 @@ public final class QuorumController implements Controller {
 
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(
                     fatalFaultHandler,
                     logContext,

@@ -64,9 +64,9 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>, AutoCloseable {
     public static class Builder {
         private int nodeId = -1;
+        private String threadNamePrefix = "";
         private Time time = Time.SYSTEM;
         private LogContext logContext = null;
-        private String threadNamePrefix = "";
         private FaultHandler faultHandler = (m, e) -> new FaultHandlerException(m, e);
         private MetadataLoaderMetrics metrics = new MetadataLoaderMetrics() {
             private volatile long lastAppliedOffset = -1L;
@@ -97,13 +97,13 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return this;
         }
 
-        public Builder setTime(Time time) {
-            this.time = time;
+        public Builder setThreadNamePrefix(String threadNamePrefix) {
+            this.threadNamePrefix = threadNamePrefix;
             return this;
         }
 
-        public Builder setThreadNamePrefix(String threadNamePrefix) {
-            this.threadNamePrefix = threadNamePrefix;
+        public Builder setTime(Time time) {
+            this.time = time;
             return this;
         }
 
@@ -124,7 +124,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
         public MetadataLoader build() {
             if (logContext == null) {
-                logContext = new LogContext("[MetadataLoader " + nodeId + "] ");
+                logContext = new LogContext("[MetadataLoader id=" + nodeId + "] ");
             }
             if (highWaterMarkAccessor == null) {
                 throw new RuntimeException("You must set the high water mark accessor.");
@@ -132,6 +132,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return new MetadataLoader(
                 time,
                 logContext,
+                nodeId,
                 threadNamePrefix,
                 faultHandler,
                 metrics,
@@ -197,6 +198,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     private MetadataLoader(
         Time time,
         LogContext logContext,
+        int nodeId,
         String threadNamePrefix,
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
@@ -210,7 +212,9 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
-        this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix, new ShutdownEvent());
+        this.eventQueue = new KafkaEventQueue(time, logContext,
+                threadNamePrefix + "metadata-loader-",
+                new ShutdownEvent());
     }
 
     private boolean stillNeedToCatchUp(long offset) {

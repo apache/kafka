@@ -413,7 +413,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
         0L, fetchSize, Optional.empty()))
 
     val fetchRequestBuilder = FetchRequest.Builder.
-      forReplica(ApiKeys.FETCH.latestVersion, FetchRequest.DEBUGGING_CONSUMER_ID, maxWait, minBytes, requestMap)
+      forReplica(ApiKeys.FETCH.latestVersion, FetchRequest.DEBUGGING_CONSUMER_ID, -1, maxWait, minBytes, requestMap)
 
     debug("Issuing fetch request ")
 
