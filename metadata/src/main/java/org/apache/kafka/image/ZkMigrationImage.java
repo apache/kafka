@@ -42,10 +42,12 @@ public class ZkMigrationImage {
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
-        if (options.metadataVersion().isMigrationSupported()) {
-            writer.write(0, new ZkMigrationStateRecord().setZkMigrationState(state.value()));
-        } else {
-            options.handleLoss("the ZK Migration state");
+        if (!isEmpty()) {
+            if (options.metadataVersion().isMigrationSupported()) {
+                writer.write(0, new ZkMigrationStateRecord().setZkMigrationState(state.value()));
+            } else {
+                options.handleLoss("the ZK Migration state");
+            }
         }
     }
 
