@@ -62,7 +62,9 @@ public class ReplicaManagerBuilder {
     private Optional<DelayedOperationPurgatory<DelayedDeleteRecords>> delayedDeleteRecordsPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedElectLeader>> delayedElectLeaderPurgatory = Optional.empty();
     private Optional<String> threadNamePrefix = Optional.empty();
+    private Long brokerEpoch = -1L;
     private Optional<AddPartitionsToTxnManager> addPartitionsToTxnManager = Optional.empty();
+
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
         return this;
@@ -153,6 +155,11 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setBrokerEpoch(long brokerEpoch) {
+        this.brokerEpoch = brokerEpoch;
+        return this;
+    }
+
     public ReplicaManagerBuilder setAddPartitionsToTransactionManager(AddPartitionsToTxnManager addPartitionsToTxnManager) {
         this.addPartitionsToTxnManager = Optional.of(addPartitionsToTxnManager);
         return this;
@@ -183,6 +190,7 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),
                              OptionConverters.toScala(delayedElectLeaderPurgatory),
                              OptionConverters.toScala(threadNamePrefix),
+                             () -> brokerEpoch,
                              OptionConverters.toScala(addPartitionsToTxnManager));
     }
 }

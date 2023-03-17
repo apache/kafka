@@ -986,6 +986,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val params = new FetchParams(
         versionId,
         fetchRequest.replicaId,
+        fetchRequest.replicaEpoch,
         fetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,

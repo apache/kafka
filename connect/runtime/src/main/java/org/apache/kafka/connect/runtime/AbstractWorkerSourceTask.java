@@ -358,9 +358,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                     continue;
                 }
                 log.trace("{} About to send {} records to Kafka", this, toSend.size());
-                if (sendRecords()) {
-                    batchDispatched();
-                } else {
+                if (!sendRecords()) {
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
                 }
             }
@@ -455,6 +453,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             recordDispatched(preTransformRecord);
         }
         toSend = null;
+        batchDispatched();
         return true;
     }
 

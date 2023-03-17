@@ -65,7 +65,8 @@ public class MockLog implements ReplicatedLog {
 
     private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
-    private long lastFlushedOffset = 0;
+    private long firstUnflushedOffset = 0;
+    private boolean flushedSinceLastChecked = false;
 
     public MockLog(
         TopicPartition topicPartition,
@@ -86,6 +87,7 @@ public class MockLog implements ReplicatedLog {
 
         batches.removeIf(entry -> entry.lastOffset() >= offset);
         epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= offset);
+        firstUnflushedOffset = Math.min(firstUnflushedOffset, endOffset().offset);
     }
 
     @Override
@@ -329,7 +331,8 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public void flush(boolean forceFlushActiveSegment) {
-        lastFlushedOffset = endOffset().offset;
+        flushedSinceLastChecked = true;
+        firstUnflushedOffset = endOffset().offset;
     }
 
     @Override
@@ -337,17 +340,25 @@ public class MockLog implements ReplicatedLog {
         return false;
     }
 
-    @Override
-    public long lastFlushedOffset() {
-        return lastFlushedOffset;
+    public long firstUnflushedOffset() {
+        return firstUnflushedOffset;
+    }
+
+    /**
+     * Returns true if the log was flushed since the last time this method was called.
+     */
+    public boolean flushedSinceLastChecked() {
+        boolean oldValue = flushedSinceLastChecked;
+        flushedSinceLastChecked = false;
+        return oldValue;
     }
 
     /**
      * Reopening the log causes all unflushed data to be lost.
      */
     public void reopen() {
-        batches.removeIf(batch -> batch.firstOffset() >= lastFlushedOffset);
-        epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= lastFlushedOffset);
+        batches.removeIf(batch -> batch.firstOffset() >= firstUnflushedOffset);
+        epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= firstUnflushedOffset);
         highWatermark = new LogOffsetMetadata(0L, Optional.empty());
     }
 

@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
@@ -104,6 +105,11 @@ public class MockController implements Controller {
             return this;
         }
 
+        public Builder newInitialTopic(String name, Uuid id, int numPartitions) {
+            initialTopics.put(name, new MockTopic(name, id, numPartitions));
+            return this;
+        }
+
         public MockController build() {
             return new MockController(initialTopics.values());
         }
@@ -149,30 +155,37 @@ public class MockController implements Controller {
             } else {
                 long topicId = nextTopicId.getAndIncrement();
                 Uuid topicUuid = new Uuid(0, topicId);
-                topicNameToId.put(topic.name(), topicUuid);
-                topics.put(topicUuid, new MockTopic(topic.name(), topicUuid));
+                MockTopic mockTopic = new MockTopic(topic.name(), topicUuid);
                 CreatableTopicResult creatableTopicResult = new CreatableTopicResult().
                     setName(topic.name()).
-                    setErrorCode(Errors.NONE.code()).
-                    setTopicId(topicUuid);
-                if (describable.contains(topic.name())) {
-                    // Note: we don't simulate topic configs here yet.
-                    // Just returning replication factor and numPartitions.
-                    if (topic.assignments() != null && !topic.assignments().isEmpty()) {
-                        creatableTopicResult.
-                            setTopicConfigErrorCode(Errors.NONE.code()).
-                            setReplicationFactor((short)
-                                topic.assignments().iterator().next().brokerIds().size()).
-                            setNumPartitions(topic.assignments().size());
+                    setErrorCode(Errors.NONE.code());
+                try {
+                    context.applyPartitionChangeQuota(mockTopic.numPartitions);
+                    creatableTopicResult.setTopicId(topicUuid);
+                    topicNameToId.put(topic.name(), topicUuid);
+                    topics.put(topicUuid, mockTopic);
+                    if (describable.contains(topic.name())) {
+                        // Note: we don't simulate topic configs here yet.
+                        // Just returning replication factor and numPartitions.
+                        if (topic.assignments() != null && !topic.assignments().isEmpty()) {
+                            creatableTopicResult.
+                                setTopicConfigErrorCode(Errors.NONE.code()).
+                                setReplicationFactor((short)
+                                    topic.assignments().iterator().next().brokerIds().size()).
+                                setNumPartitions(topic.assignments().size());
+                        } else {
+                            creatableTopicResult.
+                                setTopicConfigErrorCode(Errors.NONE.code()).
+                                setReplicationFactor(topic.replicationFactor()).
+                                setNumPartitions(topic.numPartitions());
+                        }
                     } else {
                         creatableTopicResult.
-                            setTopicConfigErrorCode(Errors.NONE.code()).
-                            setReplicationFactor(topic.replicationFactor()).
-                            setNumPartitions(topic.numPartitions());
+                            setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code());
                     }
-                } else {
-                    creatableTopicResult.
-                        setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code());
+                } catch (ThrottlingQuotaExceededException e) {
+                    ApiError apiError = new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED);
+                    creatableTopicResult.setErrorCode(apiError.error().code()).setErrorMessage(apiError.message());
                 }
                 response.topics().add(creatableTopicResult);
             }
@@ -191,10 +204,16 @@ public class MockController implements Controller {
     static class MockTopic {
         private final String name;
         private final Uuid id;
+        private final int numPartitions;
 
         MockTopic(String name, Uuid id) {
+            this(name, id, 1);
+        }
+
+        MockTopic(String name, Uuid id, int numPartitions) {
             this.name = name;
             this.id = id;
+            this.numPartitions = numPartitions;
         }
     }
 
@@ -260,12 +279,18 @@ public class MockController implements Controller {
         }
         Map<Uuid, ApiError> results = new HashMap<>();
         for (Uuid topicId : topicIds) {
-            MockTopic topic = topics.remove(topicId);
+            MockTopic topic = topics.get(topicId);
             if (topic == null) {
                 results.put(topicId, new ApiError(Errors.UNKNOWN_TOPIC_ID));
             } else {
-                topicNameToId.remove(topic.name);
-                results.put(topicId, ApiError.NONE);
+                try {
+                    context.applyPartitionChangeQuota(topic.numPartitions);
+                    topics.remove(topicId);
+                    topicNameToId.remove(topic.name);
+                    results.put(topicId, ApiError.NONE);
+                } catch (ThrottlingQuotaExceededException e) {
+                    results.put(topicId, new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED));
+                }
             }
         }
         return CompletableFuture.completedFuture(results);
@@ -434,9 +459,18 @@ public class MockController implements Controller {
         List<CreatePartitionsTopicResult> results = new ArrayList<>();
         for (CreatePartitionsTopic topic : topicList) {
             if (topicNameToId.containsKey(topic.name())) {
-                results.add(new CreatePartitionsTopicResult().setName(topic.name()).
-                    setErrorCode(Errors.NONE.code()).
-                    setErrorMessage(null));
+                try {
+                    context.applyPartitionChangeQuota(topic.count());
+                    results.add(new CreatePartitionsTopicResult().setName(topic.name()).
+                        setErrorCode(Errors.NONE.code()).
+                        setErrorMessage(null));
+                } catch (ThrottlingQuotaExceededException e) {
+                    ApiError apiError = new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED);
+                    results.add(new CreatePartitionsTopicResult().
+                        setName(topic.name()).
+                        setErrorCode(apiError.error().code()).
+                        setErrorMessage(apiError.message()));
+                }
             } else {
                 results.add(new CreatePartitionsTopicResult().setName(topic.name()).
                     setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()).

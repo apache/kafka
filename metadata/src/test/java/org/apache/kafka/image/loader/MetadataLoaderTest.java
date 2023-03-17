@@ -92,25 +92,23 @@ public class MetadataLoaderTest {
         }
 
         @Override
-        public void publishSnapshot(
+        public void onMetadataUpdate(
             MetadataDelta delta,
             MetadataImage newImage,
-            SnapshotManifest manifest
+            LoaderManifest manifest
         ) {
             latestDelta = delta;
             latestImage = newImage;
-            latestSnapshotManifest = manifest;
-        }
-
-        @Override
-        public void publishLogDelta(
-            MetadataDelta delta,
-            MetadataImage newImage,
-            LogDeltaManifest manifest
-        ) {
-            latestDelta = delta;
-            latestImage = newImage;
-            latestLogDeltaManifest = manifest;
+            switch (manifest.type()) {
+                case LOG_DELTA:
+                    latestLogDeltaManifest = (LogDeltaManifest) manifest;
+                    break;
+                case SNAPSHOT:
+                    latestSnapshotManifest = (SnapshotManifest) manifest;
+                    break;
+                default:
+                    throw new RuntimeException("Invalid manifest type " + manifest.type());
+            }
         }
 
         @Override
