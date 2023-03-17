@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.Collection;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.Admin;
@@ -247,7 +246,7 @@ public class MirrorSourceConnectorTest {
                 new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), null);
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
-        // When set to not using incrementalAlterConfigs, the default config should be excluded
+        // When "use.defaults.from" set to "target" by default, the config with default value should be excluded
         entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
         entries.add(new ConfigEntry("min.insync.replicas", "2"));
         Config config = new Config(entries);
@@ -258,6 +257,30 @@ public class MirrorSourceConnectorTest {
             .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
         assertFalse(targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    @Deprecated
+    public void testConfigPropertyFilteringWithAlterConfigsAndSourceDefault() {
+        Map<String, Object> filterConfig = Collections.singletonMap(DefaultConfigPropertyFilter.USE_DEFAULTS_FROM, "source");
+        DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
+        filter.configure(filterConfig);
+
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, filter, null);
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        // When "use.defaults.from" explicitly set to "source", the config with default value should be replicated
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config);
+        assertTrue(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertTrue(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
+        assertFalse(targetConfig.entries().stream()
+                .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
     }
 
     @Test
@@ -307,7 +330,7 @@ public class MirrorSourceConnectorTest {
     public void testIncrementalAlterConfigsRequested() throws Exception {
         MockAdminClient admin = spy(new MockAdminClient());
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT, new DefaultConfigPropertyFilter(), admin));
+                new DefaultReplicationPolicy(), MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), admin));
         final String topic = "testtopic";
         List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
         Config config = new Config(entries);
@@ -315,7 +338,7 @@ public class MirrorSourceConnectorTest {
         doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
         doNothing().when(connector).deprecatedAlterConfigs(any());
         connector.syncTopicConfigs();
-        Map<String, Config> topicConfigs = Collections.singletonMap("source."+topic, config);
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
         verify(connector).incrementalAlterConfigs(topicConfigs);
 
         // the next time we sync topic configurations, expect to use the deprecated API
@@ -344,7 +367,7 @@ public class MirrorSourceConnectorTest {
             assertNotNull(configOps);
             assertEquals(1, configOps.size());
 
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, "source."+topic);
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, "source." + topic);
             Collection<AlterConfigOp> ops = new ArrayList<>();
             ops.add(new AlterConfigOp(entryWithNonDefaultValue, AlterConfigOp.OpType.SET));
             ops.add(new AlterConfigOp(entryWithDefaultValue, AlterConfigOp.OpType.DELETE));
@@ -356,7 +379,7 @@ public class MirrorSourceConnectorTest {
 
         connector.syncTopicConfigs();
         verify(connector).syncTopicConfigs();
-        Map<String, Config> topicConfigs = Collections.singletonMap("source."+topic, config);
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
         verify(connector).incrementalAlterConfigs(topicConfigs);
     }
 
@@ -371,7 +394,7 @@ public class MirrorSourceConnectorTest {
         doNothing().when(connector).deprecatedAlterConfigs(any());
         connector.syncTopicConfigs();
         verify(connector).syncTopicConfigs();
-        Map<String, Config> topicConfigs = Collections.singletonMap("source."+topic, config);
+        Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
         verify(connector).deprecatedAlterConfigs(topicConfigs);
     }
 

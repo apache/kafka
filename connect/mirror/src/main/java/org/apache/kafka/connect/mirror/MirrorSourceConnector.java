@@ -119,7 +119,7 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
-        this.useIncrementalAlterConfigs = MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT;
+        this.useIncrementalAlterConfigs = MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIG;
     }
 
     // visible for testing the deprecated setting "use.incremental.alter.configs"
@@ -560,7 +560,7 @@ public class MirrorSourceConnector extends SourceConnector {
         log.trace("Syncing configs for {} topics.", configOps.size());
         targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
-                if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT)
+                if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIG)
                         && e instanceof UnsupportedVersionException) {
                     //Fallback logic
                     log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. Therefore using deprecated AlterConfigs API for syncing topic configurations", sourceAndTarget.target(), e);
@@ -600,20 +600,14 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     Config targetConfig(Config sourceConfig) {
-        List<ConfigEntry> entries;
-        if (Objects.equals(useIncrementalAlterConfigs, MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
-            entries = sourceConfig.entries().stream()
-                    .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
-                    .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
-                    .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
-                    .collect(Collectors.toList());
-        } else {
-            entries = sourceConfig.entries().stream()
+        List<ConfigEntry> entries = sourceConfig.entries().stream()
+                    .filter(x -> (!useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)
+                            || (x.isDefault() && shouldReplicateSourceDefault(x.name())))
+                            || (!x.isDefault() && useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)))
                     .filter(x -> !x.isReadOnly() && !x.isSensitive())
                     .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
                     .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
                     .collect(Collectors.toList());
-        }
         return new Config(entries);
     }
 

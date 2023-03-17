@@ -16,18 +16,12 @@
  */
 package org.apache.kafka.connect.mirror.integration;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AlterConfigOp;
-import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
 import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
 import org.apache.kafka.connect.mirror.MirrorClient;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
@@ -42,19 +36,18 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
- * Tests MM2 replication and failover logic for {@link IdentityReplicationPolicy}.
+ * Tests MM2 replication and fail over logic for {@link IdentityReplicationPolicy}.
  *
  * <p>MM2 is configured with active/passive replication between two Kafka clusters with {@link IdentityReplicationPolicy}.
  * Tests validate that records sent to the primary cluster arrive at the backup cluster. Then, a consumer group is
  * migrated from the primary cluster to the backup cluster. Tests validate that consumer offsets
- * are translated and replicated from the primary cluster to the backup cluster during this failover.
+ * are translated and replicated from the primary cluster to the backup cluster during this fail over.
  */
 @Tag("integration")
 public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
@@ -76,7 +69,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 put("group.id", consumerGroupName);
                 put("auto.offset.reset", "latest");
             }};
-        // warm up consumers before starting the connectors so we don't need to wait for discovery
+        // warm up consumers before starting the connectors, so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
         mm2Config = new MirrorMakerConfig(mm2Props);
@@ -116,16 +109,16 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, "test-topic-1");
 
-        // Failover consumer group to backup cluster.
+        // Fail-over consumer group to back up cluster.
         try (Consumer<byte[], byte[]> primaryConsumer = backup.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
             primaryConsumer.assign(backupOffsets.keySet());
             backupOffsets.forEach(primaryConsumer::seek);
             primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             primaryConsumer.commitAsync();
 
-            assertTrue(primaryConsumer.position(new TopicPartition("test-topic-1", 0)) > 0, "Consumer failedover to zero offset.");
+            assertTrue(primaryConsumer.position(new TopicPartition("test-topic-1", 0)) > 0, "Consumer failed over to zero offset.");
             assertTrue(primaryConsumer.position(
-                    new TopicPartition("test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedover beyond expected offset.");
+                    new TopicPartition("test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failed over beyond expected offset.");
         }
 
         primaryClient.close();
@@ -159,13 +152,13 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         // produce to all test-topic-empty's partitions, except the last partition
         produceMessages(primary, topic, NUM_PARTITIONS - 1);
 
-        // consume before starting the connectors so we don't need to wait for discovery
+        // consume before starting the connectors, so we don't need to wait for discovery
         int expectedRecords = NUM_RECORDS_PER_PARTITION * (NUM_PARTITIONS - 1);
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, topic)) {
             waitForConsumingAllRecords(primaryConsumer, expectedRecords);
         }
 
-        // one way replication from primary to backup
+        // one way replication from primary to back up
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
@@ -174,11 +167,9 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
         // note that with IdentityReplicationPolicy, topics on the backup are NOT renamed to PRIMARY_CLUSTER_ALIAS + "." + topic
-        String backupTopic = topic;
-
         // consume all records from backup cluster
         try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(consumerProps,
-                backupTopic)) {
+                topic)) {
             waitForConsumingAllRecords(backupConsumer, expectedRecords);
         }
 
@@ -188,7 +179,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                     backupClient.listConsumerGroupOffsets(consumerGroupName).partitionsToOffsetAndMetadata().get();
 
             // pinpoint the offset of the last partition which does not receive records
-            OffsetAndMetadata offset = remoteOffsets.get(new TopicPartition(backupTopic, NUM_PARTITIONS - 1));
+            OffsetAndMetadata offset = remoteOffsets.get(new TopicPartition(topic, NUM_PARTITIONS - 1));
             // offset of the last partition should exist, but its value should be 0
             assertNotNull(offset, "Offset of last partition was not replicated");
             assertEquals(0, offset.offset(), "Offset of last partition is not zero");
@@ -203,7 +194,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 put("group.id", consumerGroupName);
                 put("auto.offset.reset", "earliest");
             }};
-        // create consumers before starting the connectors so we don't need to wait for discovery
+        // create consumers before starting the connectors, so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps,
                 "test-topic-1")) {
             // we need to wait for consuming all the records for MM2 replicating the expected offsets
@@ -213,7 +204,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         // enable automated consumer group offset sync
         mm2Props.put("sync.group.offsets.enabled", "true");
         mm2Props.put("sync.group.offsets.interval.seconds", "1");
-        // one way replication from primary to backup
+        // one way replication from primary to back up
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
 
         mm2Config = new MirrorMakerConfig(mm2Props);
@@ -223,7 +214,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         // make sure the topic is created in the backup cluster with same name.
         topicShouldNotBeCreated(primary, "backup.test-topic-1");
         waitForTopicCreated(backup, "test-topic-1");
-        // create a consumer at backup cluster with same consumer group Id to consume 1 topic
+        // create a consumer at backup cluster with same consumer group ID to consume 1 topic
         try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(
                 consumerProps, "test-topic-1")) {
 
@@ -233,7 +224,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
             ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
 
             // the size of consumer record should be zero, because the offsets of the same consumer group
-            // have been automatically synchronized from primary to backup by the background job, so no
+            // have been automatically synchronized from primary to back up by the background job, so no
             // more records to consume from the replicated topic by the same consumer group at backup cluster
             assertEquals(0, records.count(), "consumer record size is not zero");
         }
@@ -253,7 +244,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
             waitForConsumingAllRecords(consumer1, NUM_RECORDS_PRODUCED);
         }
 
-        // create a consumer at backup cluster with same consumer group Id to consume old and new topic
+        // create a consumer at backup cluster with same consumer group ID to consume old and new topic
         try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
                 "group.id", consumerGroupName), "test-topic-1", "test-topic-2")) {
 

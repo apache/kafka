@@ -82,8 +82,8 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             "If explicitly set to \"required\", the IncrementalAlterConfigs API is used without the fallback logic and +" +
             "if it receives an error from an incompatible broker, the connector will fail." +
             "If explicitly set to \"never\", the AlterConfig is always used." +
-            "This setting will be removed in Kafka 4.0, therefore users should ensure that target broker is at least 2.3.0";
-    public static final String USE_INCREMENTAL_ALTER_CONFIG_DEFAULT = "requested";
+            "This setting will be removed and the behaviour of \"required\" will be used in Kafka 4.0, therefore users should ensure that target broker is at least 2.3.0";
+    public static final String REQUEST_INCREMENTAL_ALTER_CONFIG = "requested";
     public static final String REQUIRE_INCREMENTAL_ALTER_CONFIG = "required";
     public static final String NEVER_USE_INCREMENTAL_ALTER_CONFIG = "never";
 
@@ -180,7 +180,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         if (prop.equals(NEVER_USE_INCREMENTAL_ALTER_CONFIG) || prop.equals(REQUIRE_INCREMENTAL_ALTER_CONFIG)) {
             return prop;
         } else {
-            return USE_INCREMENTAL_ALTER_CONFIG_DEFAULT;
+            return REQUEST_INCREMENTAL_ALTER_CONFIG;
         }
     }
 
@@ -289,10 +289,9 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             .define(
                     USE_INCREMENTAL_ALTER_CONFIG,
                     ConfigDef.Type.STRING,
-                    USE_INCREMENTAL_ALTER_CONFIG_DEFAULT,
+                    REQUEST_INCREMENTAL_ALTER_CONFIG,
                     ConfigDef.Importance.LOW,
-                    USE_INCREMENTAL_ALTER_CONFIG_DOC
-            )
+                    USE_INCREMENTAL_ALTER_CONFIG_DOC)
             .define(
                     SYNC_TOPIC_ACLS_ENABLED,
                     ConfigDef.Type.BOOLEAN,
