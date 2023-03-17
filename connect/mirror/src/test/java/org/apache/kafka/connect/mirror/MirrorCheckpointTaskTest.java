@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -118,7 +117,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testSyncOffset() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
-        Map<String, List<Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
 
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
@@ -147,16 +146,16 @@ public class MirrorCheckpointTaskTest {
         // 'cpC2T2p0' denotes 'checkpoint' of topic2, partition 0 for consumer2
         Checkpoint cpC2T2P0 = new Checkpoint(consumer2, new TopicPartition(topic2, 0), 100, 51, "metadata");
 
-        // 'checkpointListC1' denotes 'checkpoint' list for consumer1
-        List<Checkpoint> checkpointListC1 = new ArrayList<>();
-        checkpointListC1.add(cpC1T1P0);
+        // 'checkpointMapC1' denotes 'checkpoint' map for consumer1
+        Map<TopicPartition, Checkpoint> checkpointMapC1 = new HashMap<>();
+        checkpointMapC1.put(cpC1T1P0.topicPartition(), cpC1T1P0);
 
-        // 'checkpointListC2' denotes 'checkpoint' list for consumer2
-        List<Checkpoint> checkpointListC2 = new ArrayList<>();
-        checkpointListC2.add(cpC2T2P0);
+        // 'checkpointMapC2' denotes 'checkpoint' map for consumer2
+        Map<TopicPartition, Checkpoint> checkpointMapC2 = new HashMap<>();
+        checkpointMapC2.put(cpC2T2P0.topicPartition(), cpC2T2P0);
 
-        checkpointsPerConsumerGroup.put(consumer1, checkpointListC1);
-        checkpointsPerConsumerGroup.put(consumer2, checkpointListC2);
+        checkpointsPerConsumerGroup.put(consumer1, checkpointMapC1);
+        checkpointsPerConsumerGroup.put(consumer2, checkpointMapC2);
 
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup);
@@ -194,5 +193,31 @@ public class MirrorCheckpointTaskTest {
         offsetSyncStore.sync(new TopicPartition("topic1", 0), 1L, 3L);
         Optional<Checkpoint> checkpoint = mirrorCheckpointTask.checkpoint("g1", new TopicPartition("topic1", 0), null);
         assertFalse(checkpoint.isPresent());
+    }
+
+    @Test
+    public void testCheckpointRecordsMonotonicIfStoreRewinds() throws ExecutionException, InterruptedException {
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), checkpointsPerConsumerGroup);
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        TopicPartition targetTP = new TopicPartition("source1.topic1", 0);
+
+        // emit an offset sync normally
+        offsetSyncStore.sync(tp, 10L, 3L);
+        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets = Collections.singletonMap(tp, new OffsetAndMetadata(20));
+        Map<TopicPartition, Checkpoint> checkpoints = mirrorCheckpointTask.checkpointsForGroup(consumerGroupOffsets, "g1");
+        assertTrue(checkpoints.containsKey(targetTP), "should emit offset sync");
+
+        // the task normally does this, but simulate it here
+        checkpointsPerConsumerGroup.put("g1", checkpoints);
+
+        // rewind the upstream offset, as if the mirror source task re-read the sync
+        offsetSyncStore.sync(tp, 1L, 13L);
+        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsetsAfter = Collections.singletonMap(tp, new OffsetAndMetadata(20));
+        Map<TopicPartition, Checkpoint> checkpointsAfter = mirrorCheckpointTask.checkpointsForGroup(consumerGroupOffsetsAfter, "g1");
+        assertFalse(checkpointsAfter.containsKey(targetTP), "should not emit offset sync earlier than previous");
     }
 }
