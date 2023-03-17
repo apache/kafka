@@ -311,7 +311,7 @@ class KafkaServer(
           metrics = metrics,
           config = config,
           channelName = "forwarding",
-          threadNamePrefix = threadNamePrefix,
+          s"zk-broker-${config.nodeId}-",
           retryTimeoutMs = config.requestTimeoutMs.longValue
         )
         clientToControllerChannelManager.start()
@@ -348,7 +348,7 @@ class KafkaServer(
             controllerNodeProvider,
             time = time,
             metrics = metrics,
-            threadNamePrefix = threadNamePrefix,
+            s"zk-broker-${config.nodeId}-",
             brokerEpochSupplier = brokerEpochSupplier
           )
         } else {
@@ -379,7 +379,7 @@ class KafkaServer(
           logger.info("Starting up additional components for ZooKeeper migration")
           lifecycleManager = new BrokerLifecycleManager(config,
             time,
-            threadNamePrefix,
+            s"zk-broker-${config.nodeId}-",
             isZkBroker = true)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
@@ -406,7 +406,7 @@ class KafkaServer(
             metrics = metrics,
             config = config,
             channelName = "quorum",
-            threadNamePrefix = threadNamePrefix,
+            s"zk-broker-${config.nodeId}-",
             retryTimeoutMs = config.requestTimeoutMs.longValue
           )
 

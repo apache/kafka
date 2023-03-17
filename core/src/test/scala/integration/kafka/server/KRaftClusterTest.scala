@@ -980,7 +980,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
-        setCoResident(combinedController).
+        setCombined(combinedController).
         setNumControllerNodes(1).build()).
       setConfigProp("client.quota.callback.class", classOf[DummyClientQuotaCallback].getName).
       setConfigProp(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey, "0").
@@ -1022,7 +1022,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
-        setCoResident(combinedMode).
+        setCombined(combinedMode).
         setNumControllerNodes(1).build()).
       setConfigProp("authorizer.class.name", classOf[FakeConfigurableAuthorizer].getName).
       build()
