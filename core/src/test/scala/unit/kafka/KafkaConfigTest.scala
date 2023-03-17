@@ -133,6 +133,7 @@ class KafkaTest {
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    setListenerProps(propertiesFile)
     val config = KafkaConfig.fromProps(propertiesFile)
     assertTrue(config.isKRaftCombinedMode)
   }
