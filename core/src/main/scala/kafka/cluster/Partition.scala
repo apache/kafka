@@ -839,7 +839,8 @@ class Partition(val topicPartition: TopicPartition,
     followerFetchOffsetMetadata: LogOffsetMetadata,
     followerStartOffset: Long,
     followerFetchTimeMs: Long,
-    leaderEndOffset: Long
+    leaderEndOffset: Long,
+    brokerEpoch: Long
   ): Unit = {
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
     val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
@@ -848,7 +849,8 @@ class Partition(val topicPartition: TopicPartition,
       followerFetchOffsetMetadata,
       followerStartOffset,
       followerFetchTimeMs,
-      leaderEndOffset
+      leaderEndOffset,
+      brokerEpoch
     )
 
     val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
@@ -977,11 +979,17 @@ class Partition(val topicPartition: TopicPartition,
 
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
     metadataCache match {
-      // In KRaft mode, only replicas which are not fenced nor in controlled shutdown are
-      // allowed to join the ISR.
+      // In KRaft mode, only replicas which
+      // 1. are not fenced
+      // 2. are not in controlled shutdown
+      // 3. have a cached brokerEpoch that matches with the brokerEpoch from the Fetch request
+      // are allowed to join the ISR.
       case kRaftMetadataCache: KRaftMetadataCache =>
+        val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId).getOrElse(-1L)
+        val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch.orElse(-2)
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
-          !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId)
+          !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
+          isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
 
       // In ZK mode, we just ensure the broker is alive. Although we do not check for shutting down brokers here,
       // the controller will block them from being added to ISR.
@@ -990,6 +998,10 @@ class Partition(val topicPartition: TopicPartition,
 
       case _ => true
     }
+  }
+
+  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Long, cachedBrokerEpoch: Long): Boolean = {
+    storedBrokerEpoch == -1 || (storedBrokerEpoch == cachedBrokerEpoch)
   }
 
   /*
@@ -1340,7 +1352,8 @@ class Partition(val topicPartition: TopicPartition,
           followerFetchOffsetMetadata = logReadInfo.fetchedData.fetchOffsetMetadata,
           followerStartOffset = fetchPartitionData.logStartOffset,
           followerFetchTimeMs = fetchTimeMs,
-          leaderEndOffset = logReadInfo.logEndOffset
+          leaderEndOffset = logReadInfo.logEndOffset,
+          fetchParams.replicaEpoch
         )
       }
 

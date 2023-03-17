@@ -23,6 +23,8 @@ import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
+import java.util.OptionalLong
+
 object ReplicaTest {
   val BrokerId: Int = 0
   val Partition: TopicPartition = new TopicPartition("foo", 0)
@@ -58,6 +60,8 @@ class ReplicaTest {
       "Unexpected Last Fetch Leader Log End Offset")
     assertEquals(lastFetchTimeMs, replicaState.lastFetchTimeMs,
       "Unexpected Last Fetch Time")
+    assertEquals(OptionalLong.of(1L), replicaState.brokerEpoch,
+      "Unexpected Last Fetch Time")
   }
 
   def assertReplicaStateDoesNotChange(
@@ -86,7 +90,8 @@ class ReplicaTest {
       followerFetchOffsetMetadata = new LogOffsetMetadata(followerFetchOffset),
       followerStartOffset = followerStartOffset,
       followerFetchTimeMs = currentTimeMs,
-      leaderEndOffset = leaderEndOffset
+      leaderEndOffset = leaderEndOffset,
+      brokerEpoch = 1L
     )
     currentTimeMs
   }
