@@ -128,15 +128,17 @@ public class CommitRequestManagerTest {
         commitRequestManger.clientPoll(time.milliseconds());
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
+        assertEmptyPendingRequests(commitRequestManger);
     }
 
     @Test
-    public void testEnsureStagedCommitsPurgedAfterPoll() {
+    public void testEmptyUnsentOffsetCommitRequestsQueueAfterPoll() {
         CommitRequestManager commitRequestManger = create(true, 100);
         commitRequestManger.addOffsetCommitRequest(new HashMap<>());
         assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
         commitRequestManger.poll(time.milliseconds());
         assertTrue(commitRequestManger.unsentOffsetCommitRequests().isEmpty());
+        assertEmptyPendingRequests(commitRequestManger);
     }
 
     @Test
@@ -161,6 +163,9 @@ public class CommitRequestManagerTest {
             assertTrue(f.isDone());
             assertFalse(f.isCompletedExceptionally());
         });
+        // expecting the buffers to be emptied after being completed successfully
+        commitRequestManger.poll(0);
+        assertEmptyPendingRequests(commitRequestManger);
     }
 
     @ParameterizedTest
@@ -174,10 +179,13 @@ public class CommitRequestManagerTest {
                 partitions,
                 5,
                 error);
+        // retriable will be re-queued so we only want to make sure to purge the outbound buffer for non-retriables.
         if (isRetriable)
             testRetriable(commitRequestManger, futures);
-        else
+        else {
             testNonRetriable(futures);
+            assertEmptyPendingRequests(commitRequestManger);
+        }
     }
 
     private void testRetriable(final CommitRequestManager commitRequestManger,
@@ -231,6 +239,12 @@ public class CommitRequestManagerTest {
             testRetriable(commitRequestManger, Collections.singletonList(future));
         else
             testNonRetriable(Collections.singletonList(future));
+    }
+
+    private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManger) {
+        assertTrue(commitRequestManger.pendingRequests.inflightOffsetFetches.isEmpty());
+        assertTrue(commitRequestManger.pendingRequests.unsentOffsetFetches.isEmpty());
+        assertTrue(commitRequestManger.pendingRequests.unsentOffsetCommits.isEmpty());
     }
 
     // Supplies (error, isRetriable)

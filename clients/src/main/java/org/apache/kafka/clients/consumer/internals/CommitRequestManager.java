@@ -60,7 +60,7 @@ public class CommitRequestManager implements RequestManager {
     private final GroupState groupState;
     private final long retryBackoffMs;
     private final boolean throwOnFetchStableOffsetUnsupported;
-    private final PendingRequests pendingRequests;
+    final PendingRequests pendingRequests;
 
     public CommitRequestManager(
             final Time time,
@@ -87,7 +87,8 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * Poll for the commit request if there's any. The function will also try to autocommit, if enabled.
+     * Poll for the {@link OffsetFetchRequest} and {@link OffsetCommitRequest} request if there's any. The function will
+     * also try to autocommit the offsets, if feature is enabled.
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
@@ -111,39 +112,8 @@ public class CommitRequestManager implements RequestManager {
         }
 
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptionState.allConsumed();
-        log.debug("Auto-committing offsets {}", allConsumedOffsets);
         sendAutoCommit(allConsumedOffsets);
         autocommit.resetTimer();
-    }
-
-    // Visible for testing
-    List<UnsentOffsetFetchRequest> unsentOffsetFetchRequests() {
-        return pendingRequests.unsentOffsetFetches;
-    }
-
-    // Visible for testing
-    Queue<UnsentOffsetCommitRequest> unsentOffsetCommitRequests() {
-        return pendingRequests.unsentOffsetCommits;
-    }
-
-    // Visible for testing
-    CompletableFuture<ClientResponse> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
-        return this.addOffsetCommitRequest(allConsumedOffsets)
-                .whenComplete((response, throwable) -> {
-                    if (throwable == null) {
-                        log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
-                    }
-                    // setting inflight commit to false upon completion
-                    autoCommitState.get().setInflightCommitStatus(false);
-                })
-                .exceptionally(t -> {
-                    if (t instanceof RetriableCommitFailedException) {
-                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", allConsumedOffsets, t);
-                    } else {
-                        log.warn("Asynchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, t.getMessage());
-                    }
-                    return null;
-                });
     }
 
     /**
@@ -165,6 +135,39 @@ public class CommitRequestManager implements RequestManager {
     public void clientPoll(final long currentTimeMs) {
         this.autoCommitState.ifPresent(t -> t.ack(currentTimeMs));
     }
+
+
+    // Visible for testing
+    List<UnsentOffsetFetchRequest> unsentOffsetFetchRequests() {
+        return pendingRequests.unsentOffsetFetches;
+    }
+
+    // Visible for testing
+    Queue<UnsentOffsetCommitRequest> unsentOffsetCommitRequests() {
+        return pendingRequests.unsentOffsetCommits;
+    }
+
+    // Visible for testing
+    CompletableFuture<ClientResponse> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
+        log.debug("Enqueuing autocommit offsets: {}", allConsumedOffsets);
+        return this.addOffsetCommitRequest(allConsumedOffsets)
+                .whenComplete((response, throwable) -> {
+                    if (throwable == null) {
+                        log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
+                    }
+                    // setting inflight commit to false upon completion
+                    autoCommitState.get().setInflightCommitStatus(false);
+                })
+                .exceptionally(t -> {
+                    if (t instanceof RetriableCommitFailedException) {
+                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", allConsumedOffsets, t);
+                    } else {
+                        log.warn("Asynchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, t.getMessage());
+                    }
+                    return null;
+                });
+    }
+
 
     private class UnsentOffsetCommitRequest {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
@@ -271,6 +274,7 @@ public class CommitRequestManager implements RequestManager {
                                final Errors responseError) {
             log.debug("Offset fetch failed: {}", responseError.message());
 
+            // TODO: should we retry on COORDINATOR_NOT_AVAILABLE as well ?
             if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 retry(currentTimeMs);
             } else if (responseError == Errors.NOT_COORDINATOR) {
@@ -278,8 +282,6 @@ public class CommitRequestManager implements RequestManager {
                 coordinatorRequestManager.markCoordinatorUnknown(responseError.message(), Time.SYSTEM.milliseconds());
                 retry(currentTimeMs);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
-                // TODO: I'm not sure if we should retry here.  Sounds like we should propagate the error to let the
-                //  user to fix the permission
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupState.groupId));
             } else {
                 future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
@@ -336,6 +338,7 @@ public class CommitRequestManager implements RequestManager {
             if (unauthorizedTopics != null) {
                 future.completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!unstableTxnOffsetTopicPartitions.isEmpty()) {
+                // TODO: Optimization question: Do we need to retry all partitions upon a single partition error?
                 log.info("The following partitions still have unstable offsets " +
                         "which are not cleared on the broker side: {}" +
                         ", this could be either " +
@@ -345,6 +348,16 @@ public class CommitRequestManager implements RequestManager {
             } else {
                 future.complete(offsets);
             }
+        }
+
+        private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> chainFuture(final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+            return this.future.whenComplete((r, t) -> {
+                if (t != null) {
+                    future.completeExceptionally(t);
+                } else {
+                    future.complete(r);
+                }
+            });
         }
     }
 
@@ -365,6 +378,7 @@ public class CommitRequestManager implements RequestManager {
         // Queue is used to ensure the sequence of commit
         Queue<UnsentOffsetCommitRequest> unsentOffsetCommits = new LinkedList<>();
         List<UnsentOffsetFetchRequest> unsentOffsetFetches = new ArrayList<>();
+        List<UnsentOffsetFetchRequest> inflightOffsetFetches = new ArrayList<>();
 
         public boolean hasUnsentRequests() {
             return !unsentOffsetCommits.isEmpty() || !unsentOffsetFetches.isEmpty();
@@ -380,22 +394,33 @@ public class CommitRequestManager implements RequestManager {
             return request.future();
         }
 
+        /**
+         *  We want to avoid duplication when sending an {@link OffsetFetchRequest}. The following checks are done:
+         *  <li>1. dedupe against unsents: if a duplicated request was previously made, we chain the future</>
+         *  <li>2. dedupe against incompleted: If a duplicated request was sent but hasn't gotten a results, we chain
+         *  the future.</>
+         *
+         *  <p>If the request is new, we chain a call back to remove itself from the {@code inflightOffsetFetches}
+         *  upon completion.</>
+         */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final UnsentOffsetFetchRequest request) {
             Optional<UnsentOffsetFetchRequest> dupe =
                     unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
-            if (!dupe.isPresent()) {
+            Optional<UnsentOffsetFetchRequest> inflight =
+                    inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+
+            if (dupe.isPresent() || inflight.isPresent()) {
+                log.info("Duplicated OffsetFetchRequest: " + request.requestedPartitions);
+                dupe.orElseGet(() -> inflight.get()).chainFuture(request.future);
+            } else {
+                // remove the request from the outbound buffer: inflightOffsetFetches
+                request.future.whenComplete((r, t) -> {
+                    if (!inflightOffsetFetches.remove(request)) {
+                        log.info("unable to remove request from the outbound buffer:" + request);
+                    }
+                });
                 this.unsentOffsetFetches.add(request);
-                return request.future;
             }
-            // Don't enqueue the request if duplicated has been found.  Chain the future instead.
-            log.info("Duplicated OffsetFetchRequest: " + request.requestedPartitions);
-            dupe.get().future.whenComplete((r, t) -> {
-                if (t != null) {
-                    request.future.completeExceptionally(t);
-                } else {
-                    request.future.complete(r);
-                }
-            });
             return request.future;
         }
 
@@ -412,17 +437,18 @@ public class CommitRequestManager implements RequestManager {
             unsent.addAll(unsentOffsetCommits.stream()
                     .map(UnsentOffsetCommitRequest::toUnsentRequest)
                     .collect(Collectors.toList()));
-            unsent.addAll(unsentOffsetFetches.stream()
+            List<UnsentOffsetFetchRequest> sendables = unsentOffsetFetches.stream()
                     .filter(r -> r.canSendRequest(currentTimeMs))
-                    .map(u -> u.toUnsentRequest(currentTimeMs))
+                    .collect(Collectors.toList());
+            inflightOffsetFetches.addAll(sendables);
+            unsent.addAll(sendables.stream()
+                    .peek(r -> r.onSendAttempt(currentTimeMs))
+                    .map(r -> r.toUnsentRequest(currentTimeMs))
                     .collect(Collectors.toList()));
-            clear();
-            return Collections.unmodifiableList(unsent);
-        }
-
-        private void clear() {
+            // empty the staged requests
             unsentOffsetCommits.clear();
             unsentOffsetFetches.clear();
+            return Collections.unmodifiableList(unsent);
         }
     }
 
