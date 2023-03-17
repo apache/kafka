@@ -889,9 +889,12 @@ public class MirrorConnectorsIntegrationBaseTest {
                 for (TopicPartition tp : tps) {
                     assertTrue(consumerGroupOffsets.containsKey(tp),
                             "TopicPartition " + tp + " does not have translated offsets");
-                    assertTrue(consumerGroupOffsets.get(tp).offset() > lastOffset.get(tp) - offsetLagMax,
-                            "TopicPartition " + tp + " does not have fully-translated offsets");
-                    assertTrue(consumerGroupOffsets.get(tp).offset() <= endOffsets.get(tp).offset(),
+                    long offset = consumerGroupOffsets.get(tp).offset();
+                    assertTrue(offset > lastOffset.get(tp) - offsetLagMax,
+                            "TopicPartition " + tp + " does not have fully-translated offsets: "
+                                    + offset + " is not close enough to " + lastOffset.get(tp)
+                                    + " (strictly more than " + (lastOffset.get(tp) - offsetLagMax) + ")");
+                    assertTrue(offset <= endOffsets.get(tp).offset(),
                             "TopicPartition " + tp + " has downstream offsets beyond the log end, this would lead to negative lag metrics");
                 }
                 return true;

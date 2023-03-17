@@ -25,17 +25,37 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Used internally by MirrorMaker. Stores offset syncs and performs offset translation. */
+/**
+ * Used internally by MirrorMaker. Stores offset syncs and performs offset translation.
+ * <p>A limited number of offset syncs can be stored per TopicPartition, in a way which provides better translation
+ * later in the topic, closer to the live end of the topic.
+ * This maintains the following invariants for each topic-partition in the in-memory sync storage:
+ * <ul>
+ *     <li>syncs[0] is the latest offset sync from the syncs topic</li>
+ *     <li>For each i,j, i <= j: syncs[i] is the earliest sync such that syncs[j].upstream <= syncs[i].upstream < syncs[j].upstream + 2^j</li>
+ * </ul>
+ * <p>Offset translation uses the syncs[i] which most closely precedes the upstream consumer group's current offset.
+ * For a fixed in-memory state, translation of variable upstream offsets will be monotonic.
+ * For variable in-memory state, translation of a fixed upstream offset will not be monotonic.
+ * <p>Translation will be unavailable for all topic-partitions before an initial read-to-end of the offset syncs topic
+ * is complete. Translation will be unavailable after that if no syncs are present for a topic-partition, or if relevant
+ * offset syncs for the topic were eligible for compaction at the time of the initial read-to-end.
+ */
 class OffsetSyncStore implements AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(OffsetSyncStore.class);
     private final KafkaBasedLog<byte[], byte[]> backingStore;
-    private final Map<TopicPartition, OffsetSync> offsetSyncs = new ConcurrentHashMap<>();
+    private final Map<TopicPartition, OffsetSync[]> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
     protected volatile boolean readToEnd = false;
 
@@ -99,16 +119,21 @@ class OffsetSyncStore implements AutoCloseable {
         readToEnd = true;
     }
 
-    OptionalLong translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
+    OptionalLong translateDownstream(String group, TopicPartition sourceTopicPartition, long upstreamOffset) {
         if (!readToEnd) {
             // If we have not read to the end of the syncs topic at least once, decline to translate any offsets.
             // This prevents emitting stale offsets while initially reading the offset syncs topic.
+            log.debug("translateDownstream({},{},{}): Skipped (initial offset syncs read still in progress)",
+                    group, sourceTopicPartition, upstreamOffset);
             return OptionalLong.empty();
         }
-        Optional<OffsetSync> offsetSync = latestOffsetSync(sourceTopicPartition);
+        Optional<OffsetSync> offsetSync = latestOffsetSync(sourceTopicPartition, upstreamOffset);
         if (offsetSync.isPresent()) {
             if (offsetSync.get().upstreamOffset() > upstreamOffset) {
                 // Offset is too far in the past to translate accurately
+                log.debug("translateDownstream({},{},{}): Skipped ({} is ahead of upstream consumer group {})",
+                        group, sourceTopicPartition, upstreamOffset,
+                        offsetSync.get(), upstreamOffset);
                 return OptionalLong.of(-1L);
             }
             // If the consumer group is ahead of the offset sync, we can translate the upstream offset only 1
@@ -124,8 +149,15 @@ class OffsetSyncStore implements AutoCloseable {
             //          vv
             // target |-sg----r-----|
             long upstreamStep = upstreamOffset == offsetSync.get().upstreamOffset() ? 0 : 1;
+            log.debug("translateDownstream({},{},{}): Translated {} (relative to {})",
+                    group, sourceTopicPartition, upstreamOffset,
+                    offsetSync.get().downstreamOffset() + upstreamStep,
+                    offsetSync.get()
+            );
             return OptionalLong.of(offsetSync.get().downstreamOffset() + upstreamStep);
         } else {
+            log.debug("translateDownstream({},{},{}): Skipped (offset sync not found)",
+                    group, sourceTopicPartition, upstreamOffset);
             return OptionalLong.empty();
         }
     }
@@ -139,10 +171,103 @@ class OffsetSyncStore implements AutoCloseable {
     protected void handleRecord(ConsumerRecord<byte[], byte[]> record) {
         OffsetSync offsetSync = OffsetSync.deserializeRecord(record);
         TopicPartition sourceTopicPartition = offsetSync.topicPartition();
-        offsetSyncs.put(sourceTopicPartition, offsetSync);
+        offsetSyncs.computeIfAbsent(sourceTopicPartition, ignored -> createInitialSyncs(offsetSync));
+        offsetSyncs.compute(sourceTopicPartition, (ignored, syncs) -> updateExistingSyncs(syncs, offsetSync));
     }
 
-    private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition) {
-        return Optional.ofNullable(offsetSyncs.get(topicPartition));
+    private OffsetSync[] updateExistingSyncs(OffsetSync[] syncs, OffsetSync offsetSync) {
+        // Make a copy of the array before mutating it, so that readers do not see inconsistent data
+        // TODO: batch updates so that this copy can be performed less often for high-volume sync topics.
+        OffsetSync[] mutableSyncs = Arrays.copyOf(syncs, Long.SIZE);
+        updateSyncArray(mutableSyncs, offsetSync);
+        if (log.isTraceEnabled()) {
+            StringBuilder stateString = new StringBuilder();
+            stateString.append("[");
+            for (int i = 0; i < Long.SIZE; i++) {
+                if (i != 0) {
+                    stateString.append(",");
+                }
+                if (i == 0 || i == Long.SIZE - 1 || mutableSyncs[i] != mutableSyncs[i - 1]) {
+                    // Print only if the sync is interesting, a series of repeated syncs will appear as ,,,,,
+                    stateString.append(mutableSyncs[i].upstreamOffset());
+                    stateString.append(":");
+                    stateString.append(mutableSyncs[i].downstreamOffset());
+                }
+            }
+            stateString.append("]");
+            log.trace("New sync {} applied, new state is {}", offsetSync, stateString);
+        }
+        return mutableSyncs;
+    }
+
+    private OffsetSync[] createInitialSyncs(OffsetSync firstSync) {
+        OffsetSync[] syncs = new OffsetSync[Long.SIZE];
+        clearSyncArray(syncs, firstSync);
+        return syncs;
+    }
+
+    private void clearSyncArray(OffsetSync[] syncs, OffsetSync offsetSync) {
+        for (int i = 0; i < Long.SIZE; i++) {
+            syncs[i] = offsetSync;
+        }
+    }
+
+    private void updateSyncArray(OffsetSync[] syncs, OffsetSync offsetSync) {
+        long upstreamOffset = offsetSync.upstreamOffset();
+        // Old offsets are invalid, so overwrite them all.
+        if (!readToEnd || syncs[0].upstreamOffset() > upstreamOffset) {
+            clearSyncArray(syncs, offsetSync);
+            return;
+        }
+        syncs[0] = offsetSync;
+        for (int i = 1; i < Long.SIZE; i++) {
+            OffsetSync oldValue = syncs[i];
+            long mask = Long.MAX_VALUE << i;
+            // If the old value is too stale: at least one of the 64-i high bits of the offset value have changed
+            // This produces buckets quantized at boundaries of powers of 2
+            // Syncs:     a                  b             c       d   e
+            // Bucket 0  |a|                |b|           |c|     |d| |e|                   (size    1)
+            // Bucket 1 | a|               | b|           |c |    |d | e|                   (size    2)
+            // Bucket 2 | a  |           |   b|         |  c |  |  d |   |                  (size    4)
+            // Bucket 3 | a      |       |   b   |      |  c    |  d     |                  (size    8)
+            // Bucket 4 | a              |   b          |  c             |                  (size   16)
+            // Bucket 5 | a                             |  c                             |  (size   32)
+            // Bucket 6 | a                                                              |  (size   64)
+            // ...        a                                                                 ...
+            // Bucket63   a                                                                 (size 2^63)
+            // State after a: [a,,,,,,, ... ,a] (all buckets written)
+            // State after b: [b,,,,,a,, ... ,a] (buckets 0-4 written)
+            // State after c: [c,,,,,,a, ... ,a] (buckets 0-5 written, b expired completely)
+            // State after d: [d,,,,c,,a, ... ,a] (buckets 0-3 written)
+            // State after e: [e,,d,,c,,a, ... ,a] (buckets 0-1 written)
+            if (((oldValue.upstreamOffset() ^ upstreamOffset) & mask) != 0) {
+                syncs[i] = offsetSync;
+            } else {
+                break;
+            }
+        }
+    }
+
+    private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition, long offset) {
+        return Optional.ofNullable(offsetSyncs.get(topicPartition))
+                .map(syncs -> lookupLatestSync(syncs, offset));
+    }
+
+
+    private OffsetSync lookupLatestSync(OffsetSync[] syncs, long offset) {
+        // optimization: skip loop if every sync in the store is ahead of the requested offset
+        OffsetSync oldestSync = syncs[Long.SIZE - 1];
+        if (oldestSync.upstreamOffset() > offset) {
+            return oldestSync;
+        }
+        // linear search the syncs, effectively a binary search over the topic offsets
+        // Search from latest to earliest to find the sync that gives the best accuracy
+        for (int i = 0; i < Long.SIZE; i++) {
+            OffsetSync offsetSync = syncs[i];
+            if (offsetSync.upstreamOffset() <= offset) {
+                return offsetSync;
+            }
+        }
+        return oldestSync;
     }
 }
