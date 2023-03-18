@@ -1,0 +1,15 @@
+{{ $source := index .Site.Data.metrics (.Get 0) }}
+{{ range $source }}
+<table>
+    <tr>
+        <th>MBean:</th>
+        <th><code>{{index . "mbean" }}</code></th>
+    </tr>
+    {{ range $key, $value := (index . "attributes") }}
+    <tr>
+        <td>{{ $key }}</td>
+        <td>{{ $value }}</td>
+    </tr>
+    {{ end }}
+</table>
+{{ end }}

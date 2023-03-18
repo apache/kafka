@@ -1,0 +1,17 @@
+{{ $source := index .Site.Data.streams (.Get 0) }}
+<table>
+    <tr>
+        <th>Parameter</th>
+        <th>Importance</th>
+        <th>Description</th>
+        <th>Default Value</th>
+    </tr>
+    {{ range $source }}
+    <tr>
+        <td><code>{{index . "Parameter" }}</code></td>
+        <td>{{index . "Importance" }}</td>
+        <td>{{index . "Description" | markdownify }}</td>
+        <td><code>{{index . "Default Value" }}</code></td>
+    </tr>
+    {{ end }}
+</table>

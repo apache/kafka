@@ -1,0 +1,22 @@
+{{ $configs := index .Site.Data.config (.Get "config") }}
+{{ $prefix := (.Get "prefix") }}
+<ul class="config-list">
+    {{ range $configs }}
+    {{ $id := index . "name" }}
+    {{ $ref := (printf "%s_%s" ($prefix) (index . "name")) }}
+    <li>
+        <h4>
+            <a id="{{ $ref }}" href="#{{ $ref }}">{{ $id }}</a></h4>
+        <p>{{index . "documentation" | markdownify }}</p>
+        <table>
+            <tbody>
+            {{ range $key, $value := (index . "headers") }}
+            <tr>
+                <th>{{ $key }}</th>
+                <td>{{ $value | markdownify }}</td>
+            </tr>
+            {{ end }}
+        </table>
+    </li>
+    {{ end }}
+</ul>

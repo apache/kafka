@@ -1,0 +1,17 @@
+{{ $source := index .Site.Data.connect (.Get 0) }}
+<table>
+    <tr>
+        <th>Operation</th>
+        <th>Resource Type</th>
+        <th>Resource Name</th>
+        <th>Note</th>
+    </tr>
+    {{ range $source }}
+    <tr>
+        <td>{{index . "Operation" | markdownify }}</td>
+        <td>{{index . "Resource Type" | markdownify }}</td>
+        <td>{{index . "Resource Name" | markdownify }}</td>
+        <td>{{index . "Note" | markdownify }}</td>
+    </tr>
+    {{ end }}
+</table>
