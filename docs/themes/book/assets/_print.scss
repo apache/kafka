@@ -1,0 +1,17 @@
+@media print {
+  .book-menu,
+  .book-footer,
+  .book-toc {
+    display: none;
+  }
+
+  .book-header,
+  .book-header aside {
+    display: block;
+  }
+
+  main {
+    // Fix for https://bugzilla.mozilla.org/show_bug.cgi?id=939897
+    display: block !important;
+  }
+}

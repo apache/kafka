@@ -1,0 +1,23 @@
+<nav>
+{{ partial "docs/brand" . }}
+{{ partial "docs/search" . }}
+{{ partial "docs/nav" . }}
+
+{{ partial "docs/inject/menu-before" . }}
+{{ partial "docs/menu-hugo" .Site.Menus.before }}
+
+{{ if .Site.Params.BookMenuBundle }}
+  {{ partial "docs/menu-bundle" . }}
+{{ else }}
+  {{ partial "docs/menu-filetree" . }}
+{{ end }}
+
+{{ partial "docs/menu-hugo" .Site.Menus.after }}
+{{ partial "docs/inject/menu-after" . }}
+</nav>
+
+<!-- Restore menu position as soon as possible to avoid flickering -->
+{{ $script := resources.Get "menu-reset.js" | resources.Minify }}
+{{ with $script.Content }}
+  <script>{{ . | safeJS }}</script>
+{{ end }}

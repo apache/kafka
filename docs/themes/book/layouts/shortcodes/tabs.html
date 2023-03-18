@@ -1,0 +1,15 @@
+{{ if .Inner }}{{ end }}
+{{ $id := .Get 0 }}
+{{ $group := printf "tabs-%s" $id }}
+
+<div class="book-tabs">
+{{- range $index, $tab := .Scratch.Get $group -}}
+  <input type="radio" class="toggle" name="{{ $group }}" id="{{ printf "%s-%d" $group $index }}" {{ if not $index }}checked="checked"{{ end }} />
+  <label for="{{ printf "%s-%d" $group $index }}">
+    {{- $tab.Name -}}
+  </label>
+  <div class="book-tabs-content markdown-inner">
+    {{- .Content | markdownify -}}
+  </div>
+{{- end -}}
+</div>

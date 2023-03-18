@@ -1,0 +1,159 @@
+<ul class="toc">
+    <li><a href="{{.Site.BaseURL}}#gettingStarted">1. Getting Started</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/intro">1.1 Introduction</a>
+            <li><a href="{{.Site.BaseURL}}/uses">1.2 Use Cases</a>
+            <li><a href="{{.Site.BaseURL}}/quickstart">1.3 Quick Start</a>
+            <li><a href="{{.Site.BaseURL}}/ecosystem">1.4 Ecosystem</a>
+            <li><a href="{{.Site.BaseURL}}/upgrade">1.5 Upgrading</a>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/api">2. APIs</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/api#producerapi">2.1 Producer API</a>
+            <li><a href="{{.Site.BaseURL}}/api#consumerapi">2.2 Consumer API</a>
+            <li><a href="{{.Site.BaseURL}}/api#streamsapi">2.3 Streams API</a>
+            <li><a href="{{.Site.BaseURL}}/api#connectapi">2.4 Connect API</a>
+            <li><a href="{{.Site.BaseURL}}/api#adminapi">2.5 Admin API</a>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/configuration">3. Configuration</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/configuration#brokerconfigs">3.1 Broker Configs</a>
+            <li><a href="{{.Site.BaseURL}}/configuration#topicconfigs">3.2 Topic Configs</a>
+            <li><a href="{{.Site.BaseURL}}/configuration#producerconfigs">3.3 Producer Configs</a>
+            <li><a href="{{.Site.BaseURL}}/configuration#consumerconfigs">3.4 Consumer Configs</a>
+            <li><a href="{{.Site.BaseURL}}/configuration#connectconfigs">3.5 Kafka Connect Configs</a>
+                <ul>
+                    <li><a href="{{.Site.BaseURL}}/configuration#sourceconnectconfigs">Source Connector Configs</a>
+                    <li><a href="{{.Site.BaseURL}}/configuration#sinkconnectconfigs">Sink Connector Configs</a>
+                </ul>
+            <li><a href="{{.Site.BaseURL}}/configuration#streamsconfigs">3.6 Kafka Streams Configs</a>
+            <li><a href="{{.Site.BaseURL}}/configuration#adminclientconfigs">3.7 AdminClient Configs</a>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/design">4. Design</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/design#majordesignelements">4.1 Motivation</a>
+            <li><a href="{{.Site.BaseURL}}/design#persistence">4.2 Persistence</a>
+            <li><a href="{{.Site.BaseURL}}/design#maximizingefficiency">4.3 Efficiency</a>
+            <li><a href="{{.Site.BaseURL}}/design#theproducer">4.4 The Producer</a>
+            <li><a href="{{.Site.BaseURL}}/design#theconsumer">4.5 The Consumer</a>
+            <li><a href="{{.Site.BaseURL}}/design#semantics">4.6 Message Delivery Semantics</a>
+            <li><a href="{{.Site.BaseURL}}/design#replication">4.7 Replication</a>
+            <li><a href="{{.Site.BaseURL}}/design#compaction">4.8 Log Compaction</a>
+            <li><a href="{{.Site.BaseURL}}/design#design_quotas">4.9 Quotas</a>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/implementation">5. Implementation</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/implementation#networklayer">5.1 Network Layer</a>
+            <li><a href="{{.Site.BaseURL}}/implementation#messages">5.2 Messages</a>
+            <li><a href="{{.Site.BaseURL}}/implementation#messageformat">5.3 Message format</a>
+            <li><a href="{{.Site.BaseURL}}/implementation#log">5.4 Log</a>
+            <li><a href="{{.Site.BaseURL}}/implementation#distributionimpl">5.5 Distribution</a>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/operations">6. Operations</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/operations#basic_ops">6.1 Basic Kafka Operations</a></li>
+            <li><a href="{{.Site.BaseURL}}/operations#datacenters">6.2 Datacenters</a></li>
+            <li><a href="{{.Site.BaseURL}}/operations#georeplication">6.3 Geo-Replication (Cross-Cluster Data
+                Mirroring)</a>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/operations#multitenancy">6.4 Multi-Tenancy</a>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/operations#config">6.5 Important Configs</a>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/operations#java">6.6 Java Version</a>
+            <li><a href="{{.Site.BaseURL}}/operations#hwandos">6.7 Hardware and OS</a>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/operations#monitoring">6.8 Monitoring</a>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/operations#zk">6.9 ZooKeeper</a>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/operations#kraft">6.10 KRaft</a>
+            </li>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/security">7. Security</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/security#security_overview">7.1 Security Overview</a></li>
+            <li><a href="{{.Site.BaseURL}}/security#listener_configuration">7.2 Listener Configuration</a></li>
+            <li><a href="{{.Site.BaseURL}}/security#security_ssl">7.3 Encryption and Authentication using SSL</a>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/security#security_sasl">7.4 Authentication using SASL</a></li>
+            <li><a href="{{.Site.BaseURL}}/security#security_authz">7.5 Authorization and ACLs</a></li>
+            <li><a href="{{.Site.BaseURL}}/security#security_rolling_upgrade">7.6 Incorporating Security Features in
+                a Running Cluster</a></li>
+            <li><a href="{{.Site.BaseURL}}/security#zk_authz">7.7 ZooKeeper Authentication</a>
+            <li><a href="{{.Site.BaseURL}}/security#zk_encryption">7.8 ZooKeeper Encryption</a></li>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/connect">8. Kafka Connect</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/connect#connect_overview">8.1 Overview</a></li>
+            <li><a href="{{.Site.BaseURL}}/connect#connect_user">8.2 User Guide</a>
+            <li><a href="{{.Site.BaseURL}}/connect#connect_development">8.3 Connector Development Guide</a></li>
+        </ul>
+    </li>
+    <li><a href="{{.Site.BaseURL}}/streams">9. Kafka Streams</a>
+        <ul>
+            <li><a href="{{.Site.BaseURL}}/streams/quickstart">9.1 Play with a Streams Application</a></li>
+            <li><a href="{{.Site.BaseURL}}/streams/tutorial">9.2 Write your own Streams Applications</a></li>
+            <li><a href="{{.Site.BaseURL}}/streams/developer-guide">9.3 Developer Manual</a>
+                <ul>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/write-streams">Writing a Streams
+                        Application</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/config-streams">Configuring a Streams
+                        Application</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/dsl-api">Streams DSL</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/processor-api">Processor API</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/dsl-topology-naming">Naming Operators in
+                        a Streams DSL application</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/datatypes">Data Types and
+                        Serialization</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/testing">Testing a Streams
+                        Application</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/interactive-queries">Interactive
+                        Queries</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/memory-mgmt">Memory Management</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/running-app">Running Streams
+                        Applications</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/manage-topics">Managing Streams
+                        Application Topics</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/security">Streams Security</a></li>
+                    <li><a href="{{.Site.BaseURL}}/streams/developer-guide/app-reset-tool">Application Reset
+                        Tool</a></li>
+                </ul>
+            </li>
+            <li><a href="{{.Site.BaseURL}}/streams/core-concepts">9.4 Core Concepts</a></li>
+            <li><a href="{{.Site.BaseURL}}/streams/architecture">9.5 Architecture</a></li>
+            <li><a href="{{.Site.BaseURL}}/streams/upgrade-guide">9.6 Upgrade Guide</a></li>
+        </ul>
+    </li>
+</ul>
+Prior releases: <a href="/07/documentation.html">0.7.x</a>,
+<a href="/08/documentation.html">0.8.0</a>,
+<a href="/081/documentation.html">0.8.1.X</a>,
+<a href="/082/documentation.html">0.8.2.X</a>,
+<a href="/090/documentation.html">0.9.0.X</a>,
+<a href="/0100/documentation.html">0.10.0.X</a>,
+<a href="/0101/documentation.html">0.10.1.X</a>,
+<a href="/0102/documentation.html">0.10.2.X</a>,
+<a href="/0110/documentation.html">0.11.0.X</a>,
+<a href="/10/documentation.html">1.0.X</a>,
+<a href="/11/documentation.html">1.1.X</a>,
+<a href="/20/documentation.html">2.0.X</a>,
+<a href="/21/documentation.html">2.1.X</a>,
+<a href="/22/documentation.html">2.2.X</a>,
+<a href="/23/documentation.html">2.3.X</a>,
+<a href="/24/documentation.html">2.4.X</a>,
+<a href="/25/documentation.html">2.5.X</a>,
+<a href="/26/documentation.html">2.6.X</a>,
+<a href="/27/documentation.html">2.7.X</a>,
+<a href="/28/documentation.html">2.8.X</a>,
+<a href="/30/documentation.html">3.0.X</a>,
+<a href="/31/documentation.html">3.1.X</a>,
+<a href="/32/documentation.html">3.2.X</a>,
+<a href="/33/documentation.html">3.3.X</a>.
