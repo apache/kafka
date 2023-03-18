@@ -46,7 +46,8 @@ public class ProducerMetrics {
         Metrics metrics = new Metrics(metricConfig);
 
         ProducerMetrics metricsRegistry = new ProducerMetrics(metrics);
-        System.out.println(Metrics.toHtmlTable("kafka.producer", metricsRegistry.getAllTemplates()));
+//        System.out.println(Metrics.toHtmlTable("kafka.producer", metricsRegistry.getAllTemplates()));
+        System.out.println(Metrics.toJson("kafka.producer", metricsRegistry.getAllTemplates()));
     }
 
 }
