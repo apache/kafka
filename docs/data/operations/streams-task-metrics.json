@@ -1,0 +1,77 @@
+[
+  {
+    "Metric": "process-latency-avg",
+    "Description": "The average execution time in ns, for processing.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "process-latency-max",
+    "Description": "The maximum execution time in ns, for processing.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "process-rate",
+    "Description": "The average number of processed records per second across all source processor nodes of this task.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "process-total",
+    "Description": "The total number of processed records across all source processor nodes of this task.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-latency-avg",
+    "Description": "The average execution time in ns, for committing.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-latency-max",
+    "Description": "The maximum execution time in ns, for committing.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-rate",
+    "Description": "The average number of commit calls per second.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-total",
+    "Description": "The total number of commit calls.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-lateness-avg",
+    "Description": "The average observed lateness of records (stream time - record timestamp).",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-lateness-max",
+    "Description": "The max observed lateness of records (stream time - record timestamp).",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "enforced-processing-rate",
+    "Description": "The average number of enforced processings per second.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "enforced-processing-total",
+    "Description": "The total number enforced processings.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "dropped-records-rate",
+    "Description": "The average number of records dropped within this task.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "dropped-records-total",
+    "Description": "The total number of records dropped within this task.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "active-process-ratio",
+    "Description": "The fraction of time the stream thread spent on processing this task among all assigned active tasks.",
+    "MBean": "kafka.streams:type=stream-task-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+)"
+  }
+]

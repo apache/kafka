@@ -1,0 +1,157 @@
+[
+  {
+    "Metric": "commit-latency-avg",
+    "Description": "The average time taken for a commit request",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-latency-max",
+    "Description": "The max time taken for a commit request",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-rate",
+    "Description": "The number of commit calls per second",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-total",
+    "Description": "The total number of commit calls",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "assigned-partitions",
+    "Description": "The number of partitions currently assigned to this consumer",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "heartbeat-response-time-max",
+    "Description": "The max time taken to receive a response to a heartbeat request",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "heartbeat-rate",
+    "Description": "The average number of heartbeats per second",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "heartbeat-total",
+    "Description": "The total number of heartbeats",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "join-time-avg",
+    "Description": "The average time taken for a group rejoin",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "join-time-max",
+    "Description": "The max time taken for a group rejoin",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "join-rate",
+    "Description": "The number of group joins per second",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "join-total",
+    "Description": "The total number of group joins",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "sync-time-avg",
+    "Description": "The average time taken for a group sync",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "sync-time-max",
+    "Description": "The max time taken for a group sync",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "sync-rate",
+    "Description": "The number of group syncs per second",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "sync-total",
+    "Description": "The total number of group syncs",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "rebalance-latency-avg",
+    "Description": "The average time taken for a group rebalance",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "rebalance-latency-max",
+    "Description": "The max time taken for a group rebalance",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "rebalance-latency-total",
+    "Description": "The total time taken for group rebalances so far",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "rebalance-total",
+    "Description": "The total number of group rebalances participated",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "rebalance-rate-per-hour",
+    "Description": "The number of group rebalance participated per hour",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "failed-rebalance-total",
+    "Description": "The total number of failed group rebalances",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "failed-rebalance-rate-per-hour",
+    "Description": "The number of failed group rebalance event per hour",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "last-rebalance-seconds-ago",
+    "Description": "The number of seconds since the last rebalance event",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "last-heartbeat-seconds-ago",
+    "Description": "The number of seconds since the last controller heartbeat",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "partitions-revoked-latency-avg",
+    "Description": "The average time taken by the on-partitions-revoked rebalance listener callback",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "partitions-revoked-latency-max",
+    "Description": "The max time taken by the on-partitions-revoked rebalance listener callback",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "partitions-assigned-latency-avg",
+    "Description": "The average time taken by the on-partitions-assigned rebalance listener callback",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "partitions-assigned-latency-max",
+    "Description": "The max time taken by the on-partitions-assigned rebalance listener callback",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "partitions-lost-latency-avg",
+    "Description": "The average time taken by the on-partitions-lost rebalance listener callback",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "partitions-lost-latency-max",
+    "Description": "The max time taken by the on-partitions-lost rebalance listener callback",
+    "MBean": "kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\\w]+)"
+  }
+]

@@ -1,0 +1,172 @@
+[
+  {
+    "Metric": "put-latency-avg",
+    "Description": "The average put execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-latency-max",
+    "Description": "The maximum put execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-if-absent-latency-avg",
+    "Description": "The average put-if-absent execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-if-absent-latency-max",
+    "Description": "The maximum put-if-absent execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "get-latency-avg",
+    "Description": "The average get execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "get-latency-max",
+    "Description": "The maximum get execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "delete-latency-avg",
+    "Description": "The average delete execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "delete-latency-max",
+    "Description": "The maximum delete execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-all-latency-avg",
+    "Description": "The average put-all execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-all-latency-max",
+    "Description": "The maximum put-all execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "all-latency-avg",
+    "Description": "The average all operation execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "all-latency-max",
+    "Description": "The maximum all operation execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "range-latency-avg",
+    "Description": "The average range execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "range-latency-max",
+    "Description": "The maximum range execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "flush-latency-avg",
+    "Description": "The average flush execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "flush-latency-max",
+    "Description": "The maximum flush execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "restore-latency-avg",
+    "Description": "The average restore execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "restore-latency-max",
+    "Description": "The maximum restore execution time in ns.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-rate",
+    "Description": "The average put rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-if-absent-rate",
+    "Description": "The average put-if-absent rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "get-rate",
+    "Description": "The average get rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "delete-rate",
+    "Description": "The average delete rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "put-all-rate",
+    "Description": "The average put-all rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "all-rate",
+    "Description": "The average all operation rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "range-rate",
+    "Description": "The average range rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "flush-rate",
+    "Description": "The average flush rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "restore-rate",
+    "Description": "The average restore rate for this store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "suppression-buffer-size-avg",
+    "Description": "The average total size, in bytes, of the buffered data over the sampling window.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),in-memory-suppression-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "suppression-buffer-size-max",
+    "Description": "The maximum total size, in bytes, of the buffered data over the sampling window.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),in-memory-suppression-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "suppression-buffer-count-avg",
+    "Description": "The average number of records buffered over the sampling window.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),in-memory-suppression-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "suppression-buffer-count-max",
+    "Description": "The maximum number of records buffered over the sampling window.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),in-memory-suppression-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-e2e-latency-avg",
+    "Description": "The average end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-e2e-latency-max",
+    "Description": "The maximum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-e2e-latency-min",
+    "Description": "The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  }
+]

@@ -1,0 +1,27 @@
+[
+  {
+    "Metric": "Last Applied Record Offset",
+    "Description": "The offset of the last record from the cluster metadata partition that was applied by the broker",
+    "MBean": "kafka.server:type=broker-metadata-metrics,name=last-applied-record-offset"
+  },
+  {
+    "Metric": "Last Applied Record Timestamp",
+    "Description": "The timestamp of the last record from the cluster metadata partition that was applied by the broker.",
+    "MBean": "kafka.server:type=broker-metadata-metrics,name=last-applied-record-timestamp"
+  },
+  {
+    "Metric": "Last Applied Record Lag Ms",
+    "Description": "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker",
+    "MBean": "kafka.server:type=broker-metadata-metrics,name=last-applied-record-lag-ms"
+  },
+  {
+    "Metric": "Metadata Load Error Count",
+    "Description": "The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it.",
+    "MBean": "kafka.server:type=broker-metadata-metrics,name=metadata-load-error-count"
+  },
+  {
+    "Metric": "Metadata Apply Error Count",
+    "Description": "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta.",
+    "MBean": "kafka.server:type=broker-metadata-metrics,name=metadata-apply-error-count"
+  }
+]

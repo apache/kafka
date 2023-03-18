@@ -1,0 +1,32 @@
+[
+  {
+    "Metric": "version",
+    "Description": "The version of the Kafka Streams client.",
+    "MBean": "kafka.streams:type=stream-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-id",
+    "Description": "The version control commit ID of the Kafka Streams client.",
+    "MBean": "kafka.streams:type=stream-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "application-id",
+    "Description": "The application ID of the Kafka Streams client.",
+    "MBean": "kafka.streams:type=stream-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "topology-description",
+    "Description": "The description of the topology executed in the Kafka Streams client.",
+    "MBean": "kafka.streams:type=stream-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "state",
+    "Description": "The state of the Kafka Streams client.",
+    "MBean": "kafka.streams:type=stream-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "failed-stream-threads",
+    "Description": "The number of failed stream threads since the start of the Kafka Streams client.",
+    "MBean": "kafka.streams:type=stream-metrics,client-id=([-.\\w]+)"
+  }
+]

@@ -1,0 +1,192 @@
+[
+  {
+    "Metric": "connection-close-rate",
+    "Description": "Connections closed per second in the window.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "connection-close-total",
+    "Description": "Total connections closed in the window.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "connection-creation-rate",
+    "Description": "New connections established per second in the window.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "connection-creation-total",
+    "Description": "Total new connections established in the window.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "network-io-rate",
+    "Description": "The average number of network operations (reads or writes) on all connections per second.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "network-io-total",
+    "Description": "The total number of network operations (reads or writes) on all connections.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "outgoing-byte-rate",
+    "Description": "The average number of outgoing bytes sent per second to all servers.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "outgoing-byte-total",
+    "Description": "The total number of outgoing bytes sent to all servers.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "request-rate",
+    "Description": "The average number of requests sent per second.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "request-total",
+    "Description": "The total number of requests sent.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "request-size-avg",
+    "Description": "The average size of all requests in the window.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "request-size-max",
+    "Description": "The maximum size of any request sent in the window.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "incoming-byte-rate",
+    "Description": "Bytes/second read off all sockets.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "incoming-byte-total",
+    "Description": "Total bytes read off all sockets.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "response-rate",
+    "Description": "Responses received per second.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "response-total",
+    "Description": "Total responses received.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "select-rate",
+    "Description": "Number of times the I/O layer checked for new I/O to perform per second.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "select-total",
+    "Description": "Total number of times the I/O layer checked for new I/O to perform.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "io-wait-time-ns-avg",
+    "Description": "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "io-wait-time-ns-total",
+    "Description": "The total time the I/O thread spent waiting in nanoseconds.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "io-waittime-total",
+    "Description": "<b>*Deprecated*</b> The total time the I/O thread spent waiting in nanoseconds. Replacement is <code>io-wait-time-ns-total</code>.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "io-wait-ratio",
+    "Description": "The fraction of time the I/O thread spent waiting.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "io-time-ns-avg",
+    "Description": "The average length of time for I/O per select call in nanoseconds.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "io-time-ns-total",
+    "Description": "The total time the I/O thread spent doing I/O in nanoseconds.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "iotime-total",
+    "Description": "<b>*Deprecated*</b> The total time the I/O thread spent doing I/O in nanoseconds. Replacement is <code>io-time-ns-total</code>.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "io-ratio",
+    "Description": "The fraction of time the I/O thread spent doing I/O.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "connection-count",
+    "Description": "The current number of active connections.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "successful-authentication-rate",
+    "Description": "Connections per second that were successfully authenticated using SASL or SSL.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "successful-authentication-total",
+    "Description": "Total connections that were successfully authenticated using SASL or SSL.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "failed-authentication-rate",
+    "Description": "Connections per second that failed authentication.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "failed-authentication-total",
+    "Description": "Total connections that failed authentication.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "successful-reauthentication-rate",
+    "Description": "Connections per second that were successfully re-authenticated using SASL.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "successful-reauthentication-total",
+    "Description": "Total connections that were successfully re-authenticated using SASL.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "reauthentication-latency-max",
+    "Description": "The maximum latency in ms observed due to re-authentication.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "reauthentication-latency-avg",
+    "Description": "The average latency in ms observed due to re-authentication.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "failed-reauthentication-rate",
+    "Description": "Connections per second that failed re-authentication.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "failed-reauthentication-total",
+    "Description": "Total connections that failed re-authentication.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "successful-authentication-no-reauth-total",
+    "Description": "Total connections that were successfully authenticated by older, pre-2.2.0 SASL clients that do not support re-authentication. May only be non-zero.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\\w]+)"
+  }
+]

@@ -1,0 +1,112 @@
+[
+  {
+    "Metric": "bytes-written-rate",
+    "Description": "The average number of bytes written per second to the RocksDB state store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bytes-written-total",
+    "Description": "The total number of bytes written to the RocksDB state store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bytes-read-rate",
+    "Description": "The average number of bytes read per second from the RocksDB state store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bytes-read-total",
+    "Description": "The total number of bytes read from the RocksDB state store.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "memtable-bytes-flushed-rate",
+    "Description": "The average number of bytes flushed per second from the memtable to disk.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "memtable-bytes-flushed-total",
+    "Description": "The total number of bytes flushed from the memtable to disk.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "memtable-hit-ratio",
+    "Description": "The ratio of memtable hits relative to all lookups to the memtable.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "memtable-flush-time-avg",
+    "Description": "The average duration of memtable flushes to disc in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "memtable-flush-time-min",
+    "Description": "The minimum duration of memtable flushes to disc in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "memtable-flush-time-max",
+    "Description": "The maximum duration of memtable flushes to disc in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "block-cache-data-hit-ratio",
+    "Description": "The ratio of block cache hits for data blocks relative to all lookups for data blocks to the block cache.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "block-cache-index-hit-ratio",
+    "Description": "The ratio of block cache hits for index blocks relative to all lookups for index blocks to the block cache.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "block-cache-filter-hit-ratio",
+    "Description": "The ratio of block cache hits for filter blocks relative to all lookups for filter blocks to the block cache.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "write-stall-duration-avg",
+    "Description": "The average duration of write stalls in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "write-stall-duration-total",
+    "Description": "The total duration of write stalls in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bytes-read-compaction-rate",
+    "Description": "The average number of bytes read per second during compaction.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bytes-written-compaction-rate",
+    "Description": "The average number of bytes written per second during compaction.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "compaction-time-avg",
+    "Description": "The average duration of disc compactions in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "compaction-time-min",
+    "Description": "The minimum duration of disc compactions in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "compaction-time-max",
+    "Description": "The maximum duration of disc compactions in ms.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "number-open-files",
+    "Description": "The number of current open files.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "number-file-errors-total",
+    "Description": "The total number of file errors occurred.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  }
+]
