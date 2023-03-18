@@ -54,7 +54,7 @@ public class RemoteLogMetadataFormatterTest {
         ConsumerRecord<byte[], byte[]> metadataRecord = new ConsumerRecord<>("__remote_log_metadata", 0, 0, null, metadataBytes);
 
         String expected = String.format(
-                "RemoteLogSegmentMetadata{remoteLogSegmentId=RemoteLogSegmentId{topicIdPartition=%s:foo-0, id=%s}, startOffset=0, endOffset=100, brokerId=1, maxTimestampMs=-1, eventTimestampMs=123, segmentLeaderEpochs={0=0, 1=20, 2=80}, segmentSizeInBytes=1024, state=COPY_SEGMENT_STARTED}\n",
+                "partition: 0, offset: 0, value: RemoteLogSegmentMetadata{remoteLogSegmentId=RemoteLogSegmentId{topicIdPartition=%s:foo-0, id=%s}, startOffset=0, endOffset=100, brokerId=1, maxTimestampMs=-1, eventTimestampMs=123, segmentLeaderEpochs={0=0, 1=20, 2=80}, segmentSizeInBytes=1024, state=COPY_SEGMENT_STARTED}\n",
                 TOPIC_ID, SEGMENT_ID);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              PrintStream ps = new PrintStream(baos)) {

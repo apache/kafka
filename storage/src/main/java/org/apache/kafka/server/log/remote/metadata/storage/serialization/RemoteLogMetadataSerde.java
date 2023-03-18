@@ -117,7 +117,10 @@ public class RemoteLogMetadataSerde {
         @Override
         public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
             // The key is expected to be null.
-            output.println(remoteLogMetadataSerde.deserialize(consumerRecord.value()).toString());
+            output.printf("partition: %d, offset: %d, value: %s%n",
+                    consumerRecord.partition(),
+                    consumerRecord.offset(),
+                    remoteLogMetadataSerde.deserialize(consumerRecord.value()).toString());
         }
     }
 }
