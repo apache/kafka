@@ -1002,6 +1002,7 @@ project(':core') {
   task genAdminClientConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.admin.AdminClientConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "admin_client_config.json").newOutputStream()
   }
@@ -1009,6 +1010,7 @@ project(':core') {
   task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.producer.ProducerConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_config.json").newOutputStream()
   }
@@ -1016,6 +1018,7 @@ project(':core') {
   task genConsumerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.consumer.ConsumerConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_config.json").newOutputStream()
   }
@@ -1023,6 +1026,7 @@ project(':core') {
   task genKafkaConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'kafka.server.KafkaConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "kafka_config.json").newOutputStream()
   }
@@ -1030,6 +1034,7 @@ project(':core') {
   task genTopicConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.storage.internals.log.LogConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "topic_config.json").newOutputStream()
   }
@@ -1037,6 +1042,7 @@ project(':core') {
   task genConsumerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/metrics")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_metrics.json").newOutputStream()
   }
@@ -1044,6 +1050,7 @@ project(':core') {
   task genProducerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/metrics")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_metrics.json").newOutputStream()
   }
@@ -2029,6 +2036,7 @@ project(':streams') {
   task genStreamsConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.streams.StreamsConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.json").newOutputStream()
   }
@@ -2718,6 +2726,7 @@ project(':connect:runtime') {
   task genConnectConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_config.json").newOutputStream()
   }
@@ -2725,6 +2734,7 @@ project(':connect:runtime') {
   task genSinkConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "sink_connector_config.json").newOutputStream()
   }
@@ -2732,6 +2742,7 @@ project(':connect:runtime') {
   task genSourceConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "source_connector_config.json").newOutputStream()
   }
@@ -2739,6 +2750,7 @@ project(':connect:runtime') {
   task genConnectTransformationDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.tools.TransformationDoc'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/connect")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.json").newOutputStream()
   }
@@ -2746,6 +2758,7 @@ project(':connect:runtime') {
   task genConnectPredicateDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.tools.PredicateDoc'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/connect")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_predicates.json").newOutputStream()
   }
@@ -2753,6 +2766,7 @@ project(':connect:runtime') {
   task genConnectMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/metrics")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.json").newOutputStream()
   }
@@ -2913,6 +2927,7 @@ project(':connect:mirror') {
   task genMirrorSourceConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorSourceConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "mirror_source_config.json").newOutputStream()
   }
@@ -2920,6 +2935,7 @@ project(':connect:mirror') {
   task genMirrorCheckpointConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorCheckpointConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "mirror_checkpoint_config.json").newOutputStream()
   }
@@ -2927,6 +2943,7 @@ project(':connect:mirror') {
   task genMirrorHeartbeatConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorHeartbeatConfig'
+    generatedDocsDir = new File("${project.rootDir}/docs/data/config")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "mirror_heartbeat_config.json").newOutputStream()
   }
