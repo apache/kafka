@@ -336,7 +336,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        // System.out.println(configDef().toHtml(4, config -> "sourceconnectorconfigs_" + config));
         System.out.println(configDef().printJson());
     }
 }

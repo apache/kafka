@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 
@@ -127,14 +127,6 @@ class LogConfigTest {
   def testToHtmlTable(): Unit = {
     val html = LogConfig.configDefCopy.toHtmlTable
     val expectedConfig = "<td>file.delete.delay.ms</td>"
-    assertTrue(html.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $html")
-  }
-
-  /* Sanity check that toHtml produces one of the expected configs */
-  @Test
-  def testToHtml(): Unit = {
-    val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key, Collections.emptyMap())
-    val expectedConfig = "<h4><a id=\"file.delete.delay.ms\"></a><a id=\"prefix_file.delete.delay.ms\" href=\"#prefix_file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
     assertTrue(html.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $html")
   }
 

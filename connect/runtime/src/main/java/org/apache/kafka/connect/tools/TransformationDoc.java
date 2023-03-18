@@ -113,14 +113,13 @@ public class TransformationDoc {
             array.add(docInfo.toJson());
         }
         try {
-            return mapper.writeValueAsString(array);
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(array);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
     }
 
     public static void main(String... args) {
-//        printHtml(System.out);
         System.out.println(printJson());
     }
 

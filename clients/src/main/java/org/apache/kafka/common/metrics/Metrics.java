@@ -248,7 +248,7 @@ public class Metrics implements Closeable {
         return metricName(name, group, "", tags);
     }
 
-    public static String toJson(String domain, Iterable<MetricNameTemplate> allMetrics) {
+    public static String printJson(String domain, Iterable<MetricNameTemplate> allMetrics) {
 
         Map<String, Map<String, String>> beansAndAttributes = new TreeMap<>();
 
@@ -291,7 +291,7 @@ public class Metrics implements Closeable {
 
 
         try {
-            return mapper.writeValueAsString(all);
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(all);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }

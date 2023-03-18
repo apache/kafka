@@ -2788,6 +2788,7 @@ project(':connect:runtime') {
     sortOutput = 'TRUE'
     openApiFile = file("$buildDir/resources/docs/openapi.yaml")
     resourcePackages = ['org.apache.kafka.connect.runtime.rest.resources']
+    generatedDocsDir = new File("${project.rootDir}/docs/content/connect")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     outputDir = file(generatedDocsDir)
   }

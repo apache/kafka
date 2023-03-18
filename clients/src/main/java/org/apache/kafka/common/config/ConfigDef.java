@@ -1546,7 +1546,7 @@ public class ConfigDef {
 
     public String printJson() {
         try {
-            return new ObjectMapper().writeValueAsString(toJson());
+            return new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(toJson());
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
