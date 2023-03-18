@@ -23,7 +23,7 @@ Prior releases: [0.7.x](/07/documentation.html),
 
 Everything you need to know about Kafka in 10 minutes
 
-[![](what_is_kafka.png)](https://youtube.com/watch?v=vHbvbwSEYGo&rel=0&showinfo=0&end=602)
+[![](what_is_kafka.png)](https://youtube.com/watch?v=FKgi3n-FyNU&rel=0&showinfo=0&end=602)
 
 ### Introduction {#introduction}
 
