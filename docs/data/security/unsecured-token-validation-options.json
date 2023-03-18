@@ -1,0 +1,18 @@
+[
+  {
+    "Option": "<code>unsecuredValidatorPrincipalClaimName=\"value\"</code>",
+    "Documentation": "Set to a non-empty value if you wish a particular <code>String</code> claim holding a principal name to be checked for existence; the default is to check for the existence of the <code>'sub;</code> claim."
+  },
+  {
+    "Option": "<code>unsecuredValidatorScopeClaimName=\"value\"</code>",
+    "Documentation": "Set to a custom claim name if you wish the name of the <code>String</code> or <code>String List</code> claim holding any token scope to be something other than <code>'scope'</code>."
+  },
+  {
+    "Option": "<code>unsecuredValidatorRequiredScope=\"value\"</code>",
+    "Documentation": "Set to a space-delimited list of scope values if you wish the <code>String/String List</code> claim holding the token scope to be checked to make sure it contains certain values."
+  },
+  {
+    "Option": "<code>unsecuredValidatorAllowableClockSkewMs=\"value\"</code>",
+    "Documentation": "Set to a positive integer value if you wish to allow up to some number of positive milliseconds of clock skew (the default is 0)."
+  }
+]

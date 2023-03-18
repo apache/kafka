@@ -1,0 +1,146 @@
+[
+  {
+    "Option": "--add",
+    "Description": "Indicates to the script that user is trying to add an acl.",
+    "Default": "",
+    "Option type": "Action"
+  },
+  {
+    "Option": "--remove",
+    "Description": "Indicates to the script that user is trying to remove an acl.",
+    "Default": "",
+    "Option type": "Action"
+  },
+  {
+    "Option": "--list",
+    "Description": "Indicates to the script that user is trying to list acls.",
+    "Default": "",
+    "Option type": "Action"
+  },
+  {
+    "Option": "--bootstrap-server",
+    "Description": "A list of host/port pairs to use for establishing the connection to the Kafka cluster. Only one of --bootstrap-server or --authorizer option must be specified",
+    "Default": "",
+    "Option type": "Configuration"
+  },
+  {
+    "Option": "--cluster",
+    "Description": "Indicates to the script that the user is trying to interact with acls on the singular cluster resource.",
+    "Default": "",
+    "Option type": "ResourcePattern"
+  },
+  {
+    "Option": "--topic [topic-name]",
+    "Description": "Indicates to the script that the user is trying to interact with acls on topic resource pattern(s).",
+    "Default": "",
+    "Option type": "ResourcePattern"
+  },
+  {
+    "Option": "--group [group-name]",
+    "Description": "Indicates to the script that the user is trying to interact with acls on consumer-group resource pattern(s)",
+    "Default": "",
+    "Option type": "ResourcePattern"
+  },
+  {
+    "Option": "--transactional-id [transactional-id]",
+    "Description": "The transactionalId to which ACLs should be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.",
+    "Default": "",
+    "Option type": "ResourcePattern"
+  },
+  {
+    "Option": "--delegation-token [delegation-token]",
+    "Description": "Delegation token to which ACLs should be added or removed. A value of * indicates ACL should apply to all tokens.",
+    "Default": "",
+    "Option type": "ResourcePattern"
+  },
+  {
+    "Option": "--user-principal [user-principal]",
+    "Description": "A user resource to which ACLs should be added or removed. This is currently supported in relation with delegation tokens. A value of * indicates ACL should apply to all users.",
+    "Default": "",
+    "Option type": "ResourcePattern"
+  },
+  {
+    "Option": "--resource-pattern-type [pattern-type]",
+    "Description": "Indicates to the script the type of resource pattern, (for --add), or resource pattern filter, (for --list and --remove), the user wishes to use.<br>When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'.<br>When listing or removing acls, a specific pattern type filter can be used to list or remove acls from a specific type of resource pattern, or the filter values of 'any' or 'match' can be used, where 'any' will match any pattern type, but will match the resource name exactly, and 'match' will perform pattern matching to list or remove all acls that affect the supplied resource(s).<br>WARNING: 'match', when used in combination with the '--remove' switch, should be used with care.",
+    "Default": "literal",
+    "Option type": "Configuration"
+  },
+  {
+    "Option": "--allow-principal",
+    "Description": "Principal is in PrincipalType:name format that will be added to ACL with Allow permission. Default PrincipalType string 'User' is case sensitive. <br>You can specify multiple --allow-principal in a single command.",
+    "Default": "",
+    "Option type": "Principal"
+  },
+  {
+    "Option": "--deny-principal",
+    "Description": "Principal is in PrincipalType:name format that will be added to ACL with Deny permission. Default PrincipalType string 'User' is case sensitive. <br>You can specify multiple --deny-principal in a single command.",
+    "Default": "",
+    "Option type": "Principal"
+  },
+  {
+    "Option": "--principal",
+    "Description": "Principal is in PrincipalType:name format that will be used along with --list option. Default PrincipalType string 'User' is case sensitive. This will list the ACLs for the specified principal. <br>You can specify multiple --principal in a single command.",
+    "Default": "",
+    "Option type": "Principal"
+  },
+  {
+    "Option": "--allow-host",
+    "Description": "IP address from which principals listed in --allow-principal will have access.",
+    "Default": "if --allow-principal is specified defaults to * which translates to \"all hosts\"",
+    "Option type": "Host"
+  },
+  {
+    "Option": "--deny-host",
+    "Description": "IP address from which principals listed in --deny-principal will be denied access.",
+    "Default": "if --deny-principal is specified defaults to * which translates to \"all hosts\"",
+    "Option type": "Host"
+  },
+  {
+    "Option": "--operation",
+    "Description": "Operation that will be allowed or denied.<br>Valid values are: <ul><li>Read</li><li>Write</li><li>Create</li><li>Delete</li><li>Alter</li><li>Describe</li><li>ClusterAction</li><li>DescribeConfigs</li><li>AlterConfigs</li><li>IdempotentWrite</li><li>CreateTokens</li><li>DescribeTokens</li><li>All</li></ul>",
+    "Default": "All",
+    "Option type": "Operation"
+  },
+  {
+    "Option": "--producer",
+    "Description": "Convenience option to add/remove acls for producer role. This will generate acls that allows WRITE, DESCRIBE and CREATE on topic.",
+    "Default": "",
+    "Option type": "Convenience"
+  },
+  {
+    "Option": "--consumer",
+    "Description": "Convenience option to add/remove acls for consumer role. This will generate acls that allows READ, DESCRIBE on topic and READ on consumer-group.",
+    "Default": "",
+    "Option type": "Convenience"
+  },
+  {
+    "Option": "--idempotent",
+    "Description": "Enable idempotence for the producer. This should be used in combination with the --producer option.<br>Note that idempotence is enabled automatically if the producer is authorized to a particular transactional-id.",
+    "Default": "",
+    "Option type": "Convenience"
+  },
+  {
+    "Option": "--force",
+    "Description": "Convenience option to assume yes to all queries and do not prompt.",
+    "Default": "",
+    "Option type": "Convenience"
+  },
+  {
+    "Option": "--authorizer",
+    "Description": "(DEPRECATED: not supported in KRaft) Fully qualified class name of the authorizer.",
+    "Default": "kafka.security.authorizer.AclAuthorizer",
+    "Option type": "Configuration"
+  },
+  {
+    "Option": "--authorizer-properties",
+    "Description": "(DEPRECATED: not supported in KRaft) key=val pairs that will be passed to authorizer for initialization. For the default authorizer in ZK clsuters, the example values are: zookeeper.connect=localhost:2181",
+    "Default": "",
+    "Option type": "Configuration"
+  },
+  {
+    "Option": "--zk-tls-config-file",
+    "Description": "(DEPRECATED: not supported in KRaft) Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined. Any properties other than the following (with or without an 'authorizer.' prefix) are ignored: zookeeper.clientCnxnSocket, zookeeper.ssl.cipher.suites, zookeeper.ssl.client.enable, zookeeper.ssl.crl.enable, zookeeper.ssl.enabled.protocols, zookeeper.ssl.endpoint.identification.algorithm, zookeeper.ssl.keystore.location, zookeeper.ssl.keystore.password, zookeeper.ssl.keystore.type, zookeeper.ssl.ocsp.enable, zookeeper.ssl.protocol, zookeeper.ssl.truststore.location, zookeeper.ssl.truststore.password, zookeeper.ssl.truststore.type",
+    "Default": "",
+    "Option type": "Configuration"
+  }
+]
