@@ -1,5 +1,10 @@
-kafka-site
-public
-resources
+/public
+/resources
 
 .hugo_build.lock
+
+# Generated data
+/data/config
+/data/protocol
+/data/metrics
+/data/connect

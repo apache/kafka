@@ -1,28 +1,6 @@
-# Proposal to migrate Apache Kafka docs to Markdown/Hugo
+# Kafka documentation
 
-## TODO
-
-- [x] Convert HTML to Markdown
-- [x] Fix cross-references
-- [x] Fix versioned links
-- [x] Integration with Kafka-site
-- [x] Code highlighting
-- [x] Fix tables
-
-## Goals
-
-- Progressing KAFKA-2967[1] and move Kafka documentation into a more manageable language.
-- Use Markdown as markup language and Hugo as static-site generator (similar to Flink).
-
-References:
-
-- https://issues.apache.org/jira/browse/KAFKA-2967
-
-No-goals:
-
-- Migrate kafka-site website. It will require larger effort to replace all dynamics and include logic.
-
-## Changes
+## Changes from old approach
 
 ### Single-page into multiple pages
 
