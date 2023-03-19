@@ -19,6 +19,8 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -390,26 +392,28 @@ public class SerializationTest {
         }
     }
 
-    @Test
-    public void testBooleanSerializer() {
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanSerializer(Boolean dataToSerialize) {
         byte[] testData = new byte[1];
-        testData[0] = (byte) 1;
+        testData[0] = (byte) (dataToSerialize ? 1 : 0);
 
         Serde<Boolean> booleanSerde = Serdes.Boolean();
-        assertArrayEquals(testData, booleanSerde.serializer().serialize(topic, true));
+        assertArrayEquals(testData, booleanSerde.serializer().serialize(topic, dataToSerialize));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanDeserializer(Boolean dataToDeserialize) {
+        byte[] testData = new byte[1];
+        testData[0] = (byte) (dataToDeserialize ? 1 : 0);
+
+        Serde<Boolean> booleanSerde = Serdes.Boolean();
+        assertEquals(dataToDeserialize, booleanSerde.deserializer().deserialize(topic, testData));
     }
 
     @Test
-    public void testBooleanDeserializer() {
-        byte[] testData = new byte[1];
-        testData[0] = (byte) 1;
-
-        Serde<Boolean> booleanSerde = Serdes.Boolean();
-        assertEquals(true, booleanSerde.deserializer().deserialize(topic, testData));
-    }
-
-    @Test
-    public void booleanDeserializerShouldThrowOnNotNullValues() {
+    public void booleanDeserializerShouldThrowOnEmptyInput() {
         try (Serde<Boolean> serde = Serdes.Boolean()) {
             assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
         }

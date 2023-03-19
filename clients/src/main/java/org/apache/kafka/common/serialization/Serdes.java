@@ -127,7 +127,9 @@ public class Serdes {
     }
 
     static public final class BooleanSerde extends WrapperSerde<Boolean> {
-        public BooleanSerde() { super(new BooleanSerializer(), new BooleanDeserializer()); }
+        public BooleanSerde() {
+            super(new BooleanSerializer(), new BooleanDeserializer());
+        }
     }
 
     static public final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
@@ -283,7 +285,7 @@ public class Serdes {
     }
 
     /**
-     * A serde for nullable {@code Boolean} type.
+     * A serde for {@code Boolean} type.
      */
     static public Serde<Boolean> Boolean() {
         return new BooleanSerde();
