@@ -21,13 +21,13 @@ import kafka.raft.KafkaRaftManager;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
-import kafka.server.SharedServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
-import kafka.tools.StorageTool;
+import kafka.server.SharedServer;
 import kafka.utils.Logging;
+import kafka.utils.ToolsUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
@@ -388,7 +388,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         futureConsumer.accept(executorService.submit(() -> {
             try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
                 try (PrintStream out = new PrintStream(stream)) {
-                    StorageTool.formatCommand(out,
+                    ToolsUtils.formatCommand(out,
                             JavaConverters.asScalaBuffer(Collections.singletonList(metadataLogDir)).toSeq(),
                             properties,
                             MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,

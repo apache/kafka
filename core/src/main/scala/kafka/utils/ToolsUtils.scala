@@ -17,9 +17,16 @@
 package kafka.utils
 
 import joptsimple.OptionParser
+import kafka.server.{BrokerMetadataCheckpoint, MetaProperties}
+import kafka.tools.TerseFailure
 import org.apache.kafka.common.{Metric, MetricName}
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.util.CommandLineUtils
 
+import java.io.PrintStream
+import java.nio.file.{Files, Paths}
+import java.util.Optional
 import scala.collection.mutable
 
 object ToolsUtils {
@@ -78,5 +85,46 @@ object ToolsUtils {
   def printUsageAndExit(parser: OptionParser, message: String): Nothing = {
     CommandLineUtils.printUsageAndExit(parser, message)
     throw new AssertionError("printUsageAndExit should not return, but it did.")
+  }
+
+  def formatCommand(stream: PrintStream,
+                    directories: Seq[String],
+                    metaProperties: MetaProperties,
+                    metadataVersion: MetadataVersion,
+                    ignoreFormatted: Boolean): Int = {
+    if (directories.isEmpty) {
+      throw new TerseFailure("No log directories found in the configuration.")
+    }
+    val unformattedDirectories = directories.filter(directory => {
+      if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
+        true
+      } else if (!ignoreFormatted) {
+        throw new TerseFailure(s"Log directory $directory is already formatted. " +
+          "Use --ignore-formatted to ignore this directory and format the others.")
+      } else {
+        false
+      }
+    })
+    if (unformattedDirectories.isEmpty) {
+      stream.println("All of the log directories are already formatted.")
+    }
+    unformattedDirectories.foreach(directory => {
+      try {
+        Files.createDirectories(Paths.get(directory))
+      } catch {
+        case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
+          s"directory $directory: ${e.getMessage}")
+      }
+      val metaPropertiesPath = Paths.get(directory, "meta.properties")
+      val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
+      checkpoint.write(metaProperties.toProperties)
+
+      val bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "format command")
+      val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
+      bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
+
+      stream.println(s"Formatting ${directory} with metadata.version ${metadataVersion}.")
+    })
+    0
   }
 }

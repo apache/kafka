@@ -414,6 +414,11 @@
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
+    <allow pkg="org.apache.kafka.metadata.bootstrap" />
+    <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="kafka.server" />
+    <allow pkg="kafka.tools" />
+    <allow pkg="kafka.utils" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
@@ -422,6 +427,8 @@
     <allow pkg="kafka.test" />
     <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>
+    <allow pkg="scala.collection"/>
+    <allow pkg="scala.jdk"/>
   </subpackage>
 
   <subpackage name="trogdor">
