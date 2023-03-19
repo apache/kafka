@@ -1,5 +1,3 @@
-[2023-03-18 14:18:41,895] INFO Metrics scheduler closed (org.apache.kafka.common.metrics.Metrics:747)
-[2023-03-18 14:18:41,897] INFO Metrics reporters closed (org.apache.kafka.common.metrics.Metrics:757)
 [ {
   "mbean" : "kafka.connect:type=connect-worker-metrics",
   "attributes" : {

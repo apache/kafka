@@ -1,0 +1,190 @@
+[ {
+  "name" : "Produce",
+  "key" : 0
+}, {
+  "name" : "Fetch",
+  "key" : 1
+}, {
+  "name" : "ListOffsets",
+  "key" : 2
+}, {
+  "name" : "Metadata",
+  "key" : 3
+}, {
+  "name" : "LeaderAndIsr",
+  "key" : 4
+}, {
+  "name" : "StopReplica",
+  "key" : 5
+}, {
+  "name" : "UpdateMetadata",
+  "key" : 6
+}, {
+  "name" : "ControlledShutdown",
+  "key" : 7
+}, {
+  "name" : "OffsetCommit",
+  "key" : 8
+}, {
+  "name" : "OffsetFetch",
+  "key" : 9
+}, {
+  "name" : "FindCoordinator",
+  "key" : 10
+}, {
+  "name" : "JoinGroup",
+  "key" : 11
+}, {
+  "name" : "Heartbeat",
+  "key" : 12
+}, {
+  "name" : "LeaveGroup",
+  "key" : 13
+}, {
+  "name" : "SyncGroup",
+  "key" : 14
+}, {
+  "name" : "DescribeGroups",
+  "key" : 15
+}, {
+  "name" : "ListGroups",
+  "key" : 16
+}, {
+  "name" : "SaslHandshake",
+  "key" : 17
+}, {
+  "name" : "ApiVersions",
+  "key" : 18
+}, {
+  "name" : "CreateTopics",
+  "key" : 19
+}, {
+  "name" : "DeleteTopics",
+  "key" : 20
+}, {
+  "name" : "DeleteRecords",
+  "key" : 21
+}, {
+  "name" : "InitProducerId",
+  "key" : 22
+}, {
+  "name" : "OffsetForLeaderEpoch",
+  "key" : 23
+}, {
+  "name" : "AddPartitionsToTxn",
+  "key" : 24
+}, {
+  "name" : "AddOffsetsToTxn",
+  "key" : 25
+}, {
+  "name" : "EndTxn",
+  "key" : 26
+}, {
+  "name" : "WriteTxnMarkers",
+  "key" : 27
+}, {
+  "name" : "TxnOffsetCommit",
+  "key" : 28
+}, {
+  "name" : "DescribeAcls",
+  "key" : 29
+}, {
+  "name" : "CreateAcls",
+  "key" : 30
+}, {
+  "name" : "DeleteAcls",
+  "key" : 31
+}, {
+  "name" : "DescribeConfigs",
+  "key" : 32
+}, {
+  "name" : "AlterConfigs",
+  "key" : 33
+}, {
+  "name" : "AlterReplicaLogDirs",
+  "key" : 34
+}, {
+  "name" : "DescribeLogDirs",
+  "key" : 35
+}, {
+  "name" : "SaslAuthenticate",
+  "key" : 36
+}, {
+  "name" : "CreatePartitions",
+  "key" : 37
+}, {
+  "name" : "CreateDelegationToken",
+  "key" : 38
+}, {
+  "name" : "RenewDelegationToken",
+  "key" : 39
+}, {
+  "name" : "ExpireDelegationToken",
+  "key" : 40
+}, {
+  "name" : "DescribeDelegationToken",
+  "key" : 41
+}, {
+  "name" : "DeleteGroups",
+  "key" : 42
+}, {
+  "name" : "ElectLeaders",
+  "key" : 43
+}, {
+  "name" : "IncrementalAlterConfigs",
+  "key" : 44
+}, {
+  "name" : "AlterPartitionReassignments",
+  "key" : 45
+}, {
+  "name" : "ListPartitionReassignments",
+  "key" : 46
+}, {
+  "name" : "OffsetDelete",
+  "key" : 47
+}, {
+  "name" : "DescribeClientQuotas",
+  "key" : 48
+}, {
+  "name" : "AlterClientQuotas",
+  "key" : 49
+}, {
+  "name" : "DescribeUserScramCredentials",
+  "key" : 50
+}, {
+  "name" : "AlterUserScramCredentials",
+  "key" : 51
+}, {
+  "name" : "DescribeQuorum",
+  "key" : 55
+}, {
+  "name" : "AlterPartition",
+  "key" : 56
+}, {
+  "name" : "UpdateFeatures",
+  "key" : 57
+}, {
+  "name" : "Envelope",
+  "key" : 58
+}, {
+  "name" : "DescribeCluster",
+  "key" : 60
+}, {
+  "name" : "DescribeProducers",
+  "key" : 61
+}, {
+  "name" : "UnregisterBroker",
+  "key" : 64
+}, {
+  "name" : "DescribeTransactions",
+  "key" : 65
+}, {
+  "name" : "ListTransactions",
+  "key" : 66
+}, {
+  "name" : "AllocateProducerIds",
+  "key" : 67
+}, {
+  "name" : "ConsumerGroupHeartbeat",
+  "key" : 68
+} ]

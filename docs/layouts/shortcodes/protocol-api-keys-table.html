@@ -1,0 +1,13 @@
+{{ $source := index .Site.Data.protocol.protocol_api_keys }}
+<table class="data-table">
+    <tr>
+        <th>Name</th>
+        <th>Key</th>
+    </tr>
+    {{ range $source }}
+    <tr>
+        <td><a href='#The_Messages_{{index . "name"}}'><code>{{index . "name" }}</code></a></td>
+        <td><code>{{index . "key" }}</code></td>
+    </tr>
+    {{ end }}
+</table>

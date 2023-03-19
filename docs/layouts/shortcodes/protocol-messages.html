@@ -1,0 +1,94 @@
+{{ $source := index .Site.Data.protocol.protocol_messages }}
+<h3>Headers:</h3>
+{{ $requestHeaders := $source.requestHeaders }}
+<b>Requests:</b>
+<br>
+{{ range $requestHeaders }}
+<h4>Request Header v{{ index . "version" }}</h4>
+<pre>Request Header v{{ index . "version" }} => {{ index . "bnf" }}</pre>
+<table class="data-table">
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    {{ $fields := index . "fields" }}
+    {{ range $fields }}
+    <tr>
+        <td><code>{{index . "field" }}</code></td>
+        <td>{{index . "documentation" | markdownify }} {{ if not (eq (index . "defaultValue") "")}}(Default value: {{index . "defaultValue" }}){{ end }}</td>
+    </tr>
+    {{ end }}
+</table>
+{{ end }}
+{{ $responseHeaders := $source.responseHeaders }}
+<b>Responses:</b>
+<br>
+{{ range $responseHeaders }}
+<h4>Response Header v{{ index . "version" }}</h4>
+<pre>Response Header v{{ index . "version" }} => {{ index . "bnf" }}</pre>
+<table class="data-table">
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    {{ $fields := index . "fields" }}
+    {{ range $fields }}
+    <tr>
+        <td><code>{{index . "field" }}</code></td>
+        <td>{{index . "documentation" | markdownify }} {{ if not (eq (index . "defaultValue") "")}}(Default value: {{index . "defaultValue" }}){{ end }}</td>
+    </tr>
+    {{ end }}
+</table>
+{{ end }}
+
+{{ $apis := $source.apis }}
+{{ range $apis }}
+{{ $apiName := index . "name" }}
+<h3 id='The_Messages_{{index . "name"}}'>{{ index . "name" }} API (Key: {{ index . "id" }})
+    <a class="anchor" href='#The_Messages_{{index . "name"}}'>#</a>
+</h3>
+<b>Requests:</b>
+<br>
+{{ $requests := index . "requests" }}
+{{ range $requests }}
+<h4>{{ $apiName }} Request v{{ index . "version" }}</h4>
+<div>
+    <pre>{{ $apiName }} Request (Version: {{ index . "version" }}) => {{ index . "bnf" }}</pre>
+    <table class="data-table">
+        <tr>
+            <th>Field</th>
+            <th>Description</th>
+        </tr>
+        {{ $fields := index . "fields" }}
+        {{ range $fields }}
+        <tr>
+            <td><code>{{index . "field" }}</code></td>
+            <td>{{index . "documentation" | markdownify }} {{ if not (eq (index . "defaultValue") "")}}(Default value: {{index . "defaultValue" }}){{ end }}</td>
+        </tr>
+        {{ end }}
+    </table>
+</div>
+{{ end }}
+<b>Responses:</b>
+<br>
+{{ $responses := index . "responses" }}
+{{ range $responses }}
+<h4>{{ $apiName }} Response v{{ index . "version" }}</h4>
+<div>
+    <pre>{{ $apiName }} Request (Version: {{ index . "version" }}) => {{ index . "bnf" }}</pre>
+    <table class="data-table">
+        <tr>
+            <th>Field</th>
+            <th>Description</th>
+        </tr>
+        {{ $fields := index . "fields" }}
+        {{ range $fields }}
+        <tr>
+            <td><code>{{index . "field" }}</code></td>
+            <td>{{index . "documentation" | markdownify }} {{ if not (eq (index . "defaultValue") "")}}(Default value: {{index . "defaultValue" }}){{ end }}</td>
+        </tr>
+        {{ end }}
+    </table>
+</div>
+{{ end }}
+{{ end }}
