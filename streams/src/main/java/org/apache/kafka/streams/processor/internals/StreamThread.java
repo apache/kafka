@@ -818,6 +818,7 @@ public class StreamThread extends Thread {
                 }
 
                 log.debug("Processing tasks with {} iterations.", numIterations);
+                final long bufferSizeOld = taskManager.getInputBufferSizeInBytes();
                 final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
@@ -835,7 +836,11 @@ public class StreamThread extends Thread {
                     totalProcessed += processed;
                     totalRecordsProcessedSinceLastSummary += processed;
                     final long bufferSize = taskManager.getInputBufferSizeInBytes();
-                    if (bufferSize <= maxBufferSizeBytes.get() && !mainConsumer.paused().isEmpty()) {
+                    // The total bytes buffered had exceeded the max buffer size and with the processing
+                    // of this batch has fallen down below the threshold. We can resume non-empty partitions
+                    if (bufferSizeOld > maxBufferSizeBytes.get() &&
+                            bufferSize <= maxBufferSizeBytes.get()
+                            && !mainConsumer.paused().isEmpty()) {
                         final Set<TopicPartition> pausedPartitions = mainConsumer.paused();
                         log.info("Buffered records size {} bytes falls below {}. Resuming all the paused partitions {} in the consumer",
                                 bufferSize, maxBufferSizeBytes.get(), pausedPartitions);

@@ -3115,7 +3115,6 @@ public class StreamThreadTest {
         // Buffer size exceeds after adding 3 records for both partitions. Both partitions should be paused.
         consumer.pause(mkSet(t1p1, t2p1));
         EasyMock.expectLastCall().once();
-        // No partitions are paused
         expect(consumer.paused()).andReturn(mkSet(t1p1, t2p1));
 
         // Second poll, return no records. t1p1 and t2p1 should get resumed.
@@ -3124,9 +3123,9 @@ public class StreamThreadTest {
         consumer.resume(mkSet(t1p1, t2p1));
         EasyMock.expectLastCall().once();
 
-        // Third poll, return no records. t1p1 and t2p1 are already resumed so resume shouldn't be invoked
+        // Third poll, return no records. Buffer size has already falled down the threshold so resume
+        // shouldn't be invoked
         expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(Collections.emptyMap()));
-        expect(consumer.paused()).andReturn(Collections.emptySet());
 
         final Task task1 = mock(Task.class);
 
