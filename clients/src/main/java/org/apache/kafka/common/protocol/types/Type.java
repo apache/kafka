@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -1110,6 +1113,28 @@ public abstract class Type {
         }
     };
 
+    private static String printJson() {
+        DocumentedType[] types = {
+                BOOLEAN, INT8, INT16, INT32, INT64,
+                UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
+                STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
+                BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
+                RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
+
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode all = mapper.createArrayNode();
+        for (DocumentedType type: types) {
+            all.add(mapper.createObjectNode()
+                    .put("name", type.typeName())
+                    .put("documentation", type.documentation()));
+        }
+        try {
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(all);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static String toHtml() {
         DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
@@ -1138,6 +1163,6 @@ public abstract class Type {
     }
 
     public static void main(String[] args) {
-        System.out.println(toHtml());
+        System.out.println(printJson());
     }
 }
