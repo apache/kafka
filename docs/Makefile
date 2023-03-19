@@ -3,6 +3,9 @@ VERSION := 35
 
 all: build
 
+gen_data:
+	cd .. && ./gradlew siteDocsTar
+
 build:
 	hugo -b http://localhost:8080/${VERSION}/documentation -t book
 
