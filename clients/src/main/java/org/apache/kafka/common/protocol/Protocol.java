@@ -34,7 +34,7 @@ import java.util.Set;
 
 public class Protocol {
 
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private static String indentString(int size) {
         StringBuilder b = new StringBuilder(size);
@@ -100,13 +100,13 @@ public class Protocol {
     }
 
     private static ArrayNode schemaToFieldsArray(Schema schema) {
-        ArrayNode all = mapper.createArrayNode();
+        ArrayNode all = JSON_MAPPER.createArrayNode();
 
         Set<BoundField> fields = new LinkedHashSet<>();
         populateSchemaFields(schema, fields);
 
         for (BoundField field : fields) {
-            all.add(mapper.createObjectNode()
+            all.add(JSON_MAPPER.createObjectNode()
                     .put("field", field.def.name)
                     .put("documentation", field.def.docString)
                     .put("defaultValue", field.def.hasDefaultValue ? field.def.defaultValue.toString() : ""));
@@ -138,42 +138,42 @@ public class Protocol {
     }
 
     public static String printJson() {
-        ArrayNode requestHeaders = mapper.createArrayNode();
+        ArrayNode requestHeaders = JSON_MAPPER.createArrayNode();
         for (int i = 0; i < RequestHeaderData.SCHEMAS.length; i++) {
             Schema schema = RequestHeaderData.SCHEMAS[i];
             StringBuilder bnf = new StringBuilder();
             schemaToBnf(schema, bnf, 2);
-            ObjectNode node = mapper.createObjectNode()
+            ObjectNode node = JSON_MAPPER.createObjectNode()
                     .put("bnf", bnf.toString())
                     .put("version", i);
             node.set("fields", schemaToFieldsArray(schema));
             requestHeaders.add(node);
         }
-        ArrayNode responseHeaders = mapper.createArrayNode();
+        ArrayNode responseHeaders = JSON_MAPPER.createArrayNode();
         for (int i = 0; i < ResponseHeaderData.SCHEMAS.length; i++) {
             Schema schema = ResponseHeaderData.SCHEMAS[i];
             StringBuilder bnf = new StringBuilder();
             schemaToBnf(schema, bnf, 2);
-            ObjectNode node = mapper.createObjectNode()
+            ObjectNode node = JSON_MAPPER.createObjectNode()
                     .put("bnf", bnf.toString())
                     .put("version", i);
             node.set("fields", schemaToFieldsArray(schema));
             responseHeaders.add(node);
         }
-        ArrayNode apis = mapper.createArrayNode();
+        ArrayNode apis = JSON_MAPPER.createArrayNode();
         for (ApiKeys key : ApiKeys.clientApis()) {
-            ObjectNode node = mapper.createObjectNode()
+            ObjectNode node = JSON_MAPPER.createObjectNode()
                     .put("id", key.id)
                     .put("name", key.name);
 
-            ArrayNode requestsArray = mapper.createArrayNode();
+            ArrayNode requestsArray = JSON_MAPPER.createArrayNode();
             Schema[] requests = key.messageType.requestSchemas();
             for (int i = 0; i < requests.length; i++) {
                 Schema schema = requests[i];
                 if (schema != null) {
                     StringBuilder bnf = new StringBuilder();
                     schemaToBnf(requests[i], bnf, 2);
-                    ObjectNode request = mapper.createObjectNode()
+                    ObjectNode request = JSON_MAPPER.createObjectNode()
                             .put("version", i)
                             .put("bnf", bnf.toString());
                     request.set("fields", schemaToFieldsArray(requests[i]));
@@ -182,14 +182,14 @@ public class Protocol {
             }
             node.set("requests", requestsArray);
 
-            ArrayNode responsesArray = mapper.createArrayNode();
+            ArrayNode responsesArray = JSON_MAPPER.createArrayNode();
             Schema[] responses = key.messageType.responseSchemas();
             for (int i = 0; i < responses.length; i++) {
                 Schema schema = responses[i];
                 if (schema != null) {
                     StringBuilder bnf = new StringBuilder();
                     schemaToBnf(requests[i], bnf, 2);
-                    ObjectNode response = mapper.createObjectNode()
+                    ObjectNode response = JSON_MAPPER.createObjectNode()
                             .put("version", i)
                             .put("bnf", bnf.toString());
                     response.set("fields", schemaToFieldsArray(responses[i]));
@@ -200,13 +200,13 @@ public class Protocol {
             apis.add(node);
         }
 
-        ObjectNode protocol = mapper.createObjectNode();
+        ObjectNode protocol = JSON_MAPPER.createObjectNode();
         protocol.set("requestHeaders", requestHeaders);
         protocol.set("responseHeaders", responseHeaders);
         protocol.set("apis", apis);
 
         try {
-            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(protocol);
+            return JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(protocol);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }

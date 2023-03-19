@@ -100,6 +100,8 @@
 
     <subpackage name="metrics">
       <allow pkg="org.apache.kafka.common.metrics" />
+      <!-- documentation -->
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="memory">
