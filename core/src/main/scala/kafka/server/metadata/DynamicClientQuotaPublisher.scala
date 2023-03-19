@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
-import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
+import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.fault.FaultHandler
 
@@ -32,7 +32,20 @@ class DynamicClientQuotaPublisher(
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
-  def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
+  override def name(): String = s"DynamicClientQuotaPublisher ${nodeType} id=${conf.nodeId}"
+
+  override def onMetadataUpdate(
+    delta: MetadataDelta,
+    newImage: MetadataImage,
+    manifest: LoaderManifest
+  ): Unit = {
+    onMetadataUpdate(delta, newImage)
+  }
+
+  def onMetadataUpdate(
+    delta: MetadataDelta,
+    newImage: MetadataImage,
+  ): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {
         Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
@@ -42,41 +55,5 @@ class DynamicClientQuotaPublisher(
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
         s"publishing dynamic client quota changes from ${deltaName}", t)
     }
-  }
-
-  /**
-   * Returns the name of this publisher.
-   *
-   * @return The publisher name.
-   */
-  override def name(): String = s"DynamicClientQuotaPublisher ${nodeType} id=${conf.nodeId}"
-
-  /**
-   * Publish a new cluster metadata snapshot that we loaded.
-   *
-   * @param delta    The delta between the previous state and the new one.
-   * @param newImage The complete new state.
-   * @param manifest The contents of what was published.
-   */
-  override def publishSnapshot(delta: MetadataDelta, newImage: MetadataImage, manifest: SnapshotManifest): Unit = {
-    publish(delta, newImage)
-  }
-
-  /**
-   * Publish a change to the cluster metadata.
-   *
-   * @param delta    The delta between the previous state and the new one.
-   * @param newImage The complete new state.
-   * @param manifest The contents of what was published.
-   */
-  override def publishLogDelta(delta: MetadataDelta, newImage: MetadataImage, manifest: LogDeltaManifest): Unit = {
-    publish(delta, newImage)
-  }
-
-  /**
-   * Close this metadata publisher.
-   */
-  override def close(): Unit = {
-    // nothing to close
   }
 }

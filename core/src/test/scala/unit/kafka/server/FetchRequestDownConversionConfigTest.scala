@@ -257,7 +257,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val partitionMap = createPartitionMap(1024, partitions, topicIdMap)
 
     val fetchRequest = replicaIdOpt.map { replicaId =>
-      FetchRequest.Builder.forReplica(fetchVersion, replicaId, Int.MaxValue, 0, partitionMap)
+      FetchRequest.Builder.forReplica(fetchVersion, replicaId, -1, Int.MaxValue, 0, partitionMap)
         .build(fetchVersion)
     }.getOrElse {
       FetchRequest.Builder.forConsumer(fetchVersion, Int.MaxValue, 0, partitionMap)

@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.Broker.ServerInfo
-import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
+import kafka.metrics.LinuxIoMetricsCollector
 import kafka.migration.MigrationPropagator
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
@@ -27,8 +27,8 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
+import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -37,6 +37,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
+import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
@@ -44,7 +45,7 @@ import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagat
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.util.{Deadline, FutureUtils}
 
@@ -80,14 +81,15 @@ class ControllerServer(
   val sharedServer: SharedServer,
   val configSchema: KafkaConfigSchema,
   val bootstrapMetadata: BootstrapMetadata,
-) extends Logging with KafkaMetricsGroup {
+) extends Logging {
 
   import kafka.server.Server._
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val config = sharedServer.controllerConfig
   val time = sharedServer.time
   def metrics = sharedServer.metrics
-  val threadNamePrefix = sharedServer.threadNamePrefix.getOrElse("")
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 
   val lock = new ReentrantLock()
@@ -128,19 +130,19 @@ class ControllerServer(
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     val startupDeadline = Deadline.fromDelay(time, config.serverMaxStartupTimeMs, TimeUnit.MILLISECONDS)
     try {
+      this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
       info("Starting controller")
       config.dynamicConfig.initialize(zkClientOpt = None)
 
       maybeChangeStatus(STARTING, STARTED)
-      this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
 
-      newGauge("ClusterId", () => clusterId)
-      newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
+      metricsGroup.newGauge("ClusterId", () => clusterId)
+      metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
       linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger.underlying)
       if (linuxIoMetricsCollector.usable()) {
-        newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-        newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+        metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
+        metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
       }
 
       val javaListeners = config.controllerListeners.map(_.toJava).asJava
@@ -194,7 +196,7 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying,
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
@@ -215,7 +217,7 @@ class ControllerServer(
 
         new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
           setTime(time).
-          setThreadNamePrefix(threadNamePrefix).
+          setThreadNamePrefix(s"quorum-controller-${config.nodeId}-").
           setConfigSchema(configSchema).
           setRaftClient(raftManager.client).
           setQuorumFeatures(quorumFeatures).
@@ -242,7 +244,15 @@ class ControllerServer(
 
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
-        val migrationClient = new ZkMigrationClient(zkClient)
+        val zkConfigEncoder = config.passwordEncoderSecret match {
+          case Some(secret) => PasswordEncoder.encrypting(secret,
+            config.passwordEncoderKeyFactoryAlgorithm,
+            config.passwordEncoderCipherAlgorithm,
+            config.passwordEncoderKeyLength,
+            config.passwordEncoderIterations)
+          case None => PasswordEncoder.noop()
+        }
+        val migrationClient = new ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
         val migrationDriver = new KRaftMigrationDriver(
           config.nodeId,
@@ -263,7 +273,7 @@ class ControllerServer(
       quotaManagers = QuotaFactory.instantiate(config,
         metrics,
         time,
-        threadNamePrefix)
+        s"controller-${config.nodeId}-")
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
@@ -295,33 +305,51 @@ class ControllerServer(
       val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       // Block here until all the authorizer futures are complete
-      FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
 
       // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
 
       // register this instance for dynamic config changes to the KafkaConfig
       config.dynamicConfig.addReconfigurables(this)
-      // We must install the below publisher and receive the changes when we are also running the broker role
-      // because we don't share a single KafkaConfig instance with the broker, and therefore
-      // the broker's DynamicConfigPublisher won't take care of the changes for us.
-      val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
-        // controllers don't host topics, so no need to do anything with dynamic topic config changes here
-        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
-      val dynamicConfigPublisher = new DynamicConfigPublisher(
+
+      val publishers = new java.util.ArrayList[MetadataPublisher]()
+
+      // Set up the dynamic config publisher. This runs even in combined mode, since the broker
+      // has its own separate dynamic configuration object.
+      publishers.add(new DynamicConfigPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
-        dynamicConfigHandlers,
-        "controller")
-      val dynamicClientQuotaPublisher = new DynamicClientQuotaPublisher(
+        immutable.Map[String, ConfigHandler](
+          // controllers don't host topics, so no need to do anything with dynamic topic config changes here
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers)
+        ),
+        "controller"))
+
+      // Set up the client quotas publisher. This will enable controller mutation quotas and any
+      // other quotas which are applicable.
+      publishers.add(new DynamicClientQuotaPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager)
-      FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config and client quota publishers to be installed",
-        sharedServer.loader.installPublishers(List(dynamicConfigPublisher, dynamicClientQuotaPublisher).asJava), startupDeadline, time)
+        clientQuotaMetadataManager))
+
+      // Set up the SCRAM publisher.
+      publishers.add(new ScramPublisher(
+        config,
+        sharedServer.metadataPublishingFaultHandler,
+        "controller",
+        credentialProvider
+      ))
+
+      // Install all metadata publishers.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the controller metadata publishers to be installed",
+        sharedServer.loader.installPublishers(publishers), startupDeadline, time)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)

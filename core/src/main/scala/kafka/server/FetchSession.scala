@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
@@ -25,11 +24,12 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import java.util
-import java.util.Optional
+import java.util.{Collections, Optional}
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
-import scala.collection.{mutable, _}
+import scala.collection.mutable
 import scala.math.Ordered.orderingToOrdered
 
 object FetchSession {
@@ -564,7 +564,9 @@ case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Compara
   * @param evictionMs The minimum time that an entry must be unused in order to be evictable.
   */
 class FetchSessionCache(private val maxEntries: Int,
-                        private val evictionMs: Long) extends Logging with KafkaMetricsGroup {
+                        private val evictionMs: Long) extends Logging {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
   private var numPartitions: Long = 0
 
   // A map of session ID to FetchSession.
@@ -581,13 +583,13 @@ class FetchSessionCache(private val maxEntries: Int,
   private val evictableByPrivileged = new util.TreeMap[EvictableKey, FetchSession]
 
   // Set up metrics.
-  removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => FetchSessionCache.this.size)
-  removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
-  removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
-  private[server] val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
-    FetchSession.EVICTIONS, TimeUnit.SECONDS, Map.empty)
+  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
+  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => FetchSessionCache.this.size)
+  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
+  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
+  metricsGroup.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
+  private[server] val evictionsMeter = metricsGroup.newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
+    FetchSession.EVICTIONS, TimeUnit.SECONDS, Collections.emptyMap())
 
   /**
     * Get a session by session ID.
