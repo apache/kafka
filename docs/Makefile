@@ -12,11 +12,9 @@ test:
 test-book:
 	hugo serve -b http://localhost:1313/${VERSION}/documentation -t book
 
-site: build
-	rm -rf kafka-site/${VERSION}
-	mkdir kafka-site/${VERSION}
-	cp -r public kafka-site/${VERSION}/documentation
-	docker build -t ak-docs .
+site:
+	hugo -b http://localhost:8080/${VERSION}/documentation -t book
+	docker build -t ak-docs . --no-cache
 
 run:
 	docker run -it -p 8080:80 ak-docs

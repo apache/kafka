@@ -8,15 +8,15 @@ clusters. It combines the simplicity of writing and deploying standard
 Java and Scala applications on the client side with the benefits of
 Kafka\'s server-side cluster technology.
 
-## TOUR OF THE STREAMS API
+## Tour of the Streams API
 
-[![](intro_to_streams-iframe-placeholder.png)](https://youtube.com/watch?v=ni3XPsYC5cQ&rel=0&showinfo=0&end=602)
-
-[![](creating-streams-iframe-placeholder.png)](https://youtube.com/watch?v=9ZhsnXM2OVM&rel=0&showinfo=0&end=622)
-
-[![](transforming_part_1-iframe-placeholder.png)](https://youtube.com/watch?v=SYmqwvE8umM&rel=0&showinfo=0end=557)
-
-[![](transforming_part_2-iframe-placeholder.png)](https://youtube.com/watch?v=Vk55Kl9x_Fw&rel=0&showinfo=0&end=564)
+{{< youtube ni3XPsYC5cQ >}}
+<br/>
+{{< youtube 9ZhsnXM2OVM >}}
+<br/>
+{{< youtube SYmqwvE8umM >}}
+<br/>
+{{< youtube Vk55Kl9x_Fw >}}
 
 ## Why you\'ll love using Kafka Streams!
 
@@ -35,14 +35,14 @@ Kafka\'s server-side cluster technology.
 
 ## Kafka Streams use cases
 
-[![](nyt.jpg)](https://open.nytimes.com/publishing-with-apache-kafka-at-the-new-york-times-7f0e3b7d2077)
+{{< figure-from-baseurl src="images/icons/nyt.jpg" link="https://open.nytimes.com/publishing-with-apache-kafka-at-the-new-york-times-7f0e3b7d2077" >}}
 
 [The New York Times uses Apache Kafka](https://open.nytimes.com/publishing-with-apache-kafka-at-the-new-york-times-7f0e3b7d2077)
 and the Kafka Streams to store and distribute, in real-time, published
 content to the various applications and systems that make it available
 to the readers.
 
-[![](zalando.jpg)](https://www.confluent.io/blog/ranking-websites-real-time-apache-kafkas-streams-api/)
+{{< figure-from-baseurl src="images/icons/zalando.jpg" link="https://www.confluent.io/blog/ranking-websites-real-time-apache-kafkas-streams-api/" >}}
 
 As the leading online fashion retailer in Europe, Zalando uses Kafka as
 an ESB (Enterprise Service Bus), which helps us in transitioning from a
@@ -50,7 +50,7 @@ monolithic to a micro services architecture. Using Kafka for processing
 [event streams](https://www.confluent.io/blog/ranking-websites-real-time-apache-kafkas-streams-api/){target="blank"}
 enables our technical team to do near-real time business intelligence.
 
-[![](line.svg)](https://engineering.linecorp.com/en/blog/detail/80)
+{{< figure-from-baseurl src="images/icons/line.svg" title="LINE" link="https://engineering.linecorp.com/en/blog/detail/80" >}}
 
 [LINE uses Apache Kafka](https://engineering.linecorp.com/en/blog/detail/80)
 as a central datahub for our services to communicate to one another.
@@ -61,14 +61,14 @@ filter topics enabling sub topics consumers can efficiently consume,
 meanwhile retaining easy maintainability thanks to its sophisticated yet
 minimal code base.
 
-[![](pinterest.png)](https://medium.com/@Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996)
+{{< figure-from-baseurl src="images/icons/pinterest.png" link="https://medium.com/@Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996" >}}
 
 [Pinterest uses Apache Kafka and the Kafka Streams](https://medium.com/@Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996)
 at large scale to power the real-time, predictive budgeting system of
 their advertising infrastructure. With Kafka Streams, spend predictions
 are more accurate than ever.
 
-[![](rabobank.jpg)](https://www.confluent.io/blog/real-time-financial-alerts-rabobank-apache-kafkas-streams-api/)
+{{< figure-from-baseurl src="images/icons/rabobank.jpg" link="https://www.confluent.io/blog/real-time-financial-alerts-rabobank-apache-kafkas-streams-api/" >}}
 
 Rabobank is one of the 3 largest banks in the Netherlands. Its digital
 nervous system, the Business Event Bus, is powered by Apache Kafka. It
@@ -77,7 +77,7 @@ of which is Rabo Alerts. This service alerts customers in real-time upon
 financial events and is 
 [built using Kafka Streams.](https://www.confluent.io/blog/real-time-financial-alerts-rabobank-apache-kafkas-streams-api/)
 
-[![](trivago.png)](https://speakerdeck.com/xenji/kafka-and-debezium-at-trivago-code-dot-talks-2017-edition)
+{{< figure-from-baseurl src="images/icons/trivago.png" link="https://speakerdeck.com/xenji/kafka-and-debezium-at-trivago-code-dot-talks-2017-edition" >}}
 
 Trivago is a global hotel search platform. We are focused on reshaping
 the way travelers search for and compare hotels, while enabling hotel
