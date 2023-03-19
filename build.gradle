@@ -2768,6 +2768,7 @@ project(':connect:runtime') {
   task genConnectMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
+    // TODO: fix output that includes logging from Metrics.close()
     def generatedDocsDir = new File("${project.rootDir}/docs/data/metrics")
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.json").newOutputStream()
