@@ -46,7 +46,8 @@ public class QuorumControllerMetricsTest {
             "LastAppliedRecordLagMs",
             "LastAppliedRecordOffset",
             "LastAppliedRecordTimestamp",
-            "LastCommittedRecordOffset"
+            "LastCommittedRecordOffset",
+            "ZkMigrationState"
         );
         assertMetricsCreatedAndRemovedUponClose(expectedType, expectedMetricNames);
     }

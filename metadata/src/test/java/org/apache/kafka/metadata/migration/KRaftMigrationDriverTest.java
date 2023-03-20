@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -220,6 +221,12 @@ public class KRaftMigrationDriverTest {
         return record;
     }
 
+    ZkMigrationStateRecord preMigrationRecord() {
+        ZkMigrationStateRecord record = new ZkMigrationStateRecord();
+        record.setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value());
+        return record;
+    }
+
     /**
      * Enqueues a metadata change event with the migration driver and returns a future that can be waited on in
      * the test code. The future will complete once the metadata change event executes completely.
@@ -264,6 +271,7 @@ public class KRaftMigrationDriverTest {
         MetadataDelta delta = new MetadataDelta(image);
 
         driver.start();
+        delta.replay(preMigrationRecord());
         delta.replay(zkBrokerRecord(1));
         delta.replay(zkBrokerRecord(2));
         delta.replay(zkBrokerRecord(3));
@@ -345,6 +353,7 @@ public class KRaftMigrationDriverTest {
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
+            delta.replay(preMigrationRecord());
             delta.replay(zkBrokerRecord(1));
             delta.replay(zkBrokerRecord(2));
             delta.replay(zkBrokerRecord(3));
