@@ -289,6 +289,10 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleanerManager.pauseCleaningForNonCompactedPartitions()
   }
 
+  def isCleaningInStatePaused(topicPartition: TopicPartition): Boolean = {
+    cleanerManager.checkIsCleaningInStatePaused(topicPartition)
+  }
+
   // Only for testing
   private[kafka] def currentConfig: CleanerConfig = config
 

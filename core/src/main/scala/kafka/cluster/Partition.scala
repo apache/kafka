@@ -444,11 +444,11 @@ class Partition(val topicPartition: TopicPartition,
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
     def updateHighWatermark(log: UnifiedLog): Unit = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
-        info(s"No checkpointed highwatermark is found for partition $topicPartition")
+        info(s"No checkpointed highwatermark is found for ${if (isFutureReplica) "future partition" else "partition"} $topicPartition")
         0L
       }
       val initialHighWatermark = log.updateHighWatermark(checkpointHighWatermark)
-      info(s"Log loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
+      info(s"${if (isFutureReplica) "Future Log" else "Log"} loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
     }
 
     logManager.initializingLog(topicPartition)

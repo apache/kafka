@@ -817,7 +817,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Resume cleaning of the provided partition and log a message about it.
    */
-  private def resumeCleaning(topicPartition: TopicPartition): Unit = {
+  def resumeCleaning(topicPartition: TopicPartition): Unit = {
     if (cleaner != null) {
       cleaner.resumeCleaning(Seq(topicPartition))
       info(s"Cleaning for partition $topicPartition is resumed")

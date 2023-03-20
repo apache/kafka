@@ -469,7 +469,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  private def markPartitionFailed(topicPartition: TopicPartition): Unit = {
+  def markPartitionFailed(topicPartition: TopicPartition): Unit = {
     partitionMapLock.lock()
     try {
       failedPartitions.add(topicPartition)
@@ -701,6 +701,8 @@ abstract class AbstractFetcherThread(name: String,
    *    - the request succeeded or
    *    - it was fenced and this thread hasn't received new epoch, which means we need not backoff and retry as the
    *    partition is moved to failed state.
+   *    - for ReplicaAlterLogDirsThread, "OutOfRange" error is generated when starting fetch to leader (source dir,
+   *    and log start offset is not equal to 0) when just creating future log under a new directory and hw is 0.
    *
    * Returns false if there was a retriable error.
    *
@@ -715,7 +717,8 @@ abstract class AbstractFetcherThread(name: String,
       val newFetchState = fetchOffsetAndTruncate(topicPartition, fetchState.topicId, fetchState.currentLeaderEpoch)
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
       info(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
-        s"out of range, which typically implies a leader change. Reset fetch offset to ${newFetchState.fetchOffset}")
+        s"out of range, which typically implies a leader change or first fetch for a new future log. Reset fetch " +
+        s"offset to ${newFetchState.fetchOffset}")
       true
     } catch {
       case _: FencedLeaderEpochException =>

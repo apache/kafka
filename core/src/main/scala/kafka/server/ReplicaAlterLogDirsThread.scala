@@ -97,6 +97,16 @@ class ReplicaAlterLogDirsThread(name: String,
     }
   }
 
+  // For ReplicaAlterLogDirsThread, if the partition is marked as failed due to an unknown exception and the partition fetch
+  // is suspended, the paused cleanup logic of the partition needs to be canceled, otherwise it will lead to serious unexpected
+  // disk usage growth.
+  override def markPartitionFailed(topicPartition: TopicPartition): Unit = {
+    super.markPartitionFailed(topicPartition)
+    info(s"For ReplicaAlterLogDirsThread, may also need to resume log cleaner for partition $topicPartition")
+
+    replicaMgr.logManager.resumeCleaning(topicPartition)
+  }
+
   override protected val isOffsetForLeaderEpochSupported: Boolean = true
 
   /**
