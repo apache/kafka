@@ -317,6 +317,74 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof KafkaProducer)) {
+            return false;
+        }
+        KafkaProducer other = (KafkaProducer) o;
+
+        if (!this.partitioner.equals(other.partitioner)) {
+            return false;
+        }
+        if (!this.accumulator.equals(other.accumulator)) {
+            return false;
+        }
+        if (this.maxRequestSize != other.maxRequestSize) {
+            return false;
+        }
+        if (this.totalMemorySize != other.totalMemorySize) {
+            return false;
+        }
+        if (!this.metadata.equals(other.metadata)) {
+            return false;
+        }
+        if (!this.sender.equals(other.sender)) {
+            return false;
+        }
+        if (!this.compressionType.equals(other.compressionType)) {
+            return false;
+        }
+        if (!this.time.equals(other.time)) {
+            return false;
+        }
+        if (!this.keySerializer.equals(other.keySerializer)) {
+            return false;
+        }
+        if (!this.valueSerializer.equals(other.valueSerializer)) {
+            return false;
+        }
+        if (!this.interceptors.equals(other.interceptors)) {
+            return false;
+        }
+        if (this.maxBlockTimeMs != other.maxBlockTimeMs) {
+            return false;
+        }
+        if (!this.apiVersions.equals(other.apiVersions)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int temp = 31 * this.partitioner.hashCode();
+        temp = 31 * temp + this.accumulator.hashCode();
+        temp = 31 * temp + this.maxRequestSize;
+        temp = 31 * temp + Long.hashCode(this.totalMemorySize);
+        temp = 31 * temp + this.metadata.hashCode();
+        temp = 31 * temp + this.sender.hashCode();
+        temp = 31 * temp + this.compressionType.hashCode();
+        temp = 31 * temp + this.time.hashCode();
+        temp = 31 * temp + this.keySerializer.hashCode();
+        temp = 31 * temp + this.valueSerializer.hashCode();
+        temp = 31 * temp + this.interceptors.hashCode();
+        temp = 31 * temp + Long.hashCode(this.maxBlockTimeMs);
+        temp = 31 * temp + this.apiVersions.hashCode();
+        return temp;
+    }
+
     /**
      * Check if partitioner is deprecated and log a warning if it is.
      */

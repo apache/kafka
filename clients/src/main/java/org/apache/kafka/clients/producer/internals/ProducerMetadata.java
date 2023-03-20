@@ -64,6 +64,38 @@ public class ProducerMetadata extends Metadata {
         return new MetadataRequest.Builder(new ArrayList<>(newTopics), true);
     }
 
+    @Override
+    public int hashCode() {
+        int temp = topics.hashCode();
+        temp = 31 * temp + newTopics.hashCode();
+        temp = 31 * temp + log.hashCode();
+        temp = 31 * temp + time.hashCode();
+        return temp;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof ProducerMetadata)) {
+            return false;
+        }
+        ProducerMetadata other = (ProducerMetadata) o;
+
+        if (!this.topics.equals(other.topics)) {
+            return false;
+        }
+        if (!this.newTopics.equals(other.newTopics)) {
+            return false;
+        }
+        if (!this.log.equals(other.log)) {
+            return false;
+        }
+        if (!this.time.equals(other.time)) {
+            return false;
+        }
+
+        return true;
+    }
+
     public synchronized void add(String topic, long nowMs) {
         Objects.requireNonNull(topic, "topic cannot be null");
         if (topics.put(topic, nowMs + metadataIdleMs) == null) {
