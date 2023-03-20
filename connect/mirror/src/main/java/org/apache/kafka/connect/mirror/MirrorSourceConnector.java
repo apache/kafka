@@ -567,7 +567,7 @@ public class MirrorSourceConnector extends SourceConnector {
                     useIncrementalAlterConfigs = MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG;
                 } else if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG)
                         && e instanceof UnsupportedVersionException) {
-                    log.error("{} was set to \"required\" however the target cluster {} is not compatible with IncrementalAlterConfigs API", MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG, sourceAndTarget.target(), e);
+                    context.raiseError(new UnsupportedVersionException("use.incremental.alter.configs was set to \"required\" however the target cluster is not compatible with IncrementalAlterConfigs API"));
                 } else {
                     log.warn("Could not alter configuration of topic {}.", k.name(), e);
                 }

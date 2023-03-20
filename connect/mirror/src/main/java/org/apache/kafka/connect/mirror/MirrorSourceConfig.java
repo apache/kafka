@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+
 public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     protected static final String REFRESH_TOPICS = "refresh.topics";
@@ -176,12 +178,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     }
 
     String useIncrementalAlterConfigs() {
-        String prop = getString(USE_INCREMENTAL_ALTER_CONFIG);
-        if (prop.equals(NEVER_USE_INCREMENTAL_ALTER_CONFIG) || prop.equals(REQUIRE_INCREMENTAL_ALTER_CONFIG)) {
-            return prop;
-        } else {
-            return REQUEST_INCREMENTAL_ALTER_CONFIG;
-        }
+        return getString(USE_INCREMENTAL_ALTER_CONFIG);
     }
 
     Duration syncTopicAclsInterval() {
@@ -290,6 +287,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                     USE_INCREMENTAL_ALTER_CONFIG,
                     ConfigDef.Type.STRING,
                     REQUEST_INCREMENTAL_ALTER_CONFIG,
+                    in(REQUEST_INCREMENTAL_ALTER_CONFIG, REQUIRE_INCREMENTAL_ALTER_CONFIG, NEVER_USE_INCREMENTAL_ALTER_CONFIG),
                     ConfigDef.Importance.LOW,
                     USE_INCREMENTAL_ALTER_CONFIG_DOC)
             .define(
@@ -326,7 +324,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                     OFFSET_SYNCS_TOPIC_LOCATION,
                     ConfigDef.Type.STRING,
                     OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT,
-                    ConfigDef.ValidString.in(SOURCE_CLUSTER_ALIAS_DEFAULT, TARGET_CLUSTER_ALIAS_DEFAULT),
+                    in(SOURCE_CLUSTER_ALIAS_DEFAULT, TARGET_CLUSTER_ALIAS_DEFAULT),
                     ConfigDef.Importance.LOW,
                     OFFSET_SYNCS_TOPIC_LOCATION_DOC);
 
