@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
@@ -261,17 +262,28 @@ public class AdminApiDriver<K, V> {
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
         } else {
+            boolean isFulfillmentStage = spec.scope instanceof FulfillmentScope;
+            if (handleUnsupportedVersionException(t, isFulfillmentStage)) {
+                return;
+            }
+
             Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
                 Function.identity(),
                 key -> t
             ));
-
-            if (spec.scope instanceof FulfillmentScope) {
+            if (isFulfillmentStage) {
                 completeExceptionally(errors);
             } else {
                 completeLookupExceptionally(errors);
             }
         }
+    }
+
+    private boolean handleUnsupportedVersionException(Throwable t, boolean isFulfillmentStage) {
+        return t instanceof UnsupportedVersionException
+            && handler.handleUnsupportedVersionException(
+                (UnsupportedVersionException) t,
+                isFulfillmentStage);
     }
 
     private void clearInflightRequest(long currentTimeMs, RequestSpec<K> spec) {

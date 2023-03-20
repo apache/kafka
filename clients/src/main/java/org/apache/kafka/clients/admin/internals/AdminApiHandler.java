@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
@@ -69,6 +70,22 @@ public interface AdminApiHandler<K, V> {
      * @return result indicating key completion, failure, and unmapping
      */
     ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response);
+
+    /**
+     * Callback that is invoked when a request hits an UnsupportedVersionException. If the
+     * exception can be handled and the request retried, the appropriate changes to the request
+     * should be applied and that should be indicated via the returned boolean value. If the
+     * exception is thrown during the lookup stage the handler should delegate the handling to the
+     * lookup strategy.
+     *
+     * @return True if the exception can be handled; false otherwise.
+     */
+    default boolean handleUnsupportedVersionException(
+        UnsupportedVersionException exception,
+        boolean isFulfillmentStage
+    ) {
+        return false;
+    }
 
     /**
      * Get the lookup strategy that is responsible for finding the brokerId

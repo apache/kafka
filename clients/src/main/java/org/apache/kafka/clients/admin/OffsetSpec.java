@@ -33,7 +33,7 @@ public class OffsetSpec {
             this.timestamp = timestamp;
         }
 
-        long timestamp() {
+        public long timestamp() {
             return timestamp;
         }
     }
