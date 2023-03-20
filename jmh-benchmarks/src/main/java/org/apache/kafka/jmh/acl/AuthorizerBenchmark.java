@@ -71,8 +71,8 @@ import java.util.function.Supplier;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 1)
-@Measurement(iterations = 2)
+@Warmup(iterations = 5)
+@Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class AuthorizerBenchmark {
@@ -92,13 +92,13 @@ public class AuthorizerBenchmark {
         }
     }
 
-    @Param({"50000"})
+    @Param({"10000", "50000", "200000"})
     private int resourceCount;
     //no. of. rules per resource
-    @Param({"50"})
+    @Param({"10", "50"})
     private int aclCount;
 
-    @Param({"20"})
+    @Param({"0", "20", "50", "90", "99", "99.9", "99.99", "100"})
     private double denyPercentage;
 
     @Param({"ACL", "KRAFT"})
