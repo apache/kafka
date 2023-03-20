@@ -33,7 +33,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.MetadataVersion;
 import scala.collection.Seq;
-import scala.jdk.CollectionConverters;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -76,7 +76,7 @@ public class StorageTool {
         switch (command) {
             case "info": {
                 if (config.isPresent()) {
-                    ArrayList<String> directories = configToLogDirectories(config.get());
+                    List<String> directories = configToLogDirectories(config.get());
                     boolean selfManagedMode = configToSelfManagedMode(config.get());
                     Exit.exit(infoCommand(System.out, selfManagedMode, directories));
                 }
@@ -84,7 +84,7 @@ public class StorageTool {
             }
             case "format": {
                 if (config.isPresent()) {
-                    ArrayList<String> directories = configToLogDirectories(config.get());
+                    List<String> directories = configToLogDirectories(config.get());
                     String clusterId = namespace.getString("cluster_id");
                     MetadataVersion metadataVersion = getMetadataVersion(namespace, Optional.of(config.get().interBrokerProtocolVersionString()));
                     if (!metadataVersion.isKRaftSupported()) {
@@ -109,9 +109,9 @@ public class StorageTool {
         }
     }
 
-    static int infoCommand(PrintStream stream, boolean selfManagedMode, ArrayList<String> directories) throws IOException {
-        ArrayList<String> problems = new ArrayList<>();
-        ArrayList<String> foundDirectories = new ArrayList<>();
+    static int infoCommand(PrintStream stream, boolean selfManagedMode, List<String> directories) throws IOException {
+        List<String> problems = new ArrayList<>();
+        List<String> foundDirectories = new ArrayList<>();
         Optional<RawMetaProperties> prevMetadata = Optional.empty();
         for (String directory : directories) {
             Path directoryPath = Paths.get(directory);
@@ -153,7 +153,6 @@ public class StorageTool {
             }
         }
 
-
         if (prevMetadata.isPresent()) {
             if (selfManagedMode) {
                 if (prevMetadata.get().version() == 0) {
@@ -167,7 +166,7 @@ public class StorageTool {
         return validateDirectories(stream, directories, problems, foundDirectories, prevMetadata);
     }
 
-    private static int validateDirectories(PrintStream stream, ArrayList<String> directories, ArrayList<String> problems, ArrayList<String> foundDirectories, Optional<RawMetaProperties> prevMetadata) {
+    private static int validateDirectories(PrintStream stream, List<String> directories, List<String> problems, List<String> foundDirectories, Optional<RawMetaProperties> prevMetadata) {
         if (directories.isEmpty()) {
             stream.println("No directories specified.");
             return 0;
@@ -217,16 +216,14 @@ public class StorageTool {
 
         formatParser.addArgument("--cluster-id", "-t").action(store()).required(true).help("The cluster ID to use.");
         formatParser.addArgument("--ignore-formatted", "-g").action(storeTrue());
-
         formatParser.addArgument("--release-version", "-r").action(store()).help(String.format("A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is %s", MetadataVersion.latest().version()));
-
 
         return parser.parseArgsOrFail(args);
     }
 
-    static ArrayList<String> configToLogDirectories(KafkaConfig kafkaConfig) {
+    static List<String> configToLogDirectories(KafkaConfig kafkaConfig) {
         Seq<String> logDirs = kafkaConfig.logDirs();
-        SortedSet<String> directories = new TreeSet<>(CollectionConverters.SeqHasAsJava(logDirs).asJava());
+        SortedSet<String> directories = new TreeSet<>(JavaConverters.asJava(logDirs));
         String metadataLogDir = kafkaConfig.metadataLogDir();
         if (metadataLogDir != null) {
             directories.add(metadataLogDir);
@@ -269,8 +266,7 @@ public class StorageTool {
         return new MetaProperties(effectiveClusterId.toString(), config.nodeId());
     }
 
-
-    public static int formatCommand(PrintStream stream, List<String> directories, MetaProperties metaProperties, MetadataVersion metadataVersion, boolean ignoreFormatted) {
+    static int formatCommand(PrintStream stream, List<String> directories, MetaProperties metaProperties, MetadataVersion metadataVersion, boolean ignoreFormatted) {
         if (directories.isEmpty()) {
             throw new TerseFailure("No log directories found in the configuration.");
         }
@@ -310,6 +306,4 @@ public class StorageTool {
         });
         return 0;
     }
-
-
 }
