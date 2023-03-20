@@ -632,7 +632,9 @@ public class ReplicationControlManager {
                         "Found multiple manual partition assignments for partition " +
                             assignment.partitionIndex());
                 }
-                validateManualPartitionAssignment(assignment.brokerIds(), replicationFactor);
+                validateManualPartitionAssignment(
+                    new PartitionAssignment(assignment.brokerIds()),
+                    replicationFactor);
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
                 List<Integer> isr = assignment.brokerIds().stream().
                     filter(clusterControl::isActive).collect(Collectors.toList());
@@ -1559,7 +1561,7 @@ public class ReplicationControlManager {
             isrs = new ArrayList<>();
             for (int i = 0; i < topic.assignments().size(); i++) {
                 CreatePartitionsAssignment assignment = topic.assignments().get(i);
-                validateManualPartitionAssignment(assignment.brokerIds(),
+                validateManualPartitionAssignment(new PartitionAssignment(assignment.brokerIds()),
                     OptionalInt.of(replicationFactor));
                 partitionAssignments.add(new PartitionAssignment(assignment.brokerIds()));
                 List<Integer> isr = assignment.brokerIds().stream().
@@ -1607,13 +1609,15 @@ public class ReplicationControlManager {
         }
     }
 
-    void validateManualPartitionAssignment(List<Integer> assignment,
-                                           OptionalInt replicationFactor) {
-        if (assignment.isEmpty()) {
+    void validateManualPartitionAssignment(
+        PartitionAssignment assignment,
+        OptionalInt replicationFactor
+    ) {
+        if (assignment.replicas().isEmpty()) {
             throw new InvalidReplicaAssignmentException("The manual partition " +
                 "assignment includes an empty replica list.");
         }
-        List<Integer> sortedBrokerIds = new ArrayList<>(assignment);
+        List<Integer> sortedBrokerIds = new ArrayList<>(assignment.replicas());
         sortedBrokerIds.sort(Integer::compare);
         Integer prevBrokerId = null;
         for (Integer brokerId : sortedBrokerIds) {
@@ -1841,18 +1845,21 @@ public class ReplicationControlManager {
                                                                PartitionRegistration part,
                                                                ReassignablePartition target) {
         // Check that the requested partition assignment is valid.
-        validateManualPartitionAssignment(target.replicas(), OptionalInt.empty());
+        PartitionAssignment currentAssignment = new PartitionAssignment(Replicas.toList(part.replicas));
+        PartitionAssignment targetAssignment = new PartitionAssignment(target.replicas());
+
+        validateManualPartitionAssignment(targetAssignment, OptionalInt.empty());
 
         List<Integer> currentReplicas = Replicas.toList(part.replicas);
         PartitionReassignmentReplicas reassignment =
-            new PartitionReassignmentReplicas(currentReplicas, target.replicas());
+            new PartitionReassignmentReplicas(currentAssignment, targetAssignment);
         PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
             featureControl.metadataVersion().isLeaderRecoverySupported());
-        if (!reassignment.merged().equals(currentReplicas)) {
-            builder.setTargetReplicas(reassignment.merged());
+        if (!reassignment.replicas().equals(currentReplicas)) {
+            builder.setTargetReplicas(reassignment.replicas());
         }
         if (!reassignment.removing().isEmpty()) {
             builder.setTargetRemoving(reassignment.removing());
