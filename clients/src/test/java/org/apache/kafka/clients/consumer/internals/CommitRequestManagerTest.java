@@ -103,10 +103,10 @@ public class CommitRequestManagerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
-        commitRequestManger.clientPoll(time.milliseconds());
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         when(subscriptionState.allConsumed()).thenReturn(offsets);
         time.sleep(100);
-        commitRequestManger.clientPoll(time.milliseconds());
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
     }
@@ -115,7 +115,7 @@ public class CommitRequestManagerTest {
     public void testAutocommitStateUponFailure() {
         CommitRequestManager commitRequestManger = create(true, 100);
         time.sleep(100);
-        commitRequestManger.clientPoll(time.milliseconds());
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         time.sleep(100);
         // We want to make sure we don't resend autocommit if the previous request has not been completed
@@ -125,7 +125,7 @@ public class CommitRequestManagerTest {
         res.unsentRequests.get(0).future().completeExceptionally(new KafkaException("test exception"));
 
         // we can then autocommit again
-        commitRequestManger.clientPoll(time.milliseconds());
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         assertEmptyPendingRequests(commitRequestManger);

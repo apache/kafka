@@ -70,7 +70,7 @@ public class ApplicationEventProcessor {
         }
 
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.clientPoll(event.pollTimeMs);
+        manager.updateAutoCommitTimer(event.pollTimeMs);
         return true;
     }
 
