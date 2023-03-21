@@ -38,7 +38,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.junit.MockitoRule;
 
 import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -84,16 +83,13 @@ public class RestClientTest {
             HttpClient httpClient,
             String url,
             String method,
-            HttpHeaders headers,
-            Object requestBodyData,
             TypeReference<T> responseFormat,
-            SecretKey sessionKey,
             String requestSignatureAlgorithm
     ) {
         RestClient client = spy(new RestClient(null));
         doReturn(httpClient).when(client).httpClient();
         return client.httpRequest(
-                url, method, headers, requestBodyData, responseFormat, sessionKey, requestSignatureAlgorithm);
+                url, method, null, TEST_DTO, responseFormat, MOCK_SECRET_KEY, requestSignatureAlgorithm);
     }
 
 
@@ -130,7 +126,7 @@ public class RestClientTest {
             Request request = buildThrowingMockRequest(requestException);
             when(httpClient.newRequest(anyString())).thenReturn(request);
             ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(
-                    httpClient, MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, TEST_SIGNATURE_ALGORITHM
+                    httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
             assertIsInternalServerError(e);
             assertEquals(requestException, e.getCause());
@@ -167,7 +163,7 @@ public class RestClientTest {
             setupHttpClient(statusCode, toJsonString(TEST_DTO));
 
             assertThrows(NullPointerException.class, () -> httpRequest(
-                    httpClient, null, "GET", null, null, new TypeReference<Void>() { }, null, null
+                    httpClient, null, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
         }
 
@@ -177,7 +173,7 @@ public class RestClientTest {
             setupHttpClient(statusCode, toJsonString(TEST_DTO));
 
             assertThrows(NullPointerException.class, () -> httpRequest(
-                    httpClient, MOCK_URL, null, null, null, new TypeReference<Void>() { }, null, null
+                    httpClient, MOCK_URL, null, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
         }
 
@@ -187,7 +183,7 @@ public class RestClientTest {
             setupHttpClient(statusCode, toJsonString(TEST_DTO));
 
             assertThrows(NullPointerException.class, () -> httpRequest(
-                    httpClient, MOCK_URL, TEST_METHOD, null, null, null, null, null));
+                    httpClient, MOCK_URL, TEST_METHOD, null, TEST_SIGNATURE_ALGORITHM));
         }
 
         @Test
@@ -196,7 +192,7 @@ public class RestClientTest {
             setupHttpClient(statusCode, toJsonString(TEST_DTO));
 
             RestClient.HttpResponse<TestDTO> httpResp = httpRequest(
-                    httpClient, MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, TEST_SIGNATURE_ALGORITHM
+                    httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             );
             assertEquals(statusCode, httpResp.status());
             assertEquals(TEST_DTO, httpResp.body());
@@ -208,7 +204,7 @@ public class RestClientTest {
             setupHttpClient(statusCode, null);
 
             RestClient.HttpResponse<TestDTO> httpResp = httpRequest(
-                    httpClient, MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, TEST_SIGNATURE_ALGORITHM
+                    httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             );
             assertEquals(statusCode, httpResp.status());
             assertNull(httpResp.body());
@@ -220,8 +216,8 @@ public class RestClientTest {
             ErrorMessage errorMsg = new ErrorMessage(Response.Status.GONE.getStatusCode(), "Some Error Message");
             setupHttpClient(statusCode, toJsonString(errorMsg));
 
-            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient,
-                    MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, TEST_SIGNATURE_ALGORITHM
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(
+                    httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
             assertEquals(statusCode, e.statusCode());
             assertEquals(errorMsg.errorCode(), e.errorCode());
@@ -234,7 +230,7 @@ public class RestClientTest {
             setupHttpClient(statusCode, toJsonString(TEST_DTO));
 
             RestClient.HttpResponse<Void> httpResp = httpRequest(
-                    httpClient, MOCK_URL, TEST_METHOD, null, null, new TypeReference<Void>() { }, null, null);
+                    httpClient, MOCK_URL, TEST_METHOD, new TypeReference<Void>() { }, TEST_SIGNATURE_ALGORITHM);
             assertEquals(statusCode, httpResp.status());
             assertNull(httpResp.body());
         }
@@ -246,7 +242,7 @@ public class RestClientTest {
 
             setupHttpClient(statusCode, null);
             ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(
-                    httpClient, MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, TEST_SIGNATURE_ALGORITHM
+                    httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
             assertIsInternalServerError(e);
         }
@@ -256,7 +252,7 @@ public class RestClientTest {
             when(httpClient.newRequest(anyString())).thenThrow(new RuntimeException());
 
             ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient,
-                    MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, TEST_SIGNATURE_ALGORITHM
+                    MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
             assertIsInternalServerError(e);
         }
@@ -267,7 +263,7 @@ public class RestClientTest {
 
             String invalidRequestSignatureAlgorithm = "Foo";
             ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient,
-                    MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, invalidRequestSignatureAlgorithm
+                    MOCK_URL, TEST_METHOD, TEST_TYPE, invalidRequestSignatureAlgorithm
             ));
             assertIsInternalServerError(e);
         }
@@ -278,7 +274,7 @@ public class RestClientTest {
             setupHttpClient(201, invalidJsonString);
 
             ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient,
-                    MOCK_URL, TEST_METHOD, null, TEST_DTO, TEST_TYPE, MOCK_SECRET_KEY, TEST_SIGNATURE_ALGORITHM
+                    MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
             assertIsInternalServerError(e);
         }
