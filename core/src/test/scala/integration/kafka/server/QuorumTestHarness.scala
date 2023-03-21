@@ -98,7 +98,6 @@ class KRaftQuorumImplementation(
       new MetaProperties(clusterId, config.nodeId),
       Time.SYSTEM,
       new Metrics(),
-      Option("Broker%02d_".format(config.nodeId)),
       controllerQuorumVotersFuture,
       faultHandlerFactory)
     var broker: BrokerServer = null
@@ -316,7 +315,6 @@ abstract class QuorumTestHarness extends Logging {
       metaProperties,
       Time.SYSTEM,
       new Metrics(),
-      Option("Controller_" + testInfo.getDisplayName),
       controllerQuorumVotersFuture,
       faultHandlerFactory)
     var controllerServer: ControllerServer = null

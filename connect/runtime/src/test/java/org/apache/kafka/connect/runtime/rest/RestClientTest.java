@@ -46,9 +46,11 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -75,18 +77,24 @@ public class RestClientTest {
         return mockKey;
     }
 
-    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) {
+    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm, boolean https) {
         RestClient client = spy(new RestClient(null));
-        doReturn(httpClient).when(client).httpClient();
+        doReturn(httpClient).when(client).httpClient(any());
+        String protocol = https ? "https" : "http";
+        String url = protocol + "://localhost:1234/api/endpoint";
         return client.httpRequest(
-                        "https://localhost:1234/api/endpoint",
-                        "GET",
-                        null,
-                        new TestDTO("requestBodyData"),
-                        TEST_TYPE,
-                        MOCK_SECRET_KEY,
-                        requestSignatureAlgorithm
-                );
+                url,
+                "GET",
+                null,
+                new TestDTO("requestBodyData"),
+                TEST_TYPE,
+                MOCK_SECRET_KEY,
+                requestSignatureAlgorithm
+        );
+    }
+
+    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) {
+        return httpRequest(httpClient, requestSignatureAlgorithm, false);
     }
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient) throws Exception {
@@ -224,6 +232,19 @@ public class RestClientTest {
 
             ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
             assertIsInternalServerError(e);
+        }
+
+        @Test
+        public void testUseSslConfigsOnlyWhenNecessary() throws Exception {
+            // See KAFKA-14816; we want to make sure that even if the worker is configured with invalid SSL properties,
+            // REST requests only fail if we try to contact a URL using HTTPS (but not HTTP)
+            int statusCode = Response.Status.OK.getStatusCode();
+            TestDTO expectedResponse = new TestDTO("someContent");
+            setupHttpClient(statusCode, toJsonString(expectedResponse));
+
+            String requestSignatureAlgorithm = "HmacSHA1";
+            assertDoesNotThrow(() -> httpRequest(httpClient, requestSignatureAlgorithm, false));
+            assertThrows(RuntimeException.class, () -> httpRequest(httpClient, requestSignatureAlgorithm, true));
         }
     }
 

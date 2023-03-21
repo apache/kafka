@@ -18,7 +18,7 @@ from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.quorum import remote_kraft, colocated_kraft
+from kafkatest.services.kafka.quorum import isolated_kraft, combined_kraft
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
@@ -109,14 +109,14 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         assert self.kafka.check_protocol_errors(self)
 
     @cluster(num_nodes=5)
-    @parametrize(from_kafka_version=str(LATEST_3_1), metadata_quorum=colocated_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_2), metadata_quorum=colocated_kraft)
-    def test_colocated_upgrade(self, from_kafka_version, metadata_quorum):
+    @parametrize(from_kafka_version=str(LATEST_3_1), metadata_quorum=combined_kraft)
+    @parametrize(from_kafka_version=str(LATEST_3_2), metadata_quorum=combined_kraft)
+    def test_combined_mode_upgrade(self, from_kafka_version, metadata_quorum):
         self.run_upgrade(from_kafka_version)
 
     @cluster(num_nodes=8)
-    @parametrize(from_kafka_version=str(LATEST_3_1), metadata_quorum=remote_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_2), metadata_quorum=remote_kraft)
-    def test_non_colocated_upgrade(self, from_kafka_version, metadata_quorum):
+    @parametrize(from_kafka_version=str(LATEST_3_1), metadata_quorum=isolated_kraft)
+    @parametrize(from_kafka_version=str(LATEST_3_2), metadata_quorum=isolated_kraft)
+    def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum):
         self.run_upgrade(from_kafka_version)
 
