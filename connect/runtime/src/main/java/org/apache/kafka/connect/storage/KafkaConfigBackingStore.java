@@ -937,7 +937,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     TargetState state = TargetState.valueOf((String) targetState);
                     log.debug("Setting target state for connector '{}' to {}", connectorName, targetState);
                     TargetState prevState = connectorTargetStates.put(connectorName, state);
-                    stateChanged = prevState != state;
+                    stateChanged = !state.equals(prevState);
                 } catch (IllegalArgumentException e) {
                     log.error("Invalid target state for connector '{}': {}", connectorName, targetState);
                     return;
