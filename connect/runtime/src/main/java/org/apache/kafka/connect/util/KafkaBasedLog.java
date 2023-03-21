@@ -83,8 +83,8 @@ public class KafkaBasedLog<K, V> {
     private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(30);
     private static final long MAX_SLEEP_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long INITIAL_BACKOFF_MS = 100; // initial backoff time in milliseconds INITIAL_BACKOFF_MS
-    private static final long MAX_BACKOFF_MS = 100; // maximum backoff time in milliseconds
-    private static final int MAX_RETRIES = 100; // maximum number of retries
+    private static final long MAX_BACKOFF_MS = 10000; // maximum backoff time in milliseconds
+    private static final int MAX_RETRIES = 10; // maximum number of retries
     // 15min of admin retry duration to ensure successful metadata propagation.  10 seconds of backoff
     // in between retries
     private static final Duration ADMIN_CLIENT_RETRY_DURATION = Duration.ofMinutes(15);
