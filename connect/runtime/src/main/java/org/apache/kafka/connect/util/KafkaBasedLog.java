@@ -560,8 +560,11 @@ public class KafkaBasedLog<K, V> {
                         poll(Integer.MAX_VALUE);
                     } catch (WakeupException e) {
                         // See previous comment, both possible causes of this wakeup are handled by starting this loop again
-                        continue;
+                        // continue; // commented out since it is no-op and need to reset retry counter at the end of the
+                                    // try block
                     }
+                    // reset retries counter
+                    retries = 0;
                 } catch (Throwable t) {
                     log.error("Unexpected exception in {}", this, t);
                     if (retries >= MAX_RETRIES) {
