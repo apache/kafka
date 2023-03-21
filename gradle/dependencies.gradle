@@ -122,8 +122,8 @@ versions += [
   slf4j: "1.7.36",
   snappy: "1.1.8.4",
   spotbugs: "4.7.3",
-  swaggerAnnotations: "2.2.0",
-  swaggerJaxrs2: "2.2.0",
+  swaggerAnnotations: "2.2.8",
+  swaggerJaxrs2: "2.2.8",
   zinc: "1.8.0",
   zookeeper: "3.6.4",
   zstd: "1.5.2-1"

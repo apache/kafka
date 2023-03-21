@@ -480,6 +480,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         final byte[] value,
         final long timestamp
     ) {
+        segmentStores.cleanupExpiredSegments(observedStreamTime);
+
         // track the smallest timestamp seen so far that is larger than insertion timestamp.
         // this timestamp determines, based on all segments searched so far, which segment the
         // new record should be inserted into.

@@ -24,6 +24,7 @@ import org.apache.kafka.controller.PartitionChangeBuilder.ElectionResult;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -243,10 +244,10 @@ public class PartitionChangeBuilderTest {
     @Test
     public void testRemovingReplicaReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            Replicas.toList(FOO.replicas), Arrays.asList(1, 2));
+            new PartitionAssignment(Replicas.toList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2)));
         assertEquals(Collections.singletonList(3), replicas.removing());
         assertEquals(Collections.emptyList(), replicas.adding());
-        assertEquals(Arrays.asList(1, 2, 3), replicas.merged());
+        assertEquals(Arrays.asList(1, 2, 3), replicas.replicas());
         assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
@@ -255,7 +256,7 @@ public class PartitionChangeBuilderTest {
                 setLeader(1),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion())),
             createFooBuilder().
-                setTargetReplicas(replicas.merged()).
+                setTargetReplicas(replicas.replicas()).
                 setTargetRemoving(replicas.removing()).
                 build());
     }
@@ -263,10 +264,10 @@ public class PartitionChangeBuilderTest {
     @Test
     public void testAddingReplicaReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            Replicas.toList(FOO.replicas), Arrays.asList(1, 2, 3, 4));
+            new PartitionAssignment(Replicas.toList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2, 3, 4)));
         assertEquals(Collections.emptyList(), replicas.removing());
         assertEquals(Collections.singletonList(4), replicas.adding());
-        assertEquals(Arrays.asList(1, 2, 3, 4), replicas.merged());
+        assertEquals(Arrays.asList(1, 2, 3, 4), replicas.replicas());
         assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
@@ -274,7 +275,7 @@ public class PartitionChangeBuilderTest {
                 setAddingReplicas(Collections.singletonList(4)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion())),
             createFooBuilder().
-                setTargetReplicas(replicas.merged()).
+                setTargetReplicas(replicas.replicas()).
                 setTargetAdding(replicas.adding()).
                 build());
     }
