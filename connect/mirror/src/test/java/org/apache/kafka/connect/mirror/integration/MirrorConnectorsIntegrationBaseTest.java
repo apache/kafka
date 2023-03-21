@@ -655,17 +655,36 @@ public class MirrorConnectorsIntegrationBaseTest {
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
         Map<TopicPartition, OffsetAndMetadata> initialCheckpoints = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic);
+        Map<TopicPartition, OffsetAndMetadata> partialCheckpoints;
         log.info("Initial checkpoints: {}", initialCheckpoints);
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             primaryConsumer.commitSync(partialOffsets(allRecords, 0.9f));
-            Thread.sleep(2000);
-            Map<TopicPartition, OffsetAndMetadata> partialCheckpoints = waitForCheckpointOnAllPartitions(
-                    backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic);
+            partialCheckpoints = waitForNewCheckpointOnAllPartitions(
+                    backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic, initialCheckpoints);
             log.info("Partial checkpoints: {}", partialCheckpoints);
         }
 
+        for (TopicPartition tp : initialCheckpoints.keySet()) {
+            assertTrue(initialCheckpoints.get(tp).offset() < partialCheckpoints.get(tp).offset(),
+                    "Checkpoints should advance when the upstream consumer group advances");
+        }
+
         assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
+
+        Map<TopicPartition, OffsetAndMetadata> finalCheckpoints;
+        try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
+            primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+            primaryConsumer.commitSync(partialOffsets(allRecords, 0.1f));
+            finalCheckpoints = waitForNewCheckpointOnAllPartitions(
+                    backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic, partialCheckpoints);
+            log.info("Final checkpoints: {}", finalCheckpoints);
+        }
+
+        for (TopicPartition tp : partialCheckpoints.keySet()) {
+            assertTrue(finalCheckpoints.get(tp).offset() < partialCheckpoints.get(tp).offset(),
+                    "Checkpoints should rewind when the upstream consumer group rewinds");
+        }
     }
 
     private Map<TopicPartition, OffsetAndMetadata> partialOffsets(ConsumerRecords<byte[], byte[]> allRecords, double fraction) {
@@ -821,14 +840,25 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
             MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName
     ) throws InterruptedException {
+        return waitForNewCheckpointOnAllPartitions(client, consumerGroupName, remoteClusterAlias, topicName, Collections.emptyMap());
+    }
+
+    protected static Map<TopicPartition, OffsetAndMetadata> waitForNewCheckpointOnAllPartitions(
+                MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName,
+                Map<TopicPartition, OffsetAndMetadata> lastCheckpoint
+    ) throws InterruptedException {
         AtomicReference<Map<TopicPartition, OffsetAndMetadata>> ret = new AtomicReference<>();
         waitForCondition(
                 () -> {
                     Map<TopicPartition, OffsetAndMetadata> offsets = client.remoteConsumerOffsets(
                             consumerGroupName, remoteClusterAlias, Duration.ofMillis(3000));
                     for (int i = 0; i < NUM_PARTITIONS; i++) {
-                        if (!offsets.containsKey(new TopicPartition(topicName, i))) {
+                        TopicPartition tp = new TopicPartition(topicName, i);
+                        if (!offsets.containsKey(tp)) {
                             log.info("Checkpoint is missing for {}: {}-{}", consumerGroupName, topicName, i);
+                            return false;
+                        } else if (lastCheckpoint.containsKey(tp) && lastCheckpoint.get(tp).equals(offsets.get(tp))) {
+                            log.info("Checkpoint is the same as previous checkpoint");
                             return false;
                         }
                     }
