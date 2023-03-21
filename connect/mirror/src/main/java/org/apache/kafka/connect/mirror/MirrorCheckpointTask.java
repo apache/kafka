@@ -109,6 +109,8 @@ public class MirrorCheckpointTask extends SourceTask {
             scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
                     "sync idle consumer group offset from source to target");
         }, "starting offset sync store");
+        log.info("{} checkpointing {} consumer groups {}->{}: {}.", Thread.currentThread().getName(),
+                consumerGroups.size(), sourceClusterAlias, config.targetClusterAlias(), consumerGroups);
     }
 
     @Override

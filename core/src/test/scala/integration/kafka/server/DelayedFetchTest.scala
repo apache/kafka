@@ -173,6 +173,7 @@ class DelayedFetchTest {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
       replicaId,
+      1,
       maxWaitMs,
       1,
       maxBytes,

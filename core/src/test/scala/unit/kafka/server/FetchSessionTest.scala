@@ -140,14 +140,14 @@ class FetchSessionTest {
                     toForget: util.List[TopicIdPartition], isFromFollower: Boolean,
                     version: Short = ApiKeys.FETCH.latestVersion): FetchRequest = {
     new FetchRequest.Builder(version, version, if (isFromFollower) 1 else FetchRequest.CONSUMER_REPLICA_ID,
-      0, 0, fetchData).metadata(metadata).removed(toForget).build
+      if (isFromFollower) 1 else -1, 0, 0, fetchData).metadata(metadata).removed(toForget).build
   }
 
   def createRequestWithoutTopicIds(metadata: JFetchMetadata,
                     fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
                     toForget: util.List[TopicIdPartition], isFromFollower: Boolean): FetchRequest = {
     new FetchRequest.Builder(12, 12, if (isFromFollower) 1 else FetchRequest.CONSUMER_REPLICA_ID,
-      0, 0, fetchData).metadata(metadata).removed(toForget).build
+      if (isFromFollower) 1 else -1, 0, 0, fetchData).metadata(metadata).removed(toForget).build
   }
 
   @Test
