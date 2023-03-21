@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * This maintains the following invariants for each topic-partition in the in-memory sync storage:
  * <ul>
  *     <li>syncs[0] is the latest offset sync from the syncs topic</li>
- *     <li>For each i,j, i <= j: syncs[i] is the earliest sync such that syncs[j].upstream <= syncs[i].upstream < syncs[j].upstream + 2^j</li>
+ *     <li>For each i,j, i <= j: syncs[j].upstream <= syncs[i].upstream < syncs[j].upstream + 2^j</li>
  * </ul>
  * <p>Offset translation uses the syncs[i] which most closely precedes the upstream consumer group's current offset.
  * For a fixed in-memory state, translation of variable upstream offsets will be monotonic.
