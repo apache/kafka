@@ -223,7 +223,7 @@ public class StorageTool {
 
     static List<String> configToLogDirectories(KafkaConfig kafkaConfig) {
         Seq<String> logDirs = kafkaConfig.logDirs();
-        SortedSet<String> directories = new TreeSet<>(JavaConverters.asJava(logDirs));
+        SortedSet<String> directories = new TreeSet<>(JavaConverters.asJavaCollection(logDirs));
         String metadataLogDir = kafkaConfig.metadataLogDir();
         if (metadataLogDir != null) {
             directories.add(metadataLogDir);
