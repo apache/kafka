@@ -82,9 +82,9 @@ public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
     private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(30);
     private static final long MAX_SLEEP_MS = TimeUnit.SECONDS.toMillis(1);
-    private static final long initialBackoffMs = 100; // initial backoff time in milliseconds
-    private static final long maxBackoffMs = 10000; // maximum backoff time in milliseconds
-    private static final int maxRetries = 10; // maximum number of retries
+    private static final long INITIAL_BACKOFF_MS = 100; // initial backoff time in milliseconds INITIAL_BACKOFF_MS
+    private static final long MAX_BACKOFF_MS = 100; // maximum backoff time in milliseconds
+    private static final int MAX_RETRIES = 100; // maximum number of retries
     // 15min of admin retry duration to ensure successful metadata propagation.  10 seconds of backoff
     // in between retries
     private static final Duration ADMIN_CLIENT_RETRY_DURATION = Duration.ofMinutes(15);
@@ -106,7 +106,6 @@ public class KafkaBasedLog<K, V> {
     private boolean stopRequested;
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
-    private final ThreadLocal<Integer> numRetries = ThreadLocal.withInitial(() -> 0);
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -518,9 +517,10 @@ public class KafkaBasedLog<K, V> {
 
         @Override
         public void run() {
-            try {
-                log.trace("{} started execution", this);
-                while (true) {
+            int retries = 0;
+            log.trace("{} started execution", this);
+            while (true) {
+                try {
                     int numCallbacks;
                     synchronized (KafkaBasedLog.this) {
                         if (stopRequested)
@@ -532,25 +532,13 @@ public class KafkaBasedLog<K, V> {
                         try {
                             readToLogEnd(false);
                             log.trace("Finished read to end log for topic {}", topic);
-                            numRetries.set(0);
                         } catch (TimeoutException e) {
-                            int retries = numRetries.get();
-                            if (retries >= maxRetries) {
-                                log.error("Exceeded maximum number of retries ({}) while appending record to Kafka topic. Aborting", maxRetries);
-                                throw e;
-                            }
-                            long backoffMs = Math.min(initialBackoffMs * (1L << retries), maxBackoffMs);
-                            try {
-                               Thread.sleep(backoffMs);
-                            } catch (InterruptedException ex) {
-                                log.warn("Interrupted while waiting for retry", ex);
-                            }
                             log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
+                                    "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
                             log.warn("Retriable error while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "Reason: {}", topic, e.getMessage());
+                                    "Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was
@@ -574,9 +562,22 @@ public class KafkaBasedLog<K, V> {
                         // See previous comment, both possible causes of this wakeup are handled by starting this loop again
                         continue;
                     }
+                } catch (Throwable t) {
+                    log.error("Unexpected exception in {}", this, t);
+                    if (retries >= MAX_RETRIES) {
+                        log.error("Exceeded maximum number of retries ({}). Received unexpected exception. Aborting", MAX_RETRIES);
+                        synchronized (KafkaBasedLog.this) {
+                            stopRequested = true;
+                        }
+                        throw t;
+                    }
+                    long backoffMs = Math.min(INITIAL_BACKOFF_MS * (1L << retries), MAX_BACKOFF_MS);
+                    try {
+                        Thread.sleep(backoffMs);
+                    } catch (InterruptedException ex) {
+                        log.warn("Interrupted while waiting for retry", ex);
+                    }
                 }
-            } catch (Throwable t) {
-                log.error("Unexpected exception in {}", this, t);
             }
         }
     }
