@@ -89,7 +89,14 @@ public class RestClientTest {
         RestClient client = spy(new RestClient(null));
         doReturn(httpClient).when(client).httpClient();
         return client.httpRequest(
-                url, method, null, TEST_DTO, responseFormat, MOCK_SECRET_KEY, requestSignatureAlgorithm);
+                url,
+                method,
+                null,
+                TEST_DTO,
+                responseFormat,
+                MOCK_SECRET_KEY,
+                requestSignatureAlgorithm
+        );
     }
 
 
