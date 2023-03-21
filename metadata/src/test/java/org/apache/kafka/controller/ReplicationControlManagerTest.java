@@ -134,6 +134,7 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION
 import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXCEEDED_IN_TEST_MSG;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextWithMutationQuotaExceededFor;
+import static org.apache.kafka.controller.FeatureControlManagerTest.NO_OP_MIGRATION_BOOTSTRAP;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -161,6 +162,7 @@ public class ReplicationControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         final ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -200,6 +202,7 @@ public class ReplicationControlManagerTest {
                     QuorumFeatures.defaultFeatureMap(),
                     Collections.singletonList(0))).
                 setMetadataVersion(metadataVersion).
+                setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
                 build();
 
             this.replicationControl = new ReplicationControlManager.Builder().

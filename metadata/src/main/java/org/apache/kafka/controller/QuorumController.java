@@ -688,9 +688,9 @@ public final class QuorumController implements Controller {
             if (!isActiveController(controllerEpoch)) {
                 throw newNotControllerException();
             }
-            if (zkMigrationControlManager.inPreMigrationMode() && !flags.contains(RUNS_IN_PREMIGRATION)) {
-                log.info("Cannot run write operation {} in premigration mode. Returning " +
-                        "NOT_CONTROLLER.", name);
+            if (zkMigrationControlManager.inPreMigrationMode(featureControl.metadataVersion()) &&
+                    !flags.contains(RUNS_IN_PREMIGRATION)) {
+                log.info("Cannot run write operation {} in pre-migration mode. Returning NOT_CONTROLLER.", name);
                 throw newNotControllerException();
             }
             startProcessingTimeNs = OptionalLong.of(now);
@@ -1199,22 +1199,9 @@ public final class QuorumController implements Controller {
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
                 records.addAll(bootstrapMetadata.records());
 
-                if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
-                    // Initialize the log with a ZkMigrationState
-                    if (zkMigrationEnabled) {
-                        log.info("Writing ZkMigrationState of PRE_MIGRATION to the log, since migrations are enabled.");
-                        records.add(new ApiMessageAndVersion(
-                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value()),
-                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
-                        ));
-                    } else {
-                        log.debug("Writing ZkMigrationState of NONE to the log, since migrations are not enabled.");
-                        records.add(new ApiMessageAndVersion(
-                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.NONE.value()),
-                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
-                        ));
-                    }
-                }
+                // Bootstrap the initial ZK Migration record
+                zkMigrationControlManager.bootstrapInitialMigrationState(
+                    bootstrapMetadata.metadataVersion(), true, records::add);
             } else {
                 // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
                 if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
@@ -1222,36 +1209,9 @@ public final class QuorumController implements Controller {
                         "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
                 }
 
-                if (featureControl.metadataVersion().isMigrationSupported()) {
-                    switch (zkMigrationControlManager.zkMigrationState()) {
-                        case UNINITIALIZED:
-                            // No ZkMigrationState record seen, put a NONE in the log
-                            log.debug("Writing a ZkMigrationState of NONE to the log to indicate this cluster was not migrated from ZK.");
-                            if (zkMigrationEnabled) {
-                                log.error("Should not have ZK migrations enabled on a cluster that was created in KRaft mode");
-                            }
-                            records.add(new ApiMessageAndVersion(
-                                new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.NONE.value()),
-                                ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION
-                            ));
-                            break;
-                        case NONE:
-                            // This is a non-migrated KRaft cluster
-                            log.debug("Read a ZkMigrationState of NONE from the log indicating this cluster was never migrated from ZK.");
-                            if (zkMigrationEnabled) {
-                                log.error("Should not have ZK migrations enabled on a cluster that was created in KRaft mode");
-                            }
-                            break;
-                        case POST_MIGRATION:
-                            // This is a migrated KRaft cluster
-                            log.debug("Read a ZkMigrationState of POST_MIGRATION from the log indicating this cluster was previously migrated from ZK.");
-                            break;
-                        default:
-                            // Once we have support for metadata transactions, this failure case will only exist for
-                            // errant ZkMigrationStateRecord that are encountered outside a transaction.
-                            throw fatalFaultHandler.handleFault("Detected an in-progress migration during startup, cannot continue.");
-                    }
-                }
+                // Initialize the ZK migration state as NONE, or throw an error if we find an in-progress migration
+                zkMigrationControlManager.bootstrapInitialMigrationState(
+                    featureControl.metadataVersion(), false, records::add);
             }
             return ControllerResult.atomicOf(records, null);
         }
@@ -1368,8 +1328,7 @@ public final class QuorumController implements Controller {
     private void maybeScheduleNextBalancePartitionLeaders() {
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
             leaderImbalanceCheckIntervalNs.isPresent() &&
-            replicationControl.arePartitionLeadersImbalanced() &&
-            zkMigrationControlManager.inPreMigrationMode()) {
+            replicationControl.arePartitionLeadersImbalanced()) {
 
             log.debug(
                 "Scheduling write event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
@@ -1775,10 +1734,6 @@ public final class QuorumController implements Controller {
      */
     private final int maxRecordsPerBatch;
 
-    /**
-     * True if the controller was configured to allow Zookeeper migrations.
-     */
-    private final boolean zkMigrationEnabled;
 
     private QuorumController(
         FaultHandler fatalFaultHandler,
@@ -1829,6 +1784,7 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             build();
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
+        this.zkMigrationControlManager = new ZkMigrationControlManager(snapshotRegistry, logContext, zkMigrationEnabled);
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1839,6 +1795,7 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
+            setZkMigrationBootstrap(zkMigrationControlManager).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -1881,8 +1838,6 @@ public final class QuorumController implements Controller {
         this.curClaimEpoch = -1;
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();
         this.zkRecordConsumer = new MigrationRecordConsumer();
-        this.zkMigrationEnabled = zkMigrationEnabled;
-        this.zkMigrationControlManager = new ZkMigrationControlManager(snapshotRegistry, logContext);
         updateWriteOffset(-1);
 
         resetToEmptyState();

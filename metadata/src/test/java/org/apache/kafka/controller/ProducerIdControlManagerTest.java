@@ -32,6 +32,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.kafka.controller.FeatureControlManagerTest.NO_OP_MIGRATION_BOOTSTRAP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -53,6 +54,7 @@ public class ProducerIdControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         clusterControl = new ClusterControlManager.Builder().
             setTime(time).

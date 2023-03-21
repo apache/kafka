@@ -52,6 +52,7 @@ public class FeatureControlManager {
         private QuorumFeatures quorumFeatures = null;
         private MetadataVersion metadataVersion = MetadataVersion.latest();
         private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
+        private ZkMigrationBootstrap zkMigrationBootstrap = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -78,6 +79,11 @@ public class FeatureControlManager {
             return this;
         }
 
+        Builder setZkMigrationBootstrap(ZkMigrationBootstrap zkMigrationBootstrap) {
+            this.zkMigrationBootstrap = zkMigrationBootstrap;
+            return this;
+        }
+
         public FeatureControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -85,11 +91,17 @@ public class FeatureControlManager {
                 quorumFeatures = new QuorumFeatures(0, new ApiVersions(), QuorumFeatures.defaultFeatureMap(),
                         Collections.emptyList());
             }
-            return new FeatureControlManager(logContext,
+            if (zkMigrationBootstrap == null) {
+                throw new IllegalStateException("ZkMigrationBootstrap cannot be null");
+            }
+            return new FeatureControlManager(
+                logContext,
                 quorumFeatures,
                 snapshotRegistry,
                 metadataVersion,
-                minimumBootstrapVersion);
+                minimumBootstrapVersion,
+                    zkMigrationBootstrap
+            );
         }
     }
 
@@ -115,18 +127,22 @@ public class FeatureControlManager {
      */
     private final MetadataVersion minimumBootstrapVersion;
 
+    private final ZkMigrationBootstrap zkMigrationBootstrap;
+
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         MetadataVersion metadataVersion,
-        MetadataVersion minimumBootstrapVersion
+        MetadataVersion minimumBootstrapVersion,
+        ZkMigrationBootstrap zkMigrationBootstrap
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
         this.minimumBootstrapVersion = minimumBootstrapVersion;
+        this.zkMigrationBootstrap = zkMigrationBootstrap;
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -224,7 +240,7 @@ public class FeatureControlManager {
     }
 
     /**
-     * Perform some additional validation for metadata.version updates.
+     * Perform some additional validation for "metadata.version" updates.
      */
     private ApiError updateMetadataVersion(
         short newVersionLevel,
@@ -266,6 +282,10 @@ public class FeatureControlManager {
             new FeatureLevelRecord()
                 .setName(MetadataVersion.FEATURE_NAME)
                 .setFeatureLevel(newVersionLevel), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+
+        if (newVersion.isMigrationSupported()) {
+            zkMigrationBootstrap.bootstrapInitialMigrationState(newVersion, false, recordConsumer);
+        }
         return ApiError.NONE;
     }
 

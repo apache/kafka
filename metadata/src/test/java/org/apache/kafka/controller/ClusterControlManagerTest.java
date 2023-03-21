@@ -58,6 +58,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
+import static org.apache.kafka.controller.FeatureControlManagerTest.NO_OP_MIGRATION_BOOTSTRAP;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -79,6 +80,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -140,6 +142,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -193,6 +196,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -248,6 +252,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -277,6 +282,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -333,6 +339,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
@@ -367,6 +374,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -420,6 +428,7 @@ public class ClusterControlManagerTest {
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
+            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -498,6 +507,7 @@ public class ClusterControlManagerTest {
                                 MetadataVersion.IBP_3_3_IV0.featureLevel())),
                         Collections.singletonList(0))).
                 setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
+                setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
                 build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
                 setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
