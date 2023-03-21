@@ -66,7 +66,6 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
-import org.mockito.stubbing.OngoingStubbing;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -120,7 +119,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings({"unchecked", "rawtypes"})
+@SuppressWarnings({"unchecked"})
 @RunWith(Parameterized.class)
 public class WorkerSourceTaskTest {
 
@@ -456,7 +455,7 @@ public class WorkerSourceTaskTest {
         createWorkerTask();
 
         // We'll wait for some data, then trigger a flush
-        final CountDownLatch pollLatch = expectEmptyPolls(1, new AtomicInteger());
+        final CountDownLatch pollLatch = expectEmptyPolls(new AtomicInteger());
         expectOffsetFlush(true, false);
 
         workerTask.initialize(TASK_CONFIG);
@@ -552,9 +551,13 @@ public class WorkerSourceTaskTest {
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectTopicCreation(TOPIC);
+        expectPreliminaryCalls();
 
-        // First round
-        expectSendRecord()
+        expectTaskCommitRecordWithOffset(true);
+        expectTaskGetTopic();
+
+        when(producer.send(any(ProducerRecord.class), any(org.apache.kafka.clients.producer.Callback.class)))
+                .thenAnswer(producerSendAnswer(true))
                 // Any Producer retriable exception should work here
                 .thenThrow(new org.apache.kafka.common.errors.TimeoutException("retriable sync failure"))
                 // Second round
@@ -724,8 +727,8 @@ public class WorkerSourceTaskTest {
         expectApplyTransformationChain();
     }
 
-    private CountDownLatch expectEmptyPolls(int minimum, final AtomicInteger count) throws InterruptedException {
-        final CountDownLatch latch = new CountDownLatch(minimum);
+    private CountDownLatch expectEmptyPolls(final AtomicInteger count) throws InterruptedException {
+        final CountDownLatch latch = new CountDownLatch(1);
         // Note that we stub these to allow any number of calls because the thread will continue to
         // run. The count passed in + latch returned just makes sure we get *at least* that number of
         // calls
@@ -759,20 +762,20 @@ public class WorkerSourceTaskTest {
         return expectPolls(count, new AtomicInteger());
     }
 
-    private OngoingStubbing<Future> expectSendRecord() throws InterruptedException {
-        return expectSendRecordTaskCommitRecordSucceed();
+    private void expectSendRecord() throws InterruptedException {
+        expectSendRecordTaskCommitRecordSucceed();
     }
 
     //
-    private OngoingStubbing<Future> expectSendRecordProducerCallbackFail() throws InterruptedException {
-        return expectSendRecord(TOPIC, false, false, true, emptyHeaders());
+    private void expectSendRecordProducerCallbackFail() throws InterruptedException {
+        expectSendRecord(TOPIC, false, false, true, emptyHeaders());
     }
 
-    private OngoingStubbing<Future> expectSendRecordTaskCommitRecordSucceed() throws InterruptedException {
-        return expectSendRecord(TOPIC, true, true, true, emptyHeaders());
+    private void expectSendRecordTaskCommitRecordSucceed() throws InterruptedException {
+        expectSendRecord(TOPIC, true, true, true, emptyHeaders());
     }
 
-    private OngoingStubbing<Future> expectSendRecord(
+    private void expectSendRecord(
             String topic,
             boolean sendSuccess,
             boolean commitSuccess,
@@ -791,9 +794,8 @@ public class WorkerSourceTaskTest {
             expectTaskGetTopic();
         }
 
-        return when(producer.send(any(ProducerRecord.class), any(org.apache.kafka.clients.producer.Callback.class))).thenAnswer(
-                producerSendAnswer(sendSuccess)
-        );
+        doAnswer(producerSendAnswer(sendSuccess))
+                .when(producer).send(any(ProducerRecord.class), any(org.apache.kafka.clients.producer.Callback.class));
     }
 
     private Answer<Future<RecordMetadata>> producerSendAnswer(boolean sendSuccess) {
@@ -846,10 +848,6 @@ public class WorkerSourceTaskTest {
             String topic = invocation.getArgument(1, String.class);
             return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
         });
-    }
-
-    private void verifyTaskGetTopic() {
-        verifyTaskGetTopic(1);
     }
 
     private void verifyTaskGetTopic(int times) {
