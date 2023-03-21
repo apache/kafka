@@ -54,11 +54,21 @@ import scala.jdk.CollectionConverters._
 class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
-  val threadNamePrefix: Option[String],
+  val threadNamePrefix: String,
   val isZkBroker: Boolean
 ) extends Logging {
 
-  val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
+  private def logPrefix(): String = {
+    val builder = new StringBuilder("[BrokerLifecycleManager")
+    builder.append(" id=").append(config.nodeId)
+    if (isZkBroker) {
+      builder.append(" isZkBroker=true")
+    }
+    builder.append("]")
+    builder.toString()
+  }
+
+  val logContext = new LogContext(logPrefix())
 
   this.logIdent = logContext.logPrefix()
 
@@ -182,7 +192,7 @@ class BrokerLifecycleManager(
    */
   private[server] val eventQueue = new KafkaEventQueue(time,
     logContext,
-    threadNamePrefix.getOrElse(""),
+    threadNamePrefix + "lifecycle-manager-",
     new ShutdownEvent())
 
   /**

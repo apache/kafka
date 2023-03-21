@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogConfig, LogDirFailureChannel, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -390,6 +390,7 @@ class PartitionLockTest extends Logging {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         followerId,
+        1,
         0L,
         1,
         maxBytes,
@@ -415,7 +416,7 @@ class PartitionLockTest extends Logging {
         updateFetchState = true
       )
 
-      assertTrue(logReadInfo.divergingEpoch.isEmpty)
+      assertTrue(!logReadInfo.divergingEpoch.isPresent)
 
       val batches = logReadInfo.fetchedData.records.batches.asScala
       if (batches.nonEmpty) {

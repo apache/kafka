@@ -55,7 +55,7 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogDirFailureChannel, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -108,6 +108,7 @@ object PartitionTest {
 
   def followerFetchParams(
     replicaId: Int,
+    replicaEpoch: Long = 1L,
     maxWaitMs: Long = 0L,
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue
@@ -115,6 +116,7 @@ object PartitionTest {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
       replicaId,
+      replicaEpoch,
       maxWaitMs,
       minBytes,
       maxBytes,
@@ -133,6 +135,7 @@ object PartitionTest {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
       FetchRequest.CONSUMER_REPLICA_ID,
+      -1,
       maxWaitMs,
       minBytes,
       maxBytes,
@@ -190,12 +193,12 @@ class PartitionTest extends AbstractPartitionTest {
       divergingEpoch: FetchResponseData.EpochEndOffset,
       readInfo: LogReadInfo
     ): Unit = {
-      assertEquals(Some(divergingEpoch), readInfo.divergingEpoch)
+      assertEquals(Optional.of(divergingEpoch), readInfo.divergingEpoch)
       assertEquals(0, readInfo.fetchedData.records.sizeInBytes)
     }
 
     def assertNoDivergence(readInfo: LogReadInfo): Unit = {
-      assertEquals(None, readInfo.divergingEpoch)
+      assertEquals(Optional.empty(), readInfo.divergingEpoch)
     }
 
     assertDivergence(epochEndOffset(epoch = 0, endOffset = 2), read(lastFetchedEpoch = 2, fetchOffset = 5))
@@ -213,7 +216,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Move log start offset to the middle of epoch 3
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(newLogStartOffset = 5L, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(newLogStartOffset = 5L, LogStartOffsetIncrementReason.ClientRecordDeletion)
 
     assertDivergence(epochEndOffset(epoch = 2, endOffset = 5), read(lastFetchedEpoch = 2, fetchOffset = 8))
     assertNoDivergence(read(lastFetchedEpoch = 0, fetchOffset = 5))
@@ -222,7 +225,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 0, fetchOffset = 0))
 
     // Fetch offset lower than start offset should throw OffsetOutOfRangeException
-    log.maybeIncrementLogStartOffset(newLogStartOffset = 10, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(newLogStartOffset = 10, LogStartOffsetIncrementReason.ClientRecordDeletion)
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 5, fetchOffset = 6)) // diverging
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 3, fetchOffset = 6)) // not diverging
   }

@@ -19,13 +19,15 @@ package kafka.coordinator.group
 import kafka.common.OffsetAndMetadata
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Implicits.MapExtensionMethods
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.server.util.FutureUtils
 
 import java.util
 import java.util.{Optional, OptionalInt, Properties}
@@ -61,6 +63,15 @@ private[group] class GroupCoordinatorAdapter(
   private val coordinator: GroupCoordinator,
   private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
+
+  override def consumerGroupHeartbeat(
+    context: RequestContext,
+    request: ConsumerGroupHeartbeatRequestData
+  ): CompletableFuture[ConsumerGroupHeartbeatResponseData] = {
+    FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
+      s"The old group coordinator does not support ${ApiKeys.CONSUMER_GROUP_HEARTBEAT.name} API."
+    ))
+  }
 
   override def joinGroup(
     context: RequestContext,
@@ -346,7 +357,7 @@ private[group] class GroupCoordinatorAdapter(
     val currentTimeMs = time.milliseconds
     val future = new CompletableFuture[OffsetCommitResponseData]()
 
-    def callback(commitStatus: Map[TopicPartition, Errors]): Unit = {
+    def callback(commitStatus: Map[TopicIdPartition, Errors]): Unit = {
       val response = new OffsetCommitResponseData()
       val byTopics = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
 
@@ -377,10 +388,10 @@ private[group] class GroupCoordinatorAdapter(
       case retentionTimeMs => Some(currentTimeMs + retentionTimeMs)
     }
 
-    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    val partitions = new mutable.HashMap[TopicIdPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
-        val tp = new TopicPartition(topic.name, partition.partitionIndex)
+        val tp = new TopicIdPartition(Uuid.ZERO_UUID, partition.partitionIndex, topic.name)
         partitions += tp -> createOffsetAndMetadata(
           currentTimeMs,
           partition.committedOffset,
@@ -413,7 +424,7 @@ private[group] class GroupCoordinatorAdapter(
     val currentTimeMs = time.milliseconds
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
 
-    def callback(results: Map[TopicPartition, Errors]): Unit = {
+    def callback(results: Map[TopicIdPartition, Errors]): Unit = {
       val response = new TxnOffsetCommitResponseData()
       val byTopics = new mutable.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
 
@@ -436,10 +447,10 @@ private[group] class GroupCoordinatorAdapter(
       future.complete(response)
     }
 
-    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    val partitions = new mutable.HashMap[TopicIdPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
-        val tp = new TopicPartition(topic.name, partition.partitionIndex)
+        val tp = new TopicIdPartition(Uuid.ZERO_UUID, partition.partitionIndex, topic.name)
         partitions += tp -> createOffsetAndMetadata(
           currentTimeMs,
           partition.committedOffset,
@@ -568,6 +579,13 @@ private[group] class GroupCoordinatorAdapter(
     groupMetadataPartitionLeaderEpoch: OptionalInt
   ): Unit = {
     coordinator.onResignation(groupMetadataPartitionIndex, groupMetadataPartitionLeaderEpoch)
+  }
+
+  override def onNewMetadataImage(
+    newImage: MetadataImage,
+    delta: MetadataDelta
+  ): Unit = {
+    // The metadata image is not used in the old group coordinator.
   }
 
   override def groupMetadataTopicConfigs(): Properties = {

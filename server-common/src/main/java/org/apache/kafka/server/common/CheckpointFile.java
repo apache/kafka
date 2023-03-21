@@ -69,7 +69,7 @@ public class CheckpointFile<T> {
             // Ignore if file already exists.
         }
         absolutePath = file.toPath().toAbsolutePath();
-        tempPath = Paths.get(absolutePath.toString() + ".tmp");
+        tempPath = Paths.get(absolutePath + ".tmp");
     }
 
     public void write(Collection<T> entries) throws IOException {

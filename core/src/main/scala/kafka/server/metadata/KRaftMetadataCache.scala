@@ -35,6 +35,7 @@ import java.util.concurrent.ThreadLocalRandom
 import kafka.admin.BrokerMetadata
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
+import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.MetadataVersion
 
@@ -377,6 +378,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
     _currentImage.clientQuotas().describe(request)
+  }
+
+  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
+    _currentImage.scram().describe(request)
   }
 
   override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()

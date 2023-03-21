@@ -175,7 +175,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<V> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             // we actually do not need to generate store names at all since if it is not specified, we will not
@@ -190,7 +190,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : this.valueSerde;
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            storeBuilder = queryableStoreName != null ? (new TimestampedKeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+            storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
         } else {
             keySerde = this.keySerde;
             valueSerde = this.valueSerde;
@@ -290,7 +290,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             // we actually do not need to generate store names at all since if it is not specified, we will not
@@ -302,7 +302,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            storeBuilder = queryableStoreName != null ? (new TimestampedKeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+            storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
@@ -445,7 +445,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             // don't inherit parent value serde, since this operation may change the value type, more specifically:
@@ -455,7 +455,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            storeBuilder = queryableStoreName != null ? (new TimestampedKeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+            storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
@@ -750,7 +750,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             if (materializedInternal.keySerde() == null) {
@@ -759,7 +759,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             keySerde = materializedInternal.keySerde();
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.storeName();
-            storeBuilder = new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+            storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal).materialize();
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
@@ -1270,8 +1270,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             materializedInternal.queryableStoreName()
         );
 
-        final StoreBuilder<TimestampedKeyValueStore<K, VR>> resultStore =
-            new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+        final StoreBuilder<?> resultStore =
+            new KeyValueStoreMaterializer<>(materializedInternal).materialize();
 
         final TableProcessorNode<K, VR> resultNode = new TableProcessorNode<>(
             resultProcessorName,

@@ -46,9 +46,11 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -59,7 +61,7 @@ import static org.mockito.Mockito.when;
 public class RestClientTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String MOCK_URL = "https://localhost:1234/api/endpoint";
+    private static final String MOCK_URL = "http://localhost:1234/api/endpoint";
     private static final String TEST_METHOD = "GET";
     private static final TestDTO TEST_DTO = new TestDTO("requestBodyData");
     private static final TypeReference<TestDTO> TEST_TYPE = new TypeReference<TestDTO>() {
@@ -87,7 +89,7 @@ public class RestClientTest {
             String requestSignatureAlgorithm
     ) {
         RestClient client = spy(new RestClient(null));
-        doReturn(httpClient).when(client).httpClient();
+        doReturn(httpClient).when(client).httpClient(any());
         return client.httpRequest(
                 url,
                 method,
@@ -284,6 +286,19 @@ public class RestClientTest {
                     MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
             assertIsInternalServerError(e);
+        }
+
+        @Test
+        public void testUseSslConfigsOnlyWhenNecessary() throws Exception {
+            // See KAFKA-14816; we want to make sure that even if the worker is configured with invalid SSL properties,
+            // REST requests only fail if we try to contact a URL using HTTPS (but not HTTP)
+            int statusCode = Response.Status.OK.getStatusCode();
+            setupHttpClient(statusCode, toJsonString(TEST_DTO));
+
+            assertDoesNotThrow(() -> httpRequest(
+                    httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM));
+            assertThrows(RuntimeException.class, () -> httpRequest(
+                    httpClient, "https://localhost:1234/api/endpoint", TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM));
         }
     }
 

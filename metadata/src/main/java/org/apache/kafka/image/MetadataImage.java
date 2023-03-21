@@ -38,7 +38,8 @@ public final class MetadataImage {
         ConfigurationsImage.EMPTY,
         ClientQuotasImage.EMPTY,
         ProducerIdsImage.EMPTY,
-        AclsImage.EMPTY);
+        AclsImage.EMPTY,
+        ScramImage.EMPTY);
 
     private final MetadataProvenance provenance;
 
@@ -56,6 +57,8 @@ public final class MetadataImage {
 
     private final AclsImage acls;
 
+    private final ScramImage scram;
+
     public MetadataImage(
         MetadataProvenance provenance,
         FeaturesImage features,
@@ -64,7 +67,8 @@ public final class MetadataImage {
         ConfigurationsImage configs,
         ClientQuotasImage clientQuotas,
         ProducerIdsImage producerIds,
-        AclsImage acls
+        AclsImage acls,
+        ScramImage scram
     ) {
         this.provenance = provenance;
         this.features = features;
@@ -74,6 +78,7 @@ public final class MetadataImage {
         this.clientQuotas = clientQuotas;
         this.producerIds = producerIds;
         this.acls = acls;
+        this.scram = scram;
     }
 
     public boolean isEmpty() {
@@ -83,7 +88,8 @@ public final class MetadataImage {
             configs.isEmpty() &&
             clientQuotas.isEmpty() &&
             producerIds.isEmpty() &&
-            acls.isEmpty();
+            acls.isEmpty() &&
+            scram.isEmpty();
     }
 
     public MetadataProvenance provenance() {
@@ -126,6 +132,10 @@ public final class MetadataImage {
         return acls;
     }
 
+    public ScramImage scram() {
+        return scram;
+    }
+
     public void write(ImageWriter writer, ImageWriterOptions options) {
         // Features should be written out first so we can include the metadata.version at the beginning of the
         // snapshot
@@ -136,6 +146,7 @@ public final class MetadataImage {
         clientQuotas.write(writer, options);
         producerIds.write(writer, options);
         acls.write(writer, options);
+        scram.write(writer, options);
         writer.close(true);
     }
 
@@ -150,7 +161,8 @@ public final class MetadataImage {
             configs.equals(other.configs) &&
             clientQuotas.equals(other.clientQuotas) &&
             producerIds.equals(other.producerIds) &&
-            acls.equals(other.acls);
+            acls.equals(other.acls) &&
+            scram.equals(other.scram);
     }
 
     @Override
@@ -163,7 +175,8 @@ public final class MetadataImage {
             configs,
             clientQuotas,
             producerIds,
-            acls);
+            acls,
+            scram);
     }
 
     @Override
@@ -177,6 +190,7 @@ public final class MetadataImage {
             ", clientQuotas=" + clientQuotas +
             ", producerIdsImage=" + producerIds +
             ", acls=" + acls +
+            ", scram=" + scram +
             ")";
     }
 }

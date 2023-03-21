@@ -81,14 +81,14 @@ public class MeteredKeyValueStore<K, V>
     protected Sensor putSensor;
     private Sensor putIfAbsentSensor;
     protected Sensor getSensor;
-    private Sensor deleteSensor;
+    protected Sensor deleteSensor;
     private Sensor putAllSensor;
     private Sensor allSensor;
     private Sensor rangeSensor;
     private Sensor prefixScanSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
-    private InternalProcessorContext context;
+    protected InternalProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
@@ -246,9 +246,9 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
+    protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                               final PositionBound positionBound,
+                                               final QueryConfig config) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
@@ -289,9 +289,9 @@ public class MeteredKeyValueStore<K, V>
 
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                           final PositionBound positionBound,
-                                           final QueryConfig config) {
+    protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =

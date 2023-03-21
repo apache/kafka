@@ -57,8 +57,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+
+
 
 public class InternalTopicManager {
     private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
@@ -466,6 +469,9 @@ public class InternalTopicManager {
                                                 topicName)
                                         );
                                     }
+                                } else if (cause instanceof TimeoutException) {
+                                    log.error("Creating topic {} timed out.\n" +
+                                            "Error message was: {}", topicName, cause.toString());
                                 } else {
                                     throw new StreamsException(
                                             String.format("Could not create topic %s.", topicName),
@@ -473,9 +479,6 @@ public class InternalTopicManager {
                                     );
                                 }
                             }
-                        } catch (final TimeoutException retriableException) {
-                            log.error("Creating topic {} timed out.\n" +
-                                    "Error message was: {}", topicName, retriableException.toString());
                         }
                     }
                 }
@@ -538,15 +541,15 @@ public class InternalTopicManager {
                     tempUnknownTopics.add(topicName);
                     log.debug("The leader of topic {} is not available.\n" +
                         "Error message was: {}", topicName, cause.toString());
+                } else if (cause instanceof TimeoutException) {
+                    tempUnknownTopics.add(topicName);
+                    log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
+                            "Error message was: {}", topicName, cause.toString());
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
                     throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
                 }
-            } catch (final TimeoutException retriableException) {
-                tempUnknownTopics.add(topicName);
-                log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
-                    "Error message was: {}", topicName, retriableException.toString());
             }
         }
 

@@ -58,6 +58,11 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     @Override
+    public void cleanupExpiredSegments(final long streamTime) {
+        super.cleanupExpiredSegments(streamTime);
+    }
+
+    @Override
     public void flush() {
         physicalStore.flush();
     }

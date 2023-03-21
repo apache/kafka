@@ -17,8 +17,8 @@
 
 package kafka.utils
 
-import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.concurrent.TimeUnit
 import java.util.Random
@@ -41,10 +41,12 @@ class Throttler(@volatile var desiredRatePerSec: Double,
                 throttleDown: Boolean = true,
                 metricName: String = "throttler",
                 units: String = "entries",
-                time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
-  
+                time: Time = Time.SYSTEM) extends Logging {
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
   private val lock = new Object
-  private val meter = newMeter(metricName, units, TimeUnit.SECONDS)
+  private val meter = metricsGroup.newMeter(metricName, units, TimeUnit.SECONDS)
   private val checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs)
   private var periodStartNs: Long = time.nanoseconds
   private var observedSoFar: Double = 0.0

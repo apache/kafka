@@ -36,6 +36,8 @@ import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -62,6 +64,8 @@ import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
+import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
@@ -312,10 +316,10 @@ public final class QuorumController implements Controller {
             }
 
             if (threadNamePrefix == null) {
-                threadNamePrefix = String.format("Node%d_", nodeId);
+                threadNamePrefix = String.format("quorum-controller-%d-", nodeId);
             }
             if (logContext == null) {
-                logContext = new LogContext(String.format("[Controller %d] ", nodeId));
+                logContext = new LogContext(String.format("[QuorumController id=%d] ", nodeId));
             }
             if (controllerMetrics == null) {
                 controllerMetrics = (ControllerMetrics) Class.forName(
@@ -324,7 +328,7 @@ public final class QuorumController implements Controller {
 
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(
                     fatalFaultHandler,
                     logContext,
@@ -1409,6 +1413,12 @@ public final class QuorumController implements Controller {
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
                 aclControlManager.replay((RemoveAccessControlEntryRecord) message, snapshotId);
                 break;
+            case USER_SCRAM_CREDENTIAL_RECORD:
+                scramControlManager.replay((UserScramCredentialRecord) message);
+                break;
+            case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
+                scramControlManager.replay((RemoveUserScramCredentialRecord) message);
+                break;
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
                 break;
@@ -1528,6 +1538,11 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final ReplicationControlManager replicationControl;
+
+    /**
+     * Manages SCRAM credentials, if there are any.
+     */
+    private final ScramControlManager scramControlManager;
 
     /**
      * The ClusterMetadataAuthorizer, if one is configured. Note that this will still be
@@ -1728,6 +1743,10 @@ public final class QuorumController implements Controller {
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
             build();
+        this.scramControlManager = new ScramControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            build();
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
@@ -1763,6 +1782,18 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<AlterUserScramCredentialsResponseData> alterUserScramCredentials(
+        ControllerRequestContext context,
+        AlterUserScramCredentialsRequestData request
+    ) {
+        if (request.deletions().isEmpty() && request.upsertions().isEmpty()) {
+            return CompletableFuture.completedFuture(new AlterUserScramCredentialsResponseData());
+        }
+        return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
+            () -> scramControlManager.alterCredentials(request, featureControl.metadataVersion()));
+    }
+
+    @Override
     public CompletableFuture<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
         CreateTopicsRequestData request, Set<String> describable
@@ -1771,7 +1802,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
         return appendWriteEvent("createTopics", context.deadlineNs(),
-            () -> replicationControl.createTopics(request, describable));
+            () -> replicationControl.createTopics(context, request, describable));
     }
 
     @Override
@@ -1821,7 +1852,7 @@ public final class QuorumController implements Controller {
         if (ids.isEmpty())
             return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendWriteEvent("deleteTopics", context.deadlineNs(),
-            () -> replicationControl.deleteTopics(ids));
+            () -> replicationControl.deleteTopics(context, ids));
     }
 
     @Override
@@ -2042,7 +2073,7 @@ public final class QuorumController implements Controller {
         }
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
-            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(topics);
+            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(context, topics);
             if (validateOnly) {
                 log.debug("Validate-only CreatePartitions result(s): {}", result.response());
                 return result.withoutRecords();

@@ -517,7 +517,6 @@ public class AbstractConfig {
      * @param originals           The map of raw configs.
      * @return map of resolved config variable.
      */
-    @SuppressWarnings("unchecked")
     private Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
