@@ -340,8 +340,7 @@ public class VersionedKeyValueStoreIntegrationTest {
                 Materialized
                     .<Integer, String>as(new RocksDbVersionedKeyValueBytesStoreSupplier(STORE_NAME, HISTORY_RETENTION))
                     .withKeySerde(Serdes.Integer())
-                    .withValueSerde(Serdes.String())
-            );
+                    .withValueSerde(Serdes.String()));
         streamsBuilder
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
             .process(() -> new VersionedStoreContentCheckerProcessor(false, data))
@@ -352,7 +351,7 @@ public class VersionedKeyValueStoreIntegrationTest {
         kafkaStreams.start();
 
         // produce source data to trigger store verifications in processor
-        int numRecordsProduced = produceDataToTopic(inputStream, baseTimestamp + 8, KeyValue.pair(1, "a8"), KeyValue.pair(2, "b8"), KeyValue.pair(3, "c8"));
+        final int numRecordsProduced = produceDataToTopic(inputStream, baseTimestamp + 8, KeyValue.pair(1, "a8"), KeyValue.pair(2, "b8"), KeyValue.pair(3, "c8"));
 
         // wait for output and verify
         final List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
