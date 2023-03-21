@@ -1694,7 +1694,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         if (connection.isBackingOff(currentTimeMs)) {
             long remainingBackoffMs = connection.remainingBackoffMs(currentTimeMs);
-            logger.info("Connection for {} is backing off for {} ms", destinationId, remainingBackoffMs);
+            logger.debug("Connection for {} is backing off for {} ms", destinationId, remainingBackoffMs);
             return remainingBackoffMs;
         }
 
