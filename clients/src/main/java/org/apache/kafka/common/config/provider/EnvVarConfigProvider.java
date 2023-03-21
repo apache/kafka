@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 public class EnvVarConfigProvider implements ConfigProvider {
 
-    public static final String ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG = "env.var.pattern";
+    public static final String ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG = "allowlist.pattern";
     public static final String ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG_DOC = "A pattern / regular expression that needs to match for environment variables" +
             " to be used by this config provider.";
     private final Map<String, String> envVarMap;
