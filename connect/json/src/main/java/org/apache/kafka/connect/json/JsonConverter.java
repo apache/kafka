@@ -67,30 +67,30 @@ public class JsonConverter implements Converter, HeaderConverter {
     private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 
     static {
-        TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, (schema, value) -> value.booleanValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.INT8, (schema, value) -> (byte) value.intValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.INT16, (schema, value) -> (short) value.intValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.INT32, (schema, value) -> value.intValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.INT64, (schema, value) -> value.longValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT32, (schema, value) -> value.floatValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT64, (schema, value) -> value.doubleValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.BYTES, (schema, value) -> {
+        TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, (schema, value, config) -> value.booleanValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.INT8, (schema, value, config) -> (byte) value.intValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.INT16, (schema, value, config) -> (short) value.intValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.INT32, (schema, value, config) -> value.intValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.INT64, (schema, value, config) -> value.longValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT32, (schema, value, config) -> value.floatValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT64, (schema, value, config) -> value.doubleValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.BYTES, (schema, value, config) -> {
             try {
                 return value.binaryValue();
             } catch (IOException e) {
                 throw new DataException("Invalid bytes field", e);
             }
         });
-        TO_CONNECT_CONVERTERS.put(Schema.Type.STRING, (schema, value) -> value.textValue());
-        TO_CONNECT_CONVERTERS.put(Schema.Type.ARRAY, (schema, value) -> {
+        TO_CONNECT_CONVERTERS.put(Schema.Type.STRING, (schema, value, config) -> value.textValue());
+        TO_CONNECT_CONVERTERS.put(Schema.Type.ARRAY, (schema, value, config) -> {
             Schema elemSchema = schema == null ? null : schema.valueSchema();
             ArrayList<Object> result = new ArrayList<>();
             for (JsonNode elem : value) {
-                result.add(convertToConnect(elemSchema, elem));
+                result.add(convertToConnect(elemSchema, elem, config));
             }
             return result;
         });
-        TO_CONNECT_CONVERTERS.put(Schema.Type.MAP, (schema, value) -> {
+        TO_CONNECT_CONVERTERS.put(Schema.Type.MAP, (schema, value, config) -> {
             Schema keySchema = schema == null ? null : schema.keySchema();
             Schema valueSchema = schema == null ? null : schema.valueSchema();
 
@@ -104,7 +104,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                 Iterator<Map.Entry<String, JsonNode>> fieldIt = value.fields();
                 while (fieldIt.hasNext()) {
                     Map.Entry<String, JsonNode> entry = fieldIt.next();
-                    result.put(entry.getKey(), convertToConnect(valueSchema, entry.getValue()));
+                    result.put(entry.getKey(), convertToConnect(valueSchema, entry.getValue(), config));
                 }
             } else {
                 if (!value.isArray())
@@ -114,13 +114,13 @@ public class JsonConverter implements Converter, HeaderConverter {
                         throw new DataException("Found invalid map entry instead of array tuple: " + entry.getNodeType());
                     if (entry.size() != 2)
                         throw new DataException("Found invalid map entry, expected length 2 but found :" + entry.size());
-                    result.put(convertToConnect(keySchema, entry.get(0)),
-                            convertToConnect(valueSchema, entry.get(1)));
+                    result.put(convertToConnect(keySchema, entry.get(0), config),
+                            convertToConnect(valueSchema, entry.get(1), config));
                 }
             }
             return result;
         });
-        TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, (schema, value) -> {
+        TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, (schema, value, config) -> {
             if (!value.isObject())
                 throw new DataException("Structs should be encoded as JSON objects, but found " + value.getNodeType());
 
@@ -131,7 +131,7 @@ public class JsonConverter implements Converter, HeaderConverter {
             // just returns the schema Object and has no overhead.
             Struct result = new Struct(schema.schema());
             for (Field field : schema.fields())
-                result.put(field, convertToConnect(field.schema(), value.get(field.name())));
+                result.put(field, convertToConnect(field.schema(), value.get(field.name()), config));
 
             return result;
         });
@@ -342,7 +342,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         Schema schema = asConnectSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         return new SchemaAndValue(
                 schema,
-                convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
+                convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME), config)
         );
     }
 
@@ -533,7 +533,7 @@ public class JsonConverter implements Converter, HeaderConverter {
 
         JsonNode schemaDefaultNode = jsonSchema.get(JsonSchema.SCHEMA_DEFAULT_FIELD_NAME);
         if (schemaDefaultNode != null)
-            builder.defaultValue(convertToConnect(builder, schemaDefaultNode));
+            builder.defaultValue(convertToConnect(builder, schemaDefaultNode, config));
 
         Schema result = builder.build();
         toConnectSchemaCache.put(jsonSchema, result);
@@ -564,7 +564,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         if (value == null) {
             if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
                 return null;
-            if (schema.defaultValue() != null)
+            if (schema.defaultValue() != null && config.replaceNullWithDefault())
                 return convertToJson(schema, schema.defaultValue());
             if (schema.isOptional())
                 return JSON_NODE_FACTORY.nullNode();
@@ -675,12 +675,12 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
 
-    private static Object convertToConnect(Schema schema, JsonNode jsonValue) {
+    private static Object convertToConnect(Schema schema, JsonNode jsonValue, JsonConverterConfig config) {
         final Schema.Type schemaType;
         if (schema != null) {
             schemaType = schema.type();
             if (jsonValue == null || jsonValue.isNull()) {
-                if (schema.defaultValue() != null)
+                if (schema.defaultValue() != null && config.replaceNullWithDefault())
                     return schema.defaultValue(); // any logical type conversions should already have been applied
                 if (schema.isOptional())
                     return null;
@@ -729,11 +729,11 @@ public class JsonConverter implements Converter, HeaderConverter {
                 return logicalConverter.toConnect(schema, jsonValue);
         }
 
-        return typeConverter.convert(schema, jsonValue);
+        return typeConverter.convert(schema, jsonValue, config);
     }
 
     private interface JsonToConnectTypeConverter {
-        Object convert(Schema schema, JsonNode value);
+        Object convert(Schema schema, JsonNode value, JsonConverterConfig config);
     }
 
     private interface LogicalTypeConverter {
