@@ -631,6 +631,52 @@ public class MirrorConnectorsIntegrationBaseTest {
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
     }
 
+    @Test
+    public void testOffsetTranslationBehindReplicationFlow() throws InterruptedException {
+        String consumerGroupName = "consumer-group-lagging-behind";
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
+        String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
+        warmUpConsumer(consumerProps);
+        mm2Props.put("sync.group.offsets.enabled", "true");
+        mm2Props.put("sync.group.offsets.interval.seconds", "1");
+        mm2Props.put("offset.lag.max", Integer.toString(OFFSET_LAG_MAX));
+        mm2Config = new MirrorMakerConfig(mm2Props);
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+        // Produce a large number of records to the topic, all replicated within one MM2 lifetime.
+        int iterations = 100;
+        for (int i = 0; i < iterations; i++) {
+            produceMessages(primary, "test-topic-1");
+        }
+        waitForTopicCreated(backup, remoteTopic);
+        assertEquals(iterations * NUM_RECORDS_PRODUCED, backup.kafka().consume(iterations * NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, remoteTopic).count(),
+                "Records were not replicated to backup cluster.");
+        // Once the replication has finished, we spin up the upstream consumer and start slowly consuming records
+        ConsumerRecords<byte[], byte[]> allRecords = primary.kafka().consume(iterations * NUM_RECORDS_PRODUCED, RECORD_CONSUME_DURATION_MS, "test-topic-1");
+        MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
+        Map<TopicPartition, OffsetAndMetadata> initialCheckpoints = waitForCheckpointOnAllPartitions(
+                backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic);
+        log.info("Initial checkpoints: {}", initialCheckpoints);
+        try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
+            primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+            primaryConsumer.commitSync(partialOffsets(allRecords, 0.9f));
+            Thread.sleep(2000);
+            Map<TopicPartition, OffsetAndMetadata> partialCheckpoints = waitForCheckpointOnAllPartitions(
+                    backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic);
+            log.info("Partial checkpoints: {}", partialCheckpoints);
+        }
+
+        assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
+    }
+
+    private Map<TopicPartition, OffsetAndMetadata> partialOffsets(ConsumerRecords<byte[], byte[]> allRecords, double fraction) {
+        return allRecords.partitions()
+                .stream()
+                .collect(Collectors.toMap(Function.identity(), partition -> {
+                    List<ConsumerRecord<byte[], byte[]>> records = allRecords.records(partition);
+                    int index = (int) (records.size() * fraction);
+                    return new OffsetAndMetadata(records.get(index).offset());
+                }));
+    }
 
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {
         return new TopicPartition(remoteTopicName(tp.topic(), alias), tp.partition());
