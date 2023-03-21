@@ -792,7 +792,7 @@ public class MirrorConnectorsIntegrationBaseTest {
      * @param key       Kafka key for the record
      * @param value     Kafka value for the record
      */
-    private void produce(EmbeddedKafkaCluster cluster, String topic, Integer partition, String key, String value) {
+    protected void produce(EmbeddedKafkaCluster cluster, String topic, Integer partition, String key, String value) {
         cluster.produce(topic, partition, key, value);
     }
 
