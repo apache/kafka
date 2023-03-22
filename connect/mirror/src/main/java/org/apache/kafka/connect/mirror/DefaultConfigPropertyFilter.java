@@ -31,7 +31,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     public static final String CONFIG_PROPERTIES_EXCLUDE_CONFIG = "config.properties.exclude";
     public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG = "config.properties.blacklist";
     public static final String USE_DEFAULTS_FROM = "use.defaults.from";
-    private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults to use when syncing topic configurations.";
+    private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults to use when syncing topic configurations that have default values.";
     private static final String USE_DEFAULTS_FROM_DEFAULT = "target";
 
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "List of topic configuration properties and/or regexes "

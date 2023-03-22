@@ -25,10 +25,14 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public interface ConfigPropertyFilter extends Configurable, AutoCloseable {
 
+    /**
+     * Specifies whether to replicate the given topic configuration whether it has a default value or not.
+     * The configurations with default values are controlled by shouldReplicateSourceDefault.
+     */
     boolean shouldReplicateConfigProperty(String prop);
 
     /**
-     * Specifies whether to replicate topic configurations with default values
+     * Specifies whether to replicate the given topic configuration that has a default value
      */
     default boolean shouldReplicateSourceDefault(String prop) {
         return false;

@@ -26,6 +26,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -385,9 +386,10 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing
     void syncTopicConfigs()
             throws InterruptedException, ExecutionException {
+        boolean incremental = !useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG);
         Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
+            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue(), incremental)));
         updateTopicConfigs(targetConfigs);
     }
 
@@ -449,7 +451,7 @@ public class MirrorSourceConnector extends SourceConnector {
                 .map(sourceTopic -> {
                     String remoteTopic = formatRemoteTopic(sourceTopic);
                     int partitionCount = sourceTopicToPartitionCounts.get(sourceTopic).intValue();
-                    Map<String, String> configs = configToMap(targetConfig(sourceTopicToConfig.get(sourceTopic)));
+                    Map<String, String> configs = configToMap(targetConfig(sourceTopicToConfig.get(sourceTopic), false));
                     return new NewTopic(remoteTopic, partitionCount, (short) replicationFactor)
                             .configs(configs);
                 })
@@ -542,7 +544,6 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // visible for testing
-    @SuppressWarnings("deprecation")
     void incrementalAlterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
@@ -567,7 +568,9 @@ public class MirrorSourceConnector extends SourceConnector {
                     useIncrementalAlterConfigs = MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG;
                 } else if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG)
                         && e instanceof UnsupportedVersionException) {
-                    context.raiseError(new UnsupportedVersionException("use.incremental.alter.configs was set to \"required\" however the target cluster is not compatible with IncrementalAlterConfigs API"));
+                        log.error("Failed to sync configs for topic {} on cluster {} with IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
+                        context.raiseError(new ConnectException("use.incremental.alter.configs was set to \"required\", but the target cluster '"
+                                + sourceAndTarget.target() + "' is not compatible with IncrementalAlterConfigs API", e));
                 } else {
                     log.warn("Could not alter configuration of topic {}.", k.name(), e);
                 }
@@ -599,11 +602,9 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue));
     }
 
-    Config targetConfig(Config sourceConfig) {
+    Config targetConfig(Config sourceConfig, boolean incremental) {
         List<ConfigEntry> entries = sourceConfig.entries().stream()
-                    .filter(x -> (!useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)
-                            || (x.isDefault() && shouldReplicateSourceDefault(x.name())))
-                            || (!x.isDefault() && useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)))
+                    .filter(x -> incremental || x.isDefault() && shouldReplicateSourceDefault(x.name()) || !x.isDefault())
                     .filter(x -> !x.isReadOnly() && !x.isSensitive())
                     .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
                     .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
@@ -644,6 +645,7 @@ public class MirrorSourceConnector extends SourceConnector {
     boolean shouldReplicateSourceDefault(String property) {
         return configPropertyFilter.shouldReplicateSourceDefault(property);
     }
+
     // Recurse upstream to detect cycles, i.e. whether this topic is already on the target cluster
     boolean isCycle(String topic) {
         String source = replicationPolicy.topicSource(topic);

@@ -108,14 +108,14 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, "test-topic-1");
 
-        // Fail-over consumer group to back up cluster.
+        // Fail over consumer group to back up cluster.
         try (Consumer<byte[], byte[]> primaryConsumer = backup.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
             primaryConsumer.assign(backupOffsets.keySet());
             backupOffsets.forEach(primaryConsumer::seek);
             primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             primaryConsumer.commitAsync();
 
-            assertTrue(primaryConsumer.position(new TopicPartition("test-topic-1", 0)) > 0, "Consumer failed over to zero offset.");
+            assertTrue(primaryConsumer.position(new TopicPartition("test-topic-1", 0)) > 0, "Consumer should have failed over to zero offset.");
             assertTrue(primaryConsumer.position(
                     new TopicPartition("test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failed over beyond expected offset.");
         }
@@ -157,7 +157,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
             waitForConsumingAllRecords(primaryConsumer, expectedRecords);
         }
 
-        // one way replication from primary to back up
+        // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
