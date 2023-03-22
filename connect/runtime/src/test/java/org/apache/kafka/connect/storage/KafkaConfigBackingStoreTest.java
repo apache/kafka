@@ -913,7 +913,10 @@ public class KafkaConfigBackingStoreTest {
 
         expectStart(existingRecords, deserialized);
 
-        // on resume update listener isn't called
+        // on resume update listener shouldn't be called
+        configUpdateListener.onConnectorTargetStateChange(EasyMock.anyString());
+        EasyMock.expectLastCall().andStubThrow(new AssertionError("unexpected call to onConnectorTargetStateChange"));
+
         expectRead(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0), TARGET_STATE_STARTED);
 
         expectPartitionCount(1);
