@@ -180,7 +180,7 @@ public class CommitRequestManagerTest {
                 partitions,
                 5,
                 error);
-        // retriable will be re-queued so we only want to make sure to purge the outbound buffer for non-retriables.
+        // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
         if (isRetriable)
             testRetriable(commitRequestManger, futures);
         else {
