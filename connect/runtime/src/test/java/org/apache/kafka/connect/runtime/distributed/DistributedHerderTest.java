@@ -433,6 +433,7 @@ public class DistributedHerderTest {
     @Test
     public void testIncrementalCooperativeRebalanceForExistingMember() {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
         // Join group. First rebalance contains revocations because a new member joined.
         EasyMock.expect(member.memberId()).andStubReturn("member");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V1);
@@ -451,7 +452,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.configState = SNAPSHOT;
+        herder.refreshConfigSnapshot(0);
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
@@ -1206,6 +1207,8 @@ public class DistributedHerderTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        expectConfigRefreshAndSnapshot(ClusterConfigState.EMPTY);
+
         // The change eventually is reflected to the config topic and the deleted connector and
         // tasks are revoked
         member.wakeup();
@@ -1232,7 +1235,7 @@ public class DistributedHerderTest {
         assertStatistics("leaderUrl", false, 3, 1, 100, 1000L);
 
         configUpdateListener.onConnectorConfigRemove(CONN1); // read updated config that removes the connector
-        herder.configState = ClusterConfigState.EMPTY;
+        herder.refreshConfigSnapshot(0);
         herder.tick();
         time.sleep(1000L);
         assertStatistics("leaderUrl", true, 3, 1, 100, 2100L);
@@ -1615,6 +1618,7 @@ public class DistributedHerderTest {
 
     @Test
     public void testDoRestartConnectorAndTasksOnlyTasks() {
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         EasyMock.expect(restartPlan.shouldRestartConnector()).andReturn(true).anyTimes();
@@ -1630,8 +1634,6 @@ public class DistributedHerderTest {
         // But only one task is assigned to this worker
         EasyMock.expect(herder.assignment.tasks()).andReturn(Collections.singletonList(TASK0)).anyTimes();
 
-        herder.configState = SNAPSHOT;
-
         worker.stopAndAwaitTasks(Collections.singletonList(TASK0));
         PowerMock.expectLastCall();
 
@@ -1643,12 +1645,14 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
 
         PowerMock.replayAll();
+        herder.refreshConfigSnapshot(0);
         herder.doRestartConnectorAndTasks(restartRequest);
         PowerMock.verifyAll();
     }
 
     @Test
     public void testDoRestartConnectorAndTasksBoth() {
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
         ConnectorTaskId taskId = new ConnectorTaskId(CONN1, 0);
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
@@ -1662,8 +1666,6 @@ public class DistributedHerderTest {
         herder.assignment = PowerMock.createMock(ExtendedAssignment.class);
         EasyMock.expect(herder.assignment.connectors()).andReturn(Collections.singletonList(CONN1)).anyTimes();
         EasyMock.expect(herder.assignment.tasks()).andReturn(Collections.singletonList(taskId)).anyTimes();
-
-        herder.configState = SNAPSHOT;
 
         worker.stopAndAwaitConnector(CONN1);
         PowerMock.expectLastCall();
@@ -1687,6 +1689,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
 
         PowerMock.replayAll();
+        herder.refreshConfigSnapshot(0);
         herder.doRestartConnectorAndTasks(restartRequest);
         PowerMock.verifyAll();
     }
@@ -3589,7 +3592,7 @@ public class DistributedHerderTest {
     @Test
     public void testVerifyTaskGeneration() {
         Map<String, Integer> taskConfigGenerations = new HashMap<>();
-        herder.configState = new ClusterConfigState(
+        expectConfigRefreshAndSnapshot(new ClusterConfigState(
                 1,
                 null,
                 Collections.singletonMap(CONN1, 3),
@@ -3599,7 +3602,7 @@ public class DistributedHerderTest {
                 Collections.emptyMap(),
                 taskConfigGenerations,
                 Collections.emptySet(),
-                Collections.emptySet());
+                Collections.emptySet()));
 
         Callback<Void> verifyCallback = EasyMock.mock(Callback.class);
         for (int i = 0; i < 5; i++) {
@@ -3609,6 +3612,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
+        herder.refreshConfigSnapshot(0);
         herder.assignment = new ExtendedAssignment(
                 (short) 2, (short) 0, "leader", "leaderUrl", 0,
                 Collections.emptySet(), Collections.singleton(TASK1),

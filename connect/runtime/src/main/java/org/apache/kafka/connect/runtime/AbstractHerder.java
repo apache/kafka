@@ -41,6 +41,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
@@ -116,6 +117,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
+    protected ClusterConfigState configState;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
@@ -128,6 +130,19 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore,
                           ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        this(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy,
+                Executors.newCachedThreadPool());
+    }
+
+    // Visible for testing
+    AbstractHerder(
+            Worker worker,
+            String workerId,
+            String kafkaClusterId,
+            StatusBackingStore statusBackingStore,
+            ConfigBackingStore configBackingStore,
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            ExecutorService connectorExecutor) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
@@ -135,7 +150,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
-        this.connectorExecutor = Executors.newCachedThreadPool();
+        this.configState = ClusterConfigState.EMPTY;
+        this.connectorExecutor = connectorExecutor;
     }
 
     @Override
@@ -866,4 +882,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
     }
 
+    @Override
+    public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        log.debug("Submitting offset fetch request for connector: {}", connName);
+        connectorExecutor.submit(() -> {
+            try {
+                if (!configState.contains(connName)) {
+                    cb.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                    return;
+                }
+                ConnectorOffsets offsets = worker.connectorOffsets(connName, configState.connectorConfig(connName));
+                cb.onCompletion(null, offsets);
+            } catch (Throwable t) {
+                cb.onCompletion(t, null);
+            }
+        });
+    }
 }

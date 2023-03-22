@@ -30,8 +30,12 @@ import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of OffsetBackingStore that saves data locally to a file. To ensure this behaves
@@ -41,9 +45,12 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(FileOffsetBackingStore.class);
 
     private File file;
+    private final Map<String, Set<Map<String, Object>>> connectorPartitions;
+    private final Converter keyConverter;
 
-    public FileOffsetBackingStore() {
-
+    public FileOffsetBackingStore(Converter keyConverter) {
+        connectorPartitions = new HashMap<>();
+        this.keyConverter = keyConverter;
     }
 
     @Override
@@ -78,6 +85,27 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer key = (mapEntry.getKey() != null) ? ByteBuffer.wrap(mapEntry.getKey()) : null;
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
+                if (key != null) {
+                    try {
+                        // The topic parameter is irrelevant for the JsonConverter which is the internal converter used by
+                        // Connect workers.
+                        List<Object> keyValue = (List<Object>) keyConverter.toConnectData("", key.array()).value();
+                        // The key should always be of the form [connectorName, partition] where connectorName is a
+                        // string value and partition is a Map<String, Object>
+                        String connectorName = (String) keyValue.get(0);
+                        Map<String, Object> partition = (Map<String, Object>) keyValue.get(1);
+                        if (!connectorPartitions.containsKey(connectorName)) {
+                            connectorPartitions.put(connectorName, new HashSet<>());
+                        }
+                        if (value == null) {
+                            connectorPartitions.get(connectorName).remove(partition);
+                        } else {
+                            connectorPartitions.get(connectorName).add(partition);
+                        }
+                    } catch (Throwable t) {
+                        throw new ConnectException("Failed to deserialize offset key", t);
+                    }
+                }
             }
         } catch (NoSuchFileException | EOFException e) {
             // NoSuchFileException: Ignore, may be new.
@@ -100,5 +128,10 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
         } catch (IOException e) {
             throw new ConnectException(e);
         }
+    }
+
+    @Override
+    public Set<Map<String, Object>> connectorPartitions(String connectorName) {
+        return connectorPartitions.getOrDefault(connectorName, Collections.emptySet());
     }
 }

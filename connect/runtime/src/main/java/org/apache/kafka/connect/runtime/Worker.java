@@ -19,14 +19,17 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.FenceProducersOptions;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
@@ -42,6 +45,8 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -88,6 +93,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -1133,6 +1139,105 @@ public class Worker {
         }
     }
 
+    /**
+     * Get the current offsets for a connector.
+     * @param connName the name of the connector whose offsets are to be retrieved
+     * @param connectorConfig the connector's configurations
+     * @return the connector's offsets
+     */
+    public ConnectorOffsets connectorOffsets(String connName, Map<String, String> connectorConfig) {
+        String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
+        Connector connector;
+
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            connector = plugins.newConnector(connectorClassOrAlias);
+        }
+
+        if (ConnectUtils.isSinkConnector(connector)) {
+            log.debug("Fetching offsets for sink connector: {}", connName);
+            return sinkConnectorOffsets(connName, connector, connectorConfig);
+        } else {
+            log.debug("Fetching offsets for source connector: {}", connName);
+            return sourceConnectorOffsets(connName, connector, connectorConfig);
+        }
+    }
+
+    /**
+     * Get the current consumer group offsets for a sink connector.
+     * @param connName the name of the sink connector whose offsets are to be retrieved
+     * @param connector the sink connector
+     * @param connectorConfig the sink connector's configurations
+     * @return the consumer group offsets for the sink connector
+     */
+    private ConnectorOffsets sinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig) {
+        return sinkConnectorOffsets(connName, connector, connectorConfig, Admin::create);
+    }
+
+    // Visible for testing; allows us to mock out the Admin client for testing
+    ConnectorOffsets sinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                          Function<Map<String, Object>, Admin> adminFactory) {
+        Map<String, Object> adminConfig = adminConfigs(
+                connName,
+                "connector-worker-adminclient-" + connName,
+                config,
+                new SinkConnectorConfig(plugins, connectorConfig),
+                connector.getClass(),
+                connectorClientConfigOverridePolicy,
+                kafkaClusterId,
+                ConnectorType.SOURCE);
+        String groupId = (String) baseConsumerConfigs(
+                connName, "connector-consumer-", config, new SinkConnectorConfig(plugins, connectorConfig),
+                connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
+        Admin admin = adminFactory.apply(adminConfig);
+        try {
+            ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = admin.listConsumerGroupOffsets(groupId);
+            try {
+                // Not using a timeout for the Future::get here because each offset get request is handled in its own thread in AbstractHerder
+                // and the REST API request timeout in HerderRequestHandler will ensure that the user request doesn't hang indefinitely
+                Map<TopicPartition, OffsetAndMetadata> offsets = listConsumerGroupOffsetsResult.all().get().get(groupId);
+                return SinkUtils.consumerGroupOffsetsToConnectorOffsets(offsets);
+            } catch (InterruptedException | ExecutionException e) {
+                throw new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, e);
+            }
+        } finally {
+            Utils.closeQuietly(admin, "Offset fetch admin for sink connector " + connName);
+        }
+    }
+
+    /**
+     * Get the current offsets for a source connector.
+     * @param connName the name of the source connector whose offsets are to be retrieved
+     * @param connector the source connector
+     * @param connectorConfig the source connector's configurations
+     * @return the source connector's offsets
+     */
+    private ConnectorOffsets sourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig) {
+        SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorConfig, config.topicCreationEnable());
+        ConnectorOffsetBackingStore offsetStore = config.exactlyOnceSourceEnabled()
+                ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector)
+                : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector);
+        CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetStore, connName, internalKeyConverter, internalValueConverter);
+        return sourceConnectorOffsets(connName, offsetStore, offsetReader);
+    }
+
+    // Visible for testing
+    ConnectorOffsets sourceConnectorOffsets(String connName, ConnectorOffsetBackingStore offsetStore,
+                                            CloseableOffsetStorageReader offsetReader) {
+        offsetStore.configure(config);
+        offsetStore.start();
+        try {
+            Set<Map<String, Object>> connectorPartitions = offsetStore.connectorPartitions(connName);
+            List<ConnectorOffset> connectorOffsets = offsetReader.offsets(connectorPartitions).entrySet().stream()
+                    .map(entry -> new ConnectorOffset(entry.getKey(), entry.getValue()))
+                    .collect(Collectors.toList());
+            return new ConnectorOffsets(connectorOffsets);
+        } finally {
+            Utils.closeQuietly(offsetReader, "Offset reader for connector " + connName);
+            offsetStore.stop();
+        }
+    }
+
     ConnectorStatusMetricsGroup connectorStatusMetricsGroup() {
         return connectorStatusMetricsGroup;
     }
@@ -1426,7 +1531,7 @@ public class Worker {
 
             TopicAdmin admin = new TopicAdmin(adminOverrides);
             KafkaOffsetBackingStore connectorStore =
-                    KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
+                    KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin, internalKeyConverter);
 
             // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
             // an offset store that has a primary and a secondary store which both read from that same topic.
@@ -1483,7 +1588,7 @@ public class Worker {
 
         TopicAdmin admin = new TopicAdmin(adminOverrides);
         KafkaOffsetBackingStore connectorStore =
-                KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
+                KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin, internalKeyConverter);
 
         // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
         // an offset store that has a primary and a secondary store which both read from that same topic.
@@ -1532,7 +1637,7 @@ public class Worker {
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             KafkaOffsetBackingStore connectorStore =
-                    KafkaOffsetBackingStore.forTask(sourceConfig.offsetsTopic(), producer, consumer, topicAdmin);
+                    KafkaOffsetBackingStore.forTask(sourceConfig.offsetsTopic(), producer, consumer, topicAdmin, internalKeyConverter);
 
             // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
             // an offset store that has a primary and a secondary store which both read from that same topic.
@@ -1587,7 +1692,7 @@ public class Worker {
         String connectorOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
 
         KafkaOffsetBackingStore connectorStore =
-                KafkaOffsetBackingStore.forTask(connectorOffsetsTopic, producer, consumer, topicAdmin);
+                KafkaOffsetBackingStore.forTask(connectorOffsetsTopic, producer, consumer, topicAdmin, internalKeyConverter);
 
         // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
         // an offset store that has a primary and a secondary store which both read from that same topic.

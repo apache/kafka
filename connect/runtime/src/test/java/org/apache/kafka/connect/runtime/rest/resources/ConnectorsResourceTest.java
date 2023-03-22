@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import javax.ws.rs.core.HttpHeaders;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -32,6 +30,8 @@ import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -50,11 +50,11 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Stubber;
 
 import javax.ws.rs.BadRequestException;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
-
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -70,6 +70,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -761,6 +762,27 @@ public class ConnectorsResourceTest {
         ConnectRestException e = assertThrows(ConnectRestException.class, () ->
             connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
         assertTrue(e.getMessage().contains("no known leader URL"));
+    }
+
+    @Test
+    public void testGetOffsetsConnectorNotFound() {
+        final ArgumentCaptor<Callback<ConnectorOffsets>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackException(cb, new NotFoundException("Connector not found"))
+                .when(herder).connectorOffsets(anyString(), cb.capture());
+
+        assertThrows(NotFoundException.class, () -> connectorsResource.getOffsets("unknown-connector"));
+    }
+
+    @Test
+    public void testGetOffsets() throws Throwable {
+        final ArgumentCaptor<Callback<ConnectorOffsets>> cb = ArgumentCaptor.forClass(Callback.class);
+        ConnectorOffsets offsets = new ConnectorOffsets(Arrays.asList(
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"))
+        ));
+        expectAndCallbackResult(cb, offsets).when(herder).connectorOffsets(eq(CONNECTOR_NAME), cb.capture());
+
+        assertEquals(offsets, connectorsResource.getOffsets(CONNECTOR_NAME));
     }
 
     private <T> byte[] serializeAsBytes(final T value) throws IOException {

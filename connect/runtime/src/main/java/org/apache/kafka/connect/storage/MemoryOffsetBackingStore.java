@@ -27,6 +27,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -37,7 +38,7 @@ import java.util.concurrent.TimeUnit;
  * behaves similarly to a real backing store, operations are executed asynchronously on a
  * background thread.
  */
-public class MemoryOffsetBackingStore implements OffsetBackingStore {
+public abstract class MemoryOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(MemoryOffsetBackingStore.class);
 
     protected Map<ByteBuffer, ByteBuffer> data = new HashMap<>();
@@ -102,4 +103,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     protected void save() {
 
     }
+
+    @Override
+    public abstract Set<Map<String, Object>> connectorPartitions(String connectorName);
 }

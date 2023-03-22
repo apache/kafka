@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -279,6 +280,13 @@ public interface Herder {
      * @return the list of ConfigKeyInfo of the plugin
      */
     List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
+
+    /**
+     * Get the current offsets for a connector.
+     * @param connName the name of the connector whose offsets are to be retrieved
+     * @param cb callback to invoke upon completion
+     */
+    void connectorOffsets(String connName, Callback<ConnectorOffsets> cb);
 
     enum ConfigReloadAction {
         NONE,

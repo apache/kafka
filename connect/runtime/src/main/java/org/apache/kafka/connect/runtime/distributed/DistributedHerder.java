@@ -186,8 +186,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // visible for testing
     ExtendedAssignment assignment;
     private boolean canReadConfigs;
-    // visible for testing
-    protected ClusterConfigState configState;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
@@ -317,7 +315,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.config = config;
 
         stopping = new AtomicBoolean(false);
-        configState = ClusterConfigState.EMPTY;
         rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
         needsReconfigRebalance = false;
         fencedFromConfigTopic = false;
@@ -1634,12 +1631,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     /**
      * Try to read to the end of the config log within the given timeout and capture a fresh snapshot via
-     * {@link ConfigBackingStore#snapshot()}
+     * {@link ConfigBackingStore#snapshot()}.
+     * <p>
+     * Visible for testing.
      *
      * @param timeoutMs maximum time to wait to sync to the end of the log
      * @return true if successful; false if timed out
      */
-    private boolean refreshConfigSnapshot(long timeoutMs) {
+    boolean refreshConfigSnapshot(long timeoutMs) {
         try {
             configBackingStore.refresh(timeoutMs, TimeUnit.MILLISECONDS);
             configState = configBackingStore.snapshot();

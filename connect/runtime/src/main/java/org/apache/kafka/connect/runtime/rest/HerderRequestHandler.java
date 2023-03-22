@@ -53,9 +53,30 @@ public class HerderRequestHandler {
     }
 
     /**
-     * Wait for a FutureCallback to complete. If it succeeds, return the parsed response. If it fails, try to forward the
-     * request to the leader.
-      */
+     * Wait for a {@link FutureCallback} to complete and return the result if successful.
+     * @param cb the future callback to wait for
+     * @return the future callback's result if successful
+     * @param <T> the future's result type
+     * @throws Throwable if the future callback isn't successful
+     */
+    public <T> T completeRequest(FutureCallback<T> cb) throws Throwable {
+        try {
+            return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            throw e.getCause();
+        } catch (TimeoutException e) {
+            // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
+            // error is the best option
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request timed out");
+        } catch (InterruptedException e) {
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request interrupted");
+        }
+    }
+
+    /**
+     * Wait for a {@link FutureCallback} to complete. If it succeeds, return the parsed response. If it fails, try to forward the
+     * request to the indicated target.
+     */
     public <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
                                                     String path,
                                                     String method,

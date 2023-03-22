@@ -19,11 +19,14 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FenceProducersResult;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
@@ -42,12 +45,13 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
-import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
-import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -56,6 +60,8 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -64,6 +70,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.After;
 import org.junit.Before;
@@ -86,6 +93,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -96,13 +104,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_CONFIG;
-import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
-import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
-
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
-import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
@@ -1199,7 +1204,7 @@ public class WorkerTest {
     @Test
     public void testExactlyOnceSourceTaskProducerConfigs() {
         final Map<String, Object> connectorProducerOverrides = new HashMap<>();
-        when(connectorConfig.originalsWithPrefix(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(connectorProducerOverrides);
+        when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(connectorProducerOverrides);
 
         final String groupId = "connect-cluster";
         final String transactionalId = Worker.taskTransactionalId(groupId, TASK_ID.connector(), TASK_ID.task());
@@ -1298,7 +1303,7 @@ public class WorkerTest {
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
-        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific offsets store
@@ -1306,7 +1311,7 @@ public class WorkerTest {
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
-        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
@@ -1373,7 +1378,7 @@ public class WorkerTest {
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
-        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific store
@@ -1381,7 +1386,7 @@ public class WorkerTest {
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
-        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
@@ -1700,7 +1705,7 @@ public class WorkerTest {
         worker.start();
 
         Map<String, String> connectorConfig = anyConnectorConfigMap();
-        connectorConfig.put(CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + RETRY_BACKOFF_MS_CONFIG, "4761");
+        connectorConfig.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + RETRY_BACKOFF_MS_CONFIG, "4761");
 
         AtomicReference<Map<String, Object>> adminConfig = new AtomicReference<>();
         Function<Map<String, Object>, Admin> mockAdminConstructor = actualAdminConfig -> {
@@ -1720,6 +1725,112 @@ public class WorkerTest {
 
         verifyKafkaClusterId();
         verifyGenericIsolation();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testGetSinkConnectorOffsets() throws Exception {
+        mockKafkaClusterId();
+
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
+                Collections.singletonMap(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10));
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> consumerGroupToOffsetsMap =
+                Collections.singletonMap(SinkUtils.consumerGroupId(CONNECTOR_ID), consumerGroupOffsets);
+
+        Admin admin = mock(Admin.class);
+        ListConsumerGroupOffsetsResult result = mock(ListConsumerGroupOffsetsResult.class);
+        when(admin.listConsumerGroupOffsets(anyString())).thenReturn(result);
+        KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> future = mock(KafkaFuture.class);
+        when(result.all()).thenReturn(future);
+        when(future.get()).thenReturn(consumerGroupToOffsetsMap);
+        ConnectorOffsets offsets = worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, config -> admin);
+
+        assertEquals(1, offsets.offsets().size());
+        assertEquals(10L, offsets.offsets().get(0).offset().get(ConnectorOffset.KAFKA_OFFSET_KEY));
+        assertEquals(0, offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_PARTITION_KEY));
+        assertEquals("test-topic", offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_TOPIC_KEY));
+
+        verify(admin).listConsumerGroupOffsets(SinkUtils.consumerGroupId(CONNECTOR_ID));
+        verify(admin).close();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testGetSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
+        mockKafkaClusterId();
+
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.GROUP_ID_CONFIG, "overridden-group-id");
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
+                Collections.singletonMap(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10));
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> consumerGroupToOffsetsMap =
+                Collections.singletonMap("overridden-group-id", consumerGroupOffsets);
+
+        Admin admin = mock(Admin.class);
+        ListConsumerGroupOffsetsResult result = mock(ListConsumerGroupOffsetsResult.class);
+        when(admin.listConsumerGroupOffsets(anyString())).thenReturn(result);
+        KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> future = mock(KafkaFuture.class);
+        when(result.all()).thenReturn(future);
+        when(future.get()).thenReturn(consumerGroupToOffsetsMap);
+        ConnectorOffsets offsets = worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, config -> admin);
+
+        assertEquals(1, offsets.offsets().size());
+        assertEquals(10L, offsets.offsets().get(0).offset().get(ConnectorOffset.KAFKA_OFFSET_KEY));
+        assertEquals(0, offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_PARTITION_KEY));
+        assertEquals("test-topic", offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_TOPIC_KEY));
+
+        verify(admin).listConsumerGroupOffsets("overridden-group-id");
+        verify(admin).close();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testGetSourceConnectorOffsets() {
+        mockKafkaClusterId();
+
+        ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
+        CloseableOffsetStorageReader offsetReader = mock(CloseableOffsetStorageReader.class);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        Set<Map<String, Object>> connectorPartitions =
+                Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
+
+        Map<Map<String, Object>, Map<String, Object>> partitionOffsets = Collections.singletonMap(
+                Collections.singletonMap("partitionKey", "partitionValue"),
+                Collections.singletonMap("offsetKey", "offsetValue")
+        );
+
+        when(offsetStore.connectorPartitions(CONNECTOR_ID)).thenReturn(connectorPartitions);
+        when(offsetReader.offsets(connectorPartitions)).thenReturn(partitionOffsets);
+
+        ConnectorOffsets offsets = worker.sourceConnectorOffsets(CONNECTOR_ID, offsetStore, offsetReader);
+
+        assertEquals(1, offsets.offsets().size());
+        assertEquals("partitionValue", offsets.offsets().get(0).partition().get("partitionKey"));
+        assertEquals("offsetValue", offsets.offsets().get(0).offset().get("offsetKey"));
+
+        verify(offsetStore).configure(config);
+        verify(offsetStore).start();
+        verify(offsetReader).close();
+        verify(offsetStore).stop();
+        verifyKafkaClusterId();
     }
 
     private void assertStatusMetrics(long expected, String metricName) {

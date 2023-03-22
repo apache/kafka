@@ -20,32 +20,31 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
+import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-public final class SinkUtils {
+import static org.junit.Assert.assertEquals;
 
-    private SinkUtils() {}
+public class SinkUtilsTest {
 
-    public static String consumerGroupId(String connector) {
-        return "connect-" + connector;
-    }
+    @Test
+    public void testConsumerGroupOffsetsToConnectorOffsets() {
+        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets = new HashMap<>();
+        ConnectorOffsets connectorOffsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(consumerGroupOffsets);
+        assertEquals(0, connectorOffsets.offsets().size());
 
-    public static ConnectorOffsets consumerGroupOffsetsToConnectorOffsets(Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets) {
-        List<ConnectorOffset> connectorOffsets = new ArrayList<>();
+        consumerGroupOffsets.put(new TopicPartition("test-topic", 0), new OffsetAndMetadata(100));
 
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> topicPartitionOffset : consumerGroupOffsets.entrySet()) {
-            Map<String, Object> partition = new HashMap<>();
-            partition.put(ConnectorOffset.KAFKA_TOPIC_KEY, topicPartitionOffset.getKey().topic());
-            partition.put(ConnectorOffset.KAFKA_PARTITION_KEY, topicPartitionOffset.getKey().partition());
-            connectorOffsets.add(new ConnectorOffset(partition,
-                    Collections.singletonMap(ConnectorOffset.KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
-        }
+        connectorOffsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(consumerGroupOffsets);
+        assertEquals(1, connectorOffsets.offsets().size());
+        assertEquals(Collections.singletonMap(ConnectorOffset.KAFKA_OFFSET_KEY, 100L), connectorOffsets.offsets().get(0).offset());
 
-        return new ConnectorOffsets(connectorOffsets);
+        Map<String, Object> expectedPartition = new HashMap<>();
+        expectedPartition.put(ConnectorOffset.KAFKA_TOPIC_KEY, "test-topic");
+        expectedPartition.put(ConnectorOffset.KAFKA_PARTITION_KEY, 0);
+        assertEquals(expectedPartition, connectorOffsets.offsets().get(0).partition());
     }
 }

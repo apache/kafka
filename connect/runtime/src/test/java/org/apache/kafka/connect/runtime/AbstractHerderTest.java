@@ -40,6 +40,8 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
@@ -50,6 +52,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -66,6 +69,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -1038,6 +1044,48 @@ public class AbstractHerderTest {
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
         assertEquals(ConnectorType.UNKNOWN, herder.connectorType(Collections.emptyMap()));
+    }
+
+    @Test
+    public void testGetConnectorOffsetsConnectorNotFound() {
+        ArgumentCaptor<Runnable> runnable = ArgumentCaptor.forClass(Runnable.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        when(executorService.submit(runnable.capture())).thenAnswer(invocation -> {
+            runnable.getValue().run();
+            return null;
+        });
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, executorService)
+                .defaultAnswer(CALLS_REAL_METHODS));
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        herder.connectorOffsets("unknown-connector", cb);
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(NotFoundException.class, e.getCause().getClass());
+    }
+
+    @Test
+    public void testGetConnectorOffsets() throws Exception {
+        ArgumentCaptor<Runnable> runnable = ArgumentCaptor.forClass(Runnable.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        when(executorService.submit(runnable.capture())).thenAnswer(invocation -> {
+            runnable.getValue().run();
+            return null;
+        });
+        ConnectorOffsets offsets = new ConnectorOffsets(Arrays.asList(
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"))
+        ));
+        when(worker.connectorOffsets(CONN1, CONN1_CONFIG)).thenReturn(offsets);
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy, executorService)
+                .defaultAnswer(CALLS_REAL_METHODS));
+        herder.configState = SNAPSHOT;
+
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        herder.connectorOffsets(CONN1, cb);
+        assertEquals(offsets, cb.get(1000, TimeUnit.MILLISECONDS));
+
+        verify(worker).connectorOffsets(CONN1, CONN1_CONFIG);
     }
 
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {

@@ -17,10 +17,6 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.core.HttpHeaders;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -32,6 +28,7 @@ import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -45,6 +42,7 @@ import javax.servlet.ServletContext;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -53,19 +51,19 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
-
 import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.Translator;
 import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.IdentityTranslator;
+import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.Translator;
 
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
@@ -334,6 +332,15 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
         requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
+    }
+
+    @GET
+    @Path("/{connector}/offsets")
+    @Operation(summary = "Get the current offsets for the specified connector")
+    public ConnectorOffsets getOffsets(final @PathParam("connector") String connector) throws Throwable {
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        herder.connectorOffsets(connector, cb);
+        return requestHandler.completeRequest(cb);
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig
