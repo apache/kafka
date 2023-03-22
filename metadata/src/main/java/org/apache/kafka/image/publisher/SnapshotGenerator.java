@@ -45,6 +45,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         private long maxBytesSinceLastSnapshot = 100 * 1024L * 1024L;
         private long maxTimeSinceLastSnapshotNs = TimeUnit.DAYS.toNanos(1);
         private AtomicReference<String> disabledReason = null;
+        private String threadNamePrefix = "";
 
         public Builder(Emitter emitter) {
             this.emitter = emitter;
@@ -80,6 +81,11 @@ public class SnapshotGenerator implements MetadataPublisher {
             return this;
         }
 
+        public Builder setThreadNamePrefix(String threadNamePrefix) {
+            this.threadNamePrefix = threadNamePrefix;
+            return this;
+        }
+
         public SnapshotGenerator build() {
             if (disabledReason == null) {
                 disabledReason = new AtomicReference<>();
@@ -91,7 +97,8 @@ public class SnapshotGenerator implements MetadataPublisher {
                 faultHandler,
                 maxBytesSinceLastSnapshot,
                 maxTimeSinceLastSnapshotNs,
-                disabledReason
+                disabledReason,
+                threadNamePrefix
             );
         }
     }
@@ -174,7 +181,8 @@ public class SnapshotGenerator implements MetadataPublisher {
         FaultHandler faultHandler,
         long maxBytesSinceLastSnapshot,
         long maxTimeSinceLastSnapshotNs,
-        AtomicReference<String> disabledReason
+        AtomicReference<String> disabledReason,
+        String threadNamePrefix
     ) {
         this.nodeId = nodeId;
         this.time = time;
@@ -182,10 +190,10 @@ public class SnapshotGenerator implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.maxBytesSinceLastSnapshot = maxBytesSinceLastSnapshot;
         this.maxTimeSinceLastSnapshotNs = maxTimeSinceLastSnapshotNs;
-        LogContext logContext = new LogContext("[SnapshotGenerator " + nodeId + "] ");
+        LogContext logContext = new LogContext("[SnapshotGenerator id=" + nodeId + "] ");
         this.log = logContext.logger(SnapshotGenerator.class);
         this.disabledReason = disabledReason;
-        this.eventQueue = new KafkaEventQueue(time, logContext, "SnapshotGenerator" + nodeId);
+        this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix + "snapshot-generator-");
         resetSnapshotCounters();
         log.debug("Starting SnapshotGenerator.");
     }
