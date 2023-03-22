@@ -363,16 +363,12 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * <p>This is used to stage the unsent requests, i.e., {@link OffsetCommitRequestState} and {@link OffsetFetchRequestState}.
+     * <p>This is used to stage the unsent {@link OffsetCommitRequestState} and {@link OffsetFetchRequestState}.
+     * <li>unsentOffsetCommits holds the offset commit requests that have not been sent out</>
+     * <li>unsentOffsetFetches holds the offset fetch requests that have not been sent out</li>
+     * <li>inflightOffsetFetches holds the offset fetch requests that have been sent out but incompleted</>.
      *
-     * <p>If the request is new. It will be enqueued and will be sent upon the next
-     * poll.
-     *
-     * <p>If the same request has been sent, the request's {@code CompletableFuture} will be completed upon the
-     * completion of the existing one.
-     *
-     * <p>There is a special handling for the {@link OffsetFetchRequestState}. If a duplicated request was sent
-     * previously, we will chain the future to the current future.
+     * {@code addOffsetFetchRequest} dedupes the requests to avoid sending the same requests.
      */
 
     class PendingRequests {
@@ -397,12 +393,10 @@ public class CommitRequestManager implements RequestManager {
         }
 
         /**
-         *  We want to avoid duplication when sending an {@link OffsetFetchRequest}. The following checks are done:
-         *  <li>1. dedupe against unsents: if a duplicated request was previously made, we chain the future</>
-         *  <li>2. dedupe against incompleted: If a duplicated request was sent but hasn't gotten a results, we chain
-         *  the future.</>
+         *  <p>Adding an offset fetch request to the outgoing buffer.  If the same request was made, we chain the future
+         *  to the existing one.
          *
-         *  <p>If the request is new, we chain a call back to remove itself from the {@code inflightOffsetFetches}
+         *  <p>If the request is new, it invokes a callback to remove itself from the {@code inflightOffsetFetches}
          *  upon completion.</>
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
@@ -435,10 +429,11 @@ public class CommitRequestManager implements RequestManager {
         }
 
         /**
-         * Blocks until all pending commit requests have completed or the given timeout
-         * has elapsed. This method should be called before shutting down the
-         * CommitRequestManager to ensure that all commits have been sent to the Kafka
-         * brokers.
+         * Clear {@code unsentOffsetCommits} and moves all the sendable request in {@code unsentOffsetFetches} to the
+         * {@code inflightOffsetFetches} to bookkeep all of the inflight requests.
+         *
+         * Note: Sendable requests are determined by their timer as we are expecting backoff on failed attempt. See
+         * {@link RequestState}.
          **/
         public List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
@@ -455,8 +450,7 @@ public class CommitRequestManager implements RequestManager {
                             .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
 
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
-            List<OffsetFetchRequestState> sendableRequests = partitionedBySendability.get(true);
-            for (OffsetFetchRequestState request : sendableRequests) {
+            for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
                 request.onSendAttempt(currentTimeMs);
                 unsentRequests.add(request.toUnsentRequest(currentTimeMs));
                 inflightOffsetFetches.add(request);
