@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -239,6 +240,42 @@ public class CommitRequestManagerTest {
             testRetriable(commitRequestManger, Collections.singletonList(future));
         else
             testNonRetriable(Collections.singletonList(future));
+    }
+
+    @Test
+    public void testPoll_EnsureCorrectInflightRequestBufferSize() {
+        CommitRequestManager commitManager = create(false, 100);
+
+        // Create some offset commit requests
+        Map<TopicPartition, OffsetAndMetadata> offsets1 = new HashMap<>();
+        offsets1.put(new TopicPartition("test", 0), new OffsetAndMetadata(10L));
+        offsets1.put(new TopicPartition("test", 1), new OffsetAndMetadata(20L));
+        Map<TopicPartition, OffsetAndMetadata> offsets2 = new HashMap<>();
+        offsets2.put(new TopicPartition("test", 3), new OffsetAndMetadata(20L));
+        offsets2.put(new TopicPartition("test", 4), new OffsetAndMetadata(20L));
+
+        // Add the requests to the CommitRequestManager and store their futures
+        ArrayList<CompletableFuture<ClientResponse>> commitFutures = new ArrayList<>();
+        ArrayList<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> fetchFutures = new ArrayList<>();
+        commitFutures.add(commitManager.addOffsetCommitRequest(offsets1));
+        fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 0))));
+        commitFutures.add(commitManager.addOffsetCommitRequest(offsets2));
+        fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 1))));
+
+        // Poll the CommitRequestManager and verify that the inflightOffsetFetches size is correct
+        NetworkClientDelegate.PollResult result = commitManager.poll(time.milliseconds());
+        assertEquals(4, result.unsentRequests.size());
+        assertTrue(result.unsentRequests
+                .stream().anyMatch(r -> r.requestBuilder() instanceof OffsetCommitRequest.Builder));
+        assertTrue(result.unsentRequests
+                .stream().anyMatch(r -> r.requestBuilder() instanceof OffsetFetchRequest.Builder));
+        assertFalse(commitManager.pendingRequests.hasUnsentRequests());
+        assertEquals(2, commitManager.pendingRequests.inflightOffsetFetches.size());
+
+        // Verify that the inflight offset fetch requests have been removed from the pending request buffer
+        commitFutures.forEach(f -> f.complete(null));
+        fetchFutures.forEach(f -> f.complete(null));
+        assertEquals(0, commitManager.pendingRequests.inflightOffsetFetches.size());
     }
 
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManger) {

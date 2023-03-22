@@ -434,26 +434,47 @@ public class CommitRequestManager implements RequestManager {
             return addOffsetFetchRequest(request);
         }
 
+        /**
+         * Blocks until all pending commit requests have completed or the given timeout
+         * has elapsed. This method should be called before shutting down the
+         * CommitRequestManager to ensure that all commits have been sent to the Kafka
+         * brokers.
+         **/
         public List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
-            List<NetworkClientDelegate.UnsentRequest> unsent = new ArrayList<>();
-            unsent.addAll(unsentOffsetCommits.stream()
-                    .map(OffsetCommitRequestState::toUnsentRequest)
-                    .collect(Collectors.toList()));
-            List<OffsetFetchRequestState> sendables = unsentOffsetFetches.stream()
-                    .filter(r -> r.canSendRequest(currentTimeMs))
-                    .collect(Collectors.toList());
-            inflightOffsetFetches.addAll(sendables);
-            unsent.addAll(sendables.stream()
-                    .peek(r -> r.onSendAttempt(currentTimeMs))
-                    .map(r -> r.toUnsentRequest(currentTimeMs))
-                    .collect(Collectors.toList()));
+            List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
+
+            // Add all unsent offset commit requests to the unsentRequests list
+            unsentRequests.addAll(
+                    unsentOffsetCommits.stream()
+                            .map(OffsetCommitRequestState::toUnsentRequest)
+                            .collect(Collectors.toList()));
+
+            // Partition the unsent offset fetch requests into sendable and non-sendable lists
+            Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
+                    unsentOffsetFetches.stream()
+                            .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
+
+            // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
+            List<OffsetFetchRequestState> sendableRequests = partitionedBySendability.get(true);
+            for (OffsetFetchRequestState request : sendableRequests) {
+                request.onSendAttempt(currentTimeMs);
+                unsentRequests.add(request.toUnsentRequest(currentTimeMs));
+                inflightOffsetFetches.add(request);
+            }
+
+            // Clear the unsent offset commit and fetch lists and add all non-sendable offset fetch requests to the unsentOffsetFetches list
             unsentOffsetCommits.clear();
             unsentOffsetFetches.clear();
-            return Collections.unmodifiableList(unsent);
+            unsentOffsetFetches.addAll(partitionedBySendability.get(false));
+
+            return Collections.unmodifiableList(unsentRequests);
         }
     }
 
-    static class AutoCommitState {
+    /**
+     * Encapsulates the state of auto-committing and manages the auto-commit timer.
+     */
+    private static class AutoCommitState {
         private final Timer timer;
         private final long autoCommitInterval;
         public boolean hasInflightCommit;
