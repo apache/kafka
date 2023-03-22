@@ -285,7 +285,7 @@ public class Serdes {
     }
 
     /**
-     * A serde for {@code Boolean} type.
+     * A serde for nullable {@code Boolean} type.
      */
     static public Serde<Boolean> Boolean() {
         return new BooleanSerde();
