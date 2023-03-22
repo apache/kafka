@@ -17,7 +17,7 @@
 package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import java.util.Optional
+import java.util.{Optional}
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
@@ -31,6 +31,7 @@ import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -129,6 +130,7 @@ object Partition {
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
+      localBrokerEpochSupplier = replicaManager.brokerEpochSupplier,
       time = time,
       alterPartitionListener = isrChangeListener,
       delayedOperations = delayedOperations,
@@ -281,6 +283,7 @@ class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
                 interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
+                localBrokerEpochSupplier: () => Long,
                 time: Time,
                 alterPartitionListener: AlterPartitionListener,
                 delayedOperations: DelayedOperations,
@@ -979,14 +982,14 @@ class Partition(val topicPartition: TopicPartition,
 
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
     metadataCache match {
-      // In KRaft mode, only replicas which
-      // 1. are not fenced
-      // 2. are not in controlled shutdown
-      // 3. have a cached brokerEpoch that matches with the brokerEpoch from the Fetch request
-      // are allowed to join the ISR.
+      // In KRaft mode, only replicas which meets all of the following requirements are allowed to join the ISR.
+      // 1. are not fenced.
+      // 2. are not in controlled shutdown.
+      // 3. have a cached brokerEpoch that matches with the brokerEpoch from the Fetch request, OR broker epoch
+      //    verification is not supported.
       case kRaftMetadataCache: KRaftMetadataCache =>
-        val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId).getOrElse(-1L)
-        val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch.orElse(-2)
+        val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
+        val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
           isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
@@ -1000,8 +1003,9 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Long, cachedBrokerEpoch: Long): Boolean = {
-    storedBrokerEpoch == -1 || (storedBrokerEpoch == cachedBrokerEpoch)
+  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Option[Long], cachedBrokerEpoch: Option[Long]): Boolean = {
+    storedBrokerEpoch.isDefined && cachedBrokerEpoch.isDefined &&
+      (storedBrokerEpoch.get == -1 || (storedBrokerEpoch == cachedBrokerEpoch))
   }
 
   /*
@@ -1664,11 +1668,12 @@ class Partition(val topicPartition: TopicPartition,
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
     val isrToSend = partitionState.isr + newInSyncReplicaId
+    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList)
     val newLeaderAndIsr = LeaderAndIsr(
       localBrokerId,
       leaderEpoch,
-      isrToSend.toList,
       partitionState.leaderRecoveryState,
+      isrWithBrokerEpoch,
       partitionEpoch
     )
     val updatedState = PendingExpandIsr(
@@ -1688,11 +1693,12 @@ class Partition(val topicPartition: TopicPartition,
     // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
     // for `PendingShrinkIsr` is the the current ISR.
     val isrToSend = partitionState.isr -- outOfSyncReplicaIds
+    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList)
     val newLeaderAndIsr = LeaderAndIsr(
       localBrokerId,
       leaderEpoch,
-      isrToSend.toList,
       partitionState.leaderRecoveryState,
+      isrWithBrokerEpoch,
       partitionEpoch
     )
     val updatedState = PendingShrinkIsr(
@@ -1702,6 +1708,33 @@ class Partition(val topicPartition: TopicPartition,
     )
     partitionState = updatedState
     updatedState
+  }
+
+  private def addBrokerEpochToIsr(isr: List[Int]): List[BrokerState] = {
+    isr.map(brokerId => {
+      val brokerState = new BrokerState().setBrokerId(brokerId)
+      if (!metadataCache.isInstanceOf[KRaftMetadataCache]) {
+        brokerState.setBrokerEpoch(-1)
+      } else if (brokerId == localBrokerId) {
+        brokerState.setBrokerEpoch(localBrokerEpochSupplier())
+      } else {
+        try {
+          brokerState.setBrokerEpoch(remoteReplicasMap.get(brokerId).stateSnapshot.brokerEpoch.get)
+        } catch {
+          case _: Throwable =>
+            // There are two cases where the broker epoch can be missing:
+            // 1. In ISR expansion. We already held lock for the partition and did the broker epoch check, so the new
+            //   ISR replica should have a valid broker epoch. Then, the missing broker epoch can only be the existing
+            //   ISR replicas whose fetch request has not been received by this leader. It is safe to set the epoch -1
+            //   for this replica because even if it crashed at the moment, the controller will remove it from ISR
+            //   later and bump the partition epoch to reject this AlterPartition request.
+            // 2. In ISR shrinking. Similarly, if the existing ISR replicas does not have broker epoch, it is safe to
+            //   set the broker epoch to -1 here.
+            brokerState.setBrokerEpoch(-1)
+        }
+      }
+      brokerState
+    })
   }
 
   private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {

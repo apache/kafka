@@ -417,6 +417,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -1367,6 +1368,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
     val isrItem = alterPartitionManager.isrUpdates.head
     assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
+    isrItem.leaderAndIsr.isrWithBrokerEpoch.foreach(brokerState => {
+      // In ZK mode, the broker epochs in the leaderAndIsr should be -1.
+      assertEquals(-1, brokerState.brokerEpoch())
+    })
     assertEquals(Set(brokerId), partition.partitionState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
     assertReplicaState(partition, remoteBrokerId,
@@ -1473,6 +1478,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -1557,34 +1563,36 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testIsrCanExpandedIfBrokerEpochsMatch(): Unit = {
+  def testIsrCanExpandedIfBrokerEpochsMatchWithKraftMetadataCache(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
     val leaderEpoch = 5
-    val remoteBrokerId = brokerId + 1
-    val replicas = List(brokerId, remoteBrokerId)
-    val isr = Set(brokerId)
+    val remoteBrokerId1 = brokerId + 1
+    val remoteBrokerId2 = brokerId + 2
+    val replicas = List(brokerId, remoteBrokerId1, remoteBrokerId2)
+    val isr = Set(brokerId, remoteBrokerId2)
 
     val metadataCache: MetadataCache = mock(classOf[KRaftMetadataCache])
     addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], replicas)
 
-    // Mark the remote broker as eligible in the metadata cache of the leader.
-    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerFenced(remoteBrokerId)).thenReturn(false)
-    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerShuttingDown(remoteBrokerId)).thenReturn(false)
+    // Mark the remote broker 1 as eligible in the metadata cache.
+    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerFenced(remoteBrokerId1)).thenReturn(false)
+    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerShuttingDown(remoteBrokerId1)).thenReturn(false)
 
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
       metadataCache,
       logManager,
-      alterPartitionManager
+      alterPartitionManager,
     )
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
@@ -1601,19 +1609,19 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.isr)
     assertEquals(isr, partition.partitionState.maximalIsr)
 
-    // Fetch to let the follower catch up to the log end offset using a wrong broker epoch. The expansion should fail.
-    val wrongReplicaEpoch = getDefaultBrokerEpoch(remoteBrokerId) + 1
+    // Fetch to let the follower catch up to the log end offset, but using a wrong broker epoch. The expansion should fail.
+    val wrongReplicaEpoch = getDefaultBrokerEpoch(remoteBrokerId1) + 1
     fetchFollower(partition,
-      replicaId = remoteBrokerId,
+      replicaId = remoteBrokerId1,
       fetchOffset = log.logEndOffset,
-      replicaEpoch = wrongReplicaEpoch)
+      replicaEpoch = wrongReplicaEpoch
+    )
 
-    // Follower fetches and catches up to the log end offset.
-    assertReplicaState(partition, remoteBrokerId,
+    assertReplicaState(partition, remoteBrokerId1,
       lastCaughtUpTimeMs = time.milliseconds(),
       logStartOffset = 0L,
       logEndOffset = log.logEndOffset,
-      replicaEpoch = wrongReplicaEpoch
+      brokerEpoch = wrongReplicaEpoch
     )
 
     // Expansion is not triggered.
@@ -1621,13 +1629,14 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.maximalIsr)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
-    // Fetch again, this time with correct epoch.
+    // Fetch again, this time with correct default broker epoch.
     fetchFollower(partition,
-      replicaId = remoteBrokerId,
-      fetchOffset = log.logEndOffset)
+      replicaId = remoteBrokerId1,
+      fetchOffset = log.logEndOffset
+    )
 
     // Follower fetches and catches up to the log end offset.
-    assertReplicaState(partition, remoteBrokerId,
+    assertReplicaState(partition, remoteBrokerId1,
       lastCaughtUpTimeMs = time.milliseconds(),
       logStartOffset = 0L,
       logEndOffset = log.logEndOffset
@@ -1637,6 +1646,15 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.isr)
     assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
+    val isrUpdate = alterPartitionManager.isrUpdates.head
+    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.foreach(brokerState => {
+      if (brokerState.brokerId() != remoteBrokerId2) {
+        assertEquals(getDefaultBrokerEpoch(brokerState.brokerId()), brokerState.brokerEpoch())
+      } else {
+        // remoteBrokerId2 has not received any fetch request yet, it does not have broker epoch.
+        assertEquals(-1, brokerState.brokerEpoch())
+      }
+    })
   }
 
 
@@ -1658,6 +1676,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -1799,23 +1818,45 @@ class PartitionTest extends AbstractPartitionTest {
 
     val controllerEpoch = 0
     val leaderEpoch = 5
-    val remoteBrokerId = brokerId + 1
-    val replicas = Seq(brokerId, remoteBrokerId)
-    val isr = Seq(brokerId, remoteBrokerId)
+    val remoteBrokerId1 = brokerId + 1
+    val remoteBrokerId2 = brokerId + 2
+    val replicas = Seq(brokerId, remoteBrokerId1, remoteBrokerId2)
+    val isr = Seq(brokerId, remoteBrokerId1, remoteBrokerId2)
     val initializeTimeMs = time.milliseconds()
 
-    assertTrue(makeLeader(
-      topicId = None,
-      controllerEpoch = controllerEpoch,
-      leaderEpoch = leaderEpoch,
-      isr = isr,
-      replicas = replicas,
-      partitionEpoch = 1,
-      isNew = true
-    ))
-    assertEquals(0L, partition.localLogOrException.highWatermark)
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    addBrokerEpochToMockMetadataCache(metadataCache, replicas.toList)
 
-    assertReplicaState(partition, remoteBrokerId,
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr.toList.map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+    fetchFollower(partition, replicaId = remoteBrokerId1, fetchOffset = log.logEndOffset)
+
+    assertReplicaState(partition, remoteBrokerId2,
       lastCaughtUpTimeMs = initializeTimeMs,
       logStartOffset = UnifiedLog.UnknownOffset,
       logEndOffset = UnifiedLog.UnknownOffset
@@ -1823,7 +1864,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr()
-    assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.isr)
+    assertEquals(Set(brokerId, remoteBrokerId1, remoteBrokerId2), partition.partitionState.isr)
 
     // If enough time passes without a fetch update, the ISR should shrink
     time.sleep(partition.replicaLagTimeMaxMs + 1)
@@ -1832,9 +1873,13 @@ class PartitionTest extends AbstractPartitionTest {
     partition.maybeShrinkIsr()
     assertEquals(0, alterPartitionListener.shrinks.get)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId))
-    assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.isr)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
+    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId, remoteBrokerId1))
+    val isrUpdate = alterPartitionManager.isrUpdates.head
+    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.foreach(brokerState => {
+      assertEquals(getDefaultBrokerEpoch(brokerState.brokerId()), brokerState.brokerEpoch())
+    })
+    assertEquals(Set(brokerId, remoteBrokerId1, remoteBrokerId2), partition.partitionState.isr)
+    assertEquals(Set(brokerId, remoteBrokerId1, remoteBrokerId2), partition.partitionState.maximalIsr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // After the ISR shrink completes, the ISR state should be updated and the
@@ -1843,8 +1888,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(1, alterPartitionListener.shrinks.get)
     assertEquals(2, partition.getPartitionEpoch)
     assertEquals(alterPartitionManager.isrUpdates.size, 0)
-    assertEquals(Set(brokerId), partition.partitionState.isr)
-    assertEquals(Set(brokerId), partition.partitionState.maximalIsr)
+    assertEquals(Set(brokerId, remoteBrokerId1), partition.partitionState.isr)
+    assertEquals(Set(brokerId, remoteBrokerId1), partition.partitionState.maximalIsr)
     assertEquals(log.logEndOffset, partition.localLogOrException.highWatermark)
   }
 
@@ -2187,6 +2232,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -2306,6 +2352,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = IBP_2_6_IV0, // shouldn't matter, but set this to a ZK isr version
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -2397,6 +2444,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -2441,6 +2489,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -2521,7 +2570,7 @@ class PartitionTest extends AbstractPartitionTest {
   def testUpdateAssignmentAndIsr(): Unit = {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
-      topicPartition, 1000, MetadataVersion.latest, 0,
+      topicPartition, 1000, MetadataVersion.latest, 0, () => getDefaultBrokerEpoch(0),
       new SystemTime(), mock(classOf[AlterPartitionListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterPartitionManager]))
 
@@ -2598,6 +2647,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -2636,6 +2686,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -2677,6 +2728,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => getDefaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -3256,7 +3308,7 @@ class PartitionTest extends AbstractPartitionTest {
     lastCaughtUpTimeMs: Long,
     logEndOffset: Long,
     logStartOffset: Long,
-    replicaEpoch: Long = -2
+    brokerEpoch: Long = -2
   ): Unit = {
     partition.getReplica(replicaId) match {
       case Some(replica) =>
@@ -3267,8 +3319,10 @@ class PartitionTest extends AbstractPartitionTest {
           "Unexpected Log End Offset")
         assertEquals(logStartOffset, replicaState.logStartOffset,
           "Unexpected Log Start Offset")
-        assertEquals(if (replicaEpoch == -2) getDefaultBrokerEpoch(replicaId) else replicaEpoch, replicaState.brokerEpoch.getAsLong,
-          "brokerEpochs mismatch")
+        if (brokerEpoch != -2) {
+          assertEquals(brokerEpoch, replicaState.brokerEpoch.get,
+            "brokerEpochs mismatch")
+        }
 
       case None =>
         fail(s"Replica $replicaId not found.")
@@ -3348,9 +3402,6 @@ class PartitionTest extends AbstractPartitionTest {
     )
   }
 
-  private def getDefaultBrokerEpoch(brokerId: Int): Long = {
-    brokerId + 1000L
-  }
   private def addBrokerEpochToMockMetadataCache(kRaftMetadataCache: KRaftMetadataCache, brokers: List[Int]): Unit = {
     brokers.foreach(broker => {
       when(kRaftMetadataCache.getAliveBrokerEpoch(broker)).thenReturn(Option(getDefaultBrokerEpoch(broker)))

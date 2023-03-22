@@ -703,7 +703,7 @@ class MetadataCacheTest {
 
     metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
 
-    assertEquals(100L, metadataCache.getAliveBrokerEpoch(0).getOrElse(-1))
+    assertEquals(100L, metadataCache.getAliveBrokerEpoch(0).getOrElse(-1L))
     assertEquals(-1L, metadataCache.getAliveBrokerEpoch(1).getOrElse(-1L))
   }
 }

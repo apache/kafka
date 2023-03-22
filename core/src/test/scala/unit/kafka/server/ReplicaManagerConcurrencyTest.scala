@@ -231,7 +231,7 @@ class ReplicaManagerConcurrencyTest {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         replicaId,
-        1,
+        getDefaultBrokerEpoch(replicaId),
         random.nextInt(100),
         1,
         1024 * 1024,
@@ -356,6 +356,7 @@ class ReplicaManagerConcurrencyTest {
             delta.replay(new RegisterBrokerRecord()
               .setBrokerId(brokerId)
               .setFenced(false)
+              .setBrokerEpoch(getDefaultBrokerEpoch(brokerId))
             )
           }
           topic.initialize(delta)
@@ -473,6 +474,10 @@ class ReplicaManagerConcurrencyTest {
       leaderEpoch,
       partitionEpoch
     )
+  }
+
+  private def getDefaultBrokerEpoch(brokerId: Int): Long = {
+    brokerId + 100L
   }
 
 }

@@ -22,7 +22,6 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 
-import java.util.OptionalLong
 import java.util.concurrent.atomic.AtomicReference
 
 case class ReplicaState(
@@ -49,7 +48,7 @@ case class ReplicaState(
   lastCaughtUpTimeMs: Long,
 
   // The brokerEpoch is the epoch from the Fetch request.
-  brokerEpoch: OptionalLong
+  brokerEpoch: Option[Long]
 ) {
   /**
    * Returns the current log end offset of the replica.
@@ -78,7 +77,7 @@ object ReplicaState {
     lastFetchLeaderLogEndOffset = 0L,
     lastFetchTimeMs = 0L,
     lastCaughtUpTimeMs = 0L,
-    brokerEpoch = OptionalLong.empty(),
+    brokerEpoch = None : Option[Long],
   )
 }
 
@@ -121,7 +120,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
         lastFetchLeaderLogEndOffset = math.max(leaderEndOffset, currentReplicaState.lastFetchLeaderLogEndOffset),
         lastFetchTimeMs = followerFetchTimeMs,
         lastCaughtUpTimeMs = lastCaughtUpTime,
-        brokerEpoch = OptionalLong.of(brokerEpoch)
+        brokerEpoch = Option(brokerEpoch)
       )
     }
   }
@@ -150,7 +149,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
           lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
           lastFetchTimeMs = 0L,
           lastCaughtUpTimeMs = lastCaughtUpTimeMs,
-          brokerEpoch = OptionalLong.empty()
+          brokerEpoch = Option.empty
         )
       } else {
         ReplicaState(
@@ -163,8 +162,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
           // into the ISR before a fetch is received.
           lastFetchTimeMs = if (isFollowerInSync) currentTimeMs else 0L,
           lastCaughtUpTimeMs = lastCaughtUpTimeMs,
-          // TODO(Calvin)
-          brokerEpoch = OptionalLong.empty()
+          brokerEpoch = currentReplicaState.brokerEpoch
         )
       }
     }
@@ -182,7 +180,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     replicaString.append(s", logEndOffset=${replicaState.logEndOffsetMetadata.messageOffset}")
     replicaString.append(s", logEndOffsetMetadata=${replicaState.logEndOffsetMetadata}")
     replicaString.append(s", lastFetchLeaderLogEndOffset=${replicaState.lastFetchLeaderLogEndOffset}")
-    replicaString.append(s", brokerEpoch=${replicaState.brokerEpoch.orElse(-1L)}")
+    replicaString.append(s", brokerEpoch=${replicaState.brokerEpoch.getOrElse(-2L)}")
     replicaString.append(s", lastFetchTimeMs=${replicaState.lastFetchTimeMs}")
     replicaString.append(")")
     replicaString.toString

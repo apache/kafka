@@ -17,7 +17,11 @@
 
 package kafka.api
 
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
+import org.apache.kafka.common.requests.AlterPartitionRequest
 import org.apache.kafka.metadata.LeaderRecoveryState
+
+import scala.jdk.CollectionConverters._
 
 object LeaderAndIsr {
   val InitialLeaderEpoch: Int = 0
@@ -31,14 +35,27 @@ object LeaderAndIsr {
     LeaderAndIsr(leader, InitialLeaderEpoch, isr, LeaderRecoveryState.RECOVERED, InitialPartitionEpoch)
   }
 
+  def apply(leader: Int,
+    leaderEpoch: Int,
+    isr: List[Int],
+    leaderRecoveryState: LeaderRecoveryState,
+    partitionEpoch: Int): LeaderAndIsr = {
+    LeaderAndIsr(
+      leader,
+      leaderEpoch,
+      leaderRecoveryState,
+      AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(isr.map(Integer.valueOf).asJava).asScala.toList,
+      partitionEpoch)
+  }
+
   def duringDelete(isr: List[Int]): LeaderAndIsr = LeaderAndIsr(LeaderDuringDelete, isr)
 }
 
 case class LeaderAndIsr(
   leader: Int,
   leaderEpoch: Int,
-  isr: List[Int],
   leaderRecoveryState: LeaderRecoveryState,
+  isrWithBrokerEpoch: List[BrokerState],
   // The current epoch for the partition for KRaft controllers. The current ZK version for the
   // legacy controllers. The epoch is a monotonically increasing value which is incremented
   // after every partition change.
@@ -46,20 +63,28 @@ case class LeaderAndIsr(
 ) {
   def withPartitionEpoch(partitionEpoch: Int): LeaderAndIsr = copy(partitionEpoch = partitionEpoch)
 
-  def newLeader(leader: Int): LeaderAndIsr = newLeaderAndIsr(leader, isr)
+  def newLeader(leader: Int): LeaderAndIsr = newLeaderAndIsrWithBrokerEpoch(leader, isrWithBrokerEpoch)
 
   def newLeaderAndIsr(leader: Int, isr: List[Int]): LeaderAndIsr = {
     LeaderAndIsr(leader, leaderEpoch + 1, isr, leaderRecoveryState, partitionEpoch)
+  }
+
+  def newLeaderAndIsrWithBrokerEpoch(leader: Int, isrWithBrokerEpoch: List[BrokerState]): LeaderAndIsr = {
+    LeaderAndIsr(leader, leaderEpoch + 1, leaderRecoveryState, isrWithBrokerEpoch, partitionEpoch)
   }
 
   def newRecoveringLeaderAndIsr(leader: Int, isr: List[Int]): LeaderAndIsr = {
     LeaderAndIsr(leader, leaderEpoch + 1, isr, LeaderRecoveryState.RECOVERING, partitionEpoch)
   }
 
-  def newEpoch: LeaderAndIsr = newLeaderAndIsr(leader, isr)
+  def newEpoch: LeaderAndIsr = newLeaderAndIsrWithBrokerEpoch(leader, isrWithBrokerEpoch)
 
   def leaderOpt: Option[Int] = {
     if (leader == LeaderAndIsr.NoLeader) None else Some(leader)
+  }
+
+  def isr: List[Int] = {
+    isrWithBrokerEpoch.map(_.brokerId())
   }
 
   def equalsAllowStalePartitionEpoch(other: LeaderAndIsr): Boolean = {
@@ -70,13 +95,13 @@ case class LeaderAndIsr(
     } else {
       leader == other.leader &&
         leaderEpoch == other.leaderEpoch &&
-        isr.equals(other.isr) &&
+        isrWithBrokerEpoch.equals(other.isrWithBrokerEpoch) &&
         leaderRecoveryState == other.leaderRecoveryState &&
         partitionEpoch <= other.partitionEpoch
     }
   }
 
   override def toString: String = {
-    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, leaderRecoveryState=$leaderRecoveryState, partitionEpoch=$partitionEpoch)"
+    s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isrWithBrokerEpoch=$isrWithBrokerEpoch, leaderRecoveryState=$leaderRecoveryState, partitionEpoch=$partitionEpoch)"
   }
 }

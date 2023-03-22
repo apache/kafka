@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test
 final class LeaderAndIsrTest {
   @Test
   def testRecoveringLeaderAndIsr(): Unit = {
-    val leaderAndIsr = LeaderAndIsr(1,  List(1, 2))
+    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
     val recoveringLeaderAndIsr = leaderAndIsr.newRecoveringLeaderAndIsr(3, List(3))
 
     assertEquals(3, recoveringLeaderAndIsr.leader)
