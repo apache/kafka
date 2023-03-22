@@ -251,11 +251,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         CompletableFuture<Void> future = commit(offsets);
+        final OffsetCommitCallback commitCallback = callback == null ? new DefaultOffsetCommitCallback() : callback;
         future.whenComplete((r, t) -> {
             if (t != null) {
-                callback.onComplete(offsets, new KafkaException(t));
+                commitCallback.onComplete(offsets, new KafkaException(t));
             } else {
-                callback.onComplete(offsets, null);
+                commitCallback.onComplete(offsets, null);
             }
         });
     }
