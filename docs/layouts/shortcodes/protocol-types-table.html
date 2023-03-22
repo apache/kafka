@@ -1,0 +1,13 @@
+{{ $source := index .Site.Data.protocol.protocol_types }}
+<table class="data-table">
+    <tr>
+        <th>Type</th>
+        <th>Description</th>
+    </tr>
+    {{ range $source }}
+    <tr>
+        <td><code>{{index . "name" }}</code></td>
+        <td>{{index . "documentation" | markdownify }}</td>
+    </tr>
+    {{ end }}
+</table>

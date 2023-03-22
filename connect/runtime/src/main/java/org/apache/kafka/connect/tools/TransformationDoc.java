@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.connect.tools;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.transforms.Cast;
 import org.apache.kafka.connect.transforms.DropHeaders;
@@ -49,6 +53,15 @@ public class TransformationDoc {
             this.transformationName = transformationName;
             this.overview = overview;
             this.configDef = configDef;
+        }
+
+        ObjectNode toJson() {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode json = mapper.createObjectNode();
+            json.put("name", transformationName);
+            json.put("overview", overview);
+            json.set("config", configDef.toJson());
+            return json;
         }
     }
 
@@ -93,8 +106,21 @@ public class TransformationDoc {
         }
     }
 
+    static String printJson() {
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode array = mapper.createArrayNode();
+        for (DocInfo docInfo : TRANSFORMATIONS) {
+            array.add(docInfo.toJson());
+        }
+        try {
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(array);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void main(String... args) {
-        printHtml(System.out);
+        System.out.println(printJson());
     }
 
 }

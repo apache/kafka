@@ -1,0 +1,50 @@
+[
+  {
+    "Timestamp": 1,
+    "Input record": "(hello, 1)",
+    "Grouping": "(hello, 1)",
+    "Initializer": "0 (for hello)",
+    "Adder": "(hello, 0 + 1)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\"><strong>(hello, 1)</strong></div> </div>"
+  },
+  {
+    "Timestamp": 2,
+    "Input record": "(kafka, 1)",
+    "Grouping": "(kafka, 1)",
+    "Initializer": "0 (for kafka)",
+    "Adder": "(kafka, 0 + 1)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(hello, 1)</div> <div class=\"line\"><strong>(kafka, 1)</strong></div> </div>"
+  },
+  {
+    "Timestamp": 3,
+    "Input record": "(streams, 1)",
+    "Grouping": "(streams, 1)",
+    "Initializer": "0 (for streams)",
+    "Adder": "(streams, 0 + 1)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(hello, 1)</div> <div class=\"line\">(kafka, 1)</div> <div class=\"line\"><strong>(streams, 1)</strong></div> </div>"
+  },
+  {
+    "Timestamp": 4,
+    "Input record": "(kafka, 1)",
+    "Grouping": "(kafka, 1)",
+    "Initializer": "",
+    "Adder": "(kafka, 1 + 1)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(hello, 1)</div> <div class=\"line\">(kafka, <strong>2</strong>)</div> <div class=\"line\">(streams, 1)</div> </div>"
+  },
+  {
+    "Timestamp": 5,
+    "Input record": "(kafka, 1)",
+    "Grouping": "(kafka, 1)",
+    "Initializer": "",
+    "Adder": "(kafka, 2 + 1)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(hello, 1)</div> <div class=\"line\">(kafka, <strong>3</strong>)</div> <div class=\"line\">(streams, 1)</div> </div>"
+  },
+  {
+    "Timestamp": 6,
+    "Input record": "(streams, 1)",
+    "Grouping": "(streams, 1)",
+    "Initializer": "",
+    "Adder": "(streams, 1 + 1)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(hello, 1)</div> <div class=\"line\">(kafka, 3)</div> <div class=\"line\">(streams, <strong>2</strong>)</div> </div>"
+  }
+]

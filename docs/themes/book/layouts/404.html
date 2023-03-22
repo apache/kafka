@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.Language.Lang }}">
+
+  <head>
+    {{ partial "docs/html-head" . }}
+    {{ partial "docs/inject/head" . }}
+
+    <style>
+      .not-found {
+        text-align: center;
+      }
+      .not-found h1 {
+        margin: .25em 0 0 0;
+        opacity: .25;
+        font-size: 40vmin;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="flex justify-center not-found">
+      <div>
+        <h1>404</h1>
+        <h2>Page Not Found</h2>
+        <h3>
+          <a href="{{ .Site.Home.RelPermalink }}">{{ .Site.Title }}</a>
+        </h3>
+      </div>
+    </main>
+
+    {{ partial "docs/inject/body" . }}
+    {{ template "_internal/google_analytics_async.html" . }}
+  </body>
+
+  </html>

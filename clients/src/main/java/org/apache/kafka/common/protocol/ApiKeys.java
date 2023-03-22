@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.protocol;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -255,6 +258,21 @@ public enum ApiKeys {
         return messageType.listeners().contains(listener);
     }
 
+    private static String printJson() {
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode all = mapper.createArrayNode();
+        for (ApiKeys key : clientApis()) {
+            all.add(mapper.createObjectNode()
+                    .put("name", key.name)
+                    .put("key", key.id));
+        }
+        try {
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(all);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
@@ -277,7 +295,7 @@ public enum ApiKeys {
     }
 
     public static void main(String[] args) {
-        System.out.println(toHtml());
+        System.out.println(printJson());
     }
 
     private static boolean retainsBufferReference(Schema schema) {

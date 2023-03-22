@@ -432,6 +432,6 @@ public class ConnectMetrics {
      */
     public static void main(String[] args) {
         ConnectMetricsRegistry metrics = new ConnectMetricsRegistry();
-        System.out.println(Metrics.toHtmlTable(JMX_PREFIX, metrics.getAllTemplates()));
+        System.out.println(Metrics.printJson(JMX_PREFIX, metrics.getAllTemplates()));
     }
 }

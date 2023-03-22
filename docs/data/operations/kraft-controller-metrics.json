@@ -1,0 +1,72 @@
+[
+  {
+    "Metric": "Active Controller Count",
+    "Description": "The number of Active Controllers on this node. Valid values are '0' or '1'.",
+    "MBean": "kafka.controller:type=KafkaController,name=ActiveControllerCount"
+  },
+  {
+    "Metric": "Event Queue Time Ms",
+    "Description": "A Histogram of the time in milliseconds that requests spent waiting in the Controller Event Queue.",
+    "MBean": "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs"
+  },
+  {
+    "Metric": "Event Queue Processing Time Ms",
+    "Description": "A Histogram of the time in milliseconds that requests spent being processed in the Controller Event Queue.",
+    "MBean": "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs"
+  },
+  {
+    "Metric": "Fenced Broker Count",
+    "Description": "The number of fenced brokers as observed by this Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=FencedBrokerCount"
+  },
+  {
+    "Metric": "Active Broker Count",
+    "Description": "The number of active brokers as observed by this Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=ActiveBrokerCount"
+  },
+  {
+    "Metric": "Global Topic Count",
+    "Description": "The number of global topics as observed by this Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=GlobalTopicCount"
+  },
+  {
+    "Metric": "Global Partition Count",
+    "Description": "The number of global partitions as observed by this Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=GlobalPartitionCount"
+  },
+  {
+    "Metric": "Offline Partition Count",
+    "Description": "The number of offline topic partitions (non-internal) as observed by this Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=OfflinePartitionCount"
+  },
+  {
+    "Metric": "Preferred Replica Imbalance Count",
+    "Description": "The count of topic partitions for which the leader is not the preferred leader.",
+    "MBean": "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"
+  },
+  {
+    "Metric": "Metadata Error Count",
+    "Description": "The number of times this controller node has encountered an error during metadata log processing.",
+    "MBean": "kafka.controller:type=KafkaController,name=MetadataErrorCount"
+  },
+  {
+    "Metric": "Last Applied Record Offset",
+    "Description": "The offset of the last record from the cluster metadata partition that was applied by the Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=LastAppliedRecordOffset"
+  },
+  {
+    "Metric": "Last Committed Record Offset",
+    "Description": "The offset of the last record committed to this Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=LastCommittedRecordOffset"
+  },
+  {
+    "Metric": "Last Applied Record Timestamp",
+    "Description": "The timestamp of the last record from the cluster metadata partition that was applied by the Controller.",
+    "MBean": "kafka.controller:type=KafkaController,name=LastAppliedRecordTimestamp"
+  },
+  {
+    "Metric": "Last Applied Record Lag Ms",
+    "Description": "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the controller.     For active Controllers the value of this lag is always zero.",
+    "MBean": "kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs"
+  }
+]

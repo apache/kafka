@@ -1,0 +1,17 @@
+{{ $source := index .Site.Data.security "acl-resource" }}
+<table>
+    <tr>
+        <th>Protocol (API key)</th>
+        <th>Operation</th>
+        <th>Resource</th>
+        <th>Note</th>
+    </tr>
+    {{ range $source }}
+    <tr>
+        <td>{{index . "Protocol" | markdownify }}</td>
+        <td>{{index . "Operation" | markdownify }}</td>
+        <td>{{index . "Resource" | markdownify }}</td>
+        <td>{{index . "Note" | markdownify }}</td>
+    </tr>
+    {{ end }}
+</table>

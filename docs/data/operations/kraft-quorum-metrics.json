@@ -1,0 +1,72 @@
+[
+  {
+    "Metric": "Current State",
+    "Description": "The current state of this member; possible values are leader, candidate, voted, follower, unattached.",
+    "MBean": "kafka.server:type=raft-metrics,name=current-state"
+  },
+  {
+    "Metric": "Current Leader",
+    "Description": "The current quorum leader's id; -1 indicates unknown.",
+    "MBean": "kafka.server:type=raft-metrics,name=current-leader"
+  },
+  {
+    "Metric": "Current Voted",
+    "Description": "The current voted leader's id; -1 indicates not voted for anyone.",
+    "MBean": "kafka.server:type=raft-metrics,name=current-vote"
+  },
+  {
+    "Metric": "Current Epoch",
+    "Description": "The current quorum epoch.",
+    "MBean": "kafka.server:type=raft-metrics,name=current-epoch"
+  },
+  {
+    "Metric": "High Watermark",
+    "Description": "The high watermark maintained on this member; -1 if it is unknown.",
+    "MBean": "kafka.server:type=raft-metrics,name=high-watermark"
+  },
+  {
+    "Metric": "Log End Offset",
+    "Description": "The current raft log end offset.",
+    "MBean": "kafka.server:type=raft-metrics,name=log-end-offset"
+  },
+  {
+    "Metric": "Number of Unknown Voter Connections",
+    "Description": "Number of unknown voters whose connection information is not cached. This value of this metric is always 0.",
+    "MBean": "kafka.server:type=raft-metrics,name=number-unknown-voter-connections"
+  },
+  {
+    "Metric": "Average Commit Latency",
+    "Description": "The average time in milliseconds to commit an entry in the raft log.",
+    "MBean": "kafka.server:type=raft-metrics,name=commit-latency-avg"
+  },
+  {
+    "Metric": "Maximum Commit Latency",
+    "Description": "The maximum time in milliseconds to commit an entry in the raft log.",
+    "MBean": "kafka.server:type=raft-metrics,name=commit-latency-max"
+  },
+  {
+    "Metric": "Average Election Latency",
+    "Description": "The average time in milliseconds spent on electing a new leader.",
+    "MBean": "kafka.server:type=raft-metrics,name=election-latency-avg"
+  },
+  {
+    "Metric": "Maximum Election Latency",
+    "Description": "The maximum time in milliseconds spent on electing a new leader.",
+    "MBean": "kafka.server:type=raft-metrics,name=election-latency-max"
+  },
+  {
+    "Metric": "Fetch Records Rate",
+    "Description": "The average number of records fetched from the leader of the raft quorum.",
+    "MBean": "kafka.server:type=raft-metrics,name=fetch-records-rate"
+  },
+  {
+    "Metric": "Append Records Rate",
+    "Description": "The average number of records appended per sec by the leader of the raft quorum.",
+    "MBean": "kafka.server:type=raft-metrics,name=append-records-rate"
+  },
+  {
+    "Metric": "Average Poll Idle Ratio",
+    "Description": "The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.",
+    "MBean": "kafka.server:type=raft-metrics,name=poll-idle-ratio-avg"
+  }
+]

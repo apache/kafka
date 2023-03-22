@@ -1,0 +1,32 @@
+{{ $source := index .Site.Data.connect (.Get 0) }}
+
+{{ range $source }}
+{{ $name := index . "name" }}
+{{ $configs := index . "config" }}
+<div>
+    <h5>
+        <a href="#{{ $name }}">{{$name}}</a>
+    </h5>
+    <p>{{index . "overview" | markdownify }}</p>
+    <ul class="config-list">
+        {{ range $configs }}
+        {{ $id := index . "name" }}
+        {{ $ref := (printf "%s_%s" ($name) (index . "name")) }}
+        <li>
+            <h6>
+                <a id="{{ $ref }}" href="#{{ $ref }}">{{ $id }}</a></h6>
+            <p>{{index . "documentation" | markdownify }}</p>
+            <table>
+                <tbody>
+                {{ range $key, $value := (index . "headers") }}
+                <tr>
+                    <th>{{ $key }}</th>
+                    <td>{{ $value | markdownify }}</td>
+                </tr>
+                {{ end }}
+            </table>
+        </li>
+        {{ end }}
+    </ul>
+</div>
+{{ end }}

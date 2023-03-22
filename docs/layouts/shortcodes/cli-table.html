@@ -1,0 +1,17 @@
+{{ $source := index .Site.Data.security (.Get 0) }}
+<table>
+    <tr>
+        <th>Option</th>
+        <th>Description</th>
+        <th>Default</th>
+        <th>Option type</th>
+    </tr>
+    {{ range $source }}
+    <tr>
+        <td>{{index . "Option" | markdownify }}</td>
+        <td>{{index . "Description" | markdownify }}</td>
+        <td>{{index . "Default" | markdownify }}</td>
+        <td>{{index . "Option type" | markdownify }}</td>
+    </tr>
+    {{ end }}
+</table>

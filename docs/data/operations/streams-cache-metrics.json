@@ -1,0 +1,17 @@
+[
+  {
+    "Metric": "hit-ratio-avg",
+    "Description": "The average cache hit ratio defined as the ratio of cache read hits over the total cache read requests.",
+    "MBean": "kafka.streams:type=stream-record-cache-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),record-cache-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "hit-ratio-min",
+    "Description": "The mininum cache hit ratio.",
+    "MBean": "kafka.streams:type=stream-record-cache-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),record-cache-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "hit-ratio-max",
+    "Description": "The maximum cache hit ratio.",
+    "MBean": "kafka.streams:type=stream-record-cache-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),record-cache-id=([-.\\w]+)"
+  }
+]

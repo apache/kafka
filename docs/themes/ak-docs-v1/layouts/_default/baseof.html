@@ -1,0 +1,415 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="{{ .Site.Language.Lang }}">
+<head>
+    {{ partial "header" . }}
+</head>
+<body>
+<div class="main">
+    {{ partial "top" . }}
+</div>
+<div class="main">
+    <div class="content documentation documentation--current">
+        <div class="toc-handle-container">
+            <div class="toc-handle">&lt;</div>
+        </div>
+        <div class="docs-nav">
+            {{ partial "toc" . }}
+        </div>
+        <div class="right">
+            {{- .Content -}}
+        </div>
+    </div>
+</div>
+<div class="footer">
+    <div class="footer__inner">
+        <div class="footer__legal">
+            <span class="footer__legal__one">The contents of this website are &copy; 2023 <a
+                    href="https://www.apache.org/" target="_blank">Apache Software Foundation</a> under the terms of the <a
+                    href="https://www.apache.org/licenses/LICENSE-2.0.html"
+                    target="_blank">Apache License v2</a>.</span>
+            <span class="footer__legal__two">Apache Kafka, Kafka, and the Kafka logo are either registered trademarks or trademarks of The Apache Software Foundation</span>
+            <span class="footer__legal__three">in the United States and other countries.</span>
+            <div>
+                <a href="https://kafka.apache.org/project-security" target="_blank" rel="noreferrer">Security</a>&nbsp;|&nbsp;
+                <a href="https://www.apache.org/foundation/sponsorship.html" target="_blank" rel="noreferrer">Donate</a>&nbsp;|&nbsp;
+                <a href="https://www.apache.org/foundation/thanks.html" target="_blank" rel="noreferrer">Thanks</a>&nbsp;|&nbsp;
+                <a href="https://apache.org/events/current-event" target="_blank" rel="noreferrer">Events</a>&nbsp;|&nbsp;
+                <a href="https://apache.org/licenses/" target="_blank" rel="noreferrer">License</a>&nbsp;|&nbsp;
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" target="_blank"
+                   rel="noreferrer">Privacy</a>
+            </div>
+        </div>
+        <a class="apache-feather" target="_blank" href="http://www.apache.org">
+            <img width="40" src="{{.Site.BaseURL}}/images/feather-small.png" alt="Apache Feather">
+        </a>
+    </div>
+</div>
+
+<!-- Script tags should be inside the body tag -- not inside the html tag -->
+<script src="{{.Site.BaseURL}}/js/handlebars.js" type="text/javascript"></script>
+<script type="text/application">
+			$(function () {
+				// list of pages that are rendered with Handlebars
+				var templates = [
+					'introduction',
+					'implementation',
+					'design',
+					'api',
+					'configuration',
+					'ops',
+					'security',
+					'connect',
+					'streams',
+					'quickstart',
+					'quickstart-docker',
+					'toc',
+					'upgrade',
+					'content'
+				];
+
+				// loop through all Handlebar templates on the page and render them
+				for(var i = 0; i < templates.length; i++) {
+					var templateScript = $("#" + templates[i] + "-template").html();
+					if(templateScript) {
+						var template = Handlebars.compile(templateScript);
+						var html = template(context);
+						$(".p-" + templates[i]).html(html);
+					}
+				}
+			});
+
+
+
+
+
+
+</script>
+
+<script src="{{.Site.BaseURL}}/js/jquery.sticky-kit.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+
+			let mobileScrolling = false;
+			let mobileTimeout;
+
+			// Let's start getting rid of jQuery...
+			function checkPageScroll() {
+				if (window.scrollY >= 80 || document.body.scrollTop >= 100) {
+					document.getElementById('header').classList.add('scrolled');
+				} else {
+					document.getElementById('header').classList.remove('scrolled');
+				}
+			}
+
+			function mobilePageScroll() {
+				mobileScrolling = true;
+				mobileTimeout = null;
+				mobileTimeout = setTimeout(checkPageScroll, 200);
+			}
+
+			function pageScroll(e) {
+				requestAnimationFrame(checkPageScroll);
+			};
+
+			function setUpA11yMenus(nav) {
+				const itemsWithMenu = nav.querySelectorAll('[aria-haspopup="true"]');
+				const topLevelItems = nav.querySelectorAll('.top-nav-item-anchor');
+				const navAnchors = nav.querySelectorAll('a');
+				const menus = nav.querySelectorAll('[role="menu"]');
+				const keyMap = {
+					// directions
+					'left': 37, 'up': 38, 'right': 39, 'down': 40,
+					// actions
+					'tab': 9, 'enter': 13, 'esc': 27, 'space': 32,
+				}
+				// TODO: keep synced with the above map
+				const keyCodes = [37, 38, 39, 40, 9, 13, 27, 32];
+
+				// allow # links in the nav so they can have focus and we can treat them like links
+				nav.addEventListener('click', (e) => {
+					if (e.target.hasAttribute('href') && e.target.getAttribute('href') === '#') {
+						e.preventDefault();
+						e.stopPropagation();
+					}
+				});
+
+				for (let i = 0; i < topLevelItems.length; i++) {
+					const item = topLevelItems[i];
+					const attrNames = {
+						currentFocus: 'data-current-focus',
+						hidden: 'aria-hidden',
+						expanded: 'aria-expanded',
+					};
+					// get the actual anchor
+					// get the menu which is a sibling to the item
+					const itemMenu = item.parentNode.querySelector('[role="menu"]');
+
+					function selectPreviousMenuItem(e, keyPressed) {
+						let selectedIndex = -1;
+
+						if (!itemMenu) {
+							selectPreviousTopLevelItem(e);
+						}
+
+						if (itemMenu && itemMenu.hasAttribute(attrNames.currentFocus)) {
+							selectedIndex = parseInt(itemMenu.getAttribute(attrNames.currentFocus), 10);
+						}
+						let nextIndex = selectedIndex - 1;
+						const menuItems = itemMenu.getElementsByTagName('a');
+
+						if (nextIndex >= 0) {
+						// select next item
+							menuItems[nextIndex].focus();
+							itemMenu.setAttribute(attrNames.currentFocus, nextIndex);
+						} else if (nextIndex === -1) {
+						// select top level menu item
+							item.focus();
+							itemMenu.setAttribute(attrNames.currentFocus, -1);
+						} else if (nextIndex === -2) {
+							if (keyPressed === 'tab') {
+								// go to the previous top level item
+								selectPreviousTopLevelItem(e);
+							} else {
+								// go to the last menu item
+								menuItems[menuItems.length - 1].focus()
+								itemMenu.setAttribute(attrNames.currentFocus, menuItems.length - 1);
+							}
+						}
+					}
+
+					function selectNextMenuItem(keyPressed) {
+						let selectedIndex = -1;
+						let nextIndex;
+						let menuItems;
+
+						if (!itemMenu) {
+							selectNextTopLevelItem();
+						}
+
+						menuItems = itemMenu.getElementsByTagName('a');
+
+						for (let j = 0; j < menuItems.length; j++) {
+							if (menuItems[j] === document.activeElement) {
+								selectedIndex = j;
+								break;
+							}
+						}
+
+						nextIndex = selectedIndex + 1;
+
+						// debugger;
+
+						if (keyPressed === 'tab') {
+							if (nextIndex >= menuItems.length) {
+								selectNextTopLevelItem()
+							} else {
+								menuItems[nextIndex].focus();
+							}
+						} else {
+							if (nextIndex < menuItems.length) {
+								menuItems[nextIndex].focus();
+							} else {
+								item.focus();
+							}
+						}
+					}
+
+					function selectPreviousTopLevelItem() {
+						let newIndex;
+
+						for (let j = 0; j < topLevelItems.length; j++) {
+							if (topLevelItems[j] === item) {
+								newIndex = j - 1;
+								break;
+							}
+						}
+
+						if (itemMenu) {
+							hideMenu();
+						}
+
+						if (newIndex < 0) {
+							document.querySelector('.logo-link').focus();
+						} else {
+							topLevelItems[newIndex].focus();
+						}
+					}
+
+					function selectNextTopLevelItem() {
+						let newIndex;
+
+						for (let j = 0; j < topLevelItems.length; j++) {
+							if (topLevelItems[j] === item) {
+								newIndex = j + 1;
+								break;
+							}
+						}
+
+						if (itemMenu) {
+							hideMenu();
+						}
+
+						if (newIndex > topLevelItems.length - 1) {
+							document.getElementById('top-nav-download').focus();
+						} else {
+							topLevelItems[newIndex].focus();
+						}
+					}
+
+					function isMenuOpen() {
+						return itemMenu && itemMenu.getAttribute(attrNames.hidden) === 'false';
+					}
+
+					function showMenu() {
+						item.setAttribute(attrNames.expanded, 'true');
+						if (itemMenu) {
+							itemMenu.setAttribute(attrNames.hidden, 'false');
+						}
+					}
+
+					function hideMenu() {
+						item.setAttribute(attrNames.expanded, 'false');
+						if (itemMenu) {
+							itemMenu.setAttribute(attrNames.hidden, 'true');
+							delete itemMenu.dataset.currentFocus;
+						}
+					}
+
+					item.parentNode.addEventListener('mouseover', showMenu);
+					item.parentNode.addEventListener('mouseout', hideMenu);
+					item.parentNode.addEventListener('blur', hideMenu);
+					item.addEventListener('focus', showMenu);
+
+					// use keydown for direction keys
+					item.parentNode.addEventListener('keydown', (e) => {
+						// check for an important keycode
+						if (keyCodes.indexOf(e.keyCode) > -1) {
+							e.preventDefault();
+							e.stopPropagation();
+
+							switch(e.keyCode) {
+								case keyMap.left:
+									if (itemMenu) {
+										if (!isMenuOpen()) {
+											selectPreviousTopLevelItem();
+										} else {
+											hideMenu();
+											item.focus();
+										}
+									} else {
+										selectPreviousTopLevelItem();
+									}
+								break;
+								case keyMap.up:
+									if (itemMenu) {
+										if (isMenuOpen()) {
+											selectPreviousMenuItem(e, 'up');
+										}
+									}
+								break;
+								case keyMap.right:
+									if (!isMenuOpen() || document.activeElement === item) {
+										selectNextTopLevelItem('right');
+									}
+								break;
+								case keyMap.down:
+									if (itemMenu) {
+										if (isMenuOpen()) {
+											selectNextMenuItem('down');
+										} else {
+											showMenu();
+										}
+									}
+								break;
+								case keyMap.tab:
+									const isShiftActive = e.getModifierState('Shift');
+									if (itemMenu) {
+										if (isShiftActive) {
+											selectPreviousTopLevelItem();
+										} else {
+											if (isMenuOpen()) {
+												selectNextMenuItem('tab');
+											} else {
+												showMenu();
+											}
+										}
+									} else {
+										if (isShiftActive) {
+											selectPreviousTopLevelItem();
+										} else {
+											selectNextTopLevelItem('tab');
+										}
+									}
+								break;
+								case keyMap.esc:
+									if (itemMenu && isMenuOpen()) {
+										hideMenu();
+									}
+								break;
+								default:
+									// can probably remove the default case (in this case)
+								break;
+							}
+						}
+					});
+				};
+			}
+
+			function is_touch_enabled() {
+				return ( 'ontouchstart' in window ) ||
+							( navigator.maxTouchPoints > 0 ) ||
+							( navigator.msMaxTouchPoints > 0 );
+			}
+
+			function setupDocsNav() {
+				var docsContainer = document.querySelector('.documentation--current');
+				var docsHandle = document.querySelector('.toc-handle');
+
+				function toggleDocsWidth() {
+					let isExpanded = docsContainer.classList.toggle('expanded');
+					// change the arrow direction based on the view state is expanded or not
+					if (isExpanded) {
+						docsHandle.textContent = ">";
+					} else {
+						docsHandle.textContent = "<";
+					}
+				}
+
+				docsHandle.addEventListener('click', toggleDocsWidth);
+			}
+
+			// jQuery free IIFE
+			(function() {
+				var navToggle = document.getElementById('top-nav-toggle');
+				var nav = document.getElementById('top-nav-container');
+				var docsNav = document.querySelector('.docs-nav');
+
+				navToggle.addEventListener('click', () => {
+					navToggle.classList.toggle('active');
+				});
+
+				// skip this for touch devices
+				if (is_touch_enabled()) {
+					nav.querySelectorAll('a').forEach(anchor => anchor.removeAttribute('tabindex'));
+					window.addEventListener('touchmove', mobilePageScroll, false);
+				} else {
+					setUpA11yMenus(nav);
+					window.addEventListener('scroll', pageScroll, false);
+				}
+
+				// jQuery free document ready
+				document.addEventListener("DOMContentLoaded", function() {
+					// anything to do on dom ready here
+					pageScroll();
+
+					if (docsNav) {
+						setupDocsNav();
+					}
+
+					// document.querySelectorAll('[class^="language-"]').forEach((block) => {
+					// 	hljs.highlightBlock(block);
+					// });
+				});
+			}());
+</script>
+</body>
+</html>

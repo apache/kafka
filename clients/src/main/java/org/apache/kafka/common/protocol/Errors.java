@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.protocol;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
@@ -506,6 +510,24 @@ public enum Errors {
         }
     }
 
+    private static String printJson() {
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode all = mapper.createArrayNode();
+        for (Errors error : Errors.values()) {
+            ObjectNode node = mapper.createObjectNode()
+                    .put("name", error.name())
+                    .put("code", error.code())
+                    .put("retriable", error.exception() != null && error.exception() instanceof RetriableException ? "True" : "False")
+                    .put("description", error.exception() != null ? error.exception().getMessage() : "");
+            all.add(node);
+        }
+        try {
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(all);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
@@ -536,6 +558,6 @@ public enum Errors {
     }
 
     public static void main(String[] args) {
-        System.out.println(toHtml());
+        System.out.println(printJson());
     }
 }

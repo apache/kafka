@@ -1,0 +1,218 @@
+[
+  {
+    "Parameter": "acceptable.recovery.lag",
+    "Importance": "Medium",
+    "Description": "The maximum acceptable lag (number of offsets to catch up) for an instance to be considered caught-up and ready for the active task.",
+    "Default Value": "10000"
+  },
+  {
+    "Parameter": "application.server",
+    "Importance": "Low",
+    "Description": "A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of               state stores within a single Kafka Streams application. The value of this must be different for each instance               of the application.",
+    "Default Value": "the empty string"
+  },
+  {
+    "Parameter": "buffered.records.per.partition",
+    "Importance": "Low",
+    "Description": "The maximum number of records to buffer per partition.",
+    "Default Value": "1000"
+  },
+  {
+    "Parameter": "cache.max.bytes.buffering",
+    "Importance": "Medium",
+    "Description": "Maximum number of memory bytes to be used for record caches across all threads.",
+    "Default Value": "10485760 bytes"
+  },
+  {
+    "Parameter": "client.id",
+    "Importance": "Medium",
+    "Description": "An ID string to pass to the server when making requests.               (This setting is passed to the consumer/producer clients used internally by Kafka Streams.)",
+    "Default Value": "the empty string"
+  },
+  {
+    "Parameter": "commit.interval.ms",
+    "Importance": "Low",
+    "Description": "The frequency in milliseconds with which to save the position (offsets in source topics) of tasks.",
+    "Default Value": "30000 milliseconds"
+  },
+  {
+    "Parameter": "default.deserialization.exception.handler",
+    "Importance": "Medium",
+    "Description": "Exception handling class that implements the <code class=\"docutils literal\"><span class=\"pre\">DeserializationExceptionHandler</span></code> interface.",
+    "Default Value": "<code class=\"docutils literal\"><span class=\"pre\">LogAndContinueExceptionHandler</span></code>"
+  },
+  {
+    "Parameter": "default.key.serde",
+    "Importance": "Medium",
+    "Description": "Default serializer/deserializer class for record keys, implements the <code class=\"docutils literal\"><span class=\"pre\">Serde</span></code> interface. Must be               set by the user or all serdes must be passed in explicitly (see also default.value.serde).",
+    "Default Value": "<code class=\"docutils literal\"><span class=\"pre\">null</span></code>"
+  },
+  {
+    "Parameter": "default.production.exception.handler",
+    "Importance": "Medium",
+    "Description": "Exception handling class that implements the <code class=\"docutils literal\"><span class=\"pre\">ProductionExceptionHandler</span></code> interface.",
+    "Default Value": "<code class=\"docutils literal\"><span class=\"pre\">DefaultProductionExceptionHandler</span></code>"
+  },
+  {
+    "Parameter": "default.timestamp.extractor",
+    "Importance": "Medium",
+    "Description": "Timestamp extractor class that implements the <code class=\"docutils literal\"><span class=\"pre\">TimestampExtractor</span></code> interface.",
+    "Default Value": "See <a class=\"reference internal\" href=\"#streams-developer-guide-timestamp-extractor\"><span class=\"std std-ref\">Timestamp Extractor</span></a>"
+  },
+  {
+    "Parameter": "default.value.serde",
+    "Importance": "Medium",
+    "Description": "Default serializer/deserializer class for record values, implements the <code class=\"docutils literal\"><span class=\"pre\">Serde</span></code> interface. Must be               set by the user or all serdes must be passed in explicitly (see also default.key.serde).",
+    "Default Value": "<code class=\"docutils literal\"><span class=\"pre\">null</span></code>"
+  },
+  {
+    "Parameter": "default.windowed.key.serde.inner",
+    "Importance": "Medium",
+    "Description": "Default serializer/deserializer for the inner class of windowed keys, implementing the <code class=\"docutils literal\"><span class=\"pre\">Serde</span></code> interface.",
+    "Default Value": "null"
+  },
+  {
+    "Parameter": "default.windowed.value.serde.inner",
+    "Importance": "Medium",
+    "Description": "Default serializer/deserializer for the inner class of windowed values, implementing the <code class=\"docutils literal\"><span class=\"pre\">Serde</span></code> interface.",
+    "Default Value": "null"
+  },
+  {
+    "Parameter": "max.task.idle.ms",
+    "Importance": "Medium",
+    "Description": "<p>                 This config controls whether joins and merges may produce out-of-order results.                 The config value is the maximum amount of time in milliseconds a stream task will stay idle                 when it is fully caught up on some (but not all) input partitions                 to wait for producers to send additional records and avoid potential                 out-of-order record processing across multiple input streams.                 The default (zero) does not wait for producers to send more records,                 but it does wait to fetch data that is already present on the brokers.                 This default means that for records that are already present on the brokers,                 Streams will process them in timestamp order.                 Set to -1 to disable idling entirely and process any locally available data,                 even though doing so may produce out-of-order processing.               </p>",
+    "Default Value": "0 milliseconds"
+  },
+  {
+    "Parameter": "max.warmup.replicas",
+    "Importance": "Medium",
+    "Description": "The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.",
+    "Default Value": "2"
+  },
+  {
+    "Parameter": "metric.reporters",
+    "Importance": "Low",
+    "Description": "A list of classes to use as metrics reporters.",
+    "Default Value": "the empty list"
+  },
+  {
+    "Parameter": "metrics.num.samples",
+    "Importance": "Low",
+    "Description": "The number of samples maintained to compute metrics.",
+    "Default Value": "2"
+  },
+  {
+    "Parameter": "metrics.recording.level",
+    "Importance": "Low",
+    "Description": "The highest recording level for metrics.",
+    "Default Value": "<code class=\"docutils literal\"><span class=\"pre\">INFO</span></code>"
+  },
+  {
+    "Parameter": "metrics.sample.window.ms",
+    "Importance": "Low",
+    "Description": "The window of time in milliseconds a metrics sample is computed over.",
+    "Default Value": "30000 milliseconds (30 seconds)"
+  },
+  {
+    "Parameter": "num.standby.replicas",
+    "Importance": "High",
+    "Description": "The number of standby replicas for each task.",
+    "Default Value": "0"
+  },
+  {
+    "Parameter": "num.stream.threads",
+    "Importance": "Medium",
+    "Description": "The number of threads to execute stream processing.",
+    "Default Value": "1"
+  },
+  {
+    "Parameter": "partition.grouper",
+    "Importance": "Low",
+    "Description": "Partition grouper class that implements the <code class=\"docutils literal\"><span class=\"pre\">PartitionGrouper</span></code> interface.",
+    "Default Value": "See <a class=\"reference internal\" href=\"#streams-developer-guide-partition-grouper\"><span class=\"std std-ref\">Partition Grouper</span></a>"
+  },
+  {
+    "Parameter": "probing.rebalance.interval.ms",
+    "Importance": "Low",
+    "Description": "The maximum time in milliseconds to wait before triggering a rebalance to probe for warmup replicas that have sufficiently caught up.",
+    "Default Value": "600000 milliseconds (10 minutes)"
+  },
+  {
+    "Parameter": "processing.guarantee",
+    "Importance": "Medium",
+    "Description": "The processing mode. Can be either <code class=\"docutils literal\"><span class=\"pre\">\"at_least_once\"</span></code> (default)               or <code class=\"docutils literal\"><span class=\"pre\">\"exactly_once_v2\"</span></code> (for EOS version 2, requires broker version 2.5+). Deprecated config options are               <code class=\"docutils literal\"><span class=\"pre\">\"exactly_once\"</span></code> (for EOS version 1) and <code class=\"docutils literal\"><span class=\"pre\">\"exactly_once_beta\"</span></code> (for EOS version 2, requires broker version 2.5+)",
+    "Default Value": "See <a class=\"reference internal\" href=\"#streams-developer-guide-processing-guarantee\"><span class=\"std std-ref\">Processing Guarantee</span></a>"
+  },
+  {
+    "Parameter": "poll.ms",
+    "Importance": "Low",
+    "Description": "The amount of time in milliseconds to block waiting for input.",
+    "Default Value": "100 milliseconds"
+  },
+  {
+    "Parameter": "rack.aware.assignment.tags",
+    "Importance": "Medium",
+    "Description": "List of tag keys used to distribute standby replicas across Kafka Streams               clients. When configured, Kafka Streams will make a best-effort to distribute the standby tasks over               clients with different tag values.",
+    "Default Value": "the empty list"
+  },
+  {
+    "Parameter": "replication.factor",
+    "Importance": "Medium",
+    "Description": "The replication factor for changelog topics and repartition topics created by the application.               The default of <code>-1</code> (meaning: use broker default replication factor) requires broker version 2.4 or newer.",
+    "Default Value": "-1"
+  },
+  {
+    "Parameter": "retry.backoff.ms",
+    "Importance": "Medium",
+    "Description": "The amount of time in milliseconds, before a request is retried. This applies if the <code class=\"docutils literal\"><span class=\"pre\">retries</span></code> parameter is configured to be greater than 0.",
+    "Default Value": "100 milliseconds"
+  },
+  {
+    "Parameter": "rocksdb.config.setter",
+    "Importance": "Medium",
+    "Description": "The RocksDB configuration.",
+    "Default Value": ""
+  },
+  {
+    "Parameter": "state.cleanup.delay.ms",
+    "Importance": "Low",
+    "Description": "The amount of time in milliseconds to wait before deleting state when a partition has migrated.",
+    "Default Value": "600000 milliseconds (10 minutes)"
+  },
+  {
+    "Parameter": "state.dir",
+    "Importance": "High",
+    "Description": "Directory location for state stores.",
+    "Default Value": "<code class=\"docutils literal\"><span class=\"pre\">/tmp/kafka-streams</span></code>"
+  },
+  {
+    "Parameter": "task.timeout.ms",
+    "Importance": "Medium",
+    "Description": "The maximum amount of time in milliseconds a task might stall due to internal errors and retries until an error is raised. For a timeout of <code>0 ms</code>, a task would raise an error for the first internal error. For any timeout larger than <code>0 ms</code>, a task will retry at least once before an error is raised.",
+    "Default Value": "300000 milliseconds (5 minutes)"
+  },
+  {
+    "Parameter": "topology.optimization",
+    "Importance": "Medium",
+    "Description": "A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: (<code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>)).",
+    "Default Value": "<code> NO_OPTIMIZATION</code>"
+  },
+  {
+    "Parameter": "upgrade.from",
+    "Importance": "Medium",
+    "Description": "The version you are upgrading from during a rolling upgrade.",
+    "Default Value": "See <a class=\"reference internal\" href=\"#streams-developer-guide-upgrade-from\"><span class=\"std std-ref\">Upgrade From</span></a>"
+  },
+  {
+    "Parameter": "windowstore.changelog.additional.retention.ms",
+    "Importance": "Low",
+    "Description": "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.",
+    "Default Value": "86400000 milliseconds (1 day)"
+  },
+  {
+    "Parameter": "window.size.ms",
+    "Importance": "Low",
+    "Description": "Sets window size for the deserializer in order to calculate window end times.",
+    "Default Value": "null"
+  }
+]

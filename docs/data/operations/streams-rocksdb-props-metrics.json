@@ -1,0 +1,112 @@
+[
+  {
+    "Metric": "num-immutable-mem-table",
+    "Description": "The number of immutable memtables that have not yet been flushed.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "cur-size-active-mem-table",
+    "Description": "The approximate size of the active memtable in bytes.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "cur-size-all-mem-tables",
+    "Description": "The approximate size of active and unflushed immutable memtables in bytes.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "size-all-mem-tables",
+    "Description": "The approximate size of active, unflushed immutable, and pinned immutable memtables in bytes.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "num-entries-active-mem-table",
+    "Description": "The number of entries in the active memtable.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "num-entries-imm-mem-tables",
+    "Description": "The number of entries in the unflushed immutable memtables.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "num-deletes-active-mem-table",
+    "Description": "The number of delete entries in the active memtable.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "num-deletes-imm-mem-tables",
+    "Description": "The number of delete entries in the unflushed immutable memtables.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "mem-table-flush-pending",
+    "Description": "This metric reports 1 if a memtable flush is pending, otherwise it reports 0.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "num-running-flushes",
+    "Description": "The number of currently running flushes.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "compaction-pending",
+    "Description": "This metric reports 1 if at least one compaction is pending, otherwise it reports 0.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "num-running-compactions",
+    "Description": "The number of currently running compactions.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "estimate-pending-compaction-bytes",
+    "Description": "The estimated total number of bytes a compaction needs to rewrite on disk to get all levels down to under         target size (only valid for level compaction).",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "total-sst-files-size",
+    "Description": "The total size in bytes of all SST files.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "live-sst-files-size",
+    "Description": "The total size in bytes of all SST files that belong to the latest LSM tree.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "num-live-versions",
+    "Description": "Number of live versions of the LSM tree.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "block-cache-capacity",
+    "Description": "The capacity of the block cache in bytes.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "block-cache-usage",
+    "Description": "The memory size of the entries residing in block cache in bytes.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "block-cache-pinned-usage",
+    "Description": "The memory size for the entries being pinned in the block cache in bytes.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "estimate-num-keys",
+    "Description": "The estimated number of keys in the active and unflushed immutable memtables and storage.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "estimate-table-readers-mem",
+    "Description": "The estimated memory in bytes used for reading SST tables, excluding memory used in block cache.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "background-errors",
+    "Description": "The total number of background errors.",
+    "MBean": "kafka.streams:type=stream-state-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),[store-scope]-id=([-.\\w]+)"
+  }
+]

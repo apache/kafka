@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.metrics;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
@@ -241,6 +245,55 @@ public class Metrics implements Closeable {
      */
     public MetricName metricName(String name, String group, Map<String, String> tags) {
         return metricName(name, group, "", tags);
+    }
+
+    public static String printJson(String domain, Iterable<MetricNameTemplate> allMetrics) {
+
+        Map<String, Map<String, String>> beansAndAttributes = new TreeMap<>();
+
+        try (Metrics metrics = new Metrics()) {
+            for (MetricNameTemplate template : allMetrics) {
+                Map<String, String> tags = new LinkedHashMap<>();
+                for (String s : template.tags()) {
+                    tags.put(s, "{" + s + "}");
+                }
+
+                MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
+                String mBeanName = JmxReporter.getMBeanName(domain, metricName);
+                if (!beansAndAttributes.containsKey(mBeanName)) {
+                    beansAndAttributes.put(mBeanName, new TreeMap<>());
+                }
+                Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
+                if (!attrAndDesc.containsKey(template.name())) {
+                    attrAndDesc.put(template.name(), template.description());
+                } else {
+                    throw new IllegalArgumentException("mBean '" + mBeanName + "' attribute '" + template.name() + "' is defined twice.");
+                }
+            }
+        }
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode all = mapper.createArrayNode();
+
+        for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
+            ObjectNode entry = mapper.createObjectNode();
+            entry.put("mbean", e.getKey());
+
+            ObjectNode attributes = mapper.createObjectNode();
+            for (Entry<String, String> attr : e.getValue().entrySet()) {
+                attributes.put(attr.getKey(), attr.getValue());
+            }
+            entry.set("attributes", attributes);
+            all.add(entry);
+        }
+
+
+        try {
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(all);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**

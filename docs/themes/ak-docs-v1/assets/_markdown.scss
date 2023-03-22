@@ -1,0 +1,191 @@
+@import "variables";
+
+.markdown {
+  line-height: 1.6;
+
+  // remove padding at the beginning of page
+  > :first-child {
+    margin-top: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: normal;
+    line-height: 1;
+    margin-top: 1.5em;
+    margin-bottom: $padding-16;
+
+    a.anchor {
+      opacity: 0;
+      font-size: 0.75em;
+      vertical-align: middle;
+      text-decoration: none;
+    }
+
+    &:hover a.anchor,
+    a.anchor:focus {
+      opacity: initial;
+    }
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-weight: bolder;
+  }
+
+  h5 {
+    font-size: 0.875em;
+  }
+
+  h6 {
+    font-size: 0.75em;
+  }
+
+  b,
+  optgroup,
+  strong {
+    font-weight: bolder;
+  }
+
+  a {
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+    &:visited {
+      color: var(--color-visited-link);
+    }
+  }
+
+  img {
+    max-width: 100%;
+  }
+
+  code {
+    padding: 0 $padding-4;
+    background: var(--gray-200);
+    border-radius: $border-radius;
+    font-size: 0.875em;
+  }
+
+  pre {
+    padding: $padding-16;
+    background: var(--gray-100);
+    border-radius: $border-radius;
+    overflow-x: auto;
+
+    code {
+      padding: 0;
+      background: none;
+    }
+  }
+
+  blockquote {
+    margin: $padding-16 0;
+    padding: $padding-8 $padding-16 $padding-8 ($padding-16 - $padding-4); //to keep total left space 16dp
+
+    border-inline-start: $padding-4 solid var(--gray-200);
+    border-radius: $border-radius;
+
+    :first-child {
+      margin-top: 0;
+    }
+    :last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  table {
+    overflow: auto;
+    display: block;
+    border-spacing: 0;
+    border-collapse: collapse;
+    margin-top: $padding-16;
+    margin-bottom: $padding-16;
+
+    tr th,
+    tr td {
+      padding: $padding-8 $padding-16;
+      border: $padding-1 solid var(--gray-200);
+    }
+
+    tr:nth-child(2n) {
+      background: var(--gray-100);
+    }
+  }
+
+  hr {
+    height: $padding-1;
+    border: none;
+    background: var(--gray-200);
+  }
+
+  ul,
+  ol {
+    padding-inline-start: $padding-16 * 2;
+  }
+
+  dl {
+    dt {
+      font-weight: bolder;
+      margin-top: $padding-16;
+    }
+
+    dd {
+      margin-inline-start: $padding-16;
+      margin-bottom: $padding-16;
+    }
+  }
+
+  // Special case for highlighted code with line numbers
+  .highlight table tr {
+    td:nth-child(1) pre {
+      margin: 0;
+      padding-inline-end: 0;
+    }
+    td:nth-child(2) pre {
+      margin: 0;
+      padding-inline-start: 0;
+    }
+  }
+
+  details {
+    padding: $padding-16;
+    border: $padding-1 solid var(--gray-200);
+    border-radius: $border-radius;
+
+    summary {
+      line-height: 1;
+      padding: $padding-16;
+      margin: -$padding-16;
+      cursor: pointer;
+    }
+
+    &[open] summary {
+      margin-bottom: 0;
+    }
+  }
+
+  figure {
+    margin: $padding-16 0;
+    figcaption p {
+      margin-top: 0;
+    }
+  }
+}
+
+.markdown-inner {
+  // Util class to remove extra margin in nested markdown content
+  > :first-child {
+    margin-top: 0;
+  }
+  > :last-child {
+    margin-bottom: 0;
+  }
+}

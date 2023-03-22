@@ -319,6 +319,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                     ADD_SOURCE_ALIAS_TO_METRICS_DOC);
 
     public static void main(String[] args) {
-        System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_source_" + config));
+        System.out.println(CONNECTOR_CONFIG_DEF.printJson());
     }
 }

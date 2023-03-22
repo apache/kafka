@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.protocol;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.types.BoundField;
@@ -30,6 +34,8 @@ import java.util.Set;
 
 public class Protocol {
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
     private static String indentString(int size) {
         StringBuilder b = new StringBuilder(size);
         for (int i = 0; i < size; i++)
@@ -37,7 +43,7 @@ public class Protocol {
         return b.toString();
     }
 
-    private static void schemaToBnfHtml(Schema schema, StringBuilder b, int indentSize) {
+    private static void schemaToBnf(Schema schema, StringBuilder b, int indentSize) {
         final String indentStr = indentString(indentSize);
         final Map<String, Type> subTypes = new LinkedHashMap<>();
 
@@ -69,7 +75,7 @@ public class Protocol {
                 b.append(indentStr);
                 b.append(entry.getKey());
                 b.append(" => ");
-                schemaToBnfHtml((Schema) entry.getValue(), b, indentSize + 2);
+                schemaToBnf((Schema) entry.getValue(), b, indentSize + 2);
             } else {
                 // Standard Field Type
                 b.append(indentStr);
@@ -91,6 +97,22 @@ public class Protocol {
             } else if (field.def.type instanceof Schema)
                 populateSchemaFields((Schema) field.def.type, fields);
         }
+    }
+
+    private static ArrayNode schemaToFieldsArray(Schema schema) {
+        ArrayNode all = JSON_MAPPER.createArrayNode();
+
+        Set<BoundField> fields = new LinkedHashSet<>();
+        populateSchemaFields(schema, fields);
+
+        for (BoundField field : fields) {
+            all.add(JSON_MAPPER.createObjectNode()
+                    .put("field", field.def.name)
+                    .put("documentation", field.def.docString)
+                    .put("defaultValue", field.def.hasDefaultValue ? field.def.defaultValue.toString() : ""));
+        }
+
+        return all;
     }
 
     private static void schemaToFieldTableHtml(Schema schema, StringBuilder b) {
@@ -115,6 +137,81 @@ public class Protocol {
         b.append("</tbody></table>\n");
     }
 
+    public static String printJson() {
+        ArrayNode requestHeaders = JSON_MAPPER.createArrayNode();
+        for (int i = 0; i < RequestHeaderData.SCHEMAS.length; i++) {
+            Schema schema = RequestHeaderData.SCHEMAS[i];
+            StringBuilder bnf = new StringBuilder();
+            schemaToBnf(schema, bnf, 2);
+            ObjectNode node = JSON_MAPPER.createObjectNode()
+                    .put("bnf", bnf.toString())
+                    .put("version", i);
+            node.set("fields", schemaToFieldsArray(schema));
+            requestHeaders.add(node);
+        }
+        ArrayNode responseHeaders = JSON_MAPPER.createArrayNode();
+        for (int i = 0; i < ResponseHeaderData.SCHEMAS.length; i++) {
+            Schema schema = ResponseHeaderData.SCHEMAS[i];
+            StringBuilder bnf = new StringBuilder();
+            schemaToBnf(schema, bnf, 2);
+            ObjectNode node = JSON_MAPPER.createObjectNode()
+                    .put("bnf", bnf.toString())
+                    .put("version", i);
+            node.set("fields", schemaToFieldsArray(schema));
+            responseHeaders.add(node);
+        }
+        ArrayNode apis = JSON_MAPPER.createArrayNode();
+        for (ApiKeys key : ApiKeys.clientApis()) {
+            ObjectNode node = JSON_MAPPER.createObjectNode()
+                    .put("id", key.id)
+                    .put("name", key.name);
+
+            ArrayNode requestsArray = JSON_MAPPER.createArrayNode();
+            Schema[] requests = key.messageType.requestSchemas();
+            for (int i = 0; i < requests.length; i++) {
+                Schema schema = requests[i];
+                if (schema != null) {
+                    StringBuilder bnf = new StringBuilder();
+                    schemaToBnf(requests[i], bnf, 2);
+                    ObjectNode request = JSON_MAPPER.createObjectNode()
+                            .put("version", i)
+                            .put("bnf", bnf.toString());
+                    request.set("fields", schemaToFieldsArray(requests[i]));
+                    requestsArray.add(request);
+                }
+            }
+            node.set("requests", requestsArray);
+
+            ArrayNode responsesArray = JSON_MAPPER.createArrayNode();
+            Schema[] responses = key.messageType.responseSchemas();
+            for (int i = 0; i < responses.length; i++) {
+                Schema schema = responses[i];
+                if (schema != null) {
+                    StringBuilder bnf = new StringBuilder();
+                    schemaToBnf(requests[i], bnf, 2);
+                    ObjectNode response = JSON_MAPPER.createObjectNode()
+                            .put("version", i)
+                            .put("bnf", bnf.toString());
+                    response.set("fields", schemaToFieldsArray(responses[i]));
+                    responsesArray.add(response);
+                }
+            }
+            node.set("responses", responsesArray);
+            apis.add(node);
+        }
+
+        ObjectNode protocol = JSON_MAPPER.createObjectNode();
+        protocol.set("requestHeaders", requestHeaders);
+        protocol.set("responseHeaders", responseHeaders);
+        protocol.set("apis", apis);
+
+        try {
+            return JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(protocol);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<h5>Headers:</h5>\n");
@@ -122,14 +219,14 @@ public class Protocol {
         for (int i = 0; i < RequestHeaderData.SCHEMAS.length; i++) {
             b.append("<pre>");
             b.append("Request Header v").append(i).append(" => ");
-            schemaToBnfHtml(RequestHeaderData.SCHEMAS[i], b, 2);
+            schemaToBnf(RequestHeaderData.SCHEMAS[i], b, 2);
             b.append("</pre>\n");
             schemaToFieldTableHtml(RequestHeaderData.SCHEMAS[i], b);
         }
         for (int i = 0; i < ResponseHeaderData.SCHEMAS.length; i++) {
             b.append("<pre>");
             b.append("Response Header v").append(i).append(" => ");
-            schemaToBnfHtml(ResponseHeaderData.SCHEMAS[i], b, 2);
+            schemaToBnf(ResponseHeaderData.SCHEMAS[i], b, 2);
             b.append("</pre>\n");
             schemaToFieldTableHtml(ResponseHeaderData.SCHEMAS[i], b);
         }
@@ -141,21 +238,22 @@ public class Protocol {
             b.append(" API (Key: ");
             b.append(key.id);
             b.append("):</a></h5>\n\n");
+
             // Requests
             b.append("<b>Requests:</b><br>\n");
             Schema[] requests = key.messageType.requestSchemas();
             for (int i = 0; i < requests.length; i++) {
                 Schema schema = requests[i];
+                b.append("<div>");
                 // Schema
                 if (schema != null) {
-                    b.append("<div>");
                     // Version header
                     b.append("<pre>");
                     b.append(key.name);
                     b.append(" Request (Version: ");
                     b.append(i);
                     b.append(") => ");
-                    schemaToBnfHtml(requests[i], b, 2);
+                    schemaToBnf(requests[i], b, 2);
                     b.append("</pre>");
                     schemaToFieldTableHtml(requests[i], b);
                 }
@@ -167,16 +265,16 @@ public class Protocol {
             Schema[] responses = key.messageType.responseSchemas();
             for (int i = 0; i < responses.length; i++) {
                 Schema schema = responses[i];
+                b.append("<div>");
                 // Schema
                 if (schema != null) {
-                    b.append("<div>");
                     // Version header
                     b.append("<pre>");
                     b.append(key.name);
                     b.append(" Response (Version: ");
                     b.append(i);
                     b.append(") => ");
-                    schemaToBnfHtml(responses[i], b, 2);
+                    schemaToBnf(responses[i], b, 2);
                     b.append("</pre>");
                     schemaToFieldTableHtml(responses[i], b);
                 }
@@ -188,7 +286,7 @@ public class Protocol {
     }
 
     public static void main(String[] args) {
-        System.out.println(toHtml());
+        System.out.println(printJson());
     }
 
 }

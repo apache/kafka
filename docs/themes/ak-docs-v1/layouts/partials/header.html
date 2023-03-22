@@ -1,0 +1,83 @@
+<title>Apache Kafka</title>
+<link rel='stylesheet' href='{{.Site.BaseURL}}/css/styles.css?2' type='text/css'>
+<link rel="icon" type="image/gif" href="{{.Site.BaseURL}}/images/apache_feather.gif">
+<meta name="robots" content="index,follow"/>
+<meta name="language" content="en"/>
+<meta name="keywords" content="apache kafka messaging queuing distributed stream processing">
+<meta name="description" content="Apache Kafka: A Distributed Streaming Platform.">
+<meta http-equiv='Content-Type' content='text/html;charset=utf-8'/>
+<meta name="viewport" content="initial-scale = 1.0,maximum-scale = 1.0"/>
+<meta property="og:title" content="Apache Kafka"/>
+<meta property="og:image" content="http://apache-kafka.org/images/apache-kafka.png"/>
+<meta property="og:description" content="Apache Kafka: A Distributed Streaming Platform."/>
+<meta property="og:site_name" content="Apache Kafka"/>
+<meta property="og:type" content="website"/>
+<link href="{{.Site.BaseURL}}/css/fonts.css" rel="stylesheet">
+<link href="{{.Site.BaseURL}}/css/fonts.css" rel="stylesheet">
+<script src="{{.Site.BaseURL}}/js/jquery.min.js"></script>
+<script defer src="https://use.fontawesome.com/releases/v5.0.8/js/all.js"></script>
+
+<script>
+			// DO NOT NEED TO UPDATE
+			// Legacy versions of the documentation to not do frontend redirect for
+			// These docs are written as a single super long file so no need to re-route
+			var legacyDocPaths = [
+				'/07/documentation',
+				'/07/documentation/',
+				'/08/documentation',
+				'/08/documentation/',
+				'/081/documentation',
+				'/081/documentation/',
+				'/082/documentation',
+				'/082/documentation/',
+				'/090/documentation',
+				'/090/documentation/',
+				'/0100/documentation',
+				'/0100/documentation/'
+			];
+
+			// Any direct request for Streams documentation in docs versions prior to 0101
+			// Redirect these requests to the standalone Streams doc page
+			var currentPath = window.location.pathname;
+			var shouldRedirect = !legacyDocPaths.includes(currentPath);
+			var isDocumenationPage = currentPath.includes('/documentation');
+
+			var hasNotSpecifiedFullPath = !currentPath.includes('/documentation/streams') && !currentPath.includes('/documentation/streams/');
+
+			// Look for legacy anchors to clue us in on what full path the user needs
+			// Add more as needed
+			var specifiedStreamsAnchor = window.location.hash.includes('#streams_');
+
+			if (shouldRedirect && isDocumenationPage && hasNotSpecifiedFullPath) {
+				if (specifiedStreamsAnchor) {
+					window.location.pathname = currentPath + 'streams';
+				}
+			}
+
+
+
+
+
+    </script>
+<!-- Matomo -->
+<script>
+			var _paq = window._paq = window._paq || [];
+			/* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+			/* We explicitly disable cookie tracking to avoid privacy issues */
+			_paq.push(['disableCookies']);
+			_paq.push(['trackPageView']);
+			_paq.push(['enableLinkTracking']);
+			(function() {
+				var u="//matomo.privacy.apache.org/";
+				_paq.push(['setTrackerUrl', u+'matomo.php']);
+				_paq.push(['setSiteId', '26']);
+				var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+				g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+			})();
+
+
+
+
+
+    </script>
+<!-- End Matomo Code -->

@@ -1,0 +1,21 @@
+# This should be removed in future, 'cn' is moved to `zh'
+- id: Search
+  translation: 搜索
+
+- id: Edit this page
+  translation: 编辑本页
+
+- id: Last modified by
+  translation: 最后修改者
+
+- id: Expand
+  translation: 展开
+
+- id: bookSearchConfig
+  translation: |
+    {
+      encode: false,
+      tokenize: function(str) {
+        return str.replace(/[\x00-\x7F]/g, '').split('');
+      }
+    }

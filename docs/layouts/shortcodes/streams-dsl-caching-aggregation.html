@@ -1,0 +1,33 @@
+{{ $source := index .Site.Data.streams "dsl-caching-aggregation" }}
+<table>
+    <thead valign="bottom">
+    <tr class="row-odd"><th class="head">&nbsp;</th>
+        <th class="head" colspan="3">KTable <code class="docutils literal"><span class="pre">userProfiles</span></code></th>
+        <th class="head" colspan="3">KGroupedTable <code class="docutils literal"><span class="pre">groupedTable</span></code></th>
+        <th class="head">KTable <code class="docutils literal"><span class="pre">aggregated</span></code></th>
+    </tr>
+    <tr class="row-even"><th class="head">Timestamp</th>
+        <th class="head">Input record</th>
+        <th class="head">Interpreted as</th>
+        <th class="head">Grouping</th>
+        <th class="head">Initializer</th>
+        <th class="head">Adder</th>
+        <th class="head">Subtractor</th>
+        <th class="head">State</th>
+    </tr>
+    </thead>
+    <tbody valign="top">
+    {{ range $source }}
+    <tr>
+        <td>{{index . "Timestamp" }}</td>
+        <td><code>{{index . "Input record" }}</code></td>
+        <td><code>{{index . "Interpreted as" }}</code></td>
+        <td><code>{{index . "Grouping" }}</code></td>
+        <td><code>{{index . "Initializer" }}</code></td>
+        <td><code>{{index . "Adder" }}</code></td>
+        <td><code>{{index . "Subtractor" }}</code></td>
+        <td>{{index . "State" | markdownify }}</td>
+    </tr>
+    {{ end }}
+    </tbody>
+</table>

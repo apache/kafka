@@ -1,0 +1,62 @@
+[
+  {
+    "Metric": "waiting-threads",
+    "Description": "The number of user threads blocked waiting for buffer memory to enqueue their records.",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "buffer-total-bytes",
+    "Description": "The maximum amount of buffer memory the client can use (whether or not it is currently used).",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "buffer-available-bytes",
+    "Description": "The total amount of buffer memory that is not being used (either unallocated or in the free list).",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bufferpool-wait-time",
+    "Description": "The fraction of time an appender waits for space allocation.",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bufferpool-wait-time-total",
+    "Description": "<b>*Deprecated*</b> The total time an appender waits for space allocation in nanoseconds. Replacement is <code>bufferpool-wait-time-ns-total</code>",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "bufferpool-wait-time-ns-total",
+    "Description": "The total time an appender waits for space allocation in nanoseconds.",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "flush-time-ns-total",
+    "Description": "The total time the Producer spent in Producer.flush in nanoseconds.",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "txn-init-time-ns-total",
+    "Description": "The total time the Producer spent initializing transactions in nanoseconds (for EOS).",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "txn-begin-time-ns-total",
+    "Description": "The total time the Producer spent in beginTransaction in nanoseconds (for EOS).",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "txn-send-offsets-time-ns-total",
+    "Description": "The total time the Producer spent sending offsets to transactions in nanoseconds (for EOS).",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "txn-commit-time-ns-total",
+    "Description": "The total time the Producer spent committing transactions in nanoseconds (for EOS).",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "txn-abort-time-ns-total",
+    "Description": "The total time the Producer spent aborting transactions in nanoseconds (for EOS).",
+    "MBean": "kafka.producer:type=producer-metrics,client-id=([-.\\w]+)"
+  }
+]

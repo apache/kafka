@@ -1,0 +1,57 @@
+[
+  {
+    "Metric": "bytes-consumed-total",
+    "Description": "The total number of bytes consumed by a source processor node.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+),topic=([-.\\w]+)"
+  },
+  {
+    "Metric": "bytes-produced-total",
+    "Description": "The total number of bytes produced by a sink processor node.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+),topic=([-.\\w]+)"
+  },
+  {
+    "Metric": "process-rate",
+    "Description": "The average number of records processed by a source processor node per second.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "process-total",
+    "Description": "The total number of records processed by a source processor node per second.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "suppression-emit-rate",
+    "Description": "The rate at which records that have been emitted downstream from suppression operation nodes.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "suppression-emit-total",
+    "Description": "The total number of records that have been emitted downstream from suppression operation nodes.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-e2e-latency-avg",
+    "Description": "The average end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-e2e-latency-max",
+    "Description": "The maximum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "record-e2e-latency-min",
+    "Description": "The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "records-consumed-total",
+    "Description": "The total number of records consumed by a source processor node.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+),topic=([-.\\w]+)"
+  },
+  {
+    "Metric": "records-produced-total",
+    "Description": "The total number of records produced by a sink processor node.",
+    "MBean": "kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\\w]+),task-id=([-.\\w]+),processor-node-id=([-.\\w]+),topic=([-.\\w]+)"
+  }
+]

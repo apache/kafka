@@ -1,0 +1,72 @@
+[
+  {
+    "Timestamp": 1,
+    "Input record": "(alice, E)",
+    "Interpreted as": "INSERT alice",
+    "Grouping": "(E, 5)",
+    "Initializer": "0 (for E)",
+    "Adder": "(E, 0 + 5)",
+    "Subtractor": "",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\"><strong>(E, 5)</strong></div> </div>"
+  },
+  {
+    "Timestamp": 2,
+    "Input record": "(bob, A)",
+    "Interpreted as": "INSERT bob",
+    "Grouping": "(A, 3)",
+    "Initializer": "0 (for A)",
+    "Adder": "(A, 0 + 3)",
+    "Subtractor": "",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\"><strong>(A, 3)</strong></div> <div class=\"line\">(E, 5)</div> </div>"
+  },
+  {
+    "Timestamp": 3,
+    "Input record": "(charlie, A)",
+    "Interpreted as": "INSERT charlie",
+    "Grouping": "(A, 7)",
+    "Initializer": "",
+    "Adder": "(A, 3 + 7)",
+    "Subtractor": "",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(A, <strong>10</strong>)</div> <div class=\"line\">(E, 5)</div> </div>"
+  },
+  {
+    "Timestamp": 4,
+    "Input record": "(alice, A)",
+    "Interpreted as": "UPDATE alice",
+    "Grouping": "(A, 5)",
+    "Initializer": "",
+    "Adder": "(A, 10 + 5)",
+    "Subtractor": "(E, 5 - 5)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(A, <strong>15</strong>)</div> <div class=\"line\">(E, <strong>0</strong>)</div> </div>"
+  },
+  {
+    "Timestamp": 5,
+    "Input record": "(charlie, null)",
+    "Interpreted as": "DELETE charlie",
+    "Grouping": "(null, 7)",
+    "Initializer": "",
+    "Adder": "",
+    "Subtractor": "(A, 15 - 7)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(A, <strong>8</strong>)</div> <div class=\"line\">(E, 0)</div> </div>"
+  },
+  {
+    "Timestamp": 6,
+    "Input record": "(null, E)",
+    "Interpreted as": "<em>ignored</em>",
+    "Grouping": "",
+    "Initializer": "",
+    "Adder": "",
+    "Subtractor": "",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(A, 8)</div> <div class=\"line\">(E, 0)</div> </div>"
+  },
+  {
+    "Timestamp": 7,
+    "Input record": "(bob, E)",
+    "Interpreted as": "UPDATE bob",
+    "Grouping": "(E, 3)",
+    "Initializer": "",
+    "Adder": "(E, 0 + 3)",
+    "Subtractor": "(A, 8 - 3)",
+    "State": "<div class=\"first last line-block\"> <div class=\"line\">(A, <strong>5</strong>)</div> <div class=\"line\">(E, <strong>3</strong>)</div> </div>"
+  }
+]

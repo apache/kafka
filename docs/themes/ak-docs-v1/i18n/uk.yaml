@@ -1,0 +1,14 @@
+- id: Search
+  translation: Пошук
+
+- id: Edit this page
+  translation: Редагувати цю сторінку
+
+- id: Last modified by
+  translation: Остання зміна від
+
+- id: Expand
+  translation: Розгорнути
+
+- id: bookSearchConfig
+  translation: '{ split: /[^a-zа-яё0-9\w]/gi }'

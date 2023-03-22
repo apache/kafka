@@ -1,0 +1,68 @@
+[
+  {
+    "Operation": "Write",
+    "Resource Type": "TransactionalId",
+    "Resource Name": "<code>connect-cluster-${groupId}</code>, where <code>${groupId}</code> is the <code>group.id</code> of the cluster",
+    "Note": ""
+  },
+  {
+    "Operation": "Describe",
+    "Resource Type": "TransactionalId",
+    "Resource Name": "<code>connect-cluster-${groupId}</code>, where <code>${groupId}</code> is the <code>group.id</code> of the cluster",
+    "Note": ""
+  },
+  {
+    "Operation": "IdempotentWrite",
+    "Resource Type": "Cluster",
+    "Resource Name": "ID of the Kafka cluster that hosts the worker's config topic",
+    "Note": "The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters"
+  },
+  {
+    "Operation": "Operation",
+    "Resource Type": "Resource Type",
+    "Resource Name": "Resource Name",
+    "Note": "Note"
+  },
+  {
+    "Operation": "Write",
+    "Resource Type": "TransactionalId",
+    "Resource Name": "<code>${groupId}-${connector}-${taskId}</code>, for each task that the connector will create, where <code>${groupId}</code> is the <code>group.id</code> of the Connect cluster, <code>${connector}</code> is the name of the connector, and <code>${taskId}</code> is the ID of the task (starting from zero)",
+    "Note": "A wildcard prefix of <code>${groupId}-${connector}*</code> can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user."
+  },
+  {
+    "Operation": "Describe",
+    "Resource Type": "TransactionalId",
+    "Resource Name": "<code>${groupId}-${connector}-${taskId}</code>, for each task that the connector will create, where <code>${groupId}</code> is the <code>group.id</code> of the Connect cluster, <code>${connector}</code> is the name of the connector, and <code>${taskId}</code> is the ID of the task (starting from zero)",
+    "Note": "A wildcard prefix of <code>${groupId}-${connector}*</code> can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user."
+  },
+  {
+    "Operation": "Write",
+    "Resource Type": "Topic",
+    "Resource Name": "Offsets topic used by the connector, which is either the value of the <code>offsets.storage.topic</code> property in the connector’s configuration if provided, or the value of the offsets.storage.topic property in the worker’s configuration if not.",
+    "Note": ""
+  },
+  {
+    "Operation": "Read",
+    "Resource Type": "Topic",
+    "Resource Name": "Offsets topic used by the connector, which is either the value of the offsets.storage.topic property in the connector’s configuration if provided, or the value of the offsets.storage.topic property in the worker’s configuration if not.",
+    "Note": ""
+  },
+  {
+    "Operation": "Describe",
+    "Resource Type": "Topic",
+    "Resource Name": "Offsets topic used by the connector, which is either the value of the offsets.storage.topic property in the connector’s configuration if provided, or the value of the offsets.storage.topic property in the worker’s configuration if not.",
+    "Note": ""
+  },
+  {
+    "Operation": "Create",
+    "Resource Type": "Topic",
+    "Resource Name": "Offsets topic used by the connector, which is either the value of the offsets.storage.topic property in the connector’s configuration if provided, or the value of the offsets.storage.topic property in the worker’s configuration if not.",
+    "Note": "Only necessary if the offsets topic for the connector does not exist yet"
+  },
+  {
+    "Operation": "IdempotentWrite",
+    "Resource Type": "Cluster",
+    "Resource Name": "ID of the Kafka cluster that the source connector writes to",
+    "Note": "The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters"
+  }
+]

@@ -1,0 +1,387 @@
+[
+  {
+    "Metric": "Message in rate",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec,topic=([-.\\w]+)",
+    "Description": "Incoming message rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Byte in rate from clients",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec,topic=([-.\\w]+)",
+    "Description": "Byte in (from the clients) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Byte in rate from other brokers",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec,topic=([-.\\w]+)",
+    "Description": "Byte in (from the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Controller Request rate from Broker",
+    "MBean": "kafka.controller:type=ControllerChannelManager,name=RequestRateAndQueueTimeMs,brokerId=([0-9]+)",
+    "Description": "The rate (requests per second) at which the ControllerChannelManager takes requests from the             queue of the given broker. And the time it takes for a request to stay in this queue before             it is taken from the queue."
+  },
+  {
+    "Metric": "Controller Event queue size",
+    "MBean": "kafka.controller:type=ControllerEventManager,name=EventQueueSize",
+    "Description": "Size of the ControllerEventManager's queue."
+  },
+  {
+    "Metric": "Controller Event queue time",
+    "MBean": "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
+    "Description": "Time that takes for any event (except the Idle event) to wait in the ControllerEventManager's             queue before being processed"
+  },
+  {
+    "Metric": "Request rate",
+    "MBean": "kafka.network:type=RequestMetrics,name=RequestsPerSec,request={Produce|FetchConsumer|FetchFollower},version=([0-9]+)",
+    "Description": ""
+  },
+  {
+    "Metric": "Error rate",
+    "MBean": "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=([-.\\w]+),error=([-.\\w]+)",
+    "Description": "Number of errors in responses counted per-request-type, per-error-code. If a response contains           multiple errors, all are counted. error=NONE indicates successful responses."
+  },
+  {
+    "Metric": "Produce request rate",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec,topic=([-.\\w]+)",
+    "Description": "Produce request rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Fetch request rate",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec,topic=([-.\\w]+)",
+    "Description": "Fetch request (from clients or followers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Failed produce request rate",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=FailedProduceRequestsPerSec,topic=([-.\\w]+)",
+    "Description": "Failed Produce request rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Failed fetch request rate",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec,topic=([-.\\w]+)",
+    "Description": "Failed Fetch request (from clients or followers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Request size in bytes",
+    "MBean": "kafka.network:type=RequestMetrics,name=RequestBytes,request=([-.\\w]+)",
+    "Description": "Size of requests for each request type."
+  },
+  {
+    "Metric": "Temporary memory size in bytes",
+    "MBean": "kafka.network:type=RequestMetrics,name=TemporaryMemoryBytes,request={Produce|Fetch}",
+    "Description": "Temporary memory used for message format conversions and decompression."
+  },
+  {
+    "Metric": "Message conversion time",
+    "MBean": "kafka.network:type=RequestMetrics,name=MessageConversionsTimeMs,request={Produce|Fetch}",
+    "Description": "Time in milliseconds spent on message format conversions."
+  },
+  {
+    "Metric": "Message conversion rate",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\\w]+)",
+    "Description": "Message format conversion rate, for Produce or Fetch requests, per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Request Queue Size",
+    "MBean": "kafka.network:type=RequestChannel,name=RequestQueueSize",
+    "Description": "Size of the request queue."
+  },
+  {
+    "Metric": "Byte out rate to clients",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec,topic=([-.\\w]+)",
+    "Description": "Byte out (to the clients) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Byte out rate to other brokers",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec,topic=([-.\\w]+)",
+    "Description": "Byte out (to the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Rejected byte rate",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=BytesRejectedPerSec,topic=([-.\\w]+)",
+    "Description": "Rejected byte rate per topic, due to the record batch size being greater than max.message.bytes configuration. Omitting 'topic=(...)' will yield the all-topic rate."
+  },
+  {
+    "Metric": "Message validation failure rate due to no key specified for compacted topic",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec",
+    "Description": "0"
+  },
+  {
+    "Metric": "Message validation failure rate due to invalid magic number",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec",
+    "Description": "0"
+  },
+  {
+    "Metric": "Message validation failure rate due to incorrect crc checksum",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec",
+    "Description": "0"
+  },
+  {
+    "Metric": "Message validation failure rate due to non-continuous offset or sequence number in batch",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec",
+    "Description": "0"
+  },
+  {
+    "Metric": "Log flush rate and time",
+    "MBean": "kafka.log:type=LogFlushStats,name=LogFlushRateAndTimeMs",
+    "Description": ""
+  },
+  {
+    "Metric": "# of offline log directories",
+    "MBean": "kafka.log:type=LogManager,name=OfflineLogDirectoryCount",
+    "Description": "0"
+  },
+  {
+    "Metric": "Leader election rate",
+    "MBean": "kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs",
+    "Description": "non-zero when there are broker failures"
+  },
+  {
+    "Metric": "Unclean leader election rate",
+    "MBean": "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec",
+    "Description": "0"
+  },
+  {
+    "Metric": "Is controller active on broker",
+    "MBean": "kafka.controller:type=KafkaController,name=ActiveControllerCount",
+    "Description": "only one broker in the cluster should have 1"
+  },
+  {
+    "Metric": "Pending topic deletes",
+    "MBean": "kafka.controller:type=KafkaController,name=TopicsToDeleteCount",
+    "Description": ""
+  },
+  {
+    "Metric": "Pending replica deletes",
+    "MBean": "kafka.controller:type=KafkaController,name=ReplicasToDeleteCount",
+    "Description": ""
+  },
+  {
+    "Metric": "Ineligible pending topic deletes",
+    "MBean": "kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount",
+    "Description": ""
+  },
+  {
+    "Metric": "Ineligible pending replica deletes",
+    "MBean": "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount",
+    "Description": ""
+  },
+  {
+    "Metric": "# of under replicated partitions (|ISR| < |all replicas|)",
+    "MBean": "kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions",
+    "Description": "0"
+  },
+  {
+    "Metric": "# of under minIsr partitions (|ISR| < min.insync.replicas)",
+    "MBean": "kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount",
+    "Description": "0"
+  },
+  {
+    "Metric": "# of at minIsr partitions (|ISR| = min.insync.replicas)",
+    "MBean": "kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount",
+    "Description": "0"
+  },
+  {
+    "Metric": "Partition counts",
+    "MBean": "kafka.server:type=ReplicaManager,name=PartitionCount",
+    "Description": "mostly even across brokers"
+  },
+  {
+    "Metric": "Offline Replica counts",
+    "MBean": "kafka.server:type=ReplicaManager,name=OfflineReplicaCount",
+    "Description": "0"
+  },
+  {
+    "Metric": "Leader replica counts",
+    "MBean": "kafka.server:type=ReplicaManager,name=LeaderCount",
+    "Description": "mostly even across brokers"
+  },
+  {
+    "Metric": "ISR shrink rate",
+    "MBean": "kafka.server:type=ReplicaManager,name=IsrShrinksPerSec",
+    "Description": "If a broker goes down, ISR for some of the partitions will     shrink. When that broker is up again, ISR will be expanded     once the replicas are fully caught up. Other than that, the     expected value for both ISR shrink rate and expansion rate is 0."
+  },
+  {
+    "Metric": "ISR expansion rate",
+    "MBean": "kafka.server:type=ReplicaManager,name=IsrExpandsPerSec",
+    "Description": "See above"
+  },
+  {
+    "Metric": "Failed ISR update rate",
+    "MBean": "kafka.server:type=ReplicaManager,name=FailedIsrUpdatesPerSec",
+    "Description": "0"
+  },
+  {
+    "Metric": "Producer Id counts",
+    "MBean": "kafka.server:type=ReplicaManager,name=ProducerIdCount",
+    "Description": "Count of all producer ids created by transactional and idempotent producers in each replica on the broker"
+  },
+  {
+    "Metric": "Max lag in messages btw follower and leader replicas",
+    "MBean": "kafka.server:type=ReplicaFetcherManager,name=MaxLag,clientId=Replica",
+    "Description": "lag should be proportional to the maximum batch size of a produce request."
+  },
+  {
+    "Metric": "Lag in messages per follower replica",
+    "MBean": "kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\\w]+),topic=([-.\\w]+),partition=([0-9]+)",
+    "Description": "lag should be proportional to the maximum batch size of a produce request."
+  },
+  {
+    "Metric": "Requests waiting in the producer purgatory",
+    "MBean": "kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=Produce",
+    "Description": "non-zero if ack=-1 is used"
+  },
+  {
+    "Metric": "Requests waiting in the fetch purgatory",
+    "MBean": "kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=Fetch",
+    "Description": "size depends on fetch.wait.max.ms in the consumer"
+  },
+  {
+    "Metric": "Request total time",
+    "MBean": "kafka.network:type=RequestMetrics,name=TotalTimeMs,request={Produce|FetchConsumer|FetchFollower}",
+    "Description": "broken into queue, local, remote and response send time"
+  },
+  {
+    "Metric": "Time the request waits in the request queue",
+    "MBean": "kafka.network:type=RequestMetrics,name=RequestQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}",
+    "Description": ""
+  },
+  {
+    "Metric": "Time the request is processed at the leader",
+    "MBean": "kafka.network:type=RequestMetrics,name=LocalTimeMs,request={Produce|FetchConsumer|FetchFollower}",
+    "Description": ""
+  },
+  {
+    "Metric": "Time the request waits for the follower",
+    "MBean": "kafka.network:type=RequestMetrics,name=RemoteTimeMs,request={Produce|FetchConsumer|FetchFollower}",
+    "Description": "non-zero for produce requests when ack=-1"
+  },
+  {
+    "Metric": "Time the request waits in the response queue",
+    "MBean": "kafka.network:type=RequestMetrics,name=ResponseQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}",
+    "Description": ""
+  },
+  {
+    "Metric": "Time to send the response",
+    "MBean": "kafka.network:type=RequestMetrics,name=ResponseSendTimeMs,request={Produce|FetchConsumer|FetchFollower}",
+    "Description": ""
+  },
+  {
+    "Metric": "Number of messages the consumer lags behind the producer by. Published by the consumer, not broker.",
+    "MBean": "kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id} Attribute: records-lag-max",
+    "Description": ""
+  },
+  {
+    "Metric": "The average fraction of time the network processors are idle",
+    "MBean": "kafka.network:type=SocketServer,name=NetworkProcessorAvgIdlePercent",
+    "Description": "between 0 and 1, ideally > 0.3"
+  },
+  {
+    "Metric": "The number of connections disconnected on a processor due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication",
+    "MBean": "kafka.server:type=socket-server-metrics,listener=[SASL_PLAINTEXT|SASL_SSL],networkProcessor=<#>,name=expired-connections-killed-count",
+    "Description": "ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this (listener, processor) combination"
+  },
+  {
+    "Metric": "The total number of connections disconnected, across all processors, due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication",
+    "MBean": "kafka.network:type=SocketServer,name=ExpiredConnectionsKilledCount",
+    "Description": "ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this broker"
+  },
+  {
+    "Metric": "The average fraction of time the request handler threads are idle",
+    "MBean": "kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent",
+    "Description": "between 0 and 1, ideally > 0.3"
+  },
+  {
+    "Metric": "Bandwidth quota metrics per (user, client-id), user or client-id",
+    "MBean": "kafka.server:type={Produce|Fetch},user=([-.\\w]+),client-id=([-.\\w]+)",
+    "Description": "Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0.             byte-rate indicates the data produce/consume rate of the client in bytes/sec.             For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified."
+  },
+  {
+    "Metric": "Request quota metrics per (user, client-id), user or client-id",
+    "MBean": "kafka.server:type=Request,user=([-.\\w]+),client-id=([-.\\w]+)",
+    "Description": "Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0.             request-time indicates the percentage of time spent in broker network and I/O threads to process requests from client group.             For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified."
+  },
+  {
+    "Metric": "Requests exempt from throttling",
+    "MBean": "kafka.server:type=Request",
+    "Description": "exempt-throttle-time indicates the percentage of time spent in broker network and I/O threads to process requests             that are exempt from throttling."
+  },
+  {
+    "Metric": "ZooKeeper client request latency",
+    "MBean": "kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs",
+    "Description": "Latency in millseconds for ZooKeeper requests from broker."
+  },
+  {
+    "Metric": "ZooKeeper connection status",
+    "MBean": "kafka.server:type=SessionExpireListener,name=SessionState",
+    "Description": "Connection status of broker's ZooKeeper session which may be one of             Disconnected|SyncConnected|AuthFailed|ConnectedReadOnly|SaslAuthenticated|Expired."
+  },
+  {
+    "Metric": "Max time to load group metadata",
+    "MBean": "kafka.server:type=group-coordinator-metrics,name=partition-load-time-max",
+    "Description": "maximum time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)"
+  },
+  {
+    "Metric": "Avg time to load group metadata",
+    "MBean": "kafka.server:type=group-coordinator-metrics,name=partition-load-time-avg",
+    "Description": "average time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)"
+  },
+  {
+    "Metric": "Max time to load transaction metadata",
+    "MBean": "kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-max",
+    "Description": "maximum time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)"
+  },
+  {
+    "Metric": "Avg time to load transaction metadata",
+    "MBean": "kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-avg",
+    "Description": "average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)"
+  },
+  {
+    "Metric": "Consumer Group Offset Count",
+    "MBean": "kafka.server:type=GroupMetadataManager,name=NumOffsets",
+    "Description": "Total number of committed offsets for Consumer Groups"
+  },
+  {
+    "Metric": "Consumer Group Count",
+    "MBean": "kafka.server:type=GroupMetadataManager,name=NumGroups",
+    "Description": "Total number of Consumer Groups"
+  },
+  {
+    "Metric": "Consumer Group Count, per State",
+    "MBean": "kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]",
+    "Description": "The number of Consumer Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead"
+  },
+  {
+    "Metric": "Number of reassigning partitions",
+    "MBean": "kafka.server:type=ReplicaManager,name=ReassigningPartitions",
+    "Description": "The number of reassigning leader partitions on a broker."
+  },
+  {
+    "Metric": "Outgoing byte rate of reassignment traffic",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec",
+    "Description": "0; non-zero when a partition reassignment is in progress."
+  },
+  {
+    "Metric": "Incoming byte rate of reassignment traffic",
+    "MBean": "kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec",
+    "Description": "0; non-zero when a partition reassignment is in progress."
+  },
+  {
+    "Metric": "Size of a partition on disk (in bytes)",
+    "MBean": "kafka.log:type=Log,name=Size,topic=([-.\\w]+),partition=([0-9]+)",
+    "Description": "The size of a partition on disk, measured in bytes."
+  },
+  {
+    "Metric": "Number of log segments in a partition",
+    "MBean": "kafka.log:type=Log,name=NumLogSegments,topic=([-.\\w]+),partition=([0-9]+)",
+    "Description": "The number of log segments in a partition."
+  },
+  {
+    "Metric": "First offset in a partition",
+    "MBean": "kafka.log:type=Log,name=LogStartOffset,topic=([-.\\w]+),partition=([0-9]+)",
+    "Description": "The first offset in a partition."
+  },
+  {
+    "Metric": "Last offset in a partition",
+    "MBean": "kafka.log:type=Log,name=LogEndOffset,topic=([-.\\w]+),partition=([0-9]+)",
+    "Description": "The last offset in a partition."
+  }
+]

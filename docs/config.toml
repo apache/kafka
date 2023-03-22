@@ -1,0 +1,20 @@
+baseURL = 'http://kafka.apache.org/35/documentation'
+languageCode = 'en-us'
+title = 'Apache Kafka'
+theme = 'ak-docs-v1'
+
+[params]
+BookLogo = 'images/kafka_logo--simple.png'
+akVersion = '35'
+akDotVersion = '3.5'
+akFullDotVersion = '3.5.0'
+scalaVersion = '2.13'
+
+[markup]
+[markup.highlight]
+style = 'github'
+linenos = true
+
+[markup.goldmark]
+[markup.goldmark.renderer]
+unsafe = true

@@ -1,0 +1,15 @@
+{{ $source := index .Site.Data.operations (.Get 0) }}
+<table>
+    <tr>
+        <th>Metric</th>
+        <th>MBean Name</th>
+        <th>Description</th>
+    </tr>
+    {{ range $source }}
+    <tr>
+        <td>{{index . "Metric" }}</td>
+        <td><code>{{index . "MBean" | markdownify }}</code></td>
+        <td>{{index . "Description" | markdownify }}</td>
+    </tr>
+    {{ end }}
+</table>

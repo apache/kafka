@@ -1,0 +1,422 @@
+[
+  {
+    "Protocol": "PRODUCE (0)",
+    "Operation": "Write",
+    "Resource": "TransactionalId",
+    "Note": "An transactional producer which has its transactional.id set requires this privilege."
+  },
+  {
+    "Protocol": "PRODUCE (0)",
+    "Operation": "IdempotentWrite",
+    "Resource": "Cluster",
+    "Note": "An idempotent produce action requires this privilege."
+  },
+  {
+    "Protocol": "PRODUCE (0)",
+    "Operation": "Write",
+    "Resource": "Topic",
+    "Note": "This applies to a normal produce action."
+  },
+  {
+    "Protocol": "FETCH (1)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": "A follower must have ClusterAction on the Cluster resource in order to fetch partition data."
+  },
+  {
+    "Protocol": "FETCH (1)",
+    "Operation": "Read",
+    "Resource": "Topic",
+    "Note": "Regular Kafka consumers need READ permission on each partition they are fetching."
+  },
+  {
+    "Protocol": "LIST_OFFSETS (2)",
+    "Operation": "Describe",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "METADATA (3)",
+    "Operation": "Describe",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "METADATA (3)",
+    "Operation": "Create",
+    "Resource": "Cluster",
+    "Note": "If topic auto-creation is enabled, then the broker-side API will check for the existence of a Cluster level privilege. If it's found then it'll allow creating the topic, otherwise it'll iterate through the Topic level privileges (see the next one)."
+  },
+  {
+    "Protocol": "METADATA (3)",
+    "Operation": "Create",
+    "Resource": "Topic",
+    "Note": "This authorizes auto topic creation if enabled but the given user doesn't have a cluster level permission (above)."
+  },
+  {
+    "Protocol": "LEADER_AND_ISR (4)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "STOP_REPLICA (5)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "UPDATE_METADATA (6)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "CONTROLLED_SHUTDOWN (7)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "OFFSET_COMMIT (8)",
+    "Operation": "Read",
+    "Resource": "Group",
+    "Note": "An offset can only be committed if it's authorized to the given group and the topic too (see below). Group access is checked first, then Topic access."
+  },
+  {
+    "Protocol": "OFFSET_COMMIT (8)",
+    "Operation": "Read",
+    "Resource": "Topic",
+    "Note": "Since offset commit is part of the consuming process, it needs privileges for the read action."
+  },
+  {
+    "Protocol": "OFFSET_FETCH (9)",
+    "Operation": "Describe",
+    "Resource": "Group",
+    "Note": "Similarly to OFFSET_COMMIT, the application must have privileges on group and topic level too to be able to fetch. However in this case it requires describe access instead of read. Group access is checked first, then Topic access."
+  },
+  {
+    "Protocol": "OFFSET_FETCH (9)",
+    "Operation": "Describe",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "FIND_COORDINATOR (10)",
+    "Operation": "Describe",
+    "Resource": "Group",
+    "Note": "The FIND_COORDINATOR request can be of \"Group\" type in which case it is looking for consumergroup coordinators. This privilege would represent the Group mode."
+  },
+  {
+    "Protocol": "FIND_COORDINATOR (10)",
+    "Operation": "Describe",
+    "Resource": "TransactionalId",
+    "Note": "This applies only on transactional producers and checked when a producer tries to find the transaction coordinator."
+  },
+  {
+    "Protocol": "JOIN_GROUP (11)",
+    "Operation": "Read",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "HEARTBEAT (12)",
+    "Operation": "Read",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "LEAVE_GROUP (13)",
+    "Operation": "Read",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "SYNC_GROUP (14)",
+    "Operation": "Read",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "DESCRIBE_GROUPS (15)",
+    "Operation": "Describe",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "LIST_GROUPS (16)",
+    "Operation": "Describe",
+    "Resource": "Cluster",
+    "Note": "When the broker checks to authorize a list_groups request it first checks for this cluster level authorization. If none found then it proceeds to check the groups individually. This operation doesn't return CLUSTER_AUTHORIZATION_FAILED."
+  },
+  {
+    "Protocol": "LIST_GROUPS (16)",
+    "Operation": "Describe",
+    "Resource": "Group",
+    "Note": "If none of the groups are authorized, then just an empty response will be sent back instead of an error. This operation doesn't return CLUSTER_AUTHORIZATION_FAILED. This is applicable from the 2.1 release."
+  },
+  {
+    "Protocol": "SASL_HANDSHAKE (17)",
+    "Operation": "",
+    "Resource": "",
+    "Note": "The SASL handshake is part of the authentication process and therefore it's not possible to apply any kind of authorization here."
+  },
+  {
+    "Protocol": "API_VERSIONS (18)",
+    "Operation": "",
+    "Resource": "",
+    "Note": "The API_VERSIONS request is part of the Kafka protocol handshake and happens on connection and before any authentication. Therefore it's not possible to control this with authorization."
+  },
+  {
+    "Protocol": "CREATE_TOPICS (19)",
+    "Operation": "Create",
+    "Resource": "Cluster",
+    "Note": "If there is no cluster level authorization then it won't return CLUSTER_AUTHORIZATION_FAILED but fall back to use topic level, which is just below. That'll throw error if there is a problem."
+  },
+  {
+    "Protocol": "CREATE_TOPICS (19)",
+    "Operation": "Create",
+    "Resource": "Topic",
+    "Note": "This is applicable from the 2.0 release."
+  },
+  {
+    "Protocol": "DELETE_TOPICS (20)",
+    "Operation": "Delete",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "DELETE_RECORDS (21)",
+    "Operation": "Delete",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "INIT_PRODUCER_ID (22)",
+    "Operation": "Write",
+    "Resource": "TransactionalId",
+    "Note": ""
+  },
+  {
+    "Protocol": "INIT_PRODUCER_ID (22)",
+    "Operation": "IdempotentWrite",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "OFFSET_FOR_LEADER_EPOCH (23)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": "If there is no cluster level privilege for this operation, then it'll check for topic level one."
+  },
+  {
+    "Protocol": "OFFSET_FOR_LEADER_EPOCH (23)",
+    "Operation": "Describe",
+    "Resource": "Topic",
+    "Note": "This is applicable from the 2.1 release."
+  },
+  {
+    "Protocol": "ADD_PARTITIONS_TO_TXN (24)",
+    "Operation": "Write",
+    "Resource": "TransactionalId",
+    "Note": "This API is only applicable to transactional requests. It first checks for the Write action on the TransactionalId resource, then it checks the Topic in subject (below)."
+  },
+  {
+    "Protocol": "ADD_PARTITIONS_TO_TXN (24)",
+    "Operation": "Write",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "ADD_OFFSETS_TO_TXN (25)",
+    "Operation": "Write",
+    "Resource": "TransactionalId",
+    "Note": "Similarly to ADD_PARTITIONS_TO_TXN this is only applicable to transactional request. It first checks for Write action on the TransactionalId resource, then it checks whether it can Read on the given group (below)."
+  },
+  {
+    "Protocol": "ADD_OFFSETS_TO_TXN (25)",
+    "Operation": "Read",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "END_TXN (26)",
+    "Operation": "Write",
+    "Resource": "TransactionalId",
+    "Note": ""
+  },
+  {
+    "Protocol": "WRITE_TXN_MARKERS (27)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "TXN_OFFSET_COMMIT (28)",
+    "Operation": "Write",
+    "Resource": "TransactionalId",
+    "Note": ""
+  },
+  {
+    "Protocol": "TXN_OFFSET_COMMIT (28)",
+    "Operation": "Read",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "TXN_OFFSET_COMMIT (28)",
+    "Operation": "Read",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "DESCRIBE_ACLS (29)",
+    "Operation": "Describe",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "CREATE_ACLS (30)",
+    "Operation": "Alter",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "DELETE_ACLS (31)",
+    "Operation": "Alter",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "DESCRIBE_CONFIGS (32)",
+    "Operation": "DescribeConfigs",
+    "Resource": "Cluster",
+    "Note": "If broker configs are requested, then the broker will check cluster level privileges."
+  },
+  {
+    "Protocol": "DESCRIBE_CONFIGS (32)",
+    "Operation": "DescribeConfigs",
+    "Resource": "Topic",
+    "Note": "If topic configs are requested, then the broker will check topic level privileges."
+  },
+  {
+    "Protocol": "ALTER_CONFIGS (33)",
+    "Operation": "AlterConfigs",
+    "Resource": "Cluster",
+    "Note": "If broker configs are altered, then the broker will check cluster level privileges."
+  },
+  {
+    "Protocol": "ALTER_CONFIGS (33)",
+    "Operation": "AlterConfigs",
+    "Resource": "Topic",
+    "Note": "If topic configs are altered, then the broker will check topic level privileges."
+  },
+  {
+    "Protocol": "ALTER_REPLICA_LOG_DIRS (34)",
+    "Operation": "Alter",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "DESCRIBE_LOG_DIRS (35)",
+    "Operation": "Describe",
+    "Resource": "Cluster",
+    "Note": "An empty response will be returned on authorization failure."
+  },
+  {
+    "Protocol": "SASL_AUTHENTICATE (36)",
+    "Operation": "",
+    "Resource": "",
+    "Note": "SASL_AUTHENTICATE is part of the authentication process and therefore it's not possible to apply any kind of authorization here."
+  },
+  {
+    "Protocol": "CREATE_PARTITIONS (37)",
+    "Operation": "Alter",
+    "Resource": "Topic",
+    "Note": ""
+  },
+  {
+    "Protocol": "CREATE_DELEGATION_TOKEN (38)",
+    "Operation": "",
+    "Resource": "",
+    "Note": "Creating delegation tokens has special rules, for this please see the <a href=\"#security_delegation_token\">Authentication using Delegation Tokens</a> section."
+  },
+  {
+    "Protocol": "CREATE_DELEGATION_TOKEN (38)",
+    "Operation": "CreateTokens",
+    "Resource": "User",
+    "Note": "Allows creating delegation tokens for the User resource."
+  },
+  {
+    "Protocol": "RENEW_DELEGATION_TOKEN (39)",
+    "Operation": "",
+    "Resource": "",
+    "Note": "Renewing delegation tokens has special rules, for this please see the <a href=\"#security_delegation_token\">Authentication using Delegation Tokens</a> section."
+  },
+  {
+    "Protocol": "EXPIRE_DELEGATION_TOKEN (40)",
+    "Operation": "",
+    "Resource": "",
+    "Note": "Expiring delegation tokens has special rules, for this please see the <a href=\"#security_delegation_token\">Authentication using Delegation Tokens</a> section."
+  },
+  {
+    "Protocol": "DESCRIBE_DELEGATION_TOKEN (41)",
+    "Operation": "Describe",
+    "Resource": "DelegationToken",
+    "Note": "Describing delegation tokens has special rules, for this please see the <a href=\"#security_delegation_token\">Authentication using Delegation Tokens</a> section."
+  },
+  {
+    "Protocol": "DESCRIBE_DELEGATION_TOKEN (41)",
+    "Operation": "DescribeTokens",
+    "Resource": "User",
+    "Note": "Allows describing delegation tokens of the User resource."
+  },
+  {
+    "Protocol": "DELETE_GROUPS (42)",
+    "Operation": "Delete",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "ELECT_PREFERRED_LEADERS (43)",
+    "Operation": "ClusterAction",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "INCREMENTAL_ALTER_CONFIGS (44)",
+    "Operation": "AlterConfigs",
+    "Resource": "Cluster",
+    "Note": "If broker configs are altered, then the broker will check cluster level privileges."
+  },
+  {
+    "Protocol": "INCREMENTAL_ALTER_CONFIGS (44)",
+    "Operation": "AlterConfigs",
+    "Resource": "Topic",
+    "Note": "If topic configs are altered, then the broker will check topic level privileges."
+  },
+  {
+    "Protocol": "ALTER_PARTITION_REASSIGNMENTS (45)",
+    "Operation": "Alter",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "LIST_PARTITION_REASSIGNMENTS (46)",
+    "Operation": "Describe",
+    "Resource": "Cluster",
+    "Note": ""
+  },
+  {
+    "Protocol": "OFFSET_DELETE (47)",
+    "Operation": "Delete",
+    "Resource": "Group",
+    "Note": ""
+  },
+  {
+    "Protocol": "OFFSET_DELETE (47)",
+    "Operation": "Read",
+    "Resource": "Topic",
+    "Note": ""
+  }
+]

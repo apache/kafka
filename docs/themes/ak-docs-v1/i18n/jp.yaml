@@ -1,0 +1,21 @@
+# This should be removed in future, 'jp' is moved to `ja'
+- id: Search
+  translation: 検索
+
+- id: Edit this page
+  translation: このページを編集する
+
+- id: Last modified by
+  translation: 最終更新者
+
+- id: Expand
+  translation: 展開
+
+- id: bookSearchConfig
+  translation: |
+    {
+      encode: false,
+      tokenize: function(str) {
+        return str.replace(/[\x00-\x7F]/g, '').split('');
+      }
+    }

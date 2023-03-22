@@ -1,0 +1,32 @@
+[
+  {
+    "Metric": "time-between-poll-avg",
+    "Description": "The average delay between invocations of poll().",
+    "MBean": "kafka.consumer:type=consumer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "time-between-poll-max",
+    "Description": "The max delay between invocations of poll().",
+    "MBean": "kafka.consumer:type=consumer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "last-poll-seconds-ago",
+    "Description": "The number of seconds since the last poll() invocation.",
+    "MBean": "kafka.consumer:type=consumer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "poll-idle-ratio-avg",
+    "Description": "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records.",
+    "MBean": "kafka.consumer:type=consumer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commited-time-ns-total",
+    "Description": "The total time the Consumer spent in committed in nanoseconds.",
+    "MBean": "kafka.consumer:type=consumer-metrics,client-id=([-.\\w]+)"
+  },
+  {
+    "Metric": "commit-sync-time-ns-total",
+    "Description": "The total time the Consumer spent committing offsets in nanoseconds (for AOS).",
+    "MBean": "kafka.consumer:type=consumer-metrics,client-id=([-.\\w]+)"
+  }
+]

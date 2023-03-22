@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.connect.tools;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
@@ -37,6 +41,15 @@ public class PredicateDoc {
             this.predicateName = predicateClass.getName();
             this.overview = overview;
             this.configDef = configDef;
+        }
+
+        ObjectNode toJson() {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode json = mapper.createObjectNode();
+            json.put("name", predicateName);
+            json.put("overview", overview);
+            json.set("config", configDef.toJson());
+            return json;
         }
     }
 
@@ -79,7 +92,20 @@ public class PredicateDoc {
         }
     }
 
+    static String printJson() {
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode array = mapper.createArrayNode();
+        for (DocInfo docInfo : PREDICATES) {
+            array.add(docInfo.toJson());
+        }
+        try {
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(array);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void main(String... args) {
-        printHtml(System.out);
+        System.out.println(printJson());
     }
 }

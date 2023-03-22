@@ -1,0 +1,62 @@
+[
+  {
+    "Metric": "outgoing-byte-rate",
+    "Description": "The average number of outgoing bytes sent per second for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "outgoing-byte-total",
+    "Description": "The total number of outgoing bytes sent for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "request-rate",
+    "Description": "The average number of requests sent per second for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "request-total",
+    "Description": "The total number of requests sent for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "request-size-avg",
+    "Description": "The average size of all requests in the window for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "request-size-max",
+    "Description": "The maximum size of any request sent in the window for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "incoming-byte-rate",
+    "Description": "The average number of bytes received per second for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "incoming-byte-total",
+    "Description": "The total number of bytes received for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "request-latency-avg",
+    "Description": "The average request latency in ms for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "request-latency-max",
+    "Description": "The maximum request latency in ms for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "response-rate",
+    "Description": "Responses received per second for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  },
+  {
+    "Metric": "response-total",
+    "Description": "Total responses received for a node.",
+    "MBean": "kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\\w]+),node-id=([0-9]+)"
+  }
+]
