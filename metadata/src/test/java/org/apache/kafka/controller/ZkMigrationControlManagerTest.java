@@ -30,7 +30,9 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class ZkMigrationControlManagerTest {
@@ -68,7 +70,7 @@ public class ZkMigrationControlManagerTest {
             migrationControl.bootstrapInitialMigrationState(metadataVersion, false,
                 record -> fail("Did not expect to get another record here, but got " + record + ". State was " + migrationControl.zkMigrationState()));
         } catch (IllegalStateException e) {
-            assertEquals(e.getMessage(), "Detected an in-progress migration during startup, cannot continue.");
+            assertEquals(e.getMessage(), "Detected an invalid migration state during startup, cannot continue.");
         }
     }
 
@@ -158,10 +160,73 @@ public class ZkMigrationControlManagerTest {
         migrationControl = setupAndBootstrap(MetadataVersion.IBP_3_4_IV0, false, true);
         assertEquals(ZkMigrationState.NONE, migrationControl.zkMigrationState());
         verifyNoStateTransitionAllowed(migrationControl);
+        verifyCannotBootstrapAgain(MetadataVersion.IBP_3_4_IV0, migrationControl);
 
         migrationControl = setupAndBootstrap(MetadataVersion.IBP_3_4_IV0, true, false);
         assertEquals(ZkMigrationState.NONE, migrationControl.zkMigrationState());
         verifyNoStateTransitionAllowed(migrationControl);
+        verifyCannotBootstrapAgain(MetadataVersion.IBP_3_4_IV0, migrationControl);
+    }
+
+    @Test
+    public void testFailoverToNonMigrationControllerDuringMigration() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ZkMigrationControlManager migrationControl = new ZkMigrationControlManager(
+            snapshotRegistry, new LogContext(), true
+        );
+
+        // Controller has completed migration
+        migrationControl.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value())
+                .setPreMigrationSupported(true));
+        migrationControl.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.MIGRATION.value())
+                .setPreMigrationSupported(true));
+        assertEquals(ZkMigrationState.MIGRATION, migrationControl.zkMigrationState());
+
+        // Failover to controller that does not have migrations
+        ZkMigrationControlManager migrationControl2 = new ZkMigrationControlManager(
+            snapshotRegistry, new LogContext(), false
+        );
+        migrationControl2.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.MIGRATION.value())
+                .setPreMigrationSupported(true));
+        assertThrows(IllegalStateException.class, () -> migrationControl2.bootstrapInitialMigrationState(
+            MetadataVersion.IBP_3_4_IV0, false, __ -> { }));
+    }
+
+    @Test
+    public void testFailoverToNonMigrationControllerAfterMigration() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ZkMigrationControlManager migrationControl = new ZkMigrationControlManager(
+            snapshotRegistry, new LogContext(), true
+        );
+
+        // Controller has completed migration
+        migrationControl.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value())
+                .setPreMigrationSupported(true));
+        migrationControl.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.MIGRATION.value())
+                .setPreMigrationSupported(true));
+        migrationControl.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.POST_MIGRATION.value())
+                .setPreMigrationSupported(true));
+        assertEquals(ZkMigrationState.POST_MIGRATION, migrationControl.zkMigrationState());
+
+        // Failover to controller that does not have migrations
+        ZkMigrationControlManager migrationControl2 = new ZkMigrationControlManager(
+            snapshotRegistry, new LogContext(), false
+        );
+        migrationControl2.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.POST_MIGRATION.value())
+                .setPreMigrationSupported(true));
+
+        // Bootstrap shouldn't do anything
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        migrationControl2.bootstrapInitialMigrationState(MetadataVersion.IBP_3_4_IV0, false, records::add);
+        assertTrue(records.isEmpty());
+        assertEquals(ZkMigrationState.POST_MIGRATION, migrationControl2.zkMigrationState());
     }
 
     @Test
@@ -175,5 +240,41 @@ public class ZkMigrationControlManagerTest {
         migrationControl = setupAndBootstrap(MetadataVersion.IBP_3_4_IV0, false, false);
         assertEquals(ZkMigrationState.NONE, migrationControl.zkMigrationState());
         verifyNoStateTransitionAllowed(migrationControl);
+    }
+
+    private ZkMigrationControlManager verifyUpgradeFrom34(boolean migrationEnabled) {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ZkMigrationControlManager migrationControl = new ZkMigrationControlManager(
+            snapshotRegistry, new LogContext(), migrationEnabled
+        );
+
+        // In 3.4, we only ever wrote PRE_MIGRATION and PreMigrationSupported tagged field wasn't present
+        migrationControl.replay(
+            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value()));
+
+        assertEquals(migrationControl.zkMigrationState(), ZkMigrationState.PRE_MIGRATION);
+        assertFalse(migrationControl.inPreMigrationMode(MetadataVersion.IBP_3_4_IV0));
+
+        // Now bootstrap as if we're starting up in 3.5
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        migrationControl.bootstrapInitialMigrationState(MetadataVersion.IBP_3_4_IV0, false, records::add);
+        records.forEach(record -> {
+            migrationControl.replay((ZkMigrationStateRecord) record.message());
+        });
+        return migrationControl;
+    }
+
+    @Test
+    public void testUpgradeFrom34MigrationEnabled() {
+        ZkMigrationControlManager migrationControl = verifyUpgradeFrom34(true);
+        assertEquals(migrationControl.zkMigrationState(), ZkMigrationState.MIGRATION);
+        assertFalse(migrationControl.inPreMigrationMode(MetadataVersion.IBP_3_4_IV0));
+    }
+
+    @Test
+    public void testUpgradeFrom34MigrationDisabled() {
+        ZkMigrationControlManager migrationControl = verifyUpgradeFrom34(false);
+        assertEquals(migrationControl.zkMigrationState(), ZkMigrationState.POST_MIGRATION);
+        assertFalse(migrationControl.inPreMigrationMode(MetadataVersion.IBP_3_4_IV0));
     }
 }

@@ -157,8 +157,20 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             return false;
         }
 
-        // First check the brokers registered in ZK
+        if (image.cluster().isEmpty()) {
+            // This primarily happens in system tests when we are starting a new ZK cluster and KRaft quorum
+            // around the same time.
+            log.info("No brokers are known to KRaft, waiting for brokers to register.");
+            return false;
+        }
+
         Set<Integer> zkBrokerRegistrations = zkMigrationClient.readBrokerIds();
+        if (zkBrokerRegistrations.isEmpty()) {
+            // Similar to the above empty check
+            log.info("No brokers are registered in ZK, waiting for brokers to register.");
+            return false;
+        }
+
         if (imageDoesNotContainAllBrokers(image, zkBrokerRegistrations)) {
             log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokerRegistrations);
             return false;

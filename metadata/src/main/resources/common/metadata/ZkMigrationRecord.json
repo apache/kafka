@@ -18,11 +18,15 @@
   "type": "metadata",
   "name": "ZkMigrationStateRecord",
   // Version 0 adds ZkMigrationState which is used by the KRaft controller to mark the beginning and end
-  // of the ZK to KRaft migration. Possible values are 1 (PreMigration), 2 (Migration), 3 (PostMigration).
+  // of the ZK to KRaft migration. Possible values are 0 (None), 1 (PreMigration), 2 (Migration), 3 (PostMigration).
+  //
+  // Version 0 (3.5) adds PreMigrationSupported tagged field to distinguish between a 3.4 migration and a 3.5+ migration
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ZkMigrationState", "type": "int8", "versions": "0+",
-      "about": "One of the possible migration states." }
+      "about": "One of the possible migration states." },
+    { "name": "PreMigrationSupported", "type": "bool", "versions": "0+", "taggedVersions": "0+", "tag": 0,
+      "about": "True if the cluster supports pre-migration mode" }
   ]
 }

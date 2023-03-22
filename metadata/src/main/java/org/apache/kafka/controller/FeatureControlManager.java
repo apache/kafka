@@ -100,7 +100,7 @@ public class FeatureControlManager {
                 snapshotRegistry,
                 metadataVersion,
                 minimumBootstrapVersion,
-                    zkMigrationBootstrap
+                zkMigrationBootstrap
             );
         }
     }
@@ -240,7 +240,7 @@ public class FeatureControlManager {
     }
 
     /**
-     * Perform some additional validation for "metadata.version" updates.
+     * Perform some additional validation for metadata.version updates.
      */
     private ApiError updateMetadataVersion(
         short newVersionLevel,
@@ -283,6 +283,7 @@ public class FeatureControlManager {
                 .setName(MetadataVersion.FEATURE_NAME)
                 .setFeatureLevel(newVersionLevel), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
 
+        // If we are moving to a version that supports migrations, we need to write the correct state into the log
         if (newVersion.isMigrationSupported()) {
             zkMigrationBootstrap.bootstrapInitialMigrationState(newVersion, false, recordConsumer);
         }

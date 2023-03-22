@@ -131,7 +131,7 @@ class TestMigration(ProduceConsumeValidateTest):
         This test ensures that even if we enable migrations after the upgrade to 3.5, that no migration
         is able to take place.
         """
-        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=V_3_4_0)
         self.zk.start()
 
         self.kafka = KafkaService(self.test_context,
@@ -187,3 +187,76 @@ class TestMigration(ProduceConsumeValidateTest):
                     continue
 
         assert saw_expected_error, "Did not see expected ERROR log for ZkMigrationState = NONE in the controller logs"
+
+    def test_upgrade_after_3_4_migration(self):
+        """
+        Perform a migration on version 3.4.0. Then do a rolling upgrade to 3.5+ and ensure we see
+        the correct migration state in the log.
+        """
+        zk_quorum = partial(ServiceQuorumInfo, zk)
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=V_3_4_0)
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=3,
+                                  zk=self.zk,
+                                  version=V_3_4_0,
+                                  quorum_info_provider=zk_quorum,
+                                  allow_zk_with_kraft=True,
+                                  server_prop_overrides=[["zookeeper.metadata.migration.enable", "true"]])
+
+        remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
+        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=V_3_4_0,
+                                  allow_zk_with_kraft=True,
+                                  isolated_kafka=self.kafka,
+                                  server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
+                                                         ["zookeeper.metadata.migration.enable", "true"]],
+                                  quorum_info_provider=remote_quorum)
+
+        self.kafka.security_protocol = "PLAINTEXT"
+        self.kafka.interbroker_security_protocol = "PLAINTEXT"
+        self.zk.start()
+
+        controller.start()
+
+        self.logger.info("Pre-generating clusterId for ZK.")
+        cluster_id_json = """{"version": "1", "id": "%s"}""" % CLUSTER_ID
+        self.zk.create(path="/cluster")
+        self.zk.create(path="/cluster/id", value=cluster_id_json)
+        self.kafka.reconfigure_zk_for_migration(controller)
+        self.kafka.start()
+
+        topic_cfg = {
+            "topic": self.topic,
+            "partitions": self.partitions,
+            "replication-factor": self.replication_factor,
+            "configs": {"min.insync.replicas": 2}
+        }
+        self.kafka.create_topic(topic_cfg)
+
+        # Now we're in dual-write mode. Upgrade the controller to 3.5+
+        for node in controller.nodes:
+            self.logger.info("Stopping controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.stop_node(node)
+            node.version = DEV_BRANCH
+            self.logger.info("Restarting controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
+
+        # Check the controller's logs for the error message about the migration state
+        saw_expected_error = False
+        for node in self.kafka.controller_quorum.nodes:
+            with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+                monitor.offset = 0
+                try:
+                    # Shouldn't have to wait too long to see this log message after startup
+                    monitor.wait_until(
+                        "read a ZkMigrationState of PRE_MIGRATION from a ZK migration on Apache Kafka 3.4.",
+                        timeout_sec=10.0, backoff_sec=.25,
+                        err_msg=""
+                    )
+                    saw_expected_error = True
+                    break
+                except TimeoutError:
+                    continue
+
+        assert saw_expected_error, "Did not see expected INFO log for detecting upgrade after 3.4 migration"
