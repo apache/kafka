@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.common.TopicPartition;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorCheckpointTaskTest {
@@ -205,19 +207,40 @@ public class MirrorCheckpointTaskTest {
         TopicPartition tp = new TopicPartition("topic1", 0);
         TopicPartition targetTP = new TopicPartition("source1.topic1", 0);
 
-        // emit an offset sync normally
-        offsetSyncStore.sync(tp, 10L, 3L);
-        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets = Collections.singletonMap(tp, new OffsetAndMetadata(20));
-        Map<TopicPartition, Checkpoint> checkpoints = mirrorCheckpointTask.checkpointsForGroup(consumerGroupOffsets, "g1");
-        assertTrue(checkpoints.containsKey(targetTP), "should emit offset sync");
+        long upstream = 11L;
+        long downstream = 4L;
+        // Emit syncs 0 and 1, and use the sync 1 to translate offsets and commit checkpoints
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        long consumerGroupOffset = upstream;
+        long expectedDownstreamOffset = downstream;
+        assertEquals(OptionalLong.of(expectedDownstreamOffset), offsetSyncStore.translateDownstream("g1", tp, consumerGroupOffset));
+        Map<TopicPartition, Checkpoint> checkpoints = assertCheckpointForTopic(mirrorCheckpointTask, tp, targetTP, consumerGroupOffset, true);
 
         // the task normally does this, but simulate it here
         checkpointsPerConsumerGroup.put("g1", checkpoints);
 
-        // rewind the upstream offset, as if the mirror source task re-read the sync
-        offsetSyncStore.sync(tp, 1L, 13L);
-        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsetsAfter = Collections.singletonMap(tp, new OffsetAndMetadata(20));
-        Map<TopicPartition, Checkpoint> checkpointsAfter = mirrorCheckpointTask.checkpointsForGroup(consumerGroupOffsetsAfter, "g1");
-        assertFalse(checkpointsAfter.containsKey(targetTP), "should not emit offset sync earlier than previous");
+        // Emit syncs 2-5 which will the store to drop syncs 1 and 2, forcing translation to fall back to 0.
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream++, downstream++);
+        // The OffsetSyncStore will change its translation of the same offset
+        assertNotEquals(OptionalLong.of(expectedDownstreamOffset), offsetSyncStore.translateDownstream("g1", tp, consumerGroupOffset));
+        // But the task will filter this out and not emit a checkpoint
+        assertCheckpointForTopic(mirrorCheckpointTask, tp, targetTP, consumerGroupOffset, false);
+
+        // If then the upstream offset rewinds in the topic and is still translatable, a checkpoint will be emitted
+        // also rewinding the downstream offsets to match. This will not affect auto-synced groups, only checkpoints.
+        assertCheckpointForTopic(mirrorCheckpointTask, tp, targetTP, consumerGroupOffset - 1, true);
+    }
+
+    private Map<TopicPartition, Checkpoint> assertCheckpointForTopic(
+            MirrorCheckpointTask task, TopicPartition tp, TopicPartition remoteTp, long consumerGroupOffset, boolean truth
+    ) throws ExecutionException, InterruptedException {
+        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets = Collections.singletonMap(tp, new OffsetAndMetadata(consumerGroupOffset));
+        Map<TopicPartition, Checkpoint> checkpoints = task.checkpointsForGroup(consumerGroupOffsets, "g1");
+        assertEquals(truth, checkpoints.containsKey(remoteTp), "should" + (truth ? "" : " not") + " emit offset sync");
+        return checkpoints;
     }
 }
