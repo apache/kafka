@@ -44,6 +44,15 @@ import scala.collection.mutable.ArrayBuffer
 object StorageTool extends Logging {
   def main(args: Array[String]): Unit = {
     try {
+      main_internal(args)
+    } catch {
+      case e: TerseFailure =>
+        System.err.println(e.getMessage)
+        Exit.exit(1)
+    }
+  }
+
+  def main_internal(args: Array[String]): Unit = {
       val namespace = parseArguments(args)
       val command = namespace.getString("command")
       val config = Option(namespace.getString("config")).flatMap(
@@ -87,11 +96,6 @@ object StorageTool extends Logging {
         case _ =>
           throw new RuntimeException(s"Unknown command $command")
       }
-    } catch {
-      case e: TerseFailure =>
-        System.err.println(e.getMessage)
-        Exit.exit(1)
-    }
   }
 
   def parseArguments(args: Array[String]): Namespace = {
