@@ -484,7 +484,7 @@ public class ConnectWorkerIntegrationTest {
                 "Connector did not stop in time"
         );
 
-        // Can resume a connector after is Connector has failed during shutdown after receiving a stop request
+        // Can resume a connector after its Connector has failed during shutdown after receiving a stop request
         connect.resumeConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
                 CONNECTOR_NAME,
