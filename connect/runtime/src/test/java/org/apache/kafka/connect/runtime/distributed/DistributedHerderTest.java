@@ -2224,7 +2224,7 @@ public class DistributedHerderTest {
         PowerMock.replayAll();
 
         herder.tick(); // join
-        configUpdateListener.onConnectorTargetStateChange(CONN1); // state changes to paused
+        configUpdateListener.onConnectorTargetStateChange(CONN1); // state changes to stopped
         herder.tick(); // worker should apply the state change
         herder.tick();
 
