@@ -2204,7 +2204,6 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT_STOPPED_CONN1);
-        PowerMock.expectLastCall();
 
         Capture<Callback<TargetState>> onStop = newCapture();
         worker.setTargetState(EasyMock.eq(CONN1), EasyMock.eq(TargetState.STOPPED), capture(onStop));
