@@ -31,12 +31,12 @@ import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ControllerServerMetricsTest {
+public class ControllerMetadataMetricsTest {
     @Test
     public void testMetricNames() {
         MetricsRegistry registry = new MetricsRegistry();
         try {
-            try (ControllerServerMetrics metrics = new ControllerServerMetrics(Optional.of(registry))) {
+            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
@@ -58,7 +58,7 @@ public class ControllerServerMetricsTest {
     @Test
     public void testMetadataErrorCount() {
         MetricsRegistry registry = new MetricsRegistry();
-        try (ControllerServerMetrics metrics = new ControllerServerMetrics(Optional.of(registry))) {
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             @SuppressWarnings("unchecked")
             Gauge<Integer> metadataErrorCount = (Gauge<Integer>) registry
                     .allMetrics()
@@ -77,13 +77,13 @@ public class ControllerServerMetricsTest {
     }
 
     private void testIntGaugeMetric(
-        Function<ControllerServerMetrics, Integer> metricsGetter,
+        Function<ControllerMetadataMetrics, Integer> metricsGetter,
         Function<MetricsRegistry, Integer> registryGetter,
-        BiConsumer<ControllerServerMetrics, Integer> setter,
-        BiConsumer<ControllerServerMetrics, Integer> incrementer
+        BiConsumer<ControllerMetadataMetrics, Integer> setter,
+        BiConsumer<ControllerMetadataMetrics, Integer> incrementer
     ) {
         MetricsRegistry registry = new MetricsRegistry();
-        try (ControllerServerMetrics metrics = new ControllerServerMetrics(Optional.of(registry))) {
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             assertEquals(0, metricsGetter.apply(metrics));
             assertEquals(0, registryGetter.apply(registry));
             setter.accept(metrics, 123);

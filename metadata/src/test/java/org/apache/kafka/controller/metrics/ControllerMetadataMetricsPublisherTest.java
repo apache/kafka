@@ -48,14 +48,14 @@ import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.fak
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.fakeTopicsImage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ControllerServerMetricsPublisherTest {
-    static class ControllerServerMetricsPublisherTestEnv implements AutoCloseable {
+public class ControllerMetadataMetricsPublisherTest {
+    static class TestEnv implements AutoCloseable {
         MockFaultHandler faultHandler =
-                new MockFaultHandler("ControllerServerMetricsPublisher");
-        ControllerServerMetrics metrics =
-                new ControllerServerMetrics(Optional.empty());
-        ControllerServerMetricsPublisher publisher =
-                new ControllerServerMetricsPublisher(metrics, faultHandler);
+                new MockFaultHandler("ControllerMetadataMetricsPublisher");
+        ControllerMetadataMetrics metrics =
+                new ControllerMetadataMetrics(Optional.empty());
+        ControllerMetadataMetricsPublisher publisher =
+                new ControllerMetadataMetricsPublisher(metrics, faultHandler);
 
         @Override
         public void close() {
@@ -66,7 +66,7 @@ public class ControllerServerMetricsPublisherTest {
 
     @Test
     public void testMetricsBeforePublishing() {
-        try (ControllerServerMetricsPublisherTestEnv env = new ControllerServerMetricsPublisherTestEnv()) {
+        try (TestEnv env = new TestEnv()) {
             assertEquals(0, env.metrics.activeBrokerCount());
             assertEquals(0, env.metrics.globalTopicCount());
             assertEquals(0, env.metrics.globalPartitionCount());
@@ -114,7 +114,7 @@ public class ControllerServerMetricsPublisherTest {
 
     @Test
     public void testPublish() {
-        try (ControllerServerMetricsPublisherTestEnv env = new ControllerServerMetricsPublisherTestEnv()) {
+        try (TestEnv env = new TestEnv()) {
             assertEquals(0, env.metrics.activeBrokerCount());
             assertEquals(0, env.metrics.globalTopicCount());
             assertEquals(0, env.metrics.globalPartitionCount());
@@ -134,7 +134,7 @@ public class ControllerServerMetricsPublisherTest {
 
     @Test
     public void testLoadSnapshot() {
-        try (ControllerServerMetricsPublisherTestEnv env = new ControllerServerMetricsPublisherTestEnv()) {
+        try (TestEnv env = new TestEnv()) {
             MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
             ImageReWriter writer = new ImageReWriter(delta);
             IMAGE1.write(writer, new ImageWriterOptions.Builder().

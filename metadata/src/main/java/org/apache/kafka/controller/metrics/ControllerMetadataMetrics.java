@@ -29,12 +29,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * These are the metrics which are managed by the ControllerServer class. They generally pertain to
  * aspects of the metadata, like how many topics or partitions we have.
- * All of these except MetadataErrorCount are managed by ControllerServerMetricsPublisher.
+ * All of these except MetadataErrorCount are managed by ControllerMetadataMetricsPublisher.
  *
  * IMPORTANT: Metrics which are managed by the QuorumController class itself should go in
  * @link{org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
-public final class ControllerServerMetrics implements AutoCloseable {
+public final class ControllerMetadataMetrics implements AutoCloseable {
     private final static MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
     private final static MetricName ACTIVE_BROKER_COUNT = getMetricName(
@@ -54,17 +54,17 @@ public final class ControllerServerMetrics implements AutoCloseable {
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
     private final AtomicInteger activeBrokerCount = new AtomicInteger(0);
     private final AtomicInteger globalTopicCount = new AtomicInteger(0);
-    private final AtomicInteger globalPartitionCount = new AtomicInteger();
-    private final AtomicInteger offlinePartitionCount = new AtomicInteger();
-    private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger();
+    private final AtomicInteger globalPartitionCount = new AtomicInteger(0);
+    private final AtomicInteger offlinePartitionCount = new AtomicInteger(0);
+    private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
 
     /**
-     * Create a new ControllerServerMetrics object.
+     * Create a new ControllerMetadataMetrics object.
      *
      * @param registry  The metrics registry, or Optional.empty if this is a test and we don't have one.
      */
-    public ControllerServerMetrics(Optional<MetricsRegistry> registry) {
+    public ControllerMetadataMetrics(Optional<MetricsRegistry> registry) {
         this.registry = registry;
         registry.ifPresent(r -> r.newGauge(FENCED_BROKER_COUNT, new Gauge<Integer>() {
             @Override

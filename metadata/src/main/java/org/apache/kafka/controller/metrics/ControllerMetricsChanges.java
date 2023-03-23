@@ -25,7 +25,14 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.Map.Entry;
 
 
+/**
+ * The ControllerMetricsChanges class is used inside ControllerMetricsPublisher to track the
+ * metrics changes triggered by a series of deltas.
+ */
 class ControllerMetricsChanges {
+    /**
+     * Calculates the change between two boolean values, expressed as an integer.
+     */
     static int delta(boolean prev, boolean next) {
         if (prev) {
             return next ? 0 : -1;
@@ -124,7 +131,10 @@ class ControllerMetricsChanges {
         partitionsWithoutPreferredLeaderChange += delta(wasWithoutPreferredLeader, isWithoutPreferredLeader);
     }
 
-    void apply(ControllerServerMetrics metrics) {
+    /**
+     * Apply these changes to the metrics object.
+     */
+    void apply(ControllerMetadataMetrics metrics) {
         if (fencedBrokersChange != 0) {
             metrics.addToFencedBrokerCount(fencedBrokersChange);
         }

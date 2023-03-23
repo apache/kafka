@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.metrics.{ControllerServerMetricsPublisher, QuorumControllerMetrics}
+import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.KafkaConfigSchema
@@ -351,7 +351,7 @@ class ControllerServer(
       ))
 
       // Set up the metrics publisher.
-      metadataPublishers.add(new ControllerServerMetricsPublisher(
+      metadataPublishers.add(new ControllerMetadataMetricsPublisher(
         sharedServer.controllerServerMetrics,
         sharedServer.metadataPublishingFaultHandler
       ))

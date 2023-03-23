@@ -24,7 +24,7 @@ import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
-import org.apache.kafka.controller.metrics.ControllerServerMetrics
+import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -101,7 +101,7 @@ class SharedServer(
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
-  @volatile var controllerServerMetrics: ControllerServerMetrics = _
+  @volatile var controllerServerMetrics: ControllerMetadataMetrics = _
   @volatile var loader: MetadataLoader = _
   val snapshotsDiabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
@@ -232,7 +232,7 @@ class SharedServer(
           brokerMetrics = BrokerServerMetrics(metrics)
         }
         if (sharedServerConfig.processRoles.contains(ControllerRole)) {
-          controllerServerMetrics = new ControllerServerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
+          controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
         raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           metaProps,

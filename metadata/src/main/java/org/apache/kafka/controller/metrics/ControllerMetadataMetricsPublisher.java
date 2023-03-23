@@ -44,13 +44,13 @@ import java.util.Optional;
  * partitions to always have their preferred leader, even if they don't.
  * All other metrics should be the same, as far as is possible.
  */
-public class ControllerServerMetricsPublisher implements MetadataPublisher {
-    private final ControllerServerMetrics metrics;
+public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
+    private final ControllerMetadataMetrics metrics;
     private final FaultHandler faultHandler;
     private MetadataImage prevImage = MetadataImage.EMPTY;
 
-    public ControllerServerMetricsPublisher(
-        ControllerServerMetrics metrics,
+    public ControllerMetadataMetricsPublisher(
+        ControllerMetadataMetrics metrics,
         FaultHandler faultHandler
     ) {
         this.metrics = metrics;
@@ -59,7 +59,7 @@ public class ControllerServerMetricsPublisher implements MetadataPublisher {
 
     @Override
     public String name() {
-        return "ControllerServerMetricsPublisher";
+        return "ControllerMetadataMetricsPublisher";
     }
 
     @Override
