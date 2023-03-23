@@ -223,7 +223,7 @@ public class DistributedHerderTest {
             Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG),
             Collections.singletonMap(CONN1, TargetState.STOPPED),
-            TASK_CONFIGS_MAP,
+            Collections.emptyMap(), // Stopped connectors should have an empty set of task configs
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptySet(),
