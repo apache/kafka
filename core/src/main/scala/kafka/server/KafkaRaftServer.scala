@@ -48,7 +48,6 @@ import scala.jdk.CollectionConverters._
 class KafkaRaftServer(
   config: KafkaConfig,
   time: Time,
-  threadNamePrefix: Option[String]
 ) extends Server with Logging {
 
   this.logIdent = s"[KafkaRaftServer nodeId=${config.nodeId}] "
@@ -71,16 +70,12 @@ class KafkaRaftServer(
     metaProps,
     time,
     metrics,
-    threadNamePrefix,
     controllerQuorumVotersFuture,
     new StandardFaultHandlerFactory(),
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
-    Some(new BrokerServer(
-      sharedServer,
-      offlineDirs
-    ))
+    Some(new BrokerServer(sharedServer, offlineDirs))
   } else {
     None
   }
