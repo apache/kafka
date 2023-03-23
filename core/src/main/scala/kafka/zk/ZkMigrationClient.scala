@@ -18,12 +18,13 @@ package kafka.zk
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.security.authorizer.AclAuthorizer
+import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.security.authorizer.AclAuthorizer.{ResourceOrdering, VersionedAcls}
 import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, ZkAdminManager}
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
@@ -39,7 +40,7 @@ import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import java.util
 import java.util.Properties
-import java.util.function.Consumer
+import java.util.function.{BiConsumer, Consumer}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -255,29 +256,36 @@ class ZkMigrationClient(
     }
   }
 
-  def migrateAcls(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+  override def iterateAcls(aclConsumer: BiConsumer[ResourcePattern, util.Set[AccessControlEntry]]): Unit = {
     // This is probably fairly inefficient, but it preserves the semantics from AclAuthorizer (which is non-trivial)
     var allAcls = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
     def updateAcls(resourcePattern: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
       allAcls = allAcls.updated(resourcePattern, versionedAcls)
     }
-
     AclAuthorizer.loadAllAcls(zkClient, this, updateAcls)
     allAcls.foreach { case (resourcePattern, versionedAcls) =>
-      val batch = new util.ArrayList[ApiMessageAndVersion]()
-      versionedAcls.acls.foreach { entry =>
-        batch.add(new ApiMessageAndVersion(new AccessControlEntryRecord()
-          .setId(Uuid.randomUuid())
-          .setResourceType(resourcePattern.resourceType().code())
-          .setResourceName(resourcePattern.name())
-          .setPatternType(resourcePattern.patternType().code())
-          .setPrincipal(entry.ace.principal())
-          .setHost(entry.ace.host())
-          .setOperation(entry.ace.operation().code())
-          .setPermissionType(entry.ace.permissionType().code()), AccessControlEntryRecord.HIGHEST_SUPPORTED_VERSION))
-      }
-      recordConsumer.accept(batch)
+      aclConsumer.accept(resourcePattern, versionedAcls.acls.map(_.ace).asJava)
     }
+  }
+
+  def migrateAcls(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+    iterateAcls(new util.function.BiConsumer[ResourcePattern, util.Set[AccessControlEntry]]() {
+      override def accept(resourcePattern: ResourcePattern, acls: util.Set[AccessControlEntry]): Unit = {
+        val batch = new util.ArrayList[ApiMessageAndVersion]()
+        acls.asScala.foreach { entry =>
+          batch.add(new ApiMessageAndVersion(new AccessControlEntryRecord()
+            .setId(Uuid.randomUuid())
+            .setResourceType(resourcePattern.resourceType().code())
+            .setResourceName(resourcePattern.name())
+            .setPatternType(resourcePattern.patternType().code())
+            .setPrincipal(entry.principal())
+            .setHost(entry.host())
+            .setOperation(entry.operation().code())
+            .setPermissionType(entry.permissionType().code()), AccessControlEntryRecord.HIGHEST_SUPPORTED_VERSION))
+        }
+        recordConsumer.accept(batch)
+      }
+    })
   }
 
   override def readAllMetadata(
@@ -546,4 +554,46 @@ class ZkMigrationClient(
       state
     }
   }
+
+  override def writeAddedAcls(
+    addedAcls: util.Map[ResourcePattern, util.List[AccessControlEntry]],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = {
+
+    val aclRequests = addedAcls.asScala.map { case (resource, entries) =>
+      val aclsSet = entries.asScala.map { new AclEntry(_) }.toSet
+      val aclData = ResourceZNode.encode(aclsSet)
+      SetDataRequest(ResourceZNode.path(resource), aclData, ZkVersion.MatchAnyVersion)
+    }.toSeq
+
+    val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(aclRequests, state)
+    state.withMigrationZkVersion(migrationZkVersion)
+  }
+
+  override def removeDeletedAcls(
+    deletedAcls: util.Map[ResourcePattern, util.List[AccessControlEntry]],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = {
+    val aclRequests = deletedAcls.asScala.map { case (resource, removedEntries) =>
+      val existingAcls = AclAuthorizer.getAclsFromZk(zkClient, resource)
+      val removedAcls = removedEntries.asScala.map { new AclEntry(_) }.toSet
+      val remainingAcls = existingAcls.acls -- removedAcls
+
+      // ZK broker needs the ACL change notification znode to be updated in order to process the new ACLs
+      val aclChange = ZkAclStore(resource.patternType).changeStore.createChangeNode(resource)
+      val notificationCreateRequest = CreateRequest(
+        aclChange.path, aclChange.bytes, zkClient.defaultAcls(aclChange.path), CreateMode.PERSISTENT_SEQUENTIAL)
+
+      if (remainingAcls.isEmpty) {
+        Seq(DeleteRequest(ResourceZNode.path(resource), ZkVersion.MatchAnyVersion), notificationCreateRequest)
+      } else {
+        val aclData = ResourceZNode.encode(remainingAcls)
+        Seq(SetDataRequest(ResourceZNode.path(resource), aclData, ZkVersion.MatchAnyVersion), notificationCreateRequest)
+      }
+    }.toSeq.flatten
+
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(aclRequests, state)
+    state.withMigrationZkVersion(migrationZkVersion)
+  }
+
 }

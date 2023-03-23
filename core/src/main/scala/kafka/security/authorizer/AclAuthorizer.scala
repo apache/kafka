@@ -148,7 +148,7 @@ object AclAuthorizer {
     }
   }
 
-  private def getAclsFromZk(zkClient: KafkaZkClient, resource: ResourcePattern): VersionedAcls = {
+  def getAclsFromZk(zkClient: KafkaZkClient, resource: ResourcePattern): VersionedAcls = {
     zkClient.getVersionedAclsForResource(resource)
   }
 }

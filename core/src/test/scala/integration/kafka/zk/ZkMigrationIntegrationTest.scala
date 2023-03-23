@@ -27,13 +27,13 @@ import kafka.utils.{PasswordEncoder, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult, AlterConfigOp, AlterConfigsResult, ConfigEntry, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
-import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.{ResourcePattern, ResourcePatternFilter}
 import org.apache.kafka.common.resource.ResourceType.TOPIC
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.serialization.StringSerializer
@@ -103,8 +103,9 @@ class ZkMigrationIntegrationTest {
     val result = admin.createAcls(List(acl1, acl2, acl3, acl4).asJava)
     result.all().get
 
-    val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-    val migrationClient = new ZkMigrationClient(zkClient)
+    val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
+    val zkClient = underlying.zkClient
+    val migrationClient = new ZkMigrationClient(zkClient, PasswordEncoder.noop())
     val verifier = new MetadataDeltaVerifier()
     migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => { })
     verifier.verify { image =>
@@ -116,6 +117,25 @@ class ZkMigrationIntegrationTest {
         StandardAcl.fromAclBinding(acl3),
         StandardAcl.fromAclBinding(acl4)
       ).asJava))
+    }
+
+    var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
+    migrationState = migrationState.withNewKRaftController(3000, 42)
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
+    migrationClient.removeDeletedAcls(Map(acl2.pattern() -> List(acl2.entry()).asJava).asJava, migrationState)
+
+    // NOTE normally this kind of test would be done in ZkMigrationClientTest, but AclAuthorizer is already
+    // set up for us by the underlying ZK broker.
+    val authorizer = TestUtils.pickAuthorizerForWrite(underlying.brokers, underlying.controllerServers)
+    TestUtils.retry(10000) {
+      val remainingAcls = authorizer.acls(
+        new AclBindingFilter(
+          new ResourcePatternFilter(acl2.pattern().resourceType(), acl2.pattern().name(), acl2.pattern().patternType()),
+          AccessControlEntryFilter.ANY)
+      ).asScala.toSeq
+      assertEquals(1, remainingAcls.size)
+      assertEquals(acl1.pattern(), remainingAcls.head.pattern())
+      assertEquals(acl1.entry(), remainingAcls.head.entry())
     }
   }
 
