@@ -105,7 +105,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
         log.info("Stopped {} connector {}", this.getClass().getSimpleName(), connectorName);
         connectorHandle.recordConnectorStop();
         if (Boolean.parseBoolean(commonConfigs.getOrDefault("connector.stop.inject.error", "false"))) {
-            throw new RuntimeException("Injecting errors during connector start");
+            throw new RuntimeException("Injecting errors during connector stop");
         }
     }
 

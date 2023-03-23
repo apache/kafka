@@ -225,7 +225,7 @@ public class WorkerConnector implements Runnable {
     private void suspend(boolean paused) {
         State newState = paused ? State.PAUSED : State.STOPPED;
         try {
-            if ((state == State.STOPPED || state == State.PAUSED) && state == newState) {
+            if (state == newState) {
                 // Already in the desired state
                 return;
             }
