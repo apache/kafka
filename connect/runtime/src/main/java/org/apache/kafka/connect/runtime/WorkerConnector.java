@@ -222,7 +222,7 @@ public class WorkerConnector implements Runnable {
         return state == State.STARTED;
     }
 
-    private void stop(boolean paused) {
+    private void suspend(boolean paused) {
         State newState = paused ? State.PAUSED : State.STOPPED;
         try {
             if ((state == State.STOPPED || state == State.PAUSED) && state == newState) {
@@ -372,9 +372,9 @@ public class WorkerConnector implements Runnable {
     private void doTransitionTo(TargetState targetState) throws Throwable {
         log.debug("{} Transition connector to {}", this, targetState);
         if (targetState == TargetState.PAUSED) {
-            stop(true);
+            suspend(true);
         } else if (targetState == TargetState.STOPPED) {
-            stop(false);
+            suspend(false);
         } else if (targetState == TargetState.STARTED) {
             if (state == State.INIT)
                 start();
