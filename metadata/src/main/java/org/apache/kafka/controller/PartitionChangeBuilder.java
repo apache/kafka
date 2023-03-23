@@ -300,6 +300,10 @@ public class PartitionChangeBuilder {
 
         setAssignmentChanges(record);
 
+        if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
+            record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
+        }
+
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
