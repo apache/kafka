@@ -143,7 +143,7 @@ class ConsoleProducerTest {
   def testParseKeyProp(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
     val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
-    reader.init(System.in, ConsoleProducer.getReaderProps(config))
+    reader.configure(ConsoleProducer.getReaderProps(config).asInstanceOf[java.util.Map[String, _]])
     assertTrue(reader.keySeparator == "#")
     assertTrue(reader.parseKey)
   }
@@ -165,7 +165,7 @@ class ConsoleProducerTest {
     )
     val config = new ConsoleProducer.ProducerConfig(args)
     val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
-    reader.init(System.in, ConsoleProducer.getReaderProps(config))
+    reader.configure(ConsoleProducer.getReaderProps(config).asInstanceOf[java.util.Map[String, _]])
     assertEquals(";", reader.keySeparator)
     assertTrue(reader.parseKey)
     assertTrue(reader.parseHeaders)
@@ -231,7 +231,7 @@ class ConsoleProducerTest {
   def testNewReader(): Unit = {
     ConsoleProducerTest.configureCount = 0
     ConsoleProducerTest.closeCount = 0
-    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.DumbMessageReader].getName, new Properties())
+    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.TestMessageReader].getName, new Properties())
     // the deprecated MessageReader get configured when creating records
     assertEquals(0, ConsoleProducerTest.configureCount)
     reader.readRecords(System.in)
@@ -244,7 +244,7 @@ class ConsoleProducerTest {
     ConsoleProducerTest.configureCount = 0
     ConsoleProducerTest.closeCount = 0
 
-    val reader1 = ConsoleProducer.newReader(classOf[ConsoleProducerTest.DumbRecordReader].getName, new Properties())
+    val reader1 = ConsoleProducer.newReader(classOf[ConsoleProducerTest.TestRecordReader].getName, new Properties())
     assertEquals(1, ConsoleProducerTest.configureCount)
     assertEquals(0, ConsoleProducerTest.closeCount)
     reader1.close()
@@ -255,7 +255,7 @@ class ConsoleProducerTest {
   def testLoopReader(): Unit = {
     ConsoleProducerTest.configureCount = 0
     ConsoleProducerTest.closeCount = 0
-    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.DumbRecordReader].getName, new Properties())
+    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.TestRecordReader].getName, new Properties())
 
     ConsoleProducer.loopReader(Mockito.mock(classOf[Producer[Array[Byte], Array[Byte]]]),
       reader, System.in, false)
@@ -269,7 +269,7 @@ class ConsoleProducerTest {
 object ConsoleProducerTest {
   var configureCount = 0
   var closeCount = 0
-  class DumbMessageReader extends MessageReader {
+  class TestMessageReader extends MessageReader {
     override def init(inputStream: InputStream, props: Properties): Unit = configureCount += 1
     override def readMessage(): ProducerRecord[Array[Byte], Array[Byte]] = null
 
@@ -277,7 +277,7 @@ object ConsoleProducerTest {
 
   }
 
-  class DumbRecordReader extends RecordReader {
+  class TestRecordReader extends RecordReader {
     override def configure(configs: util.Map[String, _]): Unit = configureCount += 1
     override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] =
       java.util.Collections.emptyIterator()
