@@ -18,7 +18,6 @@ package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -188,8 +187,8 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         }
     }
 
-    @Test
-    public void testOneWayReplicationWithAutoOffsetSync() throws InterruptedException {
+    @Override
+    public void testOneWayReplicationWithOffsetSyncs(int offsetLagMax) throws InterruptedException {
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
@@ -206,6 +205,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         // enable automated consumer group offset sync
         mm2Props.put("sync.group.offsets.enabled", "true");
         mm2Props.put("sync.group.offsets.interval.seconds", "1");
+        mm2Props.put("offset.lag.max", Integer.toString(offsetLagMax));
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
 
@@ -221,14 +221,9 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 consumerProps, "test-topic-1")) {
 
             waitForConsumerGroupFullSync(backup, Collections.singletonList("test-topic-1"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED);
+                    consumerGroupName, NUM_RECORDS_PRODUCED, offsetLagMax);
 
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-
-            // the size of consumer record should be zero, because the offsets of the same consumer group
-            // have been automatically synchronized from primary to backup by the background job, so no
-            // more records to consume from the replicated topic by the same consumer group at backup cluster
-            assertEquals(0, records.count(), "consumer record size is not zero");
+            assertDownstreamRedeliveriesBoundedByMaxLag(backupConsumer, offsetLagMax);
         }
 
         // now create a new topic in primary cluster
@@ -251,11 +246,9 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 "group.id", consumerGroupName), "test-topic-1", "test-topic-2")) {
 
             waitForConsumerGroupFullSync(backup, Arrays.asList("test-topic-1", "test-topic-2"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED);
+                    consumerGroupName, NUM_RECORDS_PRODUCED, offsetLagMax);
 
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-            // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
-            assertEquals(0, records.count(), "consumer record size is not zero");
+            assertDownstreamRedeliveriesBoundedByMaxLag(backupConsumer, offsetLagMax);
         }
 
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
