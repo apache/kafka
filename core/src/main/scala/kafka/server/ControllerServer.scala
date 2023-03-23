@@ -53,7 +53,7 @@ import org.apache.kafka.server.util.{Deadline, FutureUtils}
 import java.util
 import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList, TimeUnit}
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
@@ -114,7 +114,7 @@ class ControllerServer(
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   var migrationSupport: Option[ControllerMigrationSupport] = None
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
-  val metadataPublishers: util.List[MetadataPublisher] = new CopyOnWriteArrayList[MetadataPublisher]()
+  val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
