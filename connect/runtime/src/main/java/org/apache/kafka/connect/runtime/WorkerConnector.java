@@ -222,7 +222,6 @@ public class WorkerConnector implements Runnable {
         return state == State.STARTED;
     }
 
-    @SuppressWarnings("fallthrough")
     private void stop(boolean paused) {
         State newState = paused ? State.PAUSED : State.STOPPED;
         try {
