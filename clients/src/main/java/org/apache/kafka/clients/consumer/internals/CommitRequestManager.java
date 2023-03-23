@@ -412,7 +412,8 @@ public class CommitRequestManager implements RequestManager {
                 // remove the request from the outbound buffer: inflightOffsetFetches
                 request.future.whenComplete((r, t) -> {
                     if (!inflightOffsetFetches.remove(request)) {
-                        log.info("unable to remove request from the outbound buffer:" + request);
+                        log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
+                                "outbound buffer:" + request);
                     }
                 });
                 this.unsentOffsetFetches.add(request);
