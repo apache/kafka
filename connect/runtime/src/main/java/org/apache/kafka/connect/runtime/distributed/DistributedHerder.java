@@ -1100,7 +1100,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         addRequest(
                 () -> {
-                    refreshConfigSnapshot(workerSyncTimeoutMs);
                     if (!configState.contains(connName))
                         throw new NotFoundException("Unknown connector " + connName);
 
@@ -1117,8 +1116,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     // if the connector is reassigned during the ensuing rebalance, it is likely that it will immediately generate
                     // a non-empty set of task configs). A STOPPED connector with a non-empty set of tasks is less acceptable
                     // and likely to confuse users.
-                    writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, Collections.emptyList()));
+                    writeTaskConfigs(connName, Collections.emptyList());
                     configBackingStore.putTargetState(connName, TargetState.STOPPED);
+                    // Force a read of the new target state for the connector
+                    refreshConfigSnapshot(workerSyncTimeoutMs);
 
                     callback.onCompletion(null, null);
                     return null;
@@ -2024,7 +2025,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
         if (isLeader()) {
-            writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
+            writeTaskConfigs(connName, rawTaskProps);
             cb.onCompletion(null, null);
         } else if (restClient == null) {
             throw new NotLeaderException("This worker is not able to communicate with the leader of the cluster, "
@@ -2063,8 +2064,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void writeTaskConfigs(String connName, List<Map<String, String>> taskConfigs) {
-        if (configState.targetState(connName) == TargetState.STOPPED && !taskConfigs.isEmpty()) {
-            throw new BadRequestException("Cannot submit non-empty set of task configs for stopped connector " + connName);
+        if (!taskConfigs.isEmpty()) {
+            if (configState.targetState(connName) == TargetState.STOPPED)
+                throw new BadRequestException("Cannot submit non-empty set of task configs for stopped connector " + connName);
         }
 
         writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, taskConfigs));

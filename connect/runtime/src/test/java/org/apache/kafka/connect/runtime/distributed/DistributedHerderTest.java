@@ -2330,7 +2330,6 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
-        expectConfigRefreshAndSnapshot(SNAPSHOT);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -2375,7 +2374,6 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
-        expectConfigRefreshAndSnapshot(SNAPSHOT);
         configBackingStore.putTaskConfigs(CONN1, Collections.emptyList());
         // We do not expect configBackingStore::putTargetState to be invoked, which
         // is intentional since that call should only take place if we are first able to
