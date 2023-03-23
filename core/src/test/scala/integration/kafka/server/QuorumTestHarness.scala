@@ -32,7 +32,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.common.metadata.{NoOpRecord, FeatureLevelRecord}
+import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
@@ -320,9 +320,9 @@ abstract class QuorumTestHarness extends Logging {
     optionalMetadataRecords.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
     }
-    metadataRecords.add(new ApiMessageAndVersion(new NoOpRecord(), 0.toShort));
 
-    val bootstrapMetadata = new BootstrapMetadata(metadataRecords, metadataVersion, "test harness")
+    val bootstrapMetadata = BootstrapMetadata.fromRecords(metadataRecords, "test harness")
+
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")

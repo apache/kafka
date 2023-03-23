@@ -29,10 +29,18 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
+import org.apache.kafka.common.KafkaException
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
+class StorageToolException(message: String) extends KafkaException(message) {
+}
+
+// Bypass exception handling in StorageTool by throwing the exception as it is created
+class TerseFailure(message: String) extends KafkaException(message) {
+  throw new StorageToolException(message)
+}
 
 @Timeout(value = 40)
 class StorageToolTest {
@@ -170,7 +178,7 @@ Found problem:
 
       try assertEquals(1, StorageTool.
         formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false)) catch {
-        case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
+        case e: StorageToolException => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
       }
@@ -187,7 +195,7 @@ Found problem:
     val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
-        "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
+        "16 bytes of a base64-encoded UUID", assertThrows(classOf[StorageToolException],
           () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
   }
 
@@ -248,27 +256,27 @@ Found problem:
     // Require name subfield.
     try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")) catch {
-      case e: TerseFailure => assertEquals(s"You must supply 'name' to add-scram", e.getMessage)
+      case e: StorageToolException => assertEquals(s"You must supply 'name' to add-scram", e.getMessage)
     }
 
     // Require password xor saltedpassword
     try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
     catch {
-      case e: TerseFailure => assertEquals(s"You must only supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
+      case e: StorageToolException => assertEquals(s"You must only supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
     }
 
     try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",iterations=8192]"))
     catch {
-      case e: TerseFailure => assertEquals(s"You must supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
+      case e: StorageToolException => assertEquals(s"You must supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
     }
 
     // Validate salt is required with saltedpassword
     try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
     catch {
-      case e: TerseFailure => assertEquals(s"You must supply 'salt' with 'saltedpassword' to add-scram", e.getMessage)
+      case e: StorageToolException => assertEquals(s"You must supply 'salt' with 'saltedpassword' to add-scram", e.getMessage)
     }
 
     // Validate salt is optional with password
@@ -278,7 +286,7 @@ Found problem:
     try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16385]"))
     catch {
-      case e: TerseFailure => assertEquals(s"The 'iterations' value must be <= 16384 for add-scram", e.getMessage)
+      case e: StorageToolException => assertEquals(s"The 'iterations' value must be <= 16384 for add-scram", e.getMessage)
     }
 
     assertEquals(1, parseAddScram("-S",
@@ -288,7 +296,7 @@ Found problem:
     try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=4095]"))
     catch {
-      case e: TerseFailure => assertEquals(s"The 'iterations' value must be >= 4096 for add-scram", e.getMessage)
+      case e: StorageToolException => assertEquals(s"The 'iterations' value must be >= 4096 for add-scram", e.getMessage)
     }
 
     assertEquals(1, parseAddScram("-S",
@@ -297,5 +305,22 @@ Found problem:
 
     // Validate iterations is optional
     assertEquals(1, parseAddScram("-S", "SCRAM-SHA-256=[name=alice,password=alice]") .get.size)
+  }
+
+  @Test
+  def testScramWithBadMetadataVersion(): Unit = {
+    val properties = newSelfManagedProperties()
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    properties.store(propsStream, "config.props")
+    propsStream.close()
+
+    val args = Array("format", "-c", s"${propsFile.toPath}", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "--release-version", "3.4", "-S", 
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=8192]")
+
+    try assertEquals(1, StorageTool.main(args))
+    catch {
+      case e: StorageToolException => assertEquals(s"SCRAM is only supported in metadataVersion IBP_3_5_IV0 or later.", e.getMessage)
+    }
   }
 }

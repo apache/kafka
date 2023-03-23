@@ -21,6 +21,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+/*
+ * This code is duplicated in org.apache.kafka.clients.admin.ScramMechanism.
+ * The type field in both files must match and must not change. The type field
+ * is used both for passing ScramCredentialUpsertion and for the internal 
+ * UserScramCredentialRecord. Do not change the type field.
+ */
 public enum ScramMechanism {
 
     SCRAM_SHA_256((byte) 1, "SHA-256", "HmacSHA256", 4096, 16384),

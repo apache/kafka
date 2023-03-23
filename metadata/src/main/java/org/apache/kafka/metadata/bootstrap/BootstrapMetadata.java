@@ -73,7 +73,7 @@ public class BootstrapMetadata {
         return Optional.empty();
     }
 
-    public BootstrapMetadata(
+    BootstrapMetadata(
         List<ApiMessageAndVersion> records,
         MetadataVersion metadataVersion,
         String source

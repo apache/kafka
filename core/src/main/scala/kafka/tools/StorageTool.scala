@@ -28,10 +28,11 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.common.metadata.{NoOpRecord, FeatureLevelRecord}
-import org.apache.kafka.common.metadata.{UserScramCredentialRecord}
+import org.apache.kafka.common.metadata.FeatureLevelRecord
+import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
+
 
 import java.util
 import java.util.Base64
@@ -89,7 +90,7 @@ object StorageTool extends Logging {
     } catch {
       case e: TerseFailure =>
         System.err.println(e.getMessage)
-        System.exit(1)
+        Exit.exit(1)
     }
   }
 
@@ -353,8 +354,7 @@ object StorageTool extends Logging {
       for (record <- metadataArguments) metadataRecords.add(record)
     }
 
-    metadataRecords.add(new ApiMessageAndVersion(new NoOpRecord(), 0.toShort));
-    new BootstrapMetadata(metadataRecords, metadataVersion, source)
+    BootstrapMetadata.fromRecords(metadataRecords, source)
   }
 
 
