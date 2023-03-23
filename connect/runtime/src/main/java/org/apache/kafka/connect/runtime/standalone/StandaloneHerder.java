@@ -440,10 +440,10 @@ public class StandaloneHerder extends AbstractHerder {
 
     private void updateConnectorTasks(String connName) {
         if (!worker.isRunning(connName)) {
-            log.info("Skipping update of connector {} since it is not running", connName);
+            log.info("Skipping update of tasks for connector {} since it is not running", connName);
             return;
         } else if (configState.targetState(connName) != TargetState.STARTED) {
-            log.info("Skipping update of connector {} since its target state is {}", connName, configState.targetState(connName));
+            log.info("Skipping update of tasks for connector {} since its target state is {}", connName, configState.targetState(connName));
             return;
         }
 
