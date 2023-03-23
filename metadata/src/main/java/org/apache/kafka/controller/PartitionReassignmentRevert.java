@@ -21,8 +21,6 @@ import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
-import java.util.ArrayList;
-import java.util.Set;
 import java.util.List;
 import java.util.Objects;
 
