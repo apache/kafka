@@ -81,6 +81,7 @@ class ControllerContext {
   private val liveBrokers = mutable.Set.empty[Broker]
   private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
   private val leaderAndIsrRequestSent = mutable.Map.empty[Int, Boolean]
+  val corruptedBrokers = mutable.Map.empty[Int, Boolean]
   var epoch: Int = KafkaController.InitialControllerEpoch
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
@@ -257,6 +258,11 @@ class ControllerContext {
 
   def setLivePreferredControllerIds(preferredControllerIds: Set[Int]): Unit = {
     livePreferredControllerIds = preferredControllerIds
+  }
+
+  def setCorruptedBrokers(brokers: Map[Int, Boolean]): Unit = {
+    corruptedBrokers.clear()
+    corruptedBrokers ++= brokers
   }
 
   def markLeaderAndIsrSent(brokerId: Int): Unit = {

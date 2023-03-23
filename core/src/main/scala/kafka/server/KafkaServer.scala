@@ -46,7 +46,7 @@ import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledSh
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils, PoisonPill}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, PoisonPill, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node, TopicPartition}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
@@ -320,6 +320,10 @@ class KafkaServer(
         if (enableForwarding) {
           this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
           autoTopicCreationChannel = Some(clientToControllerChannelManager)
+        }
+
+        if (config.liDropCorruptedFilesEnable) {
+          zkClient.registerCorruptedBrokerId(config.brokerId)
         }
 
         val apiVersionManager = ApiVersionManager(

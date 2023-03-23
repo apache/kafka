@@ -111,6 +111,40 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
     info(s"Registered preferred controller ${id} at path $path with czxid (preferred controller epoch): ${stat.getCzxid}")
   }
 
+  def registerCorruptedBrokerId(brokerId: Int): Unit = {
+    val corruptedBroker = CorruptedBroker(brokerId)
+    val path = corruptedBroker.path
+    checkedEphemeralCreate(path, corruptedBroker.toJsonBytes)
+    info(s"Registered corrupted broker ${corruptedBroker.brokerId} at path $path")
+  }
+
+  def updateCorruptedBroker(corruptedBroker: CorruptedBroker): Unit = {
+    val path = corruptedBroker.path
+    val setDataRequest = SetDataRequest(path, corruptedBroker.toJsonBytes, ZkVersion.MatchAnyVersion)
+    val response = retryRequestUntilConnected(setDataRequest)
+    response.maybeThrow()
+    info(s"Updated corrupted broker ${corruptedBroker.brokerId} at path $path, clearedFromIsrs = ${corruptedBroker.clearedFromIsrs}")
+  }
+
+  def getCorruptedBrokers: Map[Int, CorruptedBroker] = {
+    val brokerIds = getChildren(CorruptedBrokersZNode.path).map(_.toInt).sorted
+
+    val getDataRequests = brokerIds.map(brokerId => GetDataRequest(
+      CorruptedBrokerIdZNode.path(brokerId),
+      ctx = Some(brokerId)))
+
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
+    getDataResponses.flatMap { getDataResponse =>
+      val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
+      getDataResponse.resultCode match {
+        case Code.OK =>
+          Some(brokerId, CorruptedBrokerIdZNode.decode(brokerId, getDataResponse.data))
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
+      }
+    }.toMap
+  }
+
   /**
    * Registers a given broker in zookeeper as the controller and increments controller epoch.
    * @param controllerId the id of the broker that is to be registered as the controller.

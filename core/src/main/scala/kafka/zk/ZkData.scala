@@ -84,6 +84,48 @@ object PreferredControllerIdZNode {
   def path(id: Int) = s"${BrokersZNode.path}/preferred_controllers/$id"
 }
 
+object CorruptedBrokersZNode {
+  def path = s"${BrokersZNode.path}/corrupted"
+  def encode: Array[Byte] = null
+}
+
+object CorruptedBroker {
+  def apply(brokerId: Int, clearedFromIsrs: Boolean = false): CorruptedBroker = {
+    val version = 0
+    new CorruptedBroker(brokerId, version, clearedFromIsrs)
+  }
+}
+
+case class CorruptedBroker(brokerId: Int, version: Int, clearedFromIsrs: Boolean) {
+  val path: String = CorruptedBrokerIdZNode.path(brokerId)
+  def toJsonBytes: Array[Byte] = CorruptedBrokerIdZNode.encode(this)
+}
+
+object CorruptedBrokerIdZNode {
+  private val VersionKey = "version"
+  private val ClearedFromIsrsKey = "clearedFromIsrs"
+
+  def path(id: Int) = s"${CorruptedBrokersZNode.path}/$id"
+  def encode(corruptedBroker: CorruptedBroker): Array[Byte] = {
+    val jsonMap = Map(
+      VersionKey -> corruptedBroker.version,
+      ClearedFromIsrsKey -> corruptedBroker.clearedFromIsrs)
+    Json.encodeAsBytes(jsonMap.asJava)
+  }
+  def decode(id: Int, jsonBytes: Array[Byte]): CorruptedBroker = {
+    Json.tryParseBytes(jsonBytes) match {
+      case Right(json) =>
+        val corruptedBrokerJson = json.asJsonObject
+        val version = corruptedBrokerJson(VersionKey).to[Int]
+        val clearedFromIsrs = corruptedBrokerJson(ClearedFromIsrsKey).to[Boolean]
+        new CorruptedBroker(id, version, clearedFromIsrs)
+      case Left(e) =>
+        throw new KafkaException(s"Failed to parse Zookeeper data for corrupted broker Id $id: " +
+          s"${new String(jsonBytes, UTF_8)}", e)
+    }
+  }
+}
+
 object BrokerIdsZNode {
   def path = s"${BrokersZNode.path}/ids"
   def encode: Array[Byte] = null
@@ -1011,6 +1053,7 @@ object ZkData {
     BrokerIdsZNode.path,
     BrokerShutdownNode.path,
     PreferredControllersZNode.path,
+    CorruptedBrokersZNode.path,
     TopicsZNode.path,
     ConfigEntityChangeNotificationZNode.path,
     DeleteTopicsZNode.path,
