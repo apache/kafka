@@ -254,11 +254,7 @@ public class WorkerConnector implements Runnable {
                 // We say the connector is STOPPED even if it fails at this point
                 this.state = State.STOPPED;
                 // One more try to make sure the status is updated correctly
-                try {
-                    statusListener.onStop(connName);
-                } catch (Throwable t2) {
-                    log.error("{} Error during failover attempt to stop connector", this, t2);
-                }
+                statusListener.onStop(connName);
             }
         }
     }
