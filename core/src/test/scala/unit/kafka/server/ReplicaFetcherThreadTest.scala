@@ -107,7 +107,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${leaderEndpointBlockingSend.brokerEndPoint().id}, fetcherId=$fetcherId] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, leaderEndpointBlockingSend.brokerEndPoint().id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler,
-      brokerConfig, replicaMgr, quota, () => brokerConfig.interBrokerProtocolVersion)
+      brokerConfig, replicaMgr, quota, () => brokerConfig.interBrokerProtocolVersion, () => 1)
     new ReplicaFetcherThread(name,
       leader,
       brokerConfig,
@@ -587,7 +587,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
-      replicaManager, quota, () => config.interBrokerProtocolVersion)
+      replicaManager, quota, () => config.interBrokerProtocolVersion, () => 1)
     val thread = new ReplicaFetcherThread("bob", leader, config, failedPartitions,
       replicaManager, quota, logContext.logPrefix, () => config.interBrokerProtocolVersion) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
@@ -701,7 +701,8 @@ class ReplicaFetcherThreadTest {
       config,
       replicaManager,
       quota,
-      () => config.interBrokerProtocolVersion
+      () => config.interBrokerProtocolVersion,
+      () => 1
     )
 
     val thread = new ReplicaFetcherThread(
@@ -1125,7 +1126,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config,
-      replicaManager, replicaQuota, () => config.interBrokerProtocolVersion)
+      replicaManager, replicaQuota, () => config.interBrokerProtocolVersion, () => 1)
     val thread = new ReplicaFetcherThread("bob",
       leader,
       config,

@@ -390,6 +390,7 @@ class PartitionLockTest extends Logging {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         followerId,
+        1,
         0L,
         1,
         maxBytes,
