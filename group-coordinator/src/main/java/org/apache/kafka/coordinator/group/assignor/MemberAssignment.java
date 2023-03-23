@@ -16,25 +16,28 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 
-import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
 
 /**
  * The partition assignment for a consumer group member.
  */
 public class MemberAssignment {
-    /**
-     * The target partitions assigned to this member.
-     */
-    final Collection<TopicPartition> targetPartitions;
 
-    public MemberAssignment(
-        Collection<TopicPartition> targetPartitions
-    ) {
-        Objects.requireNonNull(targetPartitions);
-        this.targetPartitions = targetPartitions;
+    private final Map<Uuid, Set<Integer>> assignmentPerTopic;
+
+
+    public MemberAssignment(Map<Uuid, Set<Integer>> assignmentPerTopic) {
+        Objects.requireNonNull(assignmentPerTopic);
+        this.assignmentPerTopic = assignmentPerTopic;
+    }
+
+    public Map<Uuid, Set<Integer>> getAssignmentPerTopic() {
+        return this.assignmentPerTopic;
     }
 
     @Override
@@ -44,16 +47,16 @@ public class MemberAssignment {
 
         MemberAssignment that = (MemberAssignment) o;
 
-        return targetPartitions.equals(that.targetPartitions);
+        return assignmentPerTopic.equals(that.assignmentPerTopic);
     }
 
     @Override
     public int hashCode() {
-        return targetPartitions.hashCode();
+        return assignmentPerTopic.hashCode();
     }
 
     @Override
     public String toString() {
-        return "MemberAssignment(targetPartitions=" + targetPartitions + ')';
+        return "MemberAssignment(targetPartitions=" + assignmentPerTopic + ')';
     }
 }

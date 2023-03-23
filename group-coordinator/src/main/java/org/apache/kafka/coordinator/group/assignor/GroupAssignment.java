@@ -35,6 +35,10 @@ public class GroupAssignment {
         this.members = members;
     }
 
+    public Map<String, MemberAssignment> getMembers() {
+        return this.members;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
