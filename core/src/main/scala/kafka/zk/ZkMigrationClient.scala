@@ -44,6 +44,10 @@ import java.util.function.{BiConsumer, Consumer}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+object ZkMigrationClient {
+  val MaxBatchSize = 100
+}
+
 /**
  * Migration client in KRaft controller responsible for handling communication to Zookeeper and
  * the ZkBrokers present in the cluster. Methods that directly use KafkaZkClient should use the wrapZkException
@@ -282,8 +286,14 @@ class ZkMigrationClient(
             .setHost(entry.host())
             .setOperation(entry.operation().code())
             .setPermissionType(entry.permissionType().code()), AccessControlEntryRecord.HIGHEST_SUPPORTED_VERSION))
+          if (batch.size() == ZkMigrationClient.MaxBatchSize) {
+            recordConsumer.accept(batch)
+            batch.clear()
+          }
         }
-        recordConsumer.accept(batch)
+        if (!batch.isEmpty) {
+          recordConsumer.accept(batch)
+        }
       }
     })
   }
