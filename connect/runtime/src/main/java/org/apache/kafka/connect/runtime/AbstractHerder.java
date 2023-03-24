@@ -845,7 +845,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                     configDefs = ((SinkConnector) plugin).config();
                     break;
                 case SOURCE:
-                    for (ConfigDef.ConfigKey configKey : SinkConnectorConfig.configDef().configKeys().values()) {
+                    for (ConfigDef.ConfigKey configKey : SourceConnectorConfig.configDef().configKeys().values()) {
                         results.add(AbstractHerder.convertConfigKey(configKey));
                     }
                     configDefs = ((SourceConnector) plugin).config();
