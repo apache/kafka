@@ -78,12 +78,16 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
             RequestFutureListener<ClientResponse> listener = new RequestFutureListener<ClientResponse>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
-                    handleFetchResponse(fetchTarget, data, resp);
+                    synchronized (Fetcher.this) {
+                        handleFetchResponse(fetchTarget, data, resp);
+                    }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    handleFetchResponse(fetchTarget, e);
+                    synchronized (Fetcher.this) {
+                        handleFetchResponse(fetchTarget, e);
+                    }
                 }
             };
 
@@ -92,18 +96,6 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
         }
 
         return fetchRequestMap.size();
-    }
-
-    @Override
-    protected synchronized void handleFetchResponse(Node fetchTarget,
-                                                    FetchSessionHandler.FetchRequestData data,
-                                                    ClientResponse resp) {
-        super.handleFetchResponse(fetchTarget, data, resp);
-    }
-
-    @Override
-    protected synchronized void handleFetchResponse(Node fetchTarget, RuntimeException e) {
-        super.handleFetchResponse(fetchTarget, e);
     }
 
     public void close(final Timer timer) {
