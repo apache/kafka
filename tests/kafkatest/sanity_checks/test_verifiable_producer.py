@@ -101,11 +101,11 @@ class TestVerifiableProducer(Test):
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
     @cluster(num_nodes=4)
-    @matrix(inter_broker_security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=[quorum.remote_kraft])
+    @matrix(inter_broker_security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=[quorum.isolated_kraft])
     @matrix(inter_broker_security_protocol=['SASL_SSL'], inter_broker_sasl_mechanism=['PLAIN', 'GSSAPI'],
-            metadata_quorum=[quorum.remote_kraft])
+            metadata_quorum=[quorum.isolated_kraft])
     def test_multiple_kraft_security_protocols(
-            self, inter_broker_security_protocol, inter_broker_sasl_mechanism='GSSAPI', metadata_quorum=quorum.remote_kraft):
+            self, inter_broker_security_protocol, inter_broker_sasl_mechanism='GSSAPI', metadata_quorum=quorum.isolated_kraft):
         """
         Test for remote KRaft cases that we can start VerifiableProducer on the current branch snapshot version, and
         verify that we can produce a small number of messages.  The inter-controller and broker-to-controller
@@ -144,7 +144,7 @@ class TestVerifiableProducer(Test):
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
     @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.remote_kraft)
+    @parametrize(metadata_quorum=quorum.isolated_kraft)
     def test_multiple_kraft_sasl_mechanisms(self, metadata_quorum):
         """
         Test for remote KRaft cases that we can start VerifiableProducer on the current branch snapshot version, and
