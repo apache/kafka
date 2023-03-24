@@ -596,7 +596,7 @@ public class ClusterControlManager {
         }
     }
 
-    public long getBrokerEpoch(int brokerId) {
+    public long brokerEpoch(int brokerId) {
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
         return registration == null ? -1 : registration.epoch();
     }

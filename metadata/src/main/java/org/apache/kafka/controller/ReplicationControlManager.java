@@ -1187,10 +1187,10 @@ public class ReplicationControlManager {
     private List<BrokerEpochMismatchReplica> brokerEpochMismatchReplicasForIsr(List<BrokerState> brokerStates) {
         List<BrokerEpochMismatchReplica> mismatchReplicas = new LinkedList<>();
         brokerStates.forEach(brokerState -> {
-            if (brokerState.brokerEpoch() != -1 && brokerState.brokerEpoch() != clusterControl.getBrokerEpoch(brokerState.brokerId())) {
+            if (brokerState.brokerEpoch() != -1 && brokerState.brokerEpoch() != clusterControl.brokerEpoch(brokerState.brokerId())) {
                 mismatchReplicas.add(new BrokerEpochMismatchReplica(
                     brokerState,
-                    clusterControl.getBrokerEpoch(brokerState.brokerId()))
+                    clusterControl.brokerEpoch(brokerState.brokerId()))
                 );
             }
         });

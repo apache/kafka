@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
@@ -85,6 +86,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointColle
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
@@ -107,6 +109,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,6 +121,7 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
+import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -344,8 +348,9 @@ public class QuorumControllerTest {
         }
     }
 
-    @Test
-    public void testBalancePartitionLeaders() throws Throwable {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testBalancePartitionLeaders(Short alterPartitionApiVersion) throws Throwable {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3);
         List<Integer> brokersToKeepUnfenced = Arrays.asList(1, 2);
         List<Integer> brokersToFence = Arrays.asList(3);
@@ -459,7 +464,8 @@ public class QuorumControllerTest {
                 .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 2, 3)));
 
             AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
-                .setTopicName("foo");
+                .setTopicName(alterPartitionApiVersion > 1 ? "" : "foo")
+                .setTopicId(alterPartitionApiVersion > 1 ? topicIdFoo : Uuid.ZERO_UUID);
             topicData.partitions().add(partitionData);
 
             AlterPartitionRequestData alterPartitionRequest = new AlterPartitionRequestData()
@@ -467,8 +473,11 @@ public class QuorumControllerTest {
                 .setBrokerEpoch(brokerEpochs.get(partitionRegistration.leader));
             alterPartitionRequest.topics().add(topicData);
 
-            short version = ANONYMOUS_CONTEXT.requestHeader().requestApiVersion();
-            active.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest.Builder(alterPartitionRequest, version > 1).build(version).data()).get();
+            ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.ALTER_PARTITION, alterPartitionApiVersion);
+            active.alterPartition(requestContext,
+                new AlterPartitionRequest.Builder(alterPartitionRequest, alterPartitionApiVersion > 1)
+                    .build(alterPartitionApiVersion).data()).get();
 
             // Check that partitions are balanced
             AtomicLong lastHeartbeat = new AtomicLong(active.time().milliseconds());
@@ -863,8 +872,9 @@ public class QuorumControllerTest {
     }
 
     @Disabled // TODO: need to fix leader election in LocalLog.
-    @Test
-    public void testMissingInMemorySnapshot() throws Exception {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testMissingInMemorySnapshot(short alterPartitionApiVersion) throws Exception {
         int numBrokers = 3;
         int numPartitions = 3;
         String topicName = "topic-name";
@@ -918,7 +928,8 @@ public class QuorumControllerTest {
                 .collect(Collectors.toList());
 
             AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
-                .setTopicName(topicName);
+                .setTopicName(alterPartitionApiVersion > 1 ? "" : topicName)
+                .setTopicId(alterPartitionApiVersion > 1 ? topicId : Uuid.ZERO_UUID);
             topicData.partitions().addAll(alterPartitions);
 
             int leaderId = 0;
@@ -930,9 +941,12 @@ public class QuorumControllerTest {
             logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
 
             int oldClaimEpoch = controller.curClaimEpoch();
-            short version = ANONYMOUS_CONTEXT.requestHeader().requestApiVersion();
+            ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.ALTER_PARTITION, alterPartitionApiVersion);
             assertThrows(ExecutionException.class,
-                () -> controller.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest.Builder(alterPartitionRequest, version > 1).build(version).data()).get());
+                () -> controller.alterPartition(requestContext,
+                    new AlterPartitionRequest.Builder(alterPartitionRequest, alterPartitionApiVersion > 1)
+                        .build(alterPartitionApiVersion).data()).get());
 
             // Wait for the controller to become active again
             assertSame(controller, controlEnv.activeController());
