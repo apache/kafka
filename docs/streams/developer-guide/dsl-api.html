@@ -852,7 +852,9 @@ KStream&lt;byte[], String&gt; repartitionedStream = stream.repartition(Repartiti
                     defined window boundary.</p>
 		<p><b>Note:</b> Following store types are used regardless of the possibly specified type (via the parameter <code class="docutils literal"><span class="pre">materialized</span></code>):
 		<ul class="simple">
-		    <li>non-windowed aggregations and non-windowed KTables use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html">TimestampedKeyValueStore</a>s</li>
+		    <li>non-windowed aggregations and non-windowed KTables use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html">TimestampedKeyValueStore</a>s
+                or <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html">VersionedKeyValueStore</a>s,
+                depending on whether the parameter <code class="docutils literal"><span class="pre">materialized</span></code> is versioned</li>
 		    <li>time-windowed aggregations and KStream-KStream joins use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html">TimestampedWindowStore</a>s</li>
 		    <li>session windowed aggregations use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/SessionStore.html">SessionStore</a>s (there is no timestamped session store as of now)</li>
 		</ul>
