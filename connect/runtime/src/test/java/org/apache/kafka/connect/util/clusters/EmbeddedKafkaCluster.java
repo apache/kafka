@@ -70,6 +70,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -112,7 +113,7 @@ public class EmbeddedKafkaCluster {
         try {
             KafkaClusterTestKit.Builder clusterBuilder = new KafkaClusterTestKit.Builder(
                     new TestKitNodes.Builder()
-                            .setCoResident(true)
+                            .setCombined(true)
                             .setNumBrokerNodes(numBrokers)
                             .setNumControllerNodes(numBrokers)
                             .build()
@@ -139,7 +140,6 @@ public class EmbeddedKafkaCluster {
 
         Map<String, Object> producerProps = new HashMap<>(clientConfigs);
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-
         if (sslEnabled()) {
             producerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             producerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
@@ -154,9 +154,7 @@ public class EmbeddedKafkaCluster {
      * {@link KafkaConfig#ListenersProp} property and it should use a fixed non-zero free port.
      */
     public void restartOnlyBrokers() {
-        for (BrokerServer broker : cluster.brokers().values()) {
-            broker.startup();
-        }
+        cluster.brokers().values().forEach(BrokerServer::startup);
     }
 
     /**
@@ -164,20 +162,16 @@ public class EmbeddedKafkaCluster {
      * when the backing Kafka cluster goes offline.
      */
     public void stopOnlyBrokers() {
-        for (BrokerServer broker : cluster.brokers().values()) {
-            broker.shutdown();
-            broker.awaitShutdown();
-        }
+        cluster.brokers().values().forEach(BrokerServer::shutdown);
+        cluster.brokers().values().forEach(BrokerServer::awaitShutdown);
     }
 
     public void stop() {
-        if (producer != null) {
-            producer.close();
-        }
-        try {
-            cluster.close();
-        } catch (Exception e) {
-            throw new ConnectException("Failed to shutdown test Kafka cluster", e);
+        AtomicReference<Throwable> shutdownFailure = new AtomicReference<>();
+        Utils.closeQuietly(producer, "producer for embedded Kafka cluster", shutdownFailure);
+        Utils.closeQuietly(cluster, "embedded Kafka cluster", shutdownFailure);
+        if (shutdownFailure.get() != null) {
+            throw new ConnectException("Failed to shut down producer / embedded Kafka cluster", shutdownFailure.get());
         }
     }
 
@@ -188,7 +182,7 @@ public class EmbeddedKafkaCluster {
     /**
      * Get the brokers that have a {@link BrokerState#RUNNING} state.
      *
-     * @return the list of {@link BrokerServer} instances that are running;
+     * @return the set of {@link BrokerServer} instances that are running;
      *         never null but possibly empty
      */
     public Set<BrokerServer> runningBrokers() {
@@ -198,7 +192,7 @@ public class EmbeddedKafkaCluster {
     /**
      * Get the brokers whose state match the given predicate.
      *
-     * @return the list of {@link BrokerServer} instances with states that match the predicate;
+     * @return the set of {@link BrokerServer} instances with states that match the predicate;
      *         never null but possibly empty
      */
     public Set<BrokerServer> brokersInState(Predicate<BrokerState> desiredState) {
@@ -215,6 +209,7 @@ public class EmbeddedKafkaCluster {
             return false;
         }
     }
+
     public boolean sslEnabled() {
         final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
         return listeners != null && listeners.contains("SSL");
@@ -593,16 +588,10 @@ public class EmbeddedKafkaCluster {
     }
 
     private void addDefaultBrokerPropsIfAbsent(Properties brokerConfig, int numBrokers) {
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), "true");
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), "0");
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), String.valueOf(numBrokers));
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), "false");
-    }
-
-    private static void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
-        if (!props.containsKey(propertyKey)) {
-            props.put(propertyKey, propertyValue);
-        }
+        brokerConfig.putIfAbsent(KafkaConfig.DeleteTopicEnableProp(), "true");
+        brokerConfig.putIfAbsent(KafkaConfig.GroupInitialRebalanceDelayMsProp(), "0");
+        brokerConfig.putIfAbsent(KafkaConfig.OffsetsTopicReplicationFactorProp(), String.valueOf(numBrokers));
+        brokerConfig.putIfAbsent(KafkaConfig.AutoCreateTopicsEnableProp(), "false");
     }
 
     private static void putIfAbsent(final Map<String, Object> props, final String propertyKey, final Object propertyValue) {

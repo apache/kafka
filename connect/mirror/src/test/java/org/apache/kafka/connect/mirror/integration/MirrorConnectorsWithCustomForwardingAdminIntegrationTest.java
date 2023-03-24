@@ -76,18 +76,13 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         brokerProps.put(KafkaConfig.InterBrokerListenerNameProp(), "EXTERNAL");
         brokerProps.put(KafkaConfig.ControllerListenerNamesProp(), "CONTROLLER");
         brokerProps.put(KafkaConfig.ListenerSecurityProtocolMapProp(), "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
-        brokerProps.put("listener.name.external.plain.sasl.jaas.config",
-                "org.apache.kafka.common.security.plain.PlainLoginModule required "
-                        + "username=\"super\" "
-                        + "password=\"super_pwd\" "
-                        + "user_connector=\"connector_pwd\" "
-                        + "user_super=\"super_pwd\";");
-        brokerProps.put("listener.name.controller.plain.sasl.jaas.config",
-                "org.apache.kafka.common.security.plain.PlainLoginModule required "
-                        + "username=\"super\" "
-                        + "password=\"super_pwd\" "
-                        + "user_connector=\"connector_pwd\" "
-                        + "user_super=\"super_pwd\";");
+        String listenerSaslJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required "
+                + "username=\"super\" "
+                + "password=\"super_pwd\" "
+                + "user_connector=\"connector_pwd\" "
+                + "user_super=\"super_pwd\";";
+        brokerProps.put("listener.name.external.plain.sasl.jaas.config", listenerSaslJaasConfig);
+        brokerProps.put("listener.name.controller.plain.sasl.jaas.config", listenerSaslJaasConfig);
         brokerProps.put("super.users", "User:super");
     }
 
