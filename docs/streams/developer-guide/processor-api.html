@@ -446,6 +446,11 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                         <a class="reference internal" href="app-reset-tool.html#streams-developer-guide-reset-local-environment"><span class="std std-ref">clear any local state directories</span></a>
                         for the store(s) being upgraded.</li>
                     <li>Update your application code to use versioned stores where desired.</li>
+                    <li>Update your changelog topic configs, for the relevant state stores,
+                        to set the value of <code class="docutils literal"><span class="pre">min.compaction.lag.ms</span></code>
+                        to be at least your desired history retention. History retention plus
+                        one day is recommended as buffer for the use of broker wall clock time
+                        during compaction.</li>
                     <li>Restart your application instances and allow time for the versioned
                         stores to rebuild state from changelog.</li>
                 </ul>
