@@ -19,24 +19,30 @@ package kafka.zk
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.coordinator.transaction.ProducerIdManager
+import kafka.security.authorizer.AclAuthorizer
+import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.{ConfigType, KafkaConfig, QuorumTestHarness, ZkAdminManager}
-import kafka.utils.PasswordEncoder
+import kafka.utils.{PasswordEncoder, TestUtils}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, ProducerIdsRecord}
+import org.apache.kafka.common.metadata.{AccessControlEntryRecord, ConfigRecord, MetadataRecordType, ProducerIdsRecord}
 import org.apache.kafka.common.quota.ClientQuotaEntity
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
-import java.util.Properties
-import scala.collection.Map
+import java.util.{Properties, UUID}
+import scala.collection.{Map, mutable}
+import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 /**
@@ -422,5 +428,90 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     val newProps = zkClient.getEntityConfigs(ConfigType.Topic, "test")
     assertEquals(1, newProps.size())
     assertEquals("100000", newProps.getProperty(TopicConfig.SEGMENT_MS_CONFIG))
+  }
+
+  def migrateAclsAndVerify(authorizer: AclAuthorizer, acls: Seq[AclBinding]): Unit = {
+    authorizer.createAcls(null, acls.asJava)
+    val batches = new ArrayBuffer[mutable.Buffer[ApiMessageAndVersion]]()
+    migrationClient.migrateAcls(batch => batches.addOne(batch.asScala))
+    val records = batches.flatten.map(_.message().asInstanceOf[AccessControlEntryRecord])
+    assertEquals(acls.size, records.size, "Expected one record for each ACLBinding")
+  }
+
+  def writeAclAndReadWithAuthorizer(
+    authorizer: AclAuthorizer,
+    resourcePattern: ResourcePattern,
+    ace: AccessControlEntry,
+    pred: Seq[AclBinding] => Boolean
+  ): Seq[AclBinding] = {
+    val resourceFilter = new AclBindingFilter(
+      new ResourcePatternFilter(resourcePattern.resourceType(), resourcePattern.name(), resourcePattern.patternType()),
+      AclBindingFilter.ANY.entryFilter()
+    )
+    migrationState = migrationClient.writeAddedAcls(resourcePattern, List(ace).asJava, migrationState)
+    val (acls, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSeq)(pred)
+    assertTrue(ok)
+    acls
+  }
+
+  def deleteAclAndReadWithAuthorizer(
+    authorizer: AclAuthorizer,
+    resourcePattern: ResourcePattern,
+    ace: AccessControlEntry,
+    pred: Seq[AclBinding] => Boolean
+  ): Seq[AclBinding] = {
+    val resourceFilter = new AclBindingFilter(
+      new ResourcePatternFilter(resourcePattern.resourceType(), resourcePattern.name(), resourcePattern.patternType()),
+      AclBindingFilter.ANY.entryFilter()
+    )
+    migrationState = migrationClient.removeDeletedAcls(resourcePattern, List(ace).asJava, migrationState)
+    val (acls, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSeq)(pred)
+    assertTrue(ok)
+    acls
+  }
+
+  @Test
+  def testAclsMigrateAndDualWrite(): Unit = {
+    val resource1 = new ResourcePattern(ResourceType.TOPIC, "foo-" + UUID.randomUUID(), PatternType.LITERAL)
+    val resource2 = new ResourcePattern(ResourceType.TOPIC, "bar-" + UUID.randomUUID(), PatternType.LITERAL)
+    val prefixedResource = new ResourcePattern(ResourceType.TOPIC, "bar-", PatternType.PREFIXED)
+    val username = "alice"
+    val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val wildcardPrincipal = SecurityUtils.parseKafkaPrincipal(WildcardPrincipalString)
+
+    val ace1 = new AccessControlEntry(principal.toString, WildcardHost, AclOperation.READ, AclPermissionType.ALLOW)
+    val acl1 = new AclBinding(resource1, ace1)
+    val ace2 = new AccessControlEntry(principal.toString, "192.168.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
+    val acl2 = new AclBinding(resource1, ace2)
+    val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WildcardHost, AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+    val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WildcardHost, AclOperation.READ, AclPermissionType.ALLOW))
+
+    val authorizer = new AclAuthorizer()
+    try {
+      authorizer.configure(Map("zookeeper.connect" -> this.zkConnect).asJava)
+
+      // Migrate ACLs
+      migrateAclsAndVerify(authorizer, Seq(acl1, acl2, acl3, acl4))
+
+      // Delete one of resource1's ACLs
+      var resource1Acls = deleteAclAndReadWithAuthorizer(authorizer, resource1, ace2, acls => acls.size == 1)
+      assertEquals(acl1, resource1Acls.head)
+
+      // Delete the other ACL from resource1
+      deleteAclAndReadWithAuthorizer(authorizer, resource1, ace1, acls => acls.isEmpty)
+
+      // Add a new ACL for resource1
+      val newAce1 = new AccessControlEntry(principal.toString, "10.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
+      resource1Acls = writeAclAndReadWithAuthorizer(authorizer, resource1, newAce1, acls => acls.size == 1)
+      assertEquals(newAce1, resource1Acls.head.entry())
+
+      // Add a new ACL for resource2
+      val newAce2 = new AccessControlEntry(principal.toString, "10.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
+      val resource2Acls = writeAclAndReadWithAuthorizer(authorizer, resource2, newAce2, acls => acls.size == 2)
+      assertEquals(acl3, resource2Acls.head)
+      assertEquals(newAce2, resource2Acls.last.entry())
+    } finally {
+      authorizer.close()
+    }
   }
 }

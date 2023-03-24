@@ -153,7 +153,8 @@ public class KRaftMigrationDriverTest {
 
         @Override
         public ZkMigrationLeadershipState removeDeletedAcls(
-            Map<ResourcePattern, List<AccessControlEntry>> deletedAcls,
+            ResourcePattern resourcePattern,
+            List<AccessControlEntry> deletedAcls,
             ZkMigrationLeadershipState state
         ) {
             return state;
@@ -161,7 +162,8 @@ public class KRaftMigrationDriverTest {
 
         @Override
         public ZkMigrationLeadershipState writeAddedAcls(
-            Map<ResourcePattern, List<AccessControlEntry>> addedAcls,
+            ResourcePattern resourcePattern,
+            List<AccessControlEntry> addedAcls,
             ZkMigrationLeadershipState state
         ) {
             return state;

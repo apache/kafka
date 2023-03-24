@@ -596,22 +596,27 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         if (!standardAclOpt.isPresent()) {
                             StandardAcl acl = prevImage.acls().acls().get(uuid);
                             if (acl != null) {
-                                standardAclToMap(deletedAcls, acl);
+                                addStandardAclToMap(deletedAcls, acl);
                             } else {
                                 throw new RuntimeException("Cannot remove deleted ACL " + uuid + " from ZK since it is " +
                                     "not present in the previous AclsImage");
                             }
                         } else {
                             StandardAcl acl = standardAclOpt.get();
-                            standardAclToMap(addedAcls, acl);
+                            addStandardAclToMap(addedAcls, acl);
                         }
                     });
-                    int added = addedAcls.values().stream().mapToInt(List::size).sum();
-                    int removed = deletedAcls.values().stream().mapToInt(List::size).sum();
-                    apply("Deleting " + removed + " ACLs",
-                        migrationState -> zkMigrationClient.removeDeletedAcls(deletedAcls, migrationState));
-                    apply("Adding " + added + " ACLs",
-                        migrationState -> zkMigrationClient.writeAddedAcls(addedAcls, migrationState));
+                    deletedAcls.forEach((resourcePattern, accessControlEntries) -> {
+                        String name = "Deleting " + accessControlEntries.size() + " for resource " + resourcePattern;
+                        apply(name, migrationState ->
+                            zkMigrationClient.removeDeletedAcls(resourcePattern, accessControlEntries, migrationState));
+                    });
+
+                    addedAcls.forEach((resourcePattern, accessControlEntries) -> {
+                        String name = "Adding " + accessControlEntries.size() + " for resource " + resourcePattern;
+                        apply(name, migrationState ->
+                            zkMigrationClient.writeAddedAcls(resourcePattern, accessControlEntries, migrationState));
+                    });
                 }
 
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
@@ -629,7 +634,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             completionHandler.accept(null);
         }
 
-        private void standardAclToMap(Map<ResourcePattern, List<AccessControlEntry>> aclMap, StandardAcl acl) {
+        private void addStandardAclToMap(Map<ResourcePattern, List<AccessControlEntry>> aclMap, StandardAcl acl) {
             ResourcePattern resource = new ResourcePattern(acl.resourceType(), acl.resourceName(), acl.patternType());
             aclMap.computeIfAbsent(resource, __ -> new ArrayList<>()).add(
                 new AccessControlEntry(acl.principal(), acl.host(), acl.operation(), acl.permissionType())

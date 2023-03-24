@@ -105,12 +105,14 @@ public interface MigrationClient {
     );
 
     ZkMigrationLeadershipState removeDeletedAcls(
-        Map<ResourcePattern, List<AccessControlEntry>> deletedAcls,
+        ResourcePattern resourcePattern,
+        List<AccessControlEntry> deletedAcls,
         ZkMigrationLeadershipState state
     );
 
     ZkMigrationLeadershipState writeAddedAcls(
-        Map<ResourcePattern, List<AccessControlEntry>> addedAcls,
+        ResourcePattern resourcePattern,
+        List<AccessControlEntry> addedAcls,
         ZkMigrationLeadershipState state
     );
 
