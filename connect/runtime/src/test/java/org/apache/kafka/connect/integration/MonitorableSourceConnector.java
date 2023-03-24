@@ -202,7 +202,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
                     throttler.throttle();
                 }
                 taskHandle.record(batchSize);
-                log.trace("Returning batch of {} records", batchSize);
+                log.trace("Returning batch of {} records", Math.min(maxMessages - seqno, batchSize));
                 return LongStream.range(0, Math.min(maxMessages - seqno, batchSize))
                         .mapToObj(i -> {
                             seqno++;
