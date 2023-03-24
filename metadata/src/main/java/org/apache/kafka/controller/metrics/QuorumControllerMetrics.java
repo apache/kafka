@@ -152,17 +152,15 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        registry.ifPresent(r -> {
-            Arrays.asList(
-                ACTIVE_CONTROLLER_COUNT,
-                EVENT_QUEUE_TIME_MS,
-                EVENT_QUEUE_PROCESSING_TIME_MS,
-                LAST_APPLIED_RECORD_OFFSET,
-                LAST_COMMITTED_RECORD_OFFSET,
-                LAST_APPLIED_RECORD_TIMESTAMP,
-                LAST_APPLIED_RECORD_LAG_MS
-            ).forEach(r::removeMetric);
-        });
+        registry.ifPresent(r -> Arrays.asList(
+            ACTIVE_CONTROLLER_COUNT,
+            EVENT_QUEUE_TIME_MS,
+            EVENT_QUEUE_PROCESSING_TIME_MS,
+            LAST_APPLIED_RECORD_OFFSET,
+            LAST_COMMITTED_RECORD_OFFSET,
+            LAST_APPLIED_RECORD_TIMESTAMP,
+            LAST_APPLIED_RECORD_LAG_MS
+        ).forEach(r::removeMetric));
     }
 
     private static MetricName getMetricName(String type, String name) {

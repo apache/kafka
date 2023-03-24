@@ -64,9 +64,9 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(
-            MetadataDelta delta,
-            MetadataImage newImage,
-            LoaderManifest manifest
+        MetadataDelta delta,
+        MetadataImage newImage,
+        LoaderManifest manifest
     ) {
         switch (manifest.type()) {
             case LOG_DELTA:

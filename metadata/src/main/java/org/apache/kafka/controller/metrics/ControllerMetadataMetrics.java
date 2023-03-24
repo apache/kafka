@@ -192,17 +192,15 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        registry.ifPresent(r -> {
-            Arrays.asList(
-                FENCED_BROKER_COUNT,
-                ACTIVE_BROKER_COUNT,
-                GLOBAL_TOPIC_COUNT,
-                GLOBAL_PARTITION_COUNT,
-                OFFLINE_PARTITION_COUNT,
-                PREFERRED_REPLICA_IMBALANCE_COUNT,
-                METADATA_ERROR_COUNT
-                ).forEach(r::removeMetric);
-        });
+        registry.ifPresent(r -> Arrays.asList(
+            FENCED_BROKER_COUNT,
+            ACTIVE_BROKER_COUNT,
+            GLOBAL_TOPIC_COUNT,
+            GLOBAL_PARTITION_COUNT,
+            OFFLINE_PARTITION_COUNT,
+            PREFERRED_REPLICA_IMBALANCE_COUNT,
+            METADATA_ERROR_COUNT
+        ).forEach(r::removeMetric));
     }
 
     private static MetricName getMetricName(String type, String name) {
