@@ -836,10 +836,19 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Object plugin = p.newPlugin(pluginName);
             PluginType pluginType = PluginType.from(plugin.getClass());
             ConfigDef configDefs;
+            List<ConfigKeyInfo> results = new ArrayList<>();
             switch (pluginType) {
                 case SINK:
+                    for (ConfigDef.ConfigKey configKey : SinkConnectorConfig.configDef().configKeys().values()) {
+                        results.add(AbstractHerder.convertConfigKey(configKey));
+                    }
+                    configDefs = ((SinkConnector) plugin).config();
+                    break;
                 case SOURCE:
-                    configDefs = ((Connector) plugin).config();
+                    for (ConfigDef.ConfigKey configKey : SinkConnectorConfig.configDef().configKeys().values()) {
+                        results.add(AbstractHerder.convertConfigKey(configKey));
+                    }
+                    configDefs = ((SourceConnector) plugin).config();
                     break;
                 case CONVERTER:
                     configDefs = ((Converter) plugin).config();
@@ -856,7 +865,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 default:
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
-            List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
