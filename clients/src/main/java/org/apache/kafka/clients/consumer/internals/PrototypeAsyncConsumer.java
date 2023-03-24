@@ -258,10 +258,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             } else {
                 commitCallback.onComplete(offsets, null);
             }
+        }).exceptionally(e -> {
+            System.out.println(e);
+            throw new KafkaException(e);
         });
     }
 
-    private CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    // Visible for testing
+    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
         maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
         eventHandler.add(commitEvent);

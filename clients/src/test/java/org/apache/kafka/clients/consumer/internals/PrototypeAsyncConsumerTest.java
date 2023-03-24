@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.common.KafkaException;
@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,16 +44,20 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,12 +109,39 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    public void testCommitAsync() {
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-        HashMap<TopicPartition, OffsetAndMetadata> mockPartitionOffset = mockTopicPartitionOffset();
-        when(subscriptions.allConsumed()).thenReturn(mockPartitionOffset);
-        consumer.commitAsync();
-        verify(eventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
+    public void testCommitAsync_NullCallback() throws InterruptedException {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
+        offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
+
+        PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
+        doReturn(future).when(mockedConsumer).commit(offsets);
+        mockedConsumer.commitAsync(offsets, null);
+        future.complete(null);
+        TestUtils.waitForCondition(() -> future.isDone(),
+                2000,
+                "commit future should complete");
+
+        assertFalse(future.isCompletedExceptionally());
+    }
+
+
+    @Test
+    public void testCommitAsync_UserSuppliedCallback() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
+        offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
+
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(consumer);
+        doReturn(future).when(mockedConsumer).commit(offsets);
+        OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
+        mockedConsumer.commitAsync(offsets, customCallback);
+        future.complete(null);
+        verify(customCallback).onComplete(offsets, null);
     }
 
     @Test
