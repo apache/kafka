@@ -112,7 +112,7 @@ class KafkaRequestHandler(id: Int,
             request.fun() 
           } catch {
             case e: FatalExitError =>
-              shutdownComplete.countDown()
+              completeShutdown()
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           }
@@ -130,6 +130,8 @@ class KafkaRequestHandler(id: Int,
           } finally {
             request.releaseBuffer()
           }
+
+        case RequestChannel.WakeupRequest =>
 
         case null => // continue
       }

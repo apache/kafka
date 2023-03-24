@@ -55,6 +55,7 @@ object RequestChannel extends Logging {
 
   sealed trait BaseRequest
   case object ShutdownRequest extends BaseRequest
+  case object WakeupRequest extends BaseRequest
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
@@ -356,6 +357,7 @@ class RequestChannel(val queueSize: Int,
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
+  private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
   metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
 
@@ -458,9 +460,16 @@ class RequestChannel(val queueSize: Int,
     }
   }
 
-  /** Get the next request or block until specified time has elapsed */
-  def receiveRequest(timeout: Long): RequestChannel.BaseRequest =
-    requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+  /** Get the next request or block until specified time has elapsed 
+   *  Check the callback queue and execute first if present since these
+   *  requests have already waited in line. */
+  def receiveRequest(timeout: Long): RequestChannel.BaseRequest = {
+    val callbackRequest = callbackQueue.poll()
+    if (callbackRequest != null)
+      callbackRequest
+    else 
+      requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+  }
 
   /** Get the next request or block until there is one */
   def receiveRequest(): RequestChannel.BaseRequest =
@@ -474,6 +483,7 @@ class RequestChannel(val queueSize: Int,
 
   def clear(): Unit = {
     requestQueue.clear()
+    callbackQueue.clear()
   }
 
   def shutdown(): Unit = {
@@ -483,14 +493,10 @@ class RequestChannel(val queueSize: Int,
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
 
-  // TODO: this is the most straightforward implementation, we may want to address fairness:
-  // The callback function is invoked as part of processing a request, so it already "stood in line"
-  // when the original request got accepted, so it may be unfair to make put to the end of the line.
-  // A simple solution would be to put it to the head of the line, but then multiple callbacks would
-  // be in LIFO order, which is weird.
-  // We may want to use a PriorityBlockingQueue or just have 2 queues and write customer wait / notify
-  // synchronization.
-  def sendCallbackRequest(request: CallbackRequest): Unit = requestQueue.put(request)
+  def sendCallbackRequest(request: CallbackRequest): Unit = {
+    callbackQueue.put(request)
+    requestQueue.put(RequestChannel.WakeupRequest)
+  }
 
 }
 
