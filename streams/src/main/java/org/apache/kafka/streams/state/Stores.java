@@ -121,6 +121,11 @@ public final class Stores {
      * <p>
      * This store supplier can be passed into a
      * {@link #versionedKeyValueStoreBuilder(VersionedBytesStoreSupplier, Serde, Serde)}.
+     * <p>
+     * Note that it is not safe to change the value of {@code historyRetention} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
      *
      * @param name             name of the store (cannot be {@code null})
      * @param historyRetention length of time that old record versions are available for query
@@ -148,6 +153,10 @@ public final class Stores {
      * <p>
      * This store supplier can be passed into a
      * {@link #versionedKeyValueStoreBuilder(VersionedBytesStoreSupplier, Serde, Serde)}.
+     * <p>
+     * Note that it is not safe to change the value of {@code segmentInterval} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store otherwise.
      *
      * @param name             name of the store (cannot be {@code null})
      * @param historyRetention length of time that old record versions are available for query
@@ -239,6 +248,11 @@ public final class Stores {
      * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
      * If you want to create a {@link TimestampedWindowStore} you should use
      * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
      *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
@@ -266,6 +280,11 @@ public final class Stores {
      * {@link #timestampedWindowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
      * If you want to create a {@link WindowStore} you should use
      * {@link #persistentWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
      *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
@@ -380,6 +399,11 @@ public final class Stores {
 
     /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
      *
      * @param name              name of the store (cannot be {@code null})
      * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
