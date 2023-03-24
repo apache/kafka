@@ -36,7 +36,6 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -45,7 +44,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -62,6 +60,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final Logger log;
     private final int nodeId;
     private final MigrationClient zkMigrationClient;
+    private final TopicMetadataZkWriter topicZkWriter;
     private final LegacyPropagator propagator;
     private final ZkRecordConsumer zkRecordConsumer;
     private final KafkaEventQueue eventQueue;
@@ -98,6 +97,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
+        this.topicZkWriter = new TopicMetadataZkWriter(zkMigrationClient, this::applyMigrationOperation);
     }
 
     public void start() {
@@ -119,7 +119,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     private void initializeMigrationState() {
         log.info("Recovering migration state");
-        apply("Recovery", zkMigrationClient::getOrCreateMigrationRecoveryState);
+        applyMigrationOperation("Recovery", zkMigrationClient::getOrCreateMigrationRecoveryState);
         String maybeDone = migrationLeadershipState.zkMigrationComplete() ? "done" : "not done";
         log.info("Recovered migration state {}. ZK migration is {}.", migrationLeadershipState, maybeDone);
         initialZkLoadHandler.accept(this);
@@ -168,12 +168,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     /**
      * Apply a function which transforms our internal migration state.
      *
-     * @param name  A descriptive name of the function that is being applied
-     * @param stateMutator  A function which performs some migration operations and possibly transforms our internal state
+     * @param name         A descriptive name of the function that is being applied
+     * @param migrationOp  A function which performs some migration operations and possibly transforms our internal state
      */
-    private void apply(String name, Function<ZkMigrationLeadershipState, ZkMigrationLeadershipState> stateMutator) {
+    private void applyMigrationOperation(String name, KRaftMigrationOperation migrationOp) {
         ZkMigrationLeadershipState beforeState = this.migrationLeadershipState;
-        ZkMigrationLeadershipState afterState = stateMutator.apply(beforeState);
+        ZkMigrationLeadershipState afterState = migrationOp.apply(beforeState);
         log.trace("{} transitioned from {} to {}", name, beforeState, afterState);
         this.migrationLeadershipState = afterState;
     }
@@ -372,11 +372,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     break;
                 default:
                     if (!isActive) {
-                        apply("KRaftLeaderEvent is not active", state -> ZkMigrationLeadershipState.EMPTY);
+                        applyMigrationOperation("KRaftLeaderEvent is not active", state -> ZkMigrationLeadershipState.EMPTY);
                         transitionTo(MigrationDriverState.INACTIVE);
                     } else {
                         // Apply the new KRaft state
-                        apply("KRaftLeaderEvent is active", state -> state.withNewKRaftController(nodeId, leaderAndEpoch.epoch()));
+                        applyMigrationOperation("KRaftLeaderEvent is active", state -> state.withNewKRaftController(nodeId, leaderAndEpoch.epoch()));
                         // Before becoming the controller fo ZkBrokers, we need to make sure the
                         // Controller Quorum can handle migration.
                         transitionTo(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM);
@@ -410,7 +410,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
-                apply("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
+                applyMigrationOperation("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                     log.debug("Unable to claim leadership, will retry until we learn of a different KRaft leader");
                 } else {
@@ -477,7 +477,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 ZkMigrationLeadershipState newState = migrationLeadershipState.withKRaftMetadataOffsetAndEpoch(
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch());
-                apply("Migrate metadata from Zk", state -> zkMigrationClient.setMigrationRecoveryState(newState));
+                applyMigrationOperation("Migrate metadata from Zk", state -> zkMigrationClient.setMigrationRecoveryState(newState));
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();
@@ -529,6 +529,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
+            MetadataImage prevImage = KRaftMigrationDriver.this.image;
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
@@ -542,58 +543,52 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 propagator.setMetadataVersion(image.features().metadataVersion());
             }
 
-            if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
-                if (delta.topicsDelta() != null) {
-                    delta.topicsDelta().changedTopics().forEach((topicId, topicDelta) -> {
-                        if (delta.topicsDelta().createdTopicIds().contains(topicId)) {
-                            apply("Create topic " + topicDelta.name(), migrationState ->
-                                zkMigrationClient.createTopic(
-                                    topicDelta.name(),
-                                    topicId,
-                                    topicDelta.partitionChanges(),
-                                    migrationState));
-                        } else {
-                            apply("Updating topic " + topicDelta.name(), migrationState ->
-                                zkMigrationClient.updateTopicPartitions(
-                                    Collections.singletonMap(topicDelta.name(), topicDelta.partitionChanges()),
-                                    migrationState));
-                        }
-                    });
-                }
-
-                // For configs and client quotas, we need to send all of the data to the ZK client since we persist
-                // everything for a given entity in a single ZK node.
-                if (delta.configsDelta() != null) {
-                    delta.configsDelta().changes().forEach((configResource, configDelta) ->
-                        apply("Updating config resource " + configResource, migrationState ->
-                            zkMigrationClient.writeConfigs(configResource, image.configs().configMapForResource(configResource), migrationState)));
-                }
-
-                if (delta.clientQuotasDelta() != null) {
-                    delta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
-                        Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                        apply("Updating client quota " + clientQuotaEntity, migrationState ->
-                            zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, migrationState));
-                    });
-                }
-
-                if (delta.producerIdsDelta() != null) {
-                    apply("Updating next producer ID", migrationState ->
-                        zkMigrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
-                }
-
-                // TODO: Unhappy path: Probably relinquish leadership and let new controller
-                //  retry the write?
-                if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-                    log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
-                    propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
-                            migrationLeadershipState.zkControllerEpoch());
-                } else {
-                    log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
-                }
-            } else {
+            if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
+                completionHandler.accept(null);
             }
+
+            if(isSnapshot) {
+                topicZkWriter.handleSnapshot(image.topics(), image.configs());
+            } else {
+                if (delta.topicsDelta() != null) {
+
+                    topicZkWriter.handleDelta(prevImage.topics(), delta.topicsDelta());
+                }
+            }
+
+
+            // For configs and client quotas, we need to send all of the data to the ZK client since we persist
+            // everything for a given entity in a single ZK node.
+            if (delta.configsDelta() != null) {
+                delta.configsDelta().changes().forEach((configResource, configDelta) ->
+                    applyMigrationOperation("Updating config resource " + configResource, migrationState ->
+                        zkMigrationClient.writeConfigs(configResource, image.configs().configMapForResource(configResource), migrationState)));
+            }
+
+            if (delta.clientQuotasDelta() != null) {
+                delta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
+                    Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
+                    applyMigrationOperation("Updating client quota " + clientQuotaEntity, migrationState ->
+                        zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, migrationState));
+                });
+            }
+
+            if (delta.producerIdsDelta() != null) {
+                applyMigrationOperation("Updating next producer ID", migrationState ->
+                    zkMigrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
+            }
+
+            // TODO: Unhappy path: Probably relinquish leadership and let new controller
+            //  retry the write?
+            if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
+                log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
+                propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
+                        migrationLeadershipState.zkControllerEpoch());
+            } else {
+                log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
+            }
+
             completionHandler.accept(null);
         }
 

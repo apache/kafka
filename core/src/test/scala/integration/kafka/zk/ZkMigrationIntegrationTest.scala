@@ -102,7 +102,7 @@ class ZkMigrationIntegrationTest {
       case None => PasswordEncoder.noop()
     }
 
-    val migrationClient = new ZkMigrationClient(zkClient, zkConfigEncoder)
+    val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
     var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
     migrationState = migrationState.withNewKRaftController(3000, 42)
     migrationState = migrationClient.claimControllerLeadership(migrationState)

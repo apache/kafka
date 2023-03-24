@@ -69,10 +69,10 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     zkClient.createControllerEpochRaw(1)
-    migrationClient = new ZkMigrationClient(zkClient, encoder)
+    migrationClient = ZkMigrationClient(zkClient, encoder)
     migrationState = initialMigrationState
     migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
-   }
+  }
 
   private def initialMigrationState: ZkMigrationLeadershipState = {
     val (epoch, stat) = zkClient.getControllerEpoch.get
@@ -151,7 +151,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
       0 -> new PartitionRegistration(Array(0, 1, 2), Array(1, 2), Array(), Array(), 1, LeaderRecoveryState.RECOVERED, 6, -1),
       1 -> new PartitionRegistration(Array(1, 2, 3), Array(3), Array(), Array(), 3, LeaderRecoveryState.RECOVERED, 7, -1)
     ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
-    migrationState = migrationClient.updateTopicPartitions(Map("test" -> partitions).asJava, migrationState)
+    migrationState = migrationClient.topicClient().updateTopicPartitions(Map("test" -> partitions).asJava, migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 
     // Read back with Zk client
@@ -164,6 +164,10 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     assertEquals(3, partition1.leader)
     assertEquals(7, partition1.leaderEpoch)
     assertEquals(List(3), partition1.isr)
+
+    // Delete whole topic
+    migrationState = migrationClient.topicClient().deleteTopic("test", migrationState)
+    assertEquals(2, migrationState.migrationZkVersion())
   }
 
   @Test
@@ -174,7 +178,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
       0 -> new PartitionRegistration(Array(0, 1, 2), Array(0, 1, 2), Array(), Array(), 0, LeaderRecoveryState.RECOVERED, 0, -1),
       1 -> new PartitionRegistration(Array(1, 2, 3), Array(1, 2, 3), Array(), Array(), 1, LeaderRecoveryState.RECOVERED, 0, -1)
     ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
-    migrationState = migrationClient.createTopic("test", Uuid.randomUuid(), partitions, migrationState)
+    migrationState = migrationClient.topicClient().createTopic("test", Uuid.randomUuid(), partitions, migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 
     // Read back with Zk client
@@ -198,10 +202,10 @@ class ZkMigrationClientTest extends QuorumTestHarness {
       1 -> new PartitionRegistration(Array(1, 2, 3), Array(1, 2, 3), Array(), Array(), 1, LeaderRecoveryState.RECOVERED, 0, -1)
     ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
     val topicId = Uuid.randomUuid()
-    migrationState = migrationClient.createTopic("test", topicId, partitions, migrationState)
+    migrationState = migrationClient.topicClient().createTopic("test", topicId, partitions, migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 
-    migrationState = migrationClient.createTopic("test", topicId, partitions, migrationState)
+    migrationState = migrationClient.topicClient().createTopic("test", topicId, partitions, migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
   }
 
@@ -386,9 +390,13 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     assertEquals(1, batches.size())
     val configs = batches.get(0)
       .asScala
-      .map {_.message()}
+      .map {
+        _.message()
+      }
       .filter(message => MetadataRecordType.fromId(message.apiKey()).equals(MetadataRecordType.CONFIG_RECORD))
-      .map {_.asInstanceOf[ConfigRecord]}
+      .map {
+        _.asInstanceOf[ConfigRecord]
+      }
       .toSeq
     assertEquals(2, configs.size)
     assertEquals(TopicConfig.FLUSH_MS_CONFIG, configs.head.name())

@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
@@ -72,17 +70,7 @@ public interface MigrationClient {
      */
     ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state);
 
-    ZkMigrationLeadershipState createTopic(
-        String topicName,
-        Uuid topicId,
-        Map<Integer, PartitionRegistration> topicPartitions,
-        ZkMigrationLeadershipState state
-    );
-
-    ZkMigrationLeadershipState updateTopicPartitions(
-        Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
-        ZkMigrationLeadershipState state
-    );
+    TopicMigrationClient topicClient();
 
     ZkMigrationLeadershipState writeConfigs(
         ConfigResource configResource,
