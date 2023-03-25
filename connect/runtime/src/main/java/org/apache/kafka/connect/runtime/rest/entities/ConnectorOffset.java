@@ -39,9 +39,7 @@ import java.util.Objects;
  * </pre>
  */
 public class ConnectorOffset {
-    public static final String KAFKA_TOPIC_KEY = "kafka_topic";
-    public static final String KAFKA_PARTITION_KEY = "kafka_partition";
-    public static final String KAFKA_OFFSET_KEY = "kafka_offset";
+
     private final Map<String, ?> partition;
     private final Map<String, ?> offset;
 

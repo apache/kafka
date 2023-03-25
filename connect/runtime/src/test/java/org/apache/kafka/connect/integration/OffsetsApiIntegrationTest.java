@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -142,8 +143,8 @@ public class OffsetsApiIntegrationTest {
                 return false;
             }
             for (ConnectorOffset offset: offsets.offsets()) {
-                assertEquals("test-topic", offset.partition().get(ConnectorOffset.KAFKA_TOPIC_KEY));
-                if ((Integer) offset.offset().get(ConnectorOffset.KAFKA_OFFSET_KEY) != 10) {
+                assertEquals("test-topic", offset.partition().get(SinkUtils.KAFKA_TOPIC_KEY));
+                if ((Integer) offset.offset().get(SinkUtils.KAFKA_OFFSET_KEY) != 10) {
                     return false;
                 }
             }
@@ -164,8 +165,8 @@ public class OffsetsApiIntegrationTest {
                 return false;
             }
             for (ConnectorOffset offset: offsets.offsets()) {
-                assertEquals("test-topic", offset.partition().get(ConnectorOffset.KAFKA_TOPIC_KEY));
-                if ((Integer) offset.offset().get(ConnectorOffset.KAFKA_OFFSET_KEY) != 20) {
+                assertEquals("test-topic", offset.partition().get(SinkUtils.KAFKA_TOPIC_KEY));
+                if ((Integer) offset.offset().get(SinkUtils.KAFKA_OFFSET_KEY) != 20) {
                     return false;
                 }
             }

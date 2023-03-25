@@ -86,24 +86,22 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
                 if (key != null) {
+                    // The key should always be of the form [connectorName, partition] where connectorName is a
+                    // string value and partition is a Map<String, Object>
                     try {
                         // The topic parameter is irrelevant for the JsonConverter which is the internal converter used by
                         // Connect workers.
                         List<Object> keyValue = (List<Object>) keyConverter.toConnectData("", key.array()).value();
-                        // The key should always be of the form [connectorName, partition] where connectorName is a
-                        // string value and partition is a Map<String, Object>
                         String connectorName = (String) keyValue.get(0);
                         Map<String, Object> partition = (Map<String, Object>) keyValue.get(1);
-                        if (!connectorPartitions.containsKey(connectorName)) {
-                            connectorPartitions.put(connectorName, new HashSet<>());
-                        }
+                        connectorPartitions.computeIfAbsent(connectorName, ignored -> new HashSet<>());
                         if (value == null) {
                             connectorPartitions.get(connectorName).remove(partition);
                         } else {
                             connectorPartitions.get(connectorName).add(partition);
                         }
-                    } catch (Throwable t) {
-                        throw new ConnectException("Failed to deserialize offset key", t);
+                    } catch (ClassCastException | IndexOutOfBoundsException e) {
+                        log.warn("Failed to deserialize offset key with an unexpected format", e);
                     }
                 }
             }

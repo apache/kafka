@@ -18,7 +18,6 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.junit.Test;
 
@@ -40,11 +39,11 @@ public class SinkUtilsTest {
 
         connectorOffsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(consumerGroupOffsets);
         assertEquals(1, connectorOffsets.offsets().size());
-        assertEquals(Collections.singletonMap(ConnectorOffset.KAFKA_OFFSET_KEY, 100L), connectorOffsets.offsets().get(0).offset());
+        assertEquals(Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 100L), connectorOffsets.offsets().get(0).offset());
 
         Map<String, Object> expectedPartition = new HashMap<>();
-        expectedPartition.put(ConnectorOffset.KAFKA_TOPIC_KEY, "test-topic");
-        expectedPartition.put(ConnectorOffset.KAFKA_PARTITION_KEY, 0);
+        expectedPartition.put(SinkUtils.KAFKA_TOPIC_KEY, "test-topic");
+        expectedPartition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
         assertEquals(expectedPartition, connectorOffsets.offsets().get(0).partition());
     }
 }

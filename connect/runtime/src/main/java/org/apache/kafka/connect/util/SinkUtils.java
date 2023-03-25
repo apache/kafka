@@ -29,6 +29,10 @@ import java.util.Map;
 
 public final class SinkUtils {
 
+    public static final String KAFKA_TOPIC_KEY = "kafka_topic";
+    public static final String KAFKA_PARTITION_KEY = "kafka_partition";
+    public static final String KAFKA_OFFSET_KEY = "kafka_offset";
+
     private SinkUtils() {}
 
     public static String consumerGroupId(String connector) {
@@ -40,10 +44,10 @@ public final class SinkUtils {
 
         for (Map.Entry<TopicPartition, OffsetAndMetadata> topicPartitionOffset : consumerGroupOffsets.entrySet()) {
             Map<String, Object> partition = new HashMap<>();
-            partition.put(ConnectorOffset.KAFKA_TOPIC_KEY, topicPartitionOffset.getKey().topic());
-            partition.put(ConnectorOffset.KAFKA_PARTITION_KEY, topicPartitionOffset.getKey().partition());
+            partition.put(KAFKA_TOPIC_KEY, topicPartitionOffset.getKey().topic());
+            partition.put(KAFKA_PARTITION_KEY, topicPartitionOffset.getKey().partition());
             connectorOffsets.add(new ConnectorOffset(partition,
-                    Collections.singletonMap(ConnectorOffset.KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
+                    Collections.singletonMap(KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
         }
 
         return new ConnectorOffsets(connectorOffsets);

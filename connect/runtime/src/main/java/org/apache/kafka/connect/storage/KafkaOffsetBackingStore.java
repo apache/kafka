@@ -349,22 +349,20 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         }
 
         if (record.key() != null) {
+            // The key should always be a list of the form [connectorName, partition] where connectorName is a
+            // string value and partition is a Map<String, Object>
             try {
-                // The key should always be a list of the form [connectorName, partition] where connectorName is a
-                // string value and partition is a Map<String, Object>
                 List<Object> keyValue = (List<Object>) keyConverter.toConnectData(topic, record.key()).value();
                 String connectorName = (String) keyValue.get(0);
                 Map<String, Object> partition = (Map<String, Object>) keyValue.get(1);
-                if (!connectorPartitions.containsKey(connectorName)) {
-                    connectorPartitions.put(connectorName, new HashSet<>());
-                }
+                connectorPartitions.computeIfAbsent(connectorName, ignored -> new HashSet<>());
                 if (record.value() == null) {
                     connectorPartitions.get(connectorName).remove(partition);
                 } else {
                     connectorPartitions.get(connectorName).add(partition);
                 }
-            } catch (Throwable t) {
-                throw new ConnectException("Failed to deserialize offset key", t);
+            } catch (ClassCastException | IndexOutOfBoundsException e) {
+                log.warn("Failed to deserialize offset key with an unexpected format", e);
             }
         }
 

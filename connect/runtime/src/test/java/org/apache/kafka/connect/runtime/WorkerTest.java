@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FenceProducersResult;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -50,7 +51,6 @@ import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -1746,18 +1746,25 @@ public class WorkerTest {
 
         Admin admin = mock(Admin.class);
         ListConsumerGroupOffsetsResult result = mock(ListConsumerGroupOffsetsResult.class);
-        when(admin.listConsumerGroupOffsets(anyString())).thenReturn(result);
-        KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> future = mock(KafkaFuture.class);
-        when(result.all()).thenReturn(future);
-        when(future.get()).thenReturn(consumerGroupToOffsetsMap);
-        ConnectorOffsets offsets = worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, config -> admin);
+        when(admin.listConsumerGroupOffsets(anyString(), any(ListConsumerGroupOffsetsOptions.class))).thenReturn(result);
+        KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> adminFuture = mock(KafkaFuture.class);
+        when(result.all()).thenReturn(adminFuture);
+        when(adminFuture.whenComplete(any())).thenAnswer(invocation -> {
+            ((KafkaFuture.BiConsumer<Map<String, Map<TopicPartition, OffsetAndMetadata>>, Throwable>) invocation.getArgument(0))
+                    .accept(consumerGroupToOffsetsMap, null);
+            return null;
+        });
+
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb, config -> admin);
+        ConnectorOffsets offsets = cb.get(1000, TimeUnit.MILLISECONDS);
 
         assertEquals(1, offsets.offsets().size());
-        assertEquals(10L, offsets.offsets().get(0).offset().get(ConnectorOffset.KAFKA_OFFSET_KEY));
-        assertEquals(0, offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_PARTITION_KEY));
-        assertEquals("test-topic", offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_TOPIC_KEY));
+        assertEquals(10L, offsets.offsets().get(0).offset().get(SinkUtils.KAFKA_OFFSET_KEY));
+        assertEquals(0, offsets.offsets().get(0).partition().get(SinkUtils.KAFKA_PARTITION_KEY));
+        assertEquals("test-topic", offsets.offsets().get(0).partition().get(SinkUtils.KAFKA_TOPIC_KEY));
 
-        verify(admin).listConsumerGroupOffsets(SinkUtils.consumerGroupId(CONNECTOR_ID));
+        verify(admin).listConsumerGroupOffsets(eq(SinkUtils.consumerGroupId(CONNECTOR_ID)), any(ListConsumerGroupOffsetsOptions.class));
         verify(admin).close();
         verifyKafkaClusterId();
     }
@@ -1775,31 +1782,38 @@ public class WorkerTest {
                 allConnectorClientConfigOverridePolicy);
         worker.start();
 
-        Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
-                Collections.singletonMap(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10));
-        Map<String, Map<TopicPartition, OffsetAndMetadata>> consumerGroupToOffsetsMap =
-                Collections.singletonMap("overridden-group-id", consumerGroupOffsets);
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> consumerGroupToOffsetsMap = new HashMap<>();
+        consumerGroupToOffsetsMap.put("overridden-group-id", Collections.singletonMap(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10)));
+        consumerGroupToOffsetsMap.put(SinkUtils.consumerGroupId(CONNECTOR_ID),
+                Collections.singletonMap(new TopicPartition("test-topic-2", 1), new OffsetAndMetadata(0)));
 
         Admin admin = mock(Admin.class);
         ListConsumerGroupOffsetsResult result = mock(ListConsumerGroupOffsetsResult.class);
-        when(admin.listConsumerGroupOffsets(anyString())).thenReturn(result);
-        KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> future = mock(KafkaFuture.class);
-        when(result.all()).thenReturn(future);
-        when(future.get()).thenReturn(consumerGroupToOffsetsMap);
-        ConnectorOffsets offsets = worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, config -> admin);
+        when(admin.listConsumerGroupOffsets(anyString(), any(ListConsumerGroupOffsetsOptions.class))).thenReturn(result);
+        KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> adminFuture = mock(KafkaFuture.class);
+        when(result.all()).thenReturn(adminFuture);
+        when(adminFuture.whenComplete(any())).thenAnswer(invocation -> {
+            ((KafkaFuture.BiConsumer<Map<String, Map<TopicPartition, OffsetAndMetadata>>, Throwable>) invocation.getArgument(0))
+                    .accept(consumerGroupToOffsetsMap, null);
+            return null;
+        });
+
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb, config -> admin);
+        ConnectorOffsets offsets = cb.get(1000, TimeUnit.MILLISECONDS);
 
         assertEquals(1, offsets.offsets().size());
-        assertEquals(10L, offsets.offsets().get(0).offset().get(ConnectorOffset.KAFKA_OFFSET_KEY));
-        assertEquals(0, offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_PARTITION_KEY));
-        assertEquals("test-topic", offsets.offsets().get(0).partition().get(ConnectorOffset.KAFKA_TOPIC_KEY));
+        assertEquals(10L, offsets.offsets().get(0).offset().get(SinkUtils.KAFKA_OFFSET_KEY));
+        assertEquals(0, offsets.offsets().get(0).partition().get(SinkUtils.KAFKA_PARTITION_KEY));
+        assertEquals("test-topic", offsets.offsets().get(0).partition().get(SinkUtils.KAFKA_TOPIC_KEY));
 
-        verify(admin).listConsumerGroupOffsets("overridden-group-id");
+        verify(admin).listConsumerGroupOffsets(eq("overridden-group-id"), any(ListConsumerGroupOffsetsOptions.class));
         verify(admin).close();
         verifyKafkaClusterId();
     }
 
     @Test
-    public void testGetSourceConnectorOffsets() {
+    public void testGetSourceConnectorOffsets() throws Exception {
         mockKafkaClusterId();
 
         ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
@@ -1820,7 +1834,9 @@ public class WorkerTest {
         when(offsetStore.connectorPartitions(CONNECTOR_ID)).thenReturn(connectorPartitions);
         when(offsetReader.offsets(connectorPartitions)).thenReturn(partitionOffsets);
 
-        ConnectorOffsets offsets = worker.sourceConnectorOffsets(CONNECTOR_ID, offsetStore, offsetReader);
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        worker.sourceConnectorOffsets(CONNECTOR_ID, offsetStore, offsetReader, cb);
+        ConnectorOffsets offsets = cb.get(1000, TimeUnit.MILLISECONDS);
 
         assertEquals(1, offsets.offsets().size());
         assertEquals("partitionValue", offsets.offsets().get(0).partition().get("partitionKey"));
