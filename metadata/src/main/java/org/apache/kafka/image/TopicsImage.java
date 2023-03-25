@@ -17,17 +17,19 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.util.VavrMapAsJava;
+import org.apache.kafka.server.util.TranslatedValueMapView;
+import org.pcollections.HashPMap;
+import org.pcollections.HashTreePMap;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-
 
 /**
  * Represents the topics in the metadata image.
@@ -36,21 +38,21 @@ import java.util.stream.Collectors;
  */
 public final class TopicsImage {
     public static final TopicsImage EMPTY =
-        new TopicsImage(io.vavr.collection.HashMap.empty(), io.vavr.collection.HashMap.empty());
+        new TopicsImage(HashTreePMap.empty(), HashTreePMap.empty());
 
-    final io.vavr.collection.Map<Uuid, TopicImage> topicsById;
-    final io.vavr.collection.Map<String, TopicImage> topicsByName;
+    final HashPMap<Uuid, TopicImage> topicsById;
+    final HashPMap<String, TopicImage> topicsByName;
 
-    public TopicsImage(io.vavr.collection.Map<Uuid, TopicImage> topicsById,
-                       io.vavr.collection.Map<String, TopicImage> topicsByName) {
+    public TopicsImage(HashPMap<Uuid, TopicImage> topicsById,
+                       HashPMap<String, TopicImage> topicsByName) {
         this.topicsById = topicsById;
         this.topicsByName = topicsByName;
     }
 
     public TopicsImage including(TopicImage topic) {
         return new TopicsImage(
-            this.topicsById.put(topic.id(), topic),
-            this.topicsByName.put(topic.name(), topic));
+            this.topicsById.plus(topic.id(), topic),
+            this.topicsByName.plus(topic.name(), topic));
     }
 
     public boolean isEmpty() {
@@ -58,30 +60,30 @@ public final class TopicsImage {
     }
 
     public Map<Uuid, TopicImage> topicsById() {
-        return new VavrMapAsJava<>(topicsById, Function.identity());
+        return topicsById;
     }
 
     public Map<String, TopicImage> topicsByName() {
-        return new VavrMapAsJava<>(topicsByName, Function.identity());
+        return topicsByName;
     }
 
     public PartitionRegistration getPartition(Uuid id, int partitionId) {
-        TopicImage topicImage = topicsById.get(id).getOrNull();
+        TopicImage topicImage = topicsById.get(id);
         if (topicImage == null) return null;
         return topicImage.partitions().get(partitionId);
     }
 
     public TopicImage getTopic(Uuid id) {
-        return topicsById.get(id).getOrNull();
+        return topicsById.get(id);
     }
 
     public TopicImage getTopic(String name) {
-        return topicsByName.get(name).getOrNull();
+        return topicsByName.get(name);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
-        for (TopicImage topicImage : topicsById.values()) {
-            topicImage.write(writer, options);
+        for (Map.Entry<Uuid, TopicImage> entry : topicsById.entrySet()) {
+            entry.getValue().write(writer, options);
         }
     }
 
@@ -104,7 +106,7 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<String, Uuid> topicNameToIdView() {
-        return new VavrMapAsJava<>(topicsByName, TopicImage::id);
+        return new TranslatedValueMapView<>(topicsByName, image -> image.id());
     }
 
     /**
@@ -113,20 +115,24 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<Uuid, String> topicIdToNameView() {
-        return new VavrMapAsJava<>(topicsById, TopicImage::name);
+        return new TranslatedValueMapView<>(topicsById, image -> image.name());
+    }
+
+    public Map<TopicPartition, PartitionRegistration> partitions() {
+        Map<TopicPartition, PartitionRegistration> partitions = new HashMap<>();
+        topicsById.entrySet().forEach(entry -> {
+            TopicImage topic = entry.getValue();
+            topic.partitions().forEach((key, value) -> partitions.put(new TopicPartition(topic.name(), key), value));
+        });
+        return partitions;
     }
 
     @Override
     public String toString() {
-        return "TopicsImage(topicsById=" + topicsById
-            .toStream()
-            .map(e -> e._1 + ":" + e._2)
-            .collect(Collectors.joining(", ")) +
-            ", topicsByName=" +
-            topicsByName
-            .toStream()
-            .map(e -> e._1 + ":" + e._2)
-            .collect(Collectors.joining(", ")) +
+        return "TopicsImage(topicsById=" + topicsById.entrySet().stream().
+            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
+            ", topicsByName=" + topicsByName.entrySet().stream().
+            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
             ")";
     }
 }

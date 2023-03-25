@@ -23,6 +23,8 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.pcollections.HashPMap;
+import org.pcollections.HashTreePMap;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -99,11 +101,11 @@ public class ControllerMetricsTestUtils {
     public static TopicsImage fakeTopicsImage(
         TopicImage... topics
     ) {
-        io.vavr.collection.Map<Uuid, TopicImage> topicsById = io.vavr.collection.HashMap.empty();
-        io.vavr.collection.Map<String, TopicImage> topicsByName = io.vavr.collection.HashMap.empty();
+        HashPMap<Uuid, TopicImage> topicsById = HashTreePMap.empty();
+        HashPMap<String, TopicImage> topicsByName = HashTreePMap.empty();
         for (TopicImage topic : topics) {
-            topicsById = topicsById.put(topic.id(), topic);
-            topicsByName = topicsByName.put(topic.name(), topic);
+            topicsById = topicsById.plus(topic.id(), topic);
+            topicsByName = topicsByName.plus(topic.name(), topic);
         }
         return new TopicsImage(topicsById, topicsByName);
     }

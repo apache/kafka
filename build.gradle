@@ -1171,7 +1171,7 @@ project(':metadata') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
-    implementation libs.vavr
+    implementation libs.pcollections
     compileOnly libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.jqwik
@@ -1552,7 +1552,7 @@ project(':server-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.joptSimple
-    implementation libs.vavr
+    implementation libs.pcollections
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output

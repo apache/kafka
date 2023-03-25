@@ -32,6 +32,8 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.pcollections.HashPMap;
+import org.pcollections.HashTreePMap;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,18 +76,18 @@ public class TopicsImageTest {
         return new TopicImage(name, id, partitionMap);
     }
 
-    private static io.vavr.collection.Map<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
-        io.vavr.collection.Map<Uuid, TopicImage> map = io.vavr.collection.HashMap.empty();
+    private static HashPMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
+        HashPMap<Uuid, TopicImage> map = HashTreePMap.empty();
         for (TopicImage topic : topics) {
-            map = map.put(topic.id(), topic);
+            map = map.plus(topic.id(), topic);
         }
         return map;
     }
 
-    private static io.vavr.collection.Map<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        io.vavr.collection.Map<String, TopicImage> map = io.vavr.collection.HashMap.empty();
+    private static HashPMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
+        HashPMap<String, TopicImage> map = HashTreePMap.empty();
         for (TopicImage topic : topics) {
-            map = map.put(topic.name(), topic);
+            map = map.plus(topic.name(), topic);
         }
         return map;
     }

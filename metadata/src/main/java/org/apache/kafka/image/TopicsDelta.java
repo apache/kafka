@@ -25,6 +25,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.pcollections.HashPMap;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -125,17 +126,17 @@ public final class TopicsDelta {
     }
 
     public TopicsImage apply() {
-        io.vavr.collection.Map<Uuid, TopicImage> newTopicsById = image.topicsById;
-        io.vavr.collection.Map<String, TopicImage> newTopicsByName = image.topicsByName;
+        HashPMap<Uuid, TopicImage> newTopicsById = image.topicsById;
+        HashPMap<String, TopicImage> newTopicsByName = image.topicsByName;
         // apply all the deletes
         for (Uuid topicId: deletedTopicIds) {
             // it was deleted, so we have to remove it from the maps
-            TopicImage originalTopicToBeDeleted = image.topicsById.get(topicId).getOrNull();
+            TopicImage originalTopicToBeDeleted = image.topicsById.get(topicId);
             if (originalTopicToBeDeleted == null) {
                 throw new IllegalStateException("Missing topic id " + topicId);
             } else {
-                newTopicsById = newTopicsById.remove(topicId);
-                newTopicsByName = newTopicsByName.remove(originalTopicToBeDeleted.name());
+                newTopicsById = newTopicsById.minus(topicId);
+                newTopicsByName = newTopicsByName.minus(originalTopicToBeDeleted.name());
             }
         }
         // apply all the updates/additions
@@ -144,8 +145,8 @@ public final class TopicsDelta {
             TopicImage newTopicToBeAddedOrUpdated = entry.getValue().apply();
             // put new information into the maps
             String topicName = newTopicToBeAddedOrUpdated.name();
-            newTopicsById = newTopicsById.put(topicId, newTopicToBeAddedOrUpdated);
-            newTopicsByName = newTopicsByName.put(topicName, newTopicToBeAddedOrUpdated);
+            newTopicsById = newTopicsById.plus(topicId, newTopicToBeAddedOrUpdated);
+            newTopicsByName = newTopicsByName.plus(topicName, newTopicToBeAddedOrUpdated);
         }
         return new TopicsImage(newTopicsById, newTopicsByName);
     }
