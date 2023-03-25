@@ -133,8 +133,23 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> delete(final Bytes key, final long timestamp) {
+        if (timestamp < observedStreamTime - gracePeriod) {
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            LOG.warn("Skipping record for expired delete.");
+            return null;
+        }
+
         final VersionedRecord<byte[]> existingRecord = get(key, timestamp);
-        put(key, null, timestamp);
+
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
+        doPut(
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            null,
+            timestamp
+        );
+
         return existingRecord;
     }
 
@@ -156,9 +171,25 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
+            // history retention exceeded. we still check the latest value store in case the
+            // latest record version satisfies the timestamp bound, in which case it should
+            // still be returned (i.e., the latest record version per key never expires).
+            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+            if (rawLatestValueAndTimestamp != null) {
+                final long latestTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                if (latestTimestamp <= asOfTimestamp) {
+                    // latest value satisfies timestamp bound
+                    return new VersionedRecord<>(
+                        LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
+                        latestTimestamp
+                    );
+                }
+            }
+
+            // history retention has elapsed and the latest record version (if present) does
+            // not satisfy the timestamp bound. return null for predictability, even if data
+            // is still present in segments.
             LOG.warn("Returning null for expired get.");
-            // history retention has elapsed. return null for predictability, even if data
-            // is still present in store.
             return null;
         }
 

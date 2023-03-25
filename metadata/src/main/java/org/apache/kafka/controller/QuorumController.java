@@ -77,6 +77,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -174,7 +175,7 @@ public final class QuorumController implements Controller {
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
         private long sessionTimeoutNs = ClusterControlManager.DEFAULT_SESSION_TIMEOUT_NS;
-        private ControllerMetrics controllerMetrics = null;
+        private QuorumControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
@@ -258,7 +259,7 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setMetrics(ControllerMetrics controllerMetrics) {
+        public Builder setMetrics(QuorumControllerMetrics controllerMetrics) {
             this.controllerMetrics = controllerMetrics;
             return this;
         }
@@ -322,8 +323,7 @@ public final class QuorumController implements Controller {
                 logContext = new LogContext(String.format("[QuorumController id=%d] ", nodeId));
             }
             if (controllerMetrics == null) {
-                controllerMetrics = (ControllerMetrics) Class.forName(
-                    "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
+                controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time);
             }
 
             KafkaEventQueue queue = null;
@@ -939,8 +939,6 @@ public final class QuorumController implements Controller {
                             }
                         }
 
-                        controllerMetricsManager.replayBatch(batch.baseOffset(), messages);
-
                         updateLastCommittedState(
                             offset,
                             epoch,
@@ -994,7 +992,6 @@ public final class QuorumController implements Controller {
                         for (ApiMessageAndVersion message : messages) {
                             try {
                                 replay(message.message(), Optional.of(reader.snapshotId()), reader.lastContainedLogOffset());
-                                controllerMetricsManager.replay(message.message());
                             } catch (Throwable e) {
                                 String failureMessage = String.format("Unable to apply %s record " +
                                         "from snapshot %s on standby controller, which was %d of " +
@@ -1435,7 +1432,6 @@ public final class QuorumController implements Controller {
      */
     private void resetToEmptyState() {
         snapshotRegistry.reset();
-        controllerMetricsManager.reset();
 
         updateLastCommittedState(-1, -1, -1);
     }
@@ -1479,13 +1475,7 @@ public final class QuorumController implements Controller {
     /**
      * The controller metrics.
      */
-    private final ControllerMetrics controllerMetrics;
-
-
-    /**
-     * Manager for updating controller metrics based on the committed metadata.
-     */
-    private final ControllerMetricsManager controllerMetricsManager;
+    private final QuorumControllerMetrics controllerMetrics;
 
     /**
      * A registry for snapshot data.  This must be accessed only by the event queue thread.
@@ -1675,7 +1665,7 @@ public final class QuorumController implements Controller {
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
         long sessionTimeoutNs,
-        ControllerMetrics controllerMetrics,
+        QuorumControllerMetrics controllerMetrics,
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
         ConfigurationValidator configurationValidator,
@@ -1693,7 +1683,6 @@ public final class QuorumController implements Controller {
         this.queue = queue;
         this.time = time;
         this.controllerMetrics = controllerMetrics;
-        this.controllerMetricsManager = new ControllerMetricsManager(controllerMetrics);
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();

@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -1245,24 +1246,25 @@ public class OffsetFetcherTest {
         buildFetcher(metricConfig, isolationLevel, metadataExpireMs, subscriptionState, logContext);
 
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumertest-group");
-        Fetcher<byte[], byte[]> fetcher = new Fetcher<>(
-                logContext,
-                consumerClient,
+        FetchConfig<byte[], byte[]> fetchConfig = new FetchConfig<>(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
                 maxPollRecords,
                 true, // check crc
-                "",
+                CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(),
+                isolationLevel);
+        Fetcher<byte[], byte[]> fetcher = new Fetcher<>(
+                logContext,
+                consumerClient,
                 metadata,
                 subscriptions,
-                metrics,
-                metricsRegistry,
-                time,
-                isolationLevel);
+                fetchConfig,
+                new FetchMetricsManager(metrics, metricsRegistry),
+                time);
 
         assignFromUser(singleton(tp0));
 
