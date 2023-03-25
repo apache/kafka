@@ -1170,7 +1170,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def test(quorum: String): Unit = {
+  def testReconfigureRemovedListener(quorum: String): Unit = {
     val client = adminClients.head
     val broker = servers.head
     assertEquals(2, broker.config.dynamicConfig.reconfigurables.asScala.count(r => r.isInstanceOf[DataPlaneAcceptor]))
