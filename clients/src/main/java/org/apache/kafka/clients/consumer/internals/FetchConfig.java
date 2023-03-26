@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.util.Objects;
+
 /**
  * {@link FetchConfig} represents the static configuration for fetching records from Kafka. It is simply a way
  * to bundle the immutable settings that were presented at the time the {@link Consumer} was created for later use by
@@ -85,8 +87,8 @@ public class FetchConfig<K, V> {
         this.maxPollRecords = maxPollRecords;
         this.checkCrcs = checkCrcs;
         this.clientRackId = clientRackId;
-        this.keyDeserializer = keyDeserializer;
-        this.valueDeserializer = valueDeserializer;
+        this.keyDeserializer = Objects.requireNonNull(keyDeserializer, "Message key deserializer provided to FetchConfig should not be null");
+        this.valueDeserializer = Objects.requireNonNull(valueDeserializer, "Message value deserializer provided to FetchConfig should not be null");
         this.isolationLevel = isolationLevel;
     }
 
@@ -101,8 +103,8 @@ public class FetchConfig<K, V> {
         this.maxPollRecords = config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG);
         this.checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
         this.clientRackId = config.getString(ConsumerConfig.CLIENT_RACK_CONFIG);
-        this.keyDeserializer = keyDeserializer;
-        this.valueDeserializer = valueDeserializer;
+        this.keyDeserializer = Objects.requireNonNull(keyDeserializer, "Message key deserializer provided to FetchConfig should not be null");
+        this.valueDeserializer = Objects.requireNonNull(valueDeserializer, "Message value deserializer provided to FetchConfig should not be null");
         this.isolationLevel = isolationLevel;
     }
 
