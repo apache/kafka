@@ -310,6 +310,37 @@ public class KafkaStatusBackingStoreTest {
     }
 
     @Test
+    public void readTaskStateShouldIgnoreStaleStatuses() {
+        byte[] value = new byte[0];
+        String otherWorkerId = "anotherhost:8083";
+
+        // This worker sends a RUNNING status in the most recent generation
+        Map<String, Object> firstStatusRead = new HashMap<>();
+        firstStatusRead.put("worker_id", otherWorkerId);
+        firstStatusRead.put("state", "RUNNING");
+        firstStatusRead.put("generation", 10L);
+
+        // Another worker still ends up producing an UNASSIGNED status before it could
+        // read the newer RUNNING status from above belonging to an older generation.
+        Map<String, Object> secondStatusRead = new HashMap<>();
+        secondStatusRead.put("worker_id", WORKER_ID);
+        secondStatusRead.put("state", "UNASSIGNED");
+        secondStatusRead.put("generation", 9L);
+
+        when(converter.toConnectData(STATUS_TOPIC, value))
+                .thenReturn(new SchemaAndValue(null, firstStatusRead))
+                .thenReturn(new SchemaAndValue(null, secondStatusRead));
+
+        store.read(consumerRecord(0, "status-task-conn-0", value));
+        store.read(consumerRecord(0, "status-task-conn-0", value));
+
+        verify(kafkaBasedLog, never()).send(anyString(), any(), any(Callback.class));
+        // The latest task status should reflect RUNNING status from the newer generation
+        TaskStatus status = new TaskStatus(TASK, ConnectorStatus.State.RUNNING, otherWorkerId, 10);
+        assertEquals(status, store.get(TASK));
+    }
+
+    @Test
     public void deleteConnectorState() {
         final byte[] value = new byte[0];
         Map<String, Object> statusMap = new HashMap<>();
