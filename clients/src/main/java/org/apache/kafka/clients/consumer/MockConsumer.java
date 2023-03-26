@@ -92,11 +92,37 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         return this.subscriptions.assignedPartitions();
     }
 
-    /** Simulate a rebalance event. */
+    /**
+     * Simulate a rebalance event.
+     */
     public synchronized void rebalance(Collection<TopicPartition> newAssignment) {
-        // TODO: Rebalance callbacks
+        // prepare for rebalance callback
+        Set<TopicPartition> oldAssignmentSet = this.subscriptions.assignedPartitions();
+        Set<TopicPartition> newAssignmentSet = new HashSet<>(newAssignment);
+        List<TopicPartition> added = new ArrayList<>(newAssignment.size());
+        List<TopicPartition> removed = new ArrayList<>(newAssignment.size());
+        for (TopicPartition tp : oldAssignmentSet) {
+            if (!newAssignmentSet.contains(tp)) {
+                removed.add(tp);
+            }
+        }
+        for (TopicPartition tp : newAssignmentSet) {
+            if (!oldAssignmentSet.contains(tp)) {
+                added.add(tp);
+            }
+        }
+
+        //rebalance
         this.records.clear();
         this.subscriptions.assignFromSubscribed(newAssignment);
+
+        //rebalance callbacks
+        if (!added.isEmpty()) {
+            this.subscriptions.rebalanceListener().onPartitionsAssigned(added);
+        }
+        if (!removed.isEmpty()) {
+            this.subscriptions.rebalanceListener().onPartitionsRevoked(removed);
+        }
     }
 
     @Override
