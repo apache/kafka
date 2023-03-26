@@ -588,13 +588,10 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         synchronized (this) {
             log.trace("Received task {} status update {}", id, status);
             CacheEntry<TaskStatus> entry = getOrAdd(id);
-            // We add the status only if it's safe to do so. This is applicable
-            // when there are race conditions during frequent rebalances leading to
-            // the RUNNING status record with the latest generation followed by a stale
-            // UNASSIGNED status record belonging to the same or a previous generation
-            // from a worker which couldn't read the RUNNING record of the latest generation.
             if (entry.canWriteSafely(status)) {
                 entry.put(status);
+            } else {
+                log.trace("Ignoring stale status update {} for task {}", status, id);
             }
         }
     }
