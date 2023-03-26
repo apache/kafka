@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools;
+package org.apache.kafka.common;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.Configurable;
 
 import java.io.Closeable;
 import java.io.InputStream;
