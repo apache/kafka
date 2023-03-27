@@ -185,7 +185,7 @@ public class ZkMigrationControlManager implements ZkMigrationBootstrap {
     }
 
     /**
-     * The state changes we allow are:
+     * Allowed state changes:
      * <li>UNINITIALIZED -> ANY</li>
      * <li>PRE_MIGRATION -> MIGRATION</li>
      * <li>MIGRATION -> POST_MIGRATION</li>
@@ -202,7 +202,8 @@ public class ZkMigrationControlManager implements ZkMigrationBootstrap {
                     throw new IllegalStateException("Cannot ever change migration state away from NONE");
                 case PRE_MIGRATION:
                     if (recordState.equals(ZkMigrationState.MIGRATION)) {
-                        log.info("Transitioning ZK migration state to {}", recordState);
+                        log.info("Transitioning ZK migration state from {} to {}",
+                            currentState.zkMigrationState(), recordState);
                         migrationControlState.set(new ZkMigrationControlState(recordState, record.preMigrationSupported()));
                     } else {
                         throw new IllegalStateException("Cannot change migration state from PRE_MIGRATION to " + recordState);
@@ -210,7 +211,8 @@ public class ZkMigrationControlManager implements ZkMigrationBootstrap {
                     break;
                 case MIGRATION:
                     if (recordState.equals(ZkMigrationState.POST_MIGRATION)) {
-                        log.info("Transitioning ZK migration state to {}", recordState);
+                        log.info("Transitioning ZK migration state from {} to {}",
+                            currentState.zkMigrationState(), recordState);
                         migrationControlState.set(new ZkMigrationControlState(recordState, record.preMigrationSupported()));
                     } else {
                         throw new IllegalStateException("Cannot change migration state from MIGRATION to " + recordState);
