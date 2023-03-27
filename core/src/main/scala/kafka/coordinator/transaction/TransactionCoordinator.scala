@@ -16,6 +16,8 @@
  */
 package kafka.coordinator.transaction
 
+import kafka.common.GenericInterBrokerSendThread
+
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
@@ -42,7 +44,8 @@ object TransactionCoordinator {
             createProducerIdGenerator: () => ProducerIdManager,
             metrics: Metrics,
             metadataCache: MetadataCache,
-            time: Time): TransactionCoordinator = {
+            time: Time,
+            interBrokerSendThread: GenericInterBrokerSendThread): TransactionCoordinator = {
 
     val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
       config.transactionMaxTimeoutMs,
@@ -59,8 +62,9 @@ object TransactionCoordinator {
       time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
-    val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
-      time, logContext)
+    val txnMarkerChannelManager = new TransactionMarkerChannelManager(config, metadataCache, interBrokerSendThread, txnStateManager,
+      time)
+    interBrokerSendThread.addRequestManager(txnMarkerChannelManager)
 
     new TransactionCoordinator(txnConfig, scheduler, createProducerIdGenerator, txnStateManager, txnMarkerChannelManager,
       time, logContext)
@@ -711,7 +715,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       txnConfig.abortTimedOutTransactionsIntervalMs
     )
     txnManager.startup(retrieveTransactionTopicPartitionCount, enableTransactionalIdExpiration)
-    txnMarkerChannelManager.start()
     isActive.set(true)
 
     info("Startup complete.")

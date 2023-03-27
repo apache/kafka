@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.common.{GenericInterBrokerSendThread, InterBrokerRequestManager, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Logging
@@ -301,13 +301,15 @@ class BrokerToControllerRequestThread(
   time: Time,
   threadName: String,
   retryTimeoutMs: Long
-) extends InterBrokerSendThread(
+) extends GenericInterBrokerSendThread(
   threadName,
   initialNetworkClient,
   Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt,
   time,
   isInterruptible = false
 ) {
+  
+  addRequestManager(new ControllerRequestManager)
 
   private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
     if (isNetworkClientForZkController != controllerInformation.isZkController) {
@@ -353,29 +355,31 @@ class BrokerToControllerRequestThread(
   def queueSize: Int = {
     requestQueue.size
   }
-
-  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-    val currentTimeMs = time.milliseconds()
-    val requestIter = requestQueue.iterator()
-    while (requestIter.hasNext) {
-      val request = requestIter.next
-      if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
-        requestIter.remove()
-        request.callback.onTimeout()
-      } else {
-        val controllerAddress = activeControllerAddress()
-        if (controllerAddress.isDefined) {
+  
+  class ControllerRequestManager extends InterBrokerRequestManager(this, 1) {
+    override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+      val currentTimeMs = time.milliseconds()
+      val requestIter = requestQueue.iterator()
+      while (requestIter.hasNext) {
+        val request = requestIter.next
+        if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
           requestIter.remove()
-          return Some(RequestAndCompletionHandler(
-            time.milliseconds(),
-            controllerAddress.get,
-            request.request,
-            handleResponse(request)
-          ))
+          request.callback.onTimeout()
+        } else {
+          val controllerAddress = activeControllerAddress()
+          if (controllerAddress.isDefined) {
+            requestIter.remove()
+            return Some(RequestAndCompletionHandler(
+              time.milliseconds(),
+              controllerAddress.get,
+              request.request,
+              handleResponse(request)
+            ))
+          }
         }
       }
+      None
     }
-    None
   }
 
   private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {

@@ -16,6 +16,8 @@
  */
 package kafka.coordinator.transaction
 
+import kafka.common.GenericInterBrokerSendThread
+
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
@@ -52,6 +54,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private val txnConfig = TransactionConfig()
   private var transactionCoordinator: TransactionCoordinator = _
   private var txnStateManager: TransactionStateManager = _
+  private var interbrokerSendThread: GenericInterBrokerSendThread = _
   private var txnMarkerChannelManager: TransactionMarkerChannelManager = _
 
   private val allOperations = Seq(
@@ -91,10 +94,11 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       any[ListenerName])
     ).thenReturn(Some(brokerNode))
     val networkClient: NetworkClient = mock(classOf[NetworkClient])
+    interbrokerSendThread = new GenericInterBrokerSendThread("", networkClient, 30000, time)
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
       metadataCache,
-      networkClient,
+      interbrokerSendThread,
       txnStateManager,
       time)
 
@@ -112,6 +116,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   override def tearDown(): Unit = {
     try {
       transactionCoordinator.shutdown()
+      interbrokerSendThread.shutdown()
     } finally {
       super.tearDown()
     }

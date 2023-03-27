@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.cluster.Broker.ServerInfo
+import kafka.common.GenericInterBrokerSendThread
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
@@ -27,6 +28,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -104,6 +106,8 @@ class BrokerServer(
   var dynamicConfigHandlers: Map[String, ConfigHandler] = _
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
+  
+  var interBrokerSendThread: GenericInterBrokerSendThread = _
 
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
@@ -247,6 +251,11 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
+      val interBrokerSendLogContext = new LogContext(s"[InterBrokerSendThread broker=${config.brokerId}]")
+      val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSendLogContext)
+      interBrokerSendThread = new GenericInterBrokerSendThread("InterBrokerSendThread", networkClient, config.requestTimeoutMs, time)
+      interBrokerSendThread.start()
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -292,7 +301,7 @@ class BrokerServer(
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
         new KafkaScheduler(1, true, "transaction-log-manager-"),
-        producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
+        producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM, interBrokerSendThread)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, Some(clientToControllerChannelManager), None, None,
@@ -573,6 +582,10 @@ class BrokerServer(
 
       if (tokenManager != null)
         CoreUtils.swallow(tokenManager.shutdown(), this)
+
+      if (interBrokerSendThread != null) {
+        CoreUtils.swallow(interBrokerSendThread.shutdown(), this)
+      }
 
       if (replicaManager != null)
         CoreUtils.swallow(replicaManager.shutdown(), this)

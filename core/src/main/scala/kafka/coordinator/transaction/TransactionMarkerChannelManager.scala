@@ -19,85 +19,21 @@ package kafka.coordinator.transaction
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.common.{InterBrokerRequestManager, GenericInterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.clients._
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
-import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
-
-object TransactionMarkerChannelManager {
-  def apply(config: KafkaConfig,
-            metrics: Metrics,
-            metadataCache: MetadataCache,
-            txnStateManager: TransactionStateManager,
-            time: Time,
-            logContext: LogContext): TransactionMarkerChannelManager = {
-    val channelBuilder = ChannelBuilders.clientChannelBuilder(
-      config.interBrokerSecurityProtocol,
-      JaasContext.Type.SERVER,
-      config,
-      config.interBrokerListenerName,
-      config.saslMechanismInterBrokerProtocol,
-      time,
-      config.saslInterBrokerHandshakeRequestEnable,
-      logContext
-    )
-    channelBuilder match {
-      case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
-      case _ =>
-    }
-    val selector = new Selector(
-      NetworkReceive.UNLIMITED,
-      config.connectionsMaxIdleMs,
-      metrics,
-      time,
-      "txn-marker-channel",
-      Map.empty[String, String].asJava,
-      false,
-      channelBuilder,
-      logContext
-    )
-    val networkClient = new NetworkClient(
-      selector,
-      new ManualMetadataUpdater(),
-      s"broker-${config.brokerId}-txn-marker-sender",
-      1,
-      50,
-      50,
-      Selectable.USE_DEFAULT_BUFFER_SIZE,
-      config.socketReceiveBufferBytes,
-      config.requestTimeoutMs,
-      config.connectionSetupTimeoutMs,
-      config.connectionSetupTimeoutMaxMs,
-      time,
-      false,
-      new ApiVersions,
-      logContext
-    )
-
-    new TransactionMarkerChannelManager(config,
-      metadataCache,
-      networkClient,
-      txnStateManager,
-      time
-    )
-  }
-
-}
 
 class TxnMarkerQueue(@volatile var destination: Node) {
 
@@ -127,12 +63,12 @@ class TxnMarkerQueue(@volatile var destination: Node) {
 }
 
 class TransactionMarkerChannelManager(
-  config: KafkaConfig,
-  metadataCache: MetadataCache,
-  networkClient: NetworkClient,
-  txnStateManager: TransactionStateManager,
-  time: Time
-) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, config.requestTimeoutMs, time)
+                                       config: KafkaConfig,
+                                       metadataCache: MetadataCache,
+                                       interBrokerSendThread: GenericInterBrokerSendThread,
+                                       txnStateManager: TransactionStateManager,
+                                       time: Time
+) extends InterBrokerRequestManager(interBrokerSendThread, 1)
   with Logging {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
@@ -156,8 +92,7 @@ class TransactionMarkerChannelManager(
   metricsGroup.newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
   metricsGroup.newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
 
-  override def shutdown(): Unit = {
-    super.shutdown()
+  def shutdown(): Unit = {
     markersQueuePerBroker.clear()
   }
 

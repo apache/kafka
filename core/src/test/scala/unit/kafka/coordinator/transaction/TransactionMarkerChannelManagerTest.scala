@@ -20,8 +20,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import java.util.concurrent.{Callable, Executors, Future}
-
-import kafka.common.RequestAndCompletionHandler
+import kafka.common.{GenericInterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -69,11 +68,13 @@ class TransactionMarkerChannelManagerTest {
 
   private val capturedErrorsCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
   private val time = new MockTime
+  
+  private val interbrokerSendThread = new GenericInterBrokerSendThread("", networkClient, 30000, time)
 
   private val channelManager = new TransactionMarkerChannelManager(
     KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
-    networkClient,
+    interbrokerSendThread,
     txnStateManager,
     time)
 
