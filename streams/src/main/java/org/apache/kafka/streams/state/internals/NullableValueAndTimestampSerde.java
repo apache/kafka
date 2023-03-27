@@ -18,10 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import static java.util.Objects.requireNonNull;
 
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -48,42 +45,4 @@ public class NullableValueAndTimestampSerde<V> extends WrappingNullableSerde<Val
         );
     }
 
-    static final class BooleanSerde {
-        private static final byte TRUE = 0x01;
-        private static final byte FALSE = 0x00;
-
-        static class BooleanSerializer implements Serializer<Boolean> {
-            @Override
-            public byte[] serialize(final String topic, final Boolean data) {
-                if (data == null) {
-                    return null;
-                }
-
-                return new byte[] {
-                    data ? TRUE : FALSE
-                };
-            }
-        }
-
-        static class BooleanDeserializer implements Deserializer<Boolean> {
-            @Override
-            public Boolean deserialize(final String topic, final byte[] data) {
-                if (data == null) {
-                    return null;
-                }
-
-                if (data.length != 1) {
-                    throw new SerializationException("Size of data received by BooleanDeserializer is not 1");
-                }
-
-                if (data[0] == TRUE) {
-                    return true;
-                } else if (data[0] == FALSE) {
-                    return false;
-                } else {
-                    throw new SerializationException("Unexpected byte received by BooleanDeserializer: " + data[0]);
-                }
-            }
-        }
-    }
 }
