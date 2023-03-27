@@ -54,6 +54,8 @@ import java.util.concurrent.ConcurrentHashMap;
 class OffsetSyncStore implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetSyncStore.class);
+    // Store one offset sync for each bit of the topic offset.
+    private static final int SYNCS_PER_PARTITION = Long.SIZE;
     private final KafkaBasedLog<byte[], byte[]> backingStore;
     private final Map<TopicPartition, OffsetSync[]> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
@@ -171,43 +173,48 @@ class OffsetSyncStore implements AutoCloseable {
     protected void handleRecord(ConsumerRecord<byte[], byte[]> record) {
         OffsetSync offsetSync = OffsetSync.deserializeRecord(record);
         TopicPartition sourceTopicPartition = offsetSync.topicPartition();
-        offsetSyncs.computeIfAbsent(sourceTopicPartition, ignored -> createInitialSyncs(offsetSync));
-        offsetSyncs.compute(sourceTopicPartition, (ignored, syncs) -> updateExistingSyncs(syncs, offsetSync));
+        offsetSyncs.compute(sourceTopicPartition, (ignored, syncs) ->
+                syncs == null ? createInitialSyncs(offsetSync) : updateExistingSyncs(syncs, offsetSync)
+        );
     }
 
     private OffsetSync[] updateExistingSyncs(OffsetSync[] syncs, OffsetSync offsetSync) {
         // Make a copy of the array before mutating it, so that readers do not see inconsistent data
-        // TODO: batch updates so that this copy can be performed less often for high-volume sync topics.
-        OffsetSync[] mutableSyncs = Arrays.copyOf(syncs, Long.SIZE);
+        // TODO: consider batching updates so that this copy can be performed less often for high-volume sync topics.
+        OffsetSync[] mutableSyncs = Arrays.copyOf(syncs, SYNCS_PER_PARTITION);
         updateSyncArray(mutableSyncs, offsetSync);
         if (log.isTraceEnabled()) {
-            StringBuilder stateString = new StringBuilder();
-            stateString.append("[");
-            for (int i = 0; i < Long.SIZE; i++) {
-                if (i != 0) {
-                    stateString.append(",");
-                }
-                if (i == 0 || i == Long.SIZE - 1 || mutableSyncs[i] != mutableSyncs[i - 1]) {
-                    // Print only if the sync is interesting, a series of repeated syncs will appear as ,,,,,
-                    stateString.append(mutableSyncs[i].upstreamOffset());
-                    stateString.append(":");
-                    stateString.append(mutableSyncs[i].downstreamOffset());
-                }
-            }
-            stateString.append("]");
-            log.trace("New sync {} applied, new state is {}", offsetSync, stateString);
+            log.trace("New sync {} applied, new state is {}", offsetSync, offsetArrayToString(mutableSyncs));
         }
         return mutableSyncs;
     }
 
+    private String offsetArrayToString(OffsetSync[] syncs) {
+        StringBuilder stateString = new StringBuilder();
+        stateString.append("[");
+        for (int i = 0; i < SYNCS_PER_PARTITION; i++) {
+            if (i == 0 || i == SYNCS_PER_PARTITION - 1 || syncs[i] != syncs[i - 1]) {
+                if (i != 0) {
+                    stateString.append(",");
+                }
+                // Print only if the sync is interesting, a series of repeated syncs will appear as ,,,,,
+                stateString.append(syncs[i].upstreamOffset());
+                stateString.append(":");
+                stateString.append(syncs[i].downstreamOffset());
+            }
+        }
+        stateString.append("]");
+        return stateString.toString();
+    }
+
     private OffsetSync[] createInitialSyncs(OffsetSync firstSync) {
-        OffsetSync[] syncs = new OffsetSync[Long.SIZE];
+        OffsetSync[] syncs = new OffsetSync[SYNCS_PER_PARTITION];
         clearSyncArray(syncs, firstSync);
         return syncs;
     }
 
     private void clearSyncArray(OffsetSync[] syncs, OffsetSync offsetSync) {
-        for (int i = 0; i < Long.SIZE; i++) {
+        for (int i = 0; i < SYNCS_PER_PARTITION; i++) {
             syncs[i] = offsetSync;
         }
     }
@@ -220,7 +227,7 @@ class OffsetSyncStore implements AutoCloseable {
             return;
         }
         syncs[0] = offsetSync;
-        for (int i = 1; i < Long.SIZE; i++) {
+        for (int i = 1; i < SYNCS_PER_PARTITION; i++) {
             OffsetSync oldValue = syncs[i];
             long mask = Long.MAX_VALUE << i;
             // If the old value is too stale: at least one of the 64-i high bits of the offset value have changed
@@ -248,26 +255,21 @@ class OffsetSyncStore implements AutoCloseable {
         }
     }
 
-    private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition, long offset) {
+    private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition, long upstreamOffset) {
         return Optional.ofNullable(offsetSyncs.get(topicPartition))
-                .map(syncs -> lookupLatestSync(syncs, offset));
+                .map(syncs -> lookupLatestSync(syncs, upstreamOffset));
     }
 
 
-    private OffsetSync lookupLatestSync(OffsetSync[] syncs, long offset) {
-        // optimization: skip loop if every sync in the store is ahead of the requested offset
-        OffsetSync oldestSync = syncs[Long.SIZE - 1];
-        if (oldestSync.upstreamOffset() > offset) {
-            return oldestSync;
-        }
+    private OffsetSync lookupLatestSync(OffsetSync[] syncs, long upstreamOffset) {
         // linear search the syncs, effectively a binary search over the topic offsets
         // Search from latest to earliest to find the sync that gives the best accuracy
-        for (int i = 0; i < Long.SIZE; i++) {
+        for (int i = 0; i < SYNCS_PER_PARTITION; i++) {
             OffsetSync offsetSync = syncs[i];
-            if (offsetSync.upstreamOffset() <= offset) {
+            if (offsetSync.upstreamOffset() <= upstreamOffset) {
                 return offsetSync;
             }
         }
-        return oldestSync;
+        return syncs[SYNCS_PER_PARTITION - 1];
     }
 }

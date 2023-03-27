@@ -183,7 +183,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     // for testing
-    protected Map<TopicPartition, Checkpoint> checkpointsForGroup(Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets, String group) throws ExecutionException, InterruptedException {
+    Map<TopicPartition, Checkpoint> checkpointsForGroup(Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets, String group) throws ExecutionException, InterruptedException {
         return upstreamGroupOffsets.entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
