@@ -17,13 +17,10 @@
 package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.server.common.CheckpointFile;
-import org.apache.kafka.server.common.CheckpointFile.EntryFormatter;
 import org.apache.kafka.storage.internals.log.EpochEntry;
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
@@ -31,8 +28,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
-import java.util.regex.Pattern;
 
 /**
  * This class stores a list of EpochEntry(LeaderEpoch + Offsets) to memory
