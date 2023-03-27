@@ -17,6 +17,7 @@
 package kafka.log.remote
 
 import kafka.cluster.Partition
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.common._
@@ -25,6 +26,7 @@ import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, Utils}
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
 import org.apache.kafka.server.log.remote.storage._
+import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 
 import java.io.{Closeable, InputStream}
@@ -217,6 +219,29 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     } finally {
       Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream")
     }
+  }
+
+  /**
+   * Returns the in memory leader epoch checkpoint by truncating with the given start[exclusive] and end[inclusive] offset
+   *
+   * @param log         The actual log from where to take the leader-epoch checkpoint
+   * @param startOffset The start offset of the checkpoint file (exclusive in the truncation).
+   *                    If start offset is 6, then it will retain an entry at offset 6.
+   * @param endOffset   The end offset of the checkpoint file (inclusive in the truncation)
+   *                    If end offset is 100, then it will remove the entries greater than or equal to 100.
+   * @return the truncated leader epoch checkpoint
+   */
+  private[remote] def getLeaderEpochCheckpoint(log: UnifiedLog, startOffset: Long, endOffset: Long): InMemoryLeaderEpochCheckpoint = {
+    val checkpoint = new InMemoryLeaderEpochCheckpoint()
+    log.leaderEpochCache
+      .map(cache => cache.writeTo(checkpoint))
+      .foreach { x =>
+        if (startOffset >= 0) {
+          x.truncateFromStart(startOffset)
+        }
+        x.truncateFromEnd(endOffset)
+      }
+    checkpoint
   }
 
   private def maybeLeaderEpoch(leaderEpoch: Int): Optional[Integer] = {

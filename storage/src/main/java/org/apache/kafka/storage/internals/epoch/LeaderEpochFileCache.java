@@ -49,12 +49,15 @@ public class LeaderEpochFileCache {
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final TreeMap<Integer, EpochEntry> epochs = new TreeMap<>();
 
+    private final TopicPartition topicPartition;
+
     /**
      * @param topicPartition the associated topic partition
      * @param checkpoint     the checkpoint file
      */
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint) {
         this.checkpoint = checkpoint;
+        this.topicPartition = topicPartition;
         LogContext logContext = new LogContext("[LeaderEpochCache " + topicPartition + "] ");
         log = logContext.logger(LeaderEpochFileCache.class);
         checkpoint.read().forEach(this::assign);
@@ -146,6 +149,16 @@ public class LeaderEpochFileCache {
         }
 
         return removedEpochs;
+    }
+
+    public LeaderEpochFileCache writeTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        lock.writeLock().lock();
+        try {
+            leaderEpochCheckpoint.write(epochEntries());
+            return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     public boolean nonEmpty() {
@@ -383,11 +396,11 @@ public class LeaderEpochFileCache {
 
     // Visible for testing
     public List<EpochEntry> epochEntries() {
-        lock.writeLock().lock();
+        lock.readLock().lock();
         try {
             return new ArrayList<>(epochs.values());
         } finally {
-            lock.writeLock().unlock();
+            lock.readLock().unlock();
         }
     }
 
