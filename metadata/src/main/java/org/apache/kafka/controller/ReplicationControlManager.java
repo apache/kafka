@@ -1185,6 +1185,8 @@ public class ReplicationControlManager {
             } else if (registration.fenced()) {
                 ineligibleReplicas.add(new IneligibleReplica(brokerId, "fenced"));
             } else if (brokerState.brokerEpoch() != -1 && registration.epoch() != brokerState.brokerEpoch()) {
+                // The given broker epoch should match with the broker epoch in the broker registration, except the
+                // given broker epoch is -1 which means skipping the broker epoch verification.
                 ineligibleReplicas.add(new IneligibleReplica(brokerId,
                     "broker epoch mismatch:" + brokerState.brokerEpoch() + " vs " + registration.epoch()));
             }
