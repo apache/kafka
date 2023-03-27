@@ -29,6 +29,10 @@ public class ZkMigrationStateDelta {
         this.image = image;
     }
 
+    public ZkMigrationState updatedState() {
+        return updatedState;
+    }
+
     public void replay(ZkMigrationStateRecord record) {
         this.updatedState = ZkMigrationState.of(record.zkMigrationState());
     }

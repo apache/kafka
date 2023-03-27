@@ -161,6 +161,10 @@ public final class MetadataDelta {
         return scramDelta;
     }
 
+    public ZkMigrationStateDelta zkMigrationDelta() {
+        return migrationDelta;
+    }
+
     public ZkMigrationStateDelta getOrCreateZkMigrationDelta() {
         if (migrationDelta == null) migrationDelta = new ZkMigrationStateDelta(image.migration());
         return migrationDelta;

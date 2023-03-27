@@ -47,7 +47,7 @@ public class SnapshotGeneratorTest {
     static class MockEmitter implements SnapshotGenerator.Emitter {
         private final CountDownLatch latch = new CountDownLatch(1);
         private final List<MetadataImage> images = new ArrayList<>();
-        private RuntimeException problem = null;
+        private volatile RuntimeException problem = null;
 
         MockEmitter setReady() {
             latch.countDown();
@@ -66,7 +66,9 @@ public class SnapshotGeneratorTest {
                 throw currentProblem;
             }
             try {
-                latch.await();
+                if (!latch.await(1, TimeUnit.MINUTES)) {
+                    throw new RuntimeException("Timed out waiting for setReady latch");
+                }
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }
