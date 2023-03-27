@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.common.{InterBrokerSendThread, InterBrokerRequestManager, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, KafkaClient}
 import org.apache.kafka.common.Node
@@ -66,18 +66,22 @@ private[raft] class RaftSendThread(
   isInterruptible
 ) {
   private val queue = new ConcurrentLinkedQueue[RequestAndCompletionHandler]()
+  
+  addRequestManager(new RaftRequestManager)
 
-  def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-    val buffer =  mutable.Buffer[RequestAndCompletionHandler]()
-    while (true) {
-      val request = queue.poll()
-      if (request == null) {
-        return buffer
-      } else {
-        buffer += request
+  class RaftRequestManager extends InterBrokerRequestManager(this, 1) {
+    def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+      val buffer = mutable.Buffer[RequestAndCompletionHandler]()
+      while (true) {
+        val request = queue.poll()
+        if (request == null) {
+          return buffer
+        } else {
+          buffer += request
+        }
       }
+      buffer
     }
-    buffer
   }
 
   def sendRequest(request: RequestAndCompletionHandler): Unit = {

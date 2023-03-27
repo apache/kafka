@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.GenericInterBrokerSendThread
+import kafka.common.InterBrokerSendThread
 
 import java.nio.ByteBuffer
 import java.util.Collections
@@ -54,7 +54,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private val txnConfig = TransactionConfig()
   private var transactionCoordinator: TransactionCoordinator = _
   private var txnStateManager: TransactionStateManager = _
-  private var interbrokerSendThread: GenericInterBrokerSendThread = _
+  private var interbrokerSendThread: InterBrokerSendThread = _
   private var txnMarkerChannelManager: TransactionMarkerChannelManager = _
 
   private val allOperations = Seq(
@@ -94,7 +94,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       any[ListenerName])
     ).thenReturn(Some(brokerNode))
     val networkClient: NetworkClient = mock(classOf[NetworkClient])
-    interbrokerSendThread = new GenericInterBrokerSendThread("", networkClient, 30000, time)
+    interbrokerSendThread = new InterBrokerSendThread("", networkClient, 30000, time)
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
       metadataCache,

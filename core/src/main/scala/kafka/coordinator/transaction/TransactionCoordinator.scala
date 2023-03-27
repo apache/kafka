@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.GenericInterBrokerSendThread
+import kafka.common.InterBrokerSendThread
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
@@ -45,7 +45,7 @@ object TransactionCoordinator {
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time,
-            interBrokerSendThread: GenericInterBrokerSendThread): TransactionCoordinator = {
+            interBrokerSendThread: InterBrokerSendThread): TransactionCoordinator = {
 
     val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
       config.transactionMaxTimeoutMs,

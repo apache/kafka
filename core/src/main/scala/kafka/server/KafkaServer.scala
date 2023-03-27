@@ -22,7 +22,7 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{GenerateBrokerIdException, GenericInterBrokerSendThread, InconsistentBrokerIdException, InconsistentClusterIdException}
+import kafka.common.{GenerateBrokerIdException, InterBrokerSendThread, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -133,7 +133,7 @@ class KafkaServer(
   var adminManager: ZkAdminManager = _
   var tokenManager: DelegationTokenManager = _
   
-  var interBrokerSendThread: GenericInterBrokerSendThread = _
+  var interBrokerSendThread: InterBrokerSendThread = _
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = _
   var dynamicConfigManager: ZkConfigManager = _
@@ -360,7 +360,7 @@ class KafkaServer(
 
         val interBrokerSendLogContext = new LogContext(s"[InterBrokerSendThread broker=${config.brokerId}]")
         val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSendLogContext)
-        interBrokerSendThread = new GenericInterBrokerSendThread("InterBrokerSendThread", networkClient, config.requestTimeoutMs, time)
+        interBrokerSendThread = new InterBrokerSendThread("InterBrokerSendThread", networkClient, config.requestTimeoutMs, time)
         interBrokerSendThread.start()
 
         // Start replica manager

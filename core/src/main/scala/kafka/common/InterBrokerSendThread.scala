@@ -17,9 +17,6 @@
 package kafka.common
 
 import kafka.utils.Logging
-
-import java.util.Map.Entry
-import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{AuthenticationException, DisconnectException}
@@ -28,12 +25,14 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.util.ShutdownableThread
 
+import java.util.Map.Entry
+import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
 import scala.jdk.CollectionConverters._
 
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
-abstract class InterBrokerSendThread(
+class InterBrokerSendThread(
   name: String,
   @volatile var networkClient: KafkaClient,
   requestTimeoutMs: Int,
@@ -45,9 +44,13 @@ abstract class InterBrokerSendThread(
 
   private val unsentRequests = new UnsentRequests
 
-  def generateRequests(): Iterable[RequestAndCompletionHandler]
+  private val requestManagers = new ArrayList[InterBrokerRequestManager]()
 
   def hasUnsentRequests: Boolean = unsentRequests.iterator().hasNext
+
+  def addRequestManager(requestManager: InterBrokerRequestManager): Unit = {
+    requestManagers.add(requestManager)
+  }
 
   override def shutdown(): Unit = {
     initiateShutdown()
@@ -57,18 +60,31 @@ abstract class InterBrokerSendThread(
   }
 
   private def drainGeneratedRequests(): Unit = {
-    generateRequests().foreach { request =>
-      unsentRequests.put(request.destination,
-        networkClient.newClientRequest(
-          request.destination.idString,
-          request.request,
-          request.creationTimeMs,
-          true,
-          requestTimeoutMs,
-          request.handler
-        ))
+    requestManagers.forEach { manager => 
+      manager.generateRequests().foreach { request =>
+        unsentRequests.put(request.destination,
+          networkClient.newClientRequest(
+            request.destination.idString,
+            request.request,
+            request.creationTimeMs,
+            true,
+            requestTimeoutMs,
+            decrementInflightRequestHandler(manager, request.handler)
+          ),
+          manager)
+      }
     }
   }
+
+  protected def decrementInflightRequestHandler(manager: InterBrokerRequestManager, originalHandler: RequestCompletionHandler): RequestCompletionHandler = {
+    new RequestCompletionHandler {
+      override def onComplete(response: ClientResponse): Unit = {
+        manager.inflightRequests -= 1
+        originalHandler.onComplete(response)
+      }
+    }
+  }
+
 
   protected def pollOnce(maxTimeoutMs: Long): Unit = {
     try {
@@ -103,9 +119,9 @@ abstract class InterBrokerSendThread(
     for (node <- unsentRequests.nodes.asScala) {
       val requestIterator = unsentRequests.requestIterator(node)
       while (requestIterator.hasNext) {
-        val request = requestIterator.next
-        if (networkClient.ready(node, now)) {
-          networkClient.send(request, now)
+        val requestInfo = requestIterator.next
+        if (networkClient.ready(node, now) && requestInfo.requestManager.maybeIncrementInflightRequests()) {
+          networkClient.send(requestInfo.request, now)
           requestIterator.remove()
         } else
           pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(node, now))
@@ -129,7 +145,7 @@ abstract class InterBrokerSendThread(
           val authenticationException = networkClient.authenticationException(node)
           if (authenticationException != null)
             error(s"Failed to send the following request due to authentication error: $request")
-          completeWithDisconnect(request, now, authenticationException)
+          completeWithDisconnect(request.request, now, authenticationException)
         }
       }
     }
@@ -156,6 +172,24 @@ abstract class InterBrokerSendThread(
   def wakeup(): Unit = networkClient.wakeup()
 }
 
+
+abstract class InterBrokerRequestManager(interBrokerSendThread: InterBrokerSendThread, val maxInflightRequests: Int) {
+  
+  var inflightRequests = 0
+  
+  def generateRequests(): Iterable[RequestAndCompletionHandler]
+
+  def wakeup(): Unit = interBrokerSendThread.wakeup()
+  
+  def maybeIncrementInflightRequests(): Boolean = {
+    val canSend = inflightRequests < maxInflightRequests
+    if (canSend)
+      inflightRequests += 1
+    canSend
+  }
+
+}
+
 case class RequestAndCompletionHandler(
   creationTimeMs: Long,
   destination: Node,
@@ -163,16 +197,21 @@ case class RequestAndCompletionHandler(
   handler: RequestCompletionHandler
 )
 
-private class UnsentRequests {
-  private val unsent = new HashMap[Node, ArrayDeque[ClientRequest]]
+case class RequestInfo(
+  request: ClientRequest,
+  requestManager: InterBrokerRequestManager
+)
 
-  def put(node: Node, request: ClientRequest): Unit = {
-    var requests = unsent.get(node)
-    if (requests == null) {
-      requests = new ArrayDeque[ClientRequest]
-      unsent.put(node, requests)
+private class UnsentRequests {
+  private val unsent = new HashMap[Node, ArrayDeque[RequestInfo]]
+
+  def put(node: Node, request: ClientRequest, manager: InterBrokerRequestManager): Unit = {
+    var requestInfo = unsent.get(node)
+    if (requestInfo == null) {
+      requestInfo = new ArrayDeque[RequestInfo]
+      unsent.put(node, requestInfo)
     }
-    requests.add(request)
+    requestInfo.add(new RequestInfo(request, manager))
   }
 
   def removeAllTimedOut(now: Long): Collection[ClientRequest] = {
@@ -181,10 +220,10 @@ private class UnsentRequests {
       val requestIterator = requests.iterator
       var foundExpiredRequest = false
       while (requestIterator.hasNext && !foundExpiredRequest) {
-        val request = requestIterator.next
-        val elapsedMs = Math.max(0, now - request.createdTimeMs)
-        if (elapsedMs > request.requestTimeoutMs) {
-          expiredRequests.add(request)
+        val requestInfo = requestIterator.next
+        val elapsedMs = Math.max(0, now - requestInfo.request.createdTimeMs)
+        if (elapsedMs > requestInfo.request.requestTimeoutMs) {
+          expiredRequests.add(requestInfo.request)
           requestIterator.remove()
           foundExpiredRequest = true
         }
@@ -202,14 +241,14 @@ private class UnsentRequests {
     }
   }
 
-  def iterator(): Iterator[Entry[Node, ArrayDeque[ClientRequest]]] = {
+  def iterator(): Iterator[Entry[Node, ArrayDeque[RequestInfo]]] = {
     unsent.entrySet().iterator()
   }
 
-  def requestIterator(node: Node): Iterator[ClientRequest] = {
+  def requestIterator(node: Node): Iterator[RequestInfo] = {
     val requests = unsent.get(node)
     if (requests == null)
-      Collections.emptyIterator[ClientRequest]
+      Collections.emptyIterator[RequestInfo]
     else
       requests.iterator
   }

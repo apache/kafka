@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
-import kafka.common.{GenericInterBrokerSendThread, InterBrokerRequestManager, RequestAndCompletionHandler}
+import kafka.common.{InterBrokerSendThread, InterBrokerRequestManager, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Logging
@@ -301,7 +301,7 @@ class BrokerToControllerRequestThread(
   time: Time,
   threadName: String,
   retryTimeoutMs: Long
-) extends GenericInterBrokerSendThread(
+) extends InterBrokerSendThread(
   threadName,
   initialNetworkClient,
   Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt,

@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.Broker.ServerInfo
-import kafka.common.GenericInterBrokerSendThread
+import kafka.common.InterBrokerSendThread
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
@@ -107,7 +107,7 @@ class BrokerServer(
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
   
-  var interBrokerSendThread: GenericInterBrokerSendThread = _
+  var interBrokerSendThread: InterBrokerSendThread = _
 
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
@@ -253,7 +253,7 @@ class BrokerServer(
 
       val interBrokerSendLogContext = new LogContext(s"[InterBrokerSendThread broker=${config.brokerId}]")
       val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSendLogContext)
-      interBrokerSendThread = new GenericInterBrokerSendThread("InterBrokerSendThread", networkClient, config.requestTimeoutMs, time)
+      interBrokerSendThread = new InterBrokerSendThread("InterBrokerSendThread", networkClient, config.requestTimeoutMs, time)
       interBrokerSendThread.start()
 
       this._replicaManager = new ReplicaManager(
