@@ -596,11 +596,6 @@ public class ClusterControlManager {
         }
     }
 
-    public long brokerEpoch(int brokerId) {
-        BrokerRegistration registration = brokerRegistrations.get(brokerId);
-        return registration == null ? -1 : registration.epoch();
-    }
-
     public void addReadyBrokersFuture(CompletableFuture<Void> future, int minBrokers) {
         readyBrokersFuture = Optional.of(new ReadyBrokersFuture(future, minBrokers));
         if (readyBrokersFuture.get().check()) {

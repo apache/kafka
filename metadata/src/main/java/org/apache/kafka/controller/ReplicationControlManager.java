@@ -106,7 +106,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map.Entry;
@@ -1158,7 +1157,7 @@ public class ReplicationControlManager {
             return INVALID_REQUEST;
         }
 
-        List<IneligibleReplica> ineligibleReplicas = ineligibleReplicasForIsr(newIsr);
+        List<IneligibleReplica> ineligibleReplicas = ineligibleReplicasForIsr(partitionData.newIsrWithEpochs());
         if (!ineligibleReplicas.isEmpty()) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified ineligible replicas {} in the new ISR {}.",
@@ -1171,42 +1170,23 @@ public class ReplicationControlManager {
             }
         }
 
-        List<BrokerEpochMismatchReplica> brokerEpochMismatchReplicas =
-            brokerEpochMismatchReplicasForIsr(partitionData.newIsrWithEpochs());
-        if (!brokerEpochMismatchReplicas.isEmpty()) {
-            log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
-                    "it specified some invalid ISR members {} that the broker epochs mismatch.",
-                    brokerId, topic.name, partitionId, brokerEpochMismatchReplicas);
-
-            return INELIGIBLE_REPLICA;
-        }
-
         return Errors.NONE;
     }
 
-    private List<BrokerEpochMismatchReplica> brokerEpochMismatchReplicasForIsr(List<BrokerState> brokerStates) {
-        List<BrokerEpochMismatchReplica> mismatchReplicas = new LinkedList<>();
-        brokerStates.forEach(brokerState -> {
-            if (brokerState.brokerEpoch() != -1 && brokerState.brokerEpoch() != clusterControl.brokerEpoch(brokerState.brokerId())) {
-                mismatchReplicas.add(new BrokerEpochMismatchReplica(
-                    brokerState,
-                    clusterControl.brokerEpoch(brokerState.brokerId()))
-                );
-            }
-        });
-        return mismatchReplicas;
-    }
-
-    private List<IneligibleReplica> ineligibleReplicasForIsr(int[] replicas) {
+    private List<IneligibleReplica> ineligibleReplicasForIsr(List<BrokerState> brokerStates) {
         List<IneligibleReplica> ineligibleReplicas = new ArrayList<>(0);
-        for (Integer replicaId : replicas) {
-            BrokerRegistration registration = clusterControl.registration(replicaId);
+        for (BrokerState brokerState : brokerStates) {
+            int brokerId = brokerState.brokerId();
+            BrokerRegistration registration = clusterControl.registration(brokerId);
             if (registration == null) {
-                ineligibleReplicas.add(new IneligibleReplica(replicaId, "not registered"));
+                ineligibleReplicas.add(new IneligibleReplica(brokerId, "not registered"));
             } else if (registration.inControlledShutdown()) {
-                ineligibleReplicas.add(new IneligibleReplica(replicaId, "shutting down"));
+                ineligibleReplicas.add(new IneligibleReplica(brokerId, "shutting down"));
             } else if (registration.fenced()) {
-                ineligibleReplicas.add(new IneligibleReplica(replicaId, "fenced"));
+                ineligibleReplicas.add(new IneligibleReplica(brokerId, "fenced"));
+            } else if (brokerState.brokerEpoch() != -1 && registration.epoch() != brokerState.brokerEpoch()) {
+                ineligibleReplicas.add(new IneligibleReplica(brokerId,
+                    "broker epoch mismatch:" + brokerState.brokerEpoch() + " vs " + registration.epoch()));
             }
         }
         return ineligibleReplicas;
@@ -1971,26 +1951,6 @@ public class ReplicationControlManager {
         @Override
         public String toString() {
             return replicaId + " (" + reason + ")";
-        }
-    }
-
-
-    private static final class BrokerEpochMismatchReplica {
-        private final BrokerState brokerState;
-        private final Long expectedBrokerEpoch;
-
-        private BrokerEpochMismatchReplica(BrokerState brokerState, Long expectedBrokerEpoch) {
-            this.brokerState = brokerState;
-            this.expectedBrokerEpoch = expectedBrokerEpoch;
-        }
-
-        @Override
-        public String toString() {
-            return "BrokerEpochMismatchReplica("
-                + "brokerId=" + brokerState.brokerId()
-                + ", brokerEpoch=" + brokerState.brokerEpoch()
-                + ", expectedBrokerEpoch=" + expectedBrokerEpoch
-                + ")";
         }
     }
 }
