@@ -1705,8 +1705,8 @@ public class StreamTaskTest {
         consumer.assign(asList(partition1, repartition));
         consumer.updateBeginningOffsets(mkMap(mkEntry(repartition, 0L)));
 
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()); // restoration checkpoint
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).times(2);
+EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap()); // restoration checkpoint
+        EasyMock.expect(stateManager.changelogPartitions()).andStubReturn(Collections.emptySet());
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
