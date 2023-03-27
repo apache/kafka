@@ -372,6 +372,7 @@ public class WorkerSourceTaskTest {
         verifyCleanStartup();
         verifyOffsetFlush(true);
         verify(statusListener).onFailure(taskId, exception);
+        verify(sourceTask).commit();
         verify(sourceTask).stop();
         verifyClose();
     }
