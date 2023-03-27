@@ -131,7 +131,7 @@ class KafkaRequestHandler(id: Int,
             request.releaseBuffer()
           }
 
-        case RequestChannel.WakeupRequest =>
+        case RequestChannel.WakeupRequest => // We should handle this in receiveRequest by polling callbackQueue.
 
         case null => // continue
       }

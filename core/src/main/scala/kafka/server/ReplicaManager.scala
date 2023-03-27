@@ -711,6 +711,7 @@ class ReplicaManager(val config: KafkaConfig,
           responseCallback(produceResponseStatus)
         }
       }
+
       if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
         appendEntries(verifiedEntriesPerPartition)(Map.empty)
       } else {
@@ -2357,7 +2358,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getTransactionCoordinator(partition: Int): (Errors, Node) = {
+  private[server] def getTransactionCoordinator(partition: Int): (Errors, Node) = {
     val listenerName = config.interBrokerListenerName
 
     val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), listenerName)

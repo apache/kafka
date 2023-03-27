@@ -78,7 +78,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
 
   private class AddPartitionsToTxnHandler(node: Node, transactionDataAndCallbacks: TransactionDataAndCallbacks) extends RequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
-      inflightNodes.synchronized(inflightNodes.remove(node))
+      inflightNodes.remove(node)
       if (response.authenticationException() != null) {
         error(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with an " +
           "authentication exception.", response.authenticationException)
@@ -102,8 +102,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
             callback(buildErrorMap(txnId, transactionDataAndCallbacks.transactionData, addPartitionsToTxnResponseData.errorCode()))
           }
         } else {
-          val unverified = mutable.Map[TopicPartition, Errors]()
           addPartitionsToTxnResponseData.resultsByTransaction().forEach { transactionResult =>
+            val unverified = mutable.Map[TopicPartition, Errors]()
             transactionResult.topicResults().forEach { topicResult =>
               topicResult.resultsByPartition().forEach { partitionResult =>
                 val tp = new TopicPartition(topicResult.name(), partitionResult.partitionIndex())
@@ -120,7 +120,6 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
             }
             val callback = transactionDataAndCallbacks.callbacks(transactionResult.transactionalId())
             callback(unverified.toMap)
-            unverified.clear()
           }
         }
       }
@@ -149,25 +148,24 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     // build and add requests to queue
     val buffer = mutable.Buffer[RequestAndCompletionHandler]()
     val currentTimeMs = time.milliseconds()
-    inflightNodes.synchronized {
-      val removedNodes = mutable.Set[Node]()
-      nodesToTransactions.foreach { case (node, transactionDataAndCallbacks) =>
-        if (!inflightNodes.contains(node)) {
-          buffer += RequestAndCompletionHandler(
-            currentTimeMs,
-            node,
-            AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData),
-            new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
-          )
+    val removedNodes = mutable.Set[Node]()
+    nodesToTransactions.foreach { case (node, transactionDataAndCallbacks) =>
+      if (!inflightNodes.contains(node)) {
+        buffer += RequestAndCompletionHandler(
+          currentTimeMs,
+          node,
+          AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData),
+          new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
+        )
 
-          removedNodes.add(node)
-        }
+        removedNodes.add(node)
       }
-      inflightNodes.addAll(removedNodes)
-      removedNodes.foreach(nodesToTransactions.remove(_))
+    }
+    removedNodes.foreach { node =>
+      inflightNodes.add(node)
+      nodesToTransactions.remove(node)
     }
     buffer
   }
-  
 
 }

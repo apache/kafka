@@ -467,8 +467,13 @@ class RequestChannel(val queueSize: Int,
     val callbackRequest = callbackQueue.poll()
     if (callbackRequest != null)
       callbackRequest
-    else 
-      requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+    else {
+      val request = requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+      request match {
+        case WakeupRequest => callbackQueue.poll()
+        case _ => request
+      }
+    }
   }
 
   /** Get the next request or block until there is one */
@@ -495,7 +500,8 @@ class RequestChannel(val queueSize: Int,
 
   def sendCallbackRequest(request: CallbackRequest): Unit = {
     callbackQueue.put(request)
-    requestQueue.put(RequestChannel.WakeupRequest)
+    if (!requestQueue.offer(RequestChannel.WakeupRequest))
+      trace("Wakeup request could not be added to queue. This means queue is full, so we will still process callback.")
   }
 
 }
