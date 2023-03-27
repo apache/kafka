@@ -34,6 +34,11 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystem;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.spi.FileSystemProvider;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -45,6 +50,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -71,6 +77,7 @@ import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -83,8 +90,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -659,6 +668,40 @@ public class UtilsTest {
         // Test that deleting a non-existent directory hierarchy works.
         Utils.delete(tempDir);
         assertFalse(Files.exists(tempDir.toPath()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testRecursiveDeleteWithDeletedFile() throws IOException {
+        // Test recursive deletes, where the FileWalk is supplied with a deleted file path.
+        File rootDir = TestUtils.tempDirectory();
+        File subDir = TestUtils.tempDirectory(rootDir.toPath(), "a");
+
+        DirectoryStream<Path> mockDirectoryStream = (DirectoryStream<Path>) mock(DirectoryStream.class);
+        FileSystemProvider mockFileSystemProvider = mock(FileSystemProvider.class);
+        FileSystem mockFileSystem = mock(FileSystem.class);
+        Path mockRootPath = mock(Path.class);
+        BasicFileAttributes mockBasicFileAttributes = mock(BasicFileAttributes.class);
+        Iterator<Path> mockIterator = mock(Iterator.class);
+        File spyRootFile = spy(rootDir);
+
+        when(spyRootFile.toPath()).thenReturn(mockRootPath);
+        when(mockRootPath.getFileSystem()).thenReturn(mockFileSystem);
+        when(mockFileSystem.provider()).thenReturn(mockFileSystemProvider);
+        when(mockFileSystemProvider.readAttributes(any(), (Class<BasicFileAttributes>) any(), any())).thenReturn(mockBasicFileAttributes);
+        when(mockBasicFileAttributes.isDirectory()).thenReturn(true);
+        when(mockFileSystemProvider.newDirectoryStream(any(), any())).thenReturn(mockDirectoryStream);
+        when(mockDirectoryStream.iterator()).thenReturn(mockIterator);
+        // Here we pass the rootDir to the FileWalk which removes all Files recursively,
+        // and then we pass the subDir path again which is already deleted by this point.
+        when(mockIterator.next()).thenReturn(rootDir.toPath()).thenReturn(subDir.toPath());
+        when(mockIterator.hasNext()).thenReturn(true).thenReturn(true).thenReturn(false);
+
+        assertDoesNotThrow(() -> {
+            Utils.delete(spyRootFile);
+        });
+        assertFalse(Files.exists(rootDir.toPath()));
+        assertFalse(Files.exists(subDir.toPath()));
     }
 
     @Test

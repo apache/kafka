@@ -906,7 +906,7 @@ public final class Utils {
                         // If the root path did not exist, ignore the error and terminate;
                         return FileVisitResult.TERMINATE;
                     } else {
-                        //  Otherwise, just continue walking because we don't have to delete this file.
+                        // Otherwise, just continue walking as the file might already be deleted by other threads.
                         return FileVisitResult.CONTINUE;
                     }
                 }
