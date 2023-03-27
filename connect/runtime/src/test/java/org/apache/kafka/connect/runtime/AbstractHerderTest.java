@@ -947,8 +947,18 @@ public class AbstractHerderTest {
     }
 
     @Test
+    public void testSinkConnectorPluginConfigIncludingCommon() throws ClassNotFoundException {
+        testConnectorPluginConfig("sink", SampleSinkConnector::new, SampleSinkConnector::configWithCommon, Optional.empty());
+    }
+
+    @Test
     public void testSourceConnectorPluginConfig() throws ClassNotFoundException {
         testConnectorPluginConfig("source", SampleSourceConnector::new, SampleSourceConnector::config, Optional.of(SourceConnectorConfig.configDef()));
+    }
+
+    @Test
+    public void testSourceConnectorPluginConfigIncludingCommon() throws ClassNotFoundException {
+        testConnectorPluginConfig("source", SampleSourceConnector::new, SampleSourceConnector::configWithCommon, Optional.empty());
     }
 
     @Test

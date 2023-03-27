@@ -822,12 +822,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return keys;
     }
 
-    private void addConfigDefToResult(Set<ConfigKeyInfo> keyInfos, ConfigDef configDef) {
-        for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
-            keyInfos.add(AbstractHerder.convertConfigKey(configKey));
-        }
-    }
-
     @Override
     public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
         Plugins p = plugins();
@@ -841,15 +835,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         try (LoaderSwap loaderSwap = p.withClassLoader(pluginClass.getClassLoader())) {
             Object plugin = p.newPlugin(pluginName);
             PluginType pluginType = PluginType.from(plugin.getClass());
-            Set<ConfigKeyInfo> results = new HashSet<>();
+            Map<String, ConfigKey> configsMap = new HashMap<>();
             ConfigDef configDefs;
             switch (pluginType) {
                 case SINK:
-                    addConfigDefToResult(results, SinkConnectorConfig.configDef());
+                    configsMap.putAll(SinkConnectorConfig.configDef().configKeys());
                     configDefs = ((SinkConnector) plugin).config();
                     break;
                 case SOURCE:
-                    addConfigDefToResult(results, SourceConnectorConfig.configDef());
+                    configsMap.putAll(SourceConnectorConfig.configDef().configKeys());
                     configDefs = ((SourceConnector) plugin).config();
                     break;
                 case CONVERTER:
@@ -867,8 +861,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 default:
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
-            addConfigDefToResult(results, configDefs);
-            return new ArrayList<>(results);
+            configsMap.putAll(configDefs.configKeys());
+
+            List<ConfigKeyInfo> results = new ArrayList<>();
+            for (ConfigKey configKey: configsMap.values()) {
+                results.add(AbstractHerder.convertConfigKey(configKey));
+            }
+            return results;
         } catch (ClassNotFoundException e) {
             throw new ConnectException("Failed to load plugin class or one of its dependencies", e);
         }
