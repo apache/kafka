@@ -34,7 +34,6 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -917,14 +916,13 @@ public class UtilsTest {
 
     @Test
     public void testToLogDateTimeFormat() {
-        DateTimeFormatter offsetFormatter = DateTimeFormatter.ofPattern("XXX");
-        ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(Instant.now());
-        
-        String requiredOffsetFormat = offsetFormatter.format(offset);
-
         final LocalDateTime timestampWithMilliSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 5, 123000000);
         final LocalDateTime timestampWithSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 5);
-        
+
+        DateTimeFormatter offsetFormatter = DateTimeFormatter.ofPattern("XXX");
+        ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(timestampWithSeconds);
+        String requiredOffsetFormat = offsetFormatter.format(offset);
+
         assertEquals(String.format("2020-11-09 12:34:05,123 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithMilliSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
         assertEquals(String.format("2020-11-09 12:34:05,000 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
     }

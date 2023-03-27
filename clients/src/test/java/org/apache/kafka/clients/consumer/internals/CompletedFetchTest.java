@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
@@ -41,8 +42,6 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -59,19 +58,6 @@ public class CompletedFetchTest {
     private final static TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
     private final static long PRODUCER_ID = 1000L;
     private final static short PRODUCER_EPOCH = 0;
-
-    private BufferSupplier bufferSupplier;
-
-    @BeforeEach
-    public void setup() {
-        bufferSupplier = BufferSupplier.create();
-    }
-
-    @AfterEach
-    public void tearDown() {
-        if (bufferSupplier != null)
-            bufferSupplier.close();
-    }
 
     @Test
     public void testSimple() {
@@ -235,13 +221,23 @@ public class CompletedFetchTest {
         FetchMetricsManager metrics = new FetchMetricsManager(new Metrics(), metricsRegistry);
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
 
-        return new CompletedFetch<>(logContext,
-                subscriptions,
+        FetchConfig<K, V> fetchConfig = new FetchConfig<>(
+                ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
+                ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
+                ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
+                ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
+                ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
                 checkCrcs,
-                bufferSupplier,
+                ConsumerConfig.DEFAULT_CLIENT_RACK,
                 keyDeserializer,
                 valueDeserializer,
-                isolationLevel,
+                isolationLevel
+        );
+        return new CompletedFetch<>(
+                logContext,
+                subscriptions,
+                fetchConfig,
+                BufferSupplier.create(),
                 TP,
                 partitionData,
                 metricAggregator,
