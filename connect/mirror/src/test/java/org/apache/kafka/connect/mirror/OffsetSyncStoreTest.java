@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.OptionalLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetSyncStoreTest {
 
@@ -113,6 +114,7 @@ public class OffsetSyncStoreTest {
             int offset = 0;
             for (; offset <= 1000; offset += maxOffsetLag) {
                 store.sync(tp, offset, offset);
+                assertSparseSyncInvariant(store, tp);
             }
             store.start();
 
@@ -121,6 +123,7 @@ public class OffsetSyncStoreTest {
 
             for (; offset <= 2000; offset += maxOffsetLag) {
                 store.sync(tp, offset, offset);
+                assertSparseSyncInvariant(store, tp);
             }
 
             // After seeing new offsets, we still cannot translate earlier than the latest startup offset
@@ -148,5 +151,27 @@ public class OffsetSyncStoreTest {
         assertEquals(OptionalLong.of(syncOffset), store.translateDownstream(null, tp, syncOffset));
         assertEquals(OptionalLong.of(syncOffset + 1), store.translateDownstream(null, tp, syncOffset + 1));
         assertEquals(OptionalLong.of(syncOffset + 1), store.translateDownstream(null, tp, syncOffset + 2));
+    }
+
+    private void assertSparseSyncInvariant(FakeOffsetSyncStore store, TopicPartition topicPartition) {
+        for (int j = 0; j < Long.SIZE; j++) {
+            for (int i = 0; i <= j; i++) {
+                long jUpstream = store.syncFor(topicPartition, j).upstreamOffset();
+                long iUpstream = store.syncFor(topicPartition, i).upstreamOffset();
+                assertTrue(
+                        jUpstream <= iUpstream,
+                        "Upstream offset " + iUpstream + " at position " + i
+                                + " should be at least as recent as offset " + jUpstream + " at position " + j
+                );
+                long iUpstreamBound = jUpstream + (1L << j);
+                if (iUpstreamBound < 0)
+                    continue;
+                assertTrue(
+                        iUpstream < iUpstreamBound,
+                        "Upstream offset " + iUpstream + " at position " + i
+                                + " should be no greater than " + iUpstreamBound + " (" + jUpstream + " + 2^" + j + ")"
+                );
+            }
+        }
     }
 }

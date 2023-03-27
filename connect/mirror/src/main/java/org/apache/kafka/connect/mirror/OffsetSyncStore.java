@@ -272,4 +272,17 @@ class OffsetSyncStore implements AutoCloseable {
         }
         return syncs[SYNCS_PER_PARTITION - 1];
     }
+
+    // For testing
+    OffsetSync syncFor(TopicPartition topicPartition, int syncIdx) {
+        OffsetSync[] syncs = offsetSyncs.get(topicPartition);
+        if (syncs == null)
+            throw new IllegalArgumentException("No syncs present for " + topicPartition);
+        if (syncIdx >= syncs.length)
+            throw new IllegalArgumentException(
+                    "Requested sync " + (syncIdx + 1) + " for " + topicPartition
+                            + " but there are only " + syncs.length + " syncs available for that topic partition"
+            );
+        return syncs[syncIdx];
+    }
 }
