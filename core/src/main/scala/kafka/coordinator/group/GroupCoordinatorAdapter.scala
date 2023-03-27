@@ -366,7 +366,9 @@ private[group] class GroupCoordinatorAdapter(
           case Some(existingTopic) =>
             existingTopic
           case None =>
-            val newTopic = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(tp.topic)
+            val newTopic = new OffsetCommitResponseData.OffsetCommitResponseTopic()
+              .setName(tp.topic)
+              .setTopicId(tp.topicId)
             byTopics += tp.topic -> newTopic
             response.topics.add(newTopic)
             newTopic
@@ -391,7 +393,7 @@ private[group] class GroupCoordinatorAdapter(
     val partitions = new mutable.HashMap[TopicIdPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
-        val tp = new TopicIdPartition(Uuid.ZERO_UUID, partition.partitionIndex, topic.name)
+        val tp = new TopicIdPartition(topic.topicId, partition.partitionIndex, topic.name)
         partitions += tp -> createOffsetAndMetadata(
           currentTimeMs,
           partition.committedOffset,

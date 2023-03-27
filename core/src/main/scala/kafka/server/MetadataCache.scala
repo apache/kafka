@@ -21,7 +21,7 @@ import kafka.admin.BrokerMetadata
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.{Cluster, Node, TopicPartition, TopicIdAndNameBiMapping, Uuid}
+import org.apache.kafka.common.{Cluster, Node, TopicPartition, TopicIdAndNameBiMap, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 
 import java.util
@@ -90,7 +90,7 @@ trait MetadataCache {
 
   def topicIdsToNames(): util.Map[Uuid, String]
 
-  def topicIdAndNames(): TopicIdAndNameBiMapping
+  def topicIdAndNames(): TopicIdAndNameBiMap
 
   def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String])
 

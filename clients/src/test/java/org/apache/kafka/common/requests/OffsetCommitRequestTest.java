@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicIdAndNameBiMapping;
+import org.apache.kafka.common.TopicIdAndNameBiMap;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.OffsetCommitResponseTest.NameAndId;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.function.Function.identity;
@@ -98,7 +101,7 @@ public class OffsetCommitRequestTest {
 
     public static Map<TopicPartition, Long> offsets(
         OffsetCommitRequest request,
-        TopicIdAndNameBiMapping topicIdAndNames
+        TopicIdAndNameBiMap topicIdAndNames
     ) {
         Map<TopicPartition, Long> offsets = new HashMap<>();
         for (OffsetCommitRequestTopic topic : request.data().topics()) {
@@ -182,7 +185,7 @@ public class OffsetCommitRequestTest {
     public void testUnresolvableTopicIdWhenListingOffset() {
         OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate(), true).build((short) 9);
         assertThrows(UnknownTopicIdException.class,
-            () -> OffsetCommitRequestTest.offsets(request, TopicIdAndNameBiMapping.emptyMapping()));
+            () -> OffsetCommitRequestTest.offsets(request, TopicIdAndNameBiMap.emptyMapping()));
     }
 
     @ParameterizedTest
@@ -193,7 +196,7 @@ public class OffsetCommitRequestTest {
     }
 
     /**
-     * Compares the two {@link OffsetCommitRequestData} independently of the order in which the
+     * Compares the two {@link OffsetCommitRequest} independently of the order in which the
      * {@link OffsetCommitRequestTopic} and {@link OffsetCommitRequestPartition} are defined in the response.
      */
     public static void assertRequestEquals(OffsetCommitRequest expectedRequest, OffsetCommitRequest actualRequest) {
@@ -211,18 +214,58 @@ public class OffsetCommitRequestTest {
         assertEquals(expected.generationId(), actual.generationId(), "Generation id mismatch");
         assertEquals(expected.memberId(), actual.memberId(), "Member id mismatch");
         assertEquals(expected.retentionTimeMs(), actual.retentionTimeMs(), "Retention time mismatch");
-        assertEquals(offsetCommitRequestPartitions(expected), offsetCommitRequestPartitions(actual));
+
+        Function<OffsetCommitRequestTopic, List<OffsetCommitRequestPartition>> partitionSelector =
+            OffsetCommitRequestTopic::partitions;
+
+        Function<OffsetCommitRequestTopic, NameAndId> topicClassifier =
+            topic -> new NameAndId(topic.name(), topic.topicId());
+
+        BiFunction<NameAndId, OffsetCommitRequestPartition, TopicIdPartition> partitionClassifier =
+            (nameAndId, p) -> new TopicIdPartition(nameAndId.id(), p.partitionIndex(), nameAndId.name());
+
+        Function<OffsetCommitRequestData, Map<TopicIdPartition, OffsetCommitRequestPartition>> partitioner =
+            request -> partition(request.topics(), partitionSelector, topicClassifier, partitionClassifier);
+
+        assertEquals(partitioner.apply(expected), partitioner.apply(actual));
     }
 
-    private static Map<TopicIdPartition, OffsetCommitRequestPartition> offsetCommitRequestPartitions(
-            OffsetCommitRequestData request) {
-        return request.topics().stream()
-                .flatMap(topic -> topic.partitions().stream()
-                        .collect(Collectors.toMap(
-                                p -> new TopicIdPartition(topic.topicId(), p.partitionIndex(), topic.name()),
-                                identity()))
-                        .entrySet()
-                        .stream())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    /**
+     * Compares the two {@link OffsetCommitResponse} independently of the order in which the
+     * {@link OffsetCommitResponseTopic} and {@link OffsetCommitResponsePartition} are defined in the response.
+     */
+    public static void assertResponseEquals(OffsetCommitResponse expected, OffsetCommitResponse actual) {
+        assertEquals(expected.throttleTimeMs(), actual.throttleTimeMs());
+        assertEquals(expected.errorCounts(), actual.errorCounts());
+
+        Function<OffsetCommitResponseTopic, List<OffsetCommitResponsePartition>> partitionSelector =
+            OffsetCommitResponseTopic::partitions;
+
+        Function<OffsetCommitResponseTopic, NameAndId> topicClassifier =
+            topic -> new NameAndId(topic.name(), topic.topicId());
+
+        BiFunction<NameAndId, OffsetCommitResponsePartition, TopicIdPartition> partitionClassifier =
+            (nameAndId, p) -> new TopicIdPartition(nameAndId.id(), p.partitionIndex(), nameAndId.name());
+
+        Function<OffsetCommitResponse, Map<TopicIdPartition, OffsetCommitResponsePartition>> partitioner =
+            response -> partition(response.data().topics(), partitionSelector, topicClassifier, partitionClassifier);
+
+        assertEquals(partitioner.apply(expected), partitioner.apply(actual));
+    }
+
+    private static <T, P> Map<TopicIdPartition, P> partition(
+        List<T> topics,
+        Function<T, List<P>> partitioner,
+        Function<T, NameAndId> topicClassifier,
+        BiFunction<NameAndId, P, TopicIdPartition> partitionClassifier
+    ) {
+        return topics.stream()
+            .flatMap(topic -> partitioner.apply(topic).stream()
+                .collect(Collectors.toMap(
+                     p -> partitionClassifier.apply(topicClassifier.apply(topic), p),
+                    identity()))
+                .entrySet()
+                .stream())
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 }

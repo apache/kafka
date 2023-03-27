@@ -38,7 +38,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicIdAndNameBiMapping;
+import org.apache.kafka.common.TopicIdAndNameBiMap;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -1277,7 +1277,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
-        TopicIdAndNameBiMapping topicIdAndNames = metadata.topicIdAndNames();
+        TopicIdAndNameBiMap topicIdAndNames = metadata.topicIdAndNames();
         boolean canUseTopicIds = true;
 
         // create the offset commit request
@@ -1355,12 +1355,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
-        private final TopicIdAndNameBiMapping topicIdAndNames;
+        private final TopicIdAndNameBiMap topicIdAndNames;
 
         private OffsetCommitResponseHandler(
                 Map<TopicPartition, OffsetAndMetadata> offsets,
                 Generation generation,
-                TopicIdAndNameBiMapping topicIdAndNames
+                TopicIdAndNameBiMap topicIdAndNames
         ) {
             super(generation);
             this.offsets = offsets;

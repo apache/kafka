@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static java.util.Arrays.asList;
 import static java.util.function.Function.identity;
@@ -259,6 +260,22 @@ public class OffsetCommitResponseTest {
 
         public Uuid id() {
             return id;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, id);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof NameAndId)) {
+                return false;
+            }
+
+            NameAndId that = (NameAndId) obj;
+
+            return Objects.equals(that.id, id) && Objects.equals(that.name, name);
         }
     }
 }

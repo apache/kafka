@@ -31,7 +31,7 @@ import java.util.Optional;
  * not to characterize the set of topics which are known by a client. Use the
  * {@link org.apache.kafka.clients.MetadataCache} for that purpose.
  */
-public class TopicIdAndNameBiMapping {
+public class TopicIdAndNameBiMap {
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
 
@@ -40,7 +40,7 @@ public class TopicIdAndNameBiMapping {
      * between a topic ID and a topic name is computed by this method. If there are more than one topic name
      * resolving to the same topic ID, an {@link InvalidTopicException} is thrown.
      */
-    public static TopicIdAndNameBiMapping fromTopicIds(Map<String, Uuid> topicIds) {
+    public static TopicIdAndNameBiMap fromTopicIds(Map<String, Uuid> topicIds) {
         Map<Uuid, String> topicNames = new HashMap<>(topicIds.size());
 
         for (Map.Entry<String, Uuid> e: topicIds.entrySet()) {
@@ -51,7 +51,7 @@ public class TopicIdAndNameBiMapping {
             }
         }
 
-        return new TopicIdAndNameBiMapping(topicIds, topicNames);
+        return new TopicIdAndNameBiMap(topicIds, topicNames);
     }
 
     /**
@@ -59,18 +59,18 @@ public class TopicIdAndNameBiMapping {
      * No validation is performed about the consistency of the mapping. This method is to be preferred
      * when the copy of the input maps needs to be avoided.
      */
-    public static TopicIdAndNameBiMapping wrap(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
-        return new TopicIdAndNameBiMapping(topicIds, topicNames);
+    public static TopicIdAndNameBiMap wrap(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
+        return new TopicIdAndNameBiMap(topicIds, topicNames);
     }
 
     /**
      * Used when no mapping between topic name and id exists.
      */
-    public static TopicIdAndNameBiMapping emptyMapping() {
+    public static TopicIdAndNameBiMap emptyMapping() {
         return fromTopicIds(Collections.emptyMap());
     }
 
-    private TopicIdAndNameBiMapping(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
+    private TopicIdAndNameBiMap(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
         this.topicIds = Collections.unmodifiableMap(topicIds);
         this.topicNames = Collections.unmodifiableMap(topicNames);
     }

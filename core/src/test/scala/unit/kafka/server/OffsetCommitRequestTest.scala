@@ -21,10 +21,10 @@ import kafka.server.KafkaApisTest.{NameAndId, newOffsetCommitRequestData, newOff
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.OffsetCommitRequestTest.assertResponseEquals
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetCommitResponse}
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.util.Optional.empty
@@ -134,7 +134,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
       val response = connectAndReceive[OffsetCommitResponse](
         new OffsetCommitRequest.Builder(requestData, true).build(version)
       )
-      assertEquals(expectedResponse, response.data(), s"OffsetCommit version = $version")
+      assertResponseEquals(new OffsetCommitResponse(expectedResponse), response)
     }
   }
 

@@ -20,7 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicIdAndNameBiMapping;
+import org.apache.kafka.common.TopicIdAndNameBiMap;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -226,12 +226,12 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Returns a {@link TopicIdAndNameBiMapping} to resolve topic id from topic name, or topic name from topic id,
+     * Returns a {@link TopicIdAndNameBiMap} to resolve topic id from topic name, or topic name from topic id,
      * based on the current topic ids cached in the metadata. Metadata updates, and changes in topic ids
-     * cached, are not reflected in the {@link TopicIdAndNameBiMapping} returned by this method.
+     * cached, are not reflected in the {@link TopicIdAndNameBiMap} returned by this method.
      */
-    public TopicIdAndNameBiMapping topicIdAndNames() {
-        return TopicIdAndNameBiMapping.fromTopicIds(topicIds());
+    public TopicIdAndNameBiMap topicIdAndNames() {
+        return TopicIdAndNameBiMap.fromTopicIds(topicIds());
     }
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {

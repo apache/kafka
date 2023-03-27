@@ -33,7 +33,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicIdAndNameBiMapping;
+import org.apache.kafka.common.TopicIdAndNameBiMap;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -195,7 +195,7 @@ public abstract class ConsumerCoordinatorTest {
         partitionCounts.put(topic2, 1);
     }
 
-    private final TopicIdAndNameBiMapping topicIdAndNames = TopicIdAndNameBiMapping.fromTopicIds(topicIds);
+    private final TopicIdAndNameBiMap topicIdAndNames = TopicIdAndNameBiMap.fromTopicIds(topicIds);
 
     private MockClient client;
     private MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, topicIds);
