@@ -984,8 +984,8 @@ public class AbstractHerderTest {
         assertNotNull(configs);
 
         ConfigDef expectedConfig = pluginConfig.apply(newPluginInstance.get());
-        int expectedConfigSize = baseConfig.map(config -> expectedConfig.names().size() + config.names().size())
-                .orElse(expectedConfig.names().size());
+        int expectedConfigSize = baseConfig.map(config -> config.names().size()).orElse(0)
+                + expectedConfig.names().size();
         assertEquals(expectedConfigSize, configs.size());
         // Make sure that we used the correct class loader when interacting with the plugin
         verify(plugins).withClassLoader(newPluginInstance.get().getClass().getClassLoader());

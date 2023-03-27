@@ -822,6 +822,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return keys;
     }
 
+    private void addConfigDefToResult(Set<ConfigKeyInfo> keyInfos, ConfigDef configDef) {
+        for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
+            keyInfos.add(AbstractHerder.convertConfigKey(configKey));
+        }
+    }
+
     @Override
     public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
         Plugins p = plugins();
@@ -835,19 +841,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         try (LoaderSwap loaderSwap = p.withClassLoader(pluginClass.getClassLoader())) {
             Object plugin = p.newPlugin(pluginName);
             PluginType pluginType = PluginType.from(plugin.getClass());
+            Set<ConfigKeyInfo> results = new HashSet<>();
             ConfigDef configDefs;
-            List<ConfigKeyInfo> results = new ArrayList<>();
             switch (pluginType) {
                 case SINK:
-                    for (ConfigDef.ConfigKey configKey : SinkConnectorConfig.configDef().configKeys().values()) {
-                        results.add(AbstractHerder.convertConfigKey(configKey));
-                    }
+                    addConfigDefToResult(results, SinkConnectorConfig.configDef());
                     configDefs = ((SinkConnector) plugin).config();
                     break;
                 case SOURCE:
-                    for (ConfigDef.ConfigKey configKey : SourceConnectorConfig.configDef().configKeys().values()) {
-                        results.add(AbstractHerder.convertConfigKey(configKey));
-                    }
+                    addConfigDefToResult(results, SourceConnectorConfig.configDef());
                     configDefs = ((SourceConnector) plugin).config();
                     break;
                 case CONVERTER:
@@ -865,10 +867,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 default:
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
-            for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
-                results.add(AbstractHerder.convertConfigKey(configKey));
-            }
-            return results;
+            addConfigDefToResult(results, configDefs);
+            return new ArrayList<>(results);
         } catch (ClassNotFoundException e) {
             throw new ConnectException("Failed to load plugin class or one of its dependencies", e);
         }
