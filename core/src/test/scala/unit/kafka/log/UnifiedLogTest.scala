@@ -3728,7 +3728,7 @@ class UnifiedLogTest {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
       lastShutdownClean, topicId, keepPartitionMetadataFile, new ConcurrentHashMap[String, Int],
-      remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
+      remoteStorageSystemEnable, logOffsetsListener)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {

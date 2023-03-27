@@ -70,6 +70,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
@@ -1377,7 +1378,8 @@ object TestUtils extends Logging {
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
                    keepPartitionMetadataFile = true,
-                   interBrokerProtocolVersion = interBrokerProtocolVersion)
+                   interBrokerProtocolVersion = interBrokerProtocolVersion,
+                   remoteLogManagerConfig = new RemoteLogManagerConfig(defaultConfig))
   }
 
   class MockAlterPartitionManager extends AlterPartitionManager {

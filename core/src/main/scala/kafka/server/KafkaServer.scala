@@ -266,6 +266,7 @@ class KafkaServer(
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
+        val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
         /* start log manager */
         _logManager = LogManager(
           config,
@@ -275,7 +276,8 @@ class KafkaServer(
           time,
           brokerTopicStats,
           logDirFailureChannel,
-          config.usesTopicId)
+          config.usesTopicId,
+          remoteLogManagerConfig)
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 

@@ -17,8 +17,6 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteLogManager
-
 import java.io.File
 import java.util.Properties
 import kafka.server.BrokerTopicStats
@@ -94,7 +92,6 @@ object LogTestUtils {
                 keepPartitionMetadataFile: Boolean = true,
                 numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
                 remoteStorageSystemEnable: Boolean = false,
-                remoteLogManager: Option[RemoteLogManager] = None,
                 logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     UnifiedLog(
       dir = dir,
@@ -113,7 +110,6 @@ object LogTestUtils {
       keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable,
-      remoteLogManager = remoteLogManager,
       logOffsetsListener = logOffsetsListener
     )
   }

@@ -188,10 +188,11 @@ class BrokerServer(
 
       metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
 
+      val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
-        brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
+        brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true, remoteLogManagerConfig)
 
       remoteLogManager = createRemoteLogManager(config)
 
