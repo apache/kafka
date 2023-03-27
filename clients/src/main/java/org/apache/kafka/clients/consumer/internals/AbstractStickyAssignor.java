@@ -94,7 +94,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         List<PartitionInfo> allPartitions = new ArrayList<>();
         partitionsPerTopic.values().forEach(allPartitions::addAll);
-        RackInfo rackInfo =  new RackInfo(allPartitions, subscriptions);
+        RackInfo rackInfo = new RackInfo(allPartitions, subscriptions);
 
         AbstractAssignmentBuilder assignmentBuilder;
         if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners)) {
@@ -615,7 +615,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         @Override
         Map<String, List<TopicPartition>> build() {
             if (log.isDebugEnabled()) {
-                log.debug("Performing constrained assign with partitionsPerTopic: {}, currentAssignment: {} rackInfo {}.",
+                log.debug("Performing constrained assign with partitionsPerTopic: {}, currentAssignment: {}, rackInfo {}.",
                         partitionsPerTopic, currentAssignment, rackInfo);
             }
 
@@ -700,9 +700,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         // Round-Robin filling within racks for remaining members up to the expected numbers of maxQuota,
         // otherwise, to minQuota
         private void assignRackAwareRoundRobin(List<TopicPartition> unassignedPartitions) {
+            if (rackInfo.consumerRacks.isEmpty())
+                return;
             int nextUnfilledConsumerIndex = 0;
             Iterator<TopicPartition> unassignedIter = unassignedPartitions.iterator();
-            while (!rackInfo.consumerRacks.isEmpty() && unassignedIter.hasNext()) {
+            while (unassignedIter.hasNext()) {
                 TopicPartition unassignedPartition = unassignedIter.next();
                 String consumer = null;
                 int nextIndex = rackInfo.nextRackConsumer(unassignedPartition, unfilledMembersWithUnderMinQuotaPartitions, nextUnfilledConsumerIndex);
