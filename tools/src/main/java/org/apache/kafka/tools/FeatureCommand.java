@@ -58,11 +58,6 @@ public class FeatureCommand {
         try {
             execute(args);
             return 0;
-        } catch (HelpScreenException e) {
-            return 0;
-        } catch (ArgumentParserException e) {
-            System.err.println("Command line error: ${e.getMessage}. Type --help for help.");
-            return 1;
         } catch (TerseException e) {
             System.err.println(e.getMessage());
             return 1;

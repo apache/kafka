@@ -55,7 +55,7 @@ public class FeatureCommandTest {
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
         );
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                        "SupportedMaxVersion: 3.5-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
+                "SupportedMaxVersion: 3.5-IV1\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
     }
 
     @ClusterTest(clusterType = Type.ZK, metadataVersion = IBP_3_3_IV1)
@@ -65,7 +65,7 @@ public class FeatureCommandTest {
                         "upgrade", "--metadata", "3.3-IV2"))
         );
         assertEquals("Could not upgrade metadata.version to 6. Could not apply finalized feature " +
-                        "update because the provided feature is not supported.", commandOutput);
+                "update because the provided feature is not supported.", commandOutput);
     }
 
     @ClusterTest(clusterType = Type.KRAFT, metadataVersion = IBP_3_3_IV1)
@@ -103,7 +103,7 @@ public class FeatureCommandTest {
                         "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
         );
         assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
-                        "update because the provided feature is not supported.", commandOutput);
+                "update because the provided feature is not supported.", commandOutput);
     }
 
     @ClusterTest(clusterType = Type.KRAFT, metadataVersion = IBP_3_3_IV1)
@@ -113,7 +113,7 @@ public class FeatureCommandTest {
                         "disable", "--feature", "metadata.version"))
         );
         assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                        "metadata.version. Local controller 3000 only supports versions 1-9", commandOutput);
+                "metadata.version. Local controller 3000 only supports versions 1-10", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -193,8 +193,7 @@ class FeatureCommandUnitTest {
 
     @Test
     public void testHandleDescribe() {
-        String describeResult = ToolsTestUtils.captureStandardOut(() ->
-        {
+        String describeResult = ToolsTestUtils.captureStandardOut(() -> {
             try {
                 FeatureCommand.handleDescribe(buildAdminClient());
             } catch (Exception e) {
@@ -202,7 +201,7 @@ class FeatureCommandUnitTest {
             }
         });
         assertEquals(format("Feature: foo.bar\tSupportedMinVersion: 0\tSupportedMaxVersion: 10\tFinalizedVersionLevel: 5\tEpoch: 123%n" +
-                        "Feature: metadata.version\tSupportedMinVersion: 3.3-IV0\tSupportedMaxVersion: 3.3-IV3\tFinalizedVersionLevel: 3.3-IV2\tEpoch: 123"), describeResult);
+                "Feature: metadata.version\tSupportedMinVersion: 3.3-IV0\tSupportedMaxVersion: 3.3-IV3\tFinalizedVersionLevel: 3.3-IV2\tEpoch: 123"), describeResult);
     }
 
     @Test
@@ -214,7 +213,7 @@ class FeatureCommandUnitTest {
         String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()))
                 .getMessage().contains("1 out of 2 operation(s) failed.")));
         assertEquals(format("foo.bar was upgraded to 6.%n" +
-                        "Could not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
+                "Could not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
     }
 
     @Test
