@@ -1188,7 +1188,8 @@ public class ReplicationControlManager {
                 // The given broker epoch should match with the broker epoch in the broker registration, except the
                 // given broker epoch is -1 which means skipping the broker epoch verification.
                 ineligibleReplicas.add(new IneligibleReplica(brokerId,
-                    "broker epoch mismatch:" + brokerState.brokerEpoch() + " vs " + registration.epoch()));
+                    "broker epoch mismatch: in request=" + brokerState.brokerEpoch()
+                        + " VS in registration=" + registration.epoch()));
             }
         }
         return ineligibleReplicas;
