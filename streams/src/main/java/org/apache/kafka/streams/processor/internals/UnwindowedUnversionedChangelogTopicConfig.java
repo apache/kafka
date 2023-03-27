@@ -24,10 +24,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * UnwindowedChangelogTopicConfig captures the properties required for configuring
- * the un-windowed store changelog topics.
+ * UnwindowedUnversionedChangelogTopicConfig captures the properties required for configuring
+ * the un-windowed, un-versioned store changelog topics.
  */
-public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
+public class UnwindowedUnversionedChangelogTopicConfig extends InternalTopicConfig {
     private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
     static {
         final Map<String, String> tempTopicDefaultOverrides = new HashMap<>(INTERNAL_TOPIC_DEFAULT_OVERRIDES);
@@ -35,7 +35,7 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
         UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
 
-    UnwindowedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    UnwindowedUnversionedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs) {
         super(name, topicConfigs);
     }
 
@@ -66,7 +66,7 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        final UnwindowedChangelogTopicConfig that = (UnwindowedChangelogTopicConfig) o;
+        final UnwindowedUnversionedChangelogTopicConfig that = (UnwindowedUnversionedChangelogTopicConfig) o;
         return Objects.equals(name, that.name) &&
                Objects.equals(topicConfigs, that.topicConfigs) &&
                Objects.equals(enforceNumberOfPartitions, that.enforceNumberOfPartitions);
@@ -79,7 +79,7 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
 
     @Override
     public String toString() {
-        return "UnwindowedChangelogTopicConfig(" +
+        return "UnwindowedUnversionedChangelogTopicConfig(" +
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
                 ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
