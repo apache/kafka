@@ -82,9 +82,6 @@ public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
     private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(30);
     private static final long MAX_SLEEP_MS = TimeUnit.SECONDS.toMillis(1);
-    private static final long INITIAL_BACKOFF_MS = 100; // initial backoff time in milliseconds INITIAL_BACKOFF_MS
-    private static final long MAX_BACKOFF_MS = 10000; // maximum backoff time in milliseconds
-    private static final int MAX_RETRIES = 10; // maximum number of retries
     // 15min of admin retry duration to ensure successful metadata propagation.  10 seconds of backoff
     // in between retries
     private static final Duration ADMIN_CLIENT_RETRY_DURATION = Duration.ofMinutes(15);
@@ -278,7 +275,6 @@ public class KafkaBasedLog<K, V> {
         consumer.seekToBeginning(partitions);
 
         readToLogEnd(true);
-
         thread = new WorkThread();
         thread.start();
 
@@ -513,73 +509,55 @@ public class KafkaBasedLog<K, V> {
     private class WorkThread extends Thread {
         public WorkThread() {
             super("KafkaBasedLog Work Thread - " + topic);
+            setUncaughtExceptionHandler((t, e) -> {
+                log.error("Uncaught exception in thread '{}':", t.getName(), e);
+                throw new ConnectException(e);
+            });
         }
-
         @Override
         public void run() {
-            int retries = 0;
             log.trace("{} started execution", this);
             while (true) {
-                try {
-                    int numCallbacks;
-                    synchronized (KafkaBasedLog.this) {
-                        if (stopRequested)
-                            break;
-                        numCallbacks = readLogEndOffsetCallbacks.size();
-                    }
+                int numCallbacks;
+                synchronized (KafkaBasedLog.this) {
+                    if (stopRequested)
+                        break;
+                    numCallbacks = readLogEndOffsetCallbacks.size();
+                }
 
-                    if (numCallbacks > 0) {
-                        try {
-                            readToLogEnd(false);
-                            log.trace("Finished read to end log for topic {}", topic);
-                        } catch (TimeoutException e) {
-                            log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
-                                    "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
-                            continue;
-                        } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
-                            log.warn("Retriable error while reading log to end for topic '{}'. Retrying automatically. " +
-                                    "Reason: {}", topic, e.getMessage());
-                            continue;
-                        } catch (WakeupException e) {
-                            // Either received another get() call and need to retry reading to end of log or stop() was
-                            // called. Both are handled by restarting this loop.
-                            continue;
-                        }
-                    }
-
-                    synchronized (KafkaBasedLog.this) {
-                        // Only invoke exactly the number of callbacks we found before triggering the read to log end
-                        // since it is possible for another write + readToEnd to sneak in the meantime
-                        for (int i = 0; i < numCallbacks; i++) {
-                            Callback<Void> cb = readLogEndOffsetCallbacks.poll();
-                            cb.onCompletion(null, null);
-                        }
-                    }
-
+                if (numCallbacks > 0) {
                     try {
-                        poll(Integer.MAX_VALUE);
+                        readToLogEnd(false);
+                        log.trace("Finished read to end log for topic {}", topic);
+                    } catch (TimeoutException e) {
+                        log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
+                                "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
+                        continue;
+                    } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
+                        log.warn("Retriable error while reading log to end for topic '{}'. Retrying automatically. " +
+                                "Reason: {}", topic, e.getMessage());
+                        continue;
                     } catch (WakeupException e) {
-                        // See previous comment, both possible causes of this wakeup are handled by starting this loop again
-                        // continue; // commented out since it is no-op and need to reset retry counter at the end of the
-                                    // try block
+                        // Either received another get() call and need to retry reading to end of log or stop() was
+                        // called. Both are handled by restarting this loop.
+                        continue;
                     }
-                    // reset retries counter
-                    retries = 0;
-                } catch (Throwable t) {
-                    log.error("Unexpected exception in {}", this, t);
-                    if (retries >= MAX_RETRIES) {
-                        log.error("Exceeded maximum number of retries ({}). Received unexpected exception. Aborting", MAX_RETRIES);
-                        synchronized (KafkaBasedLog.this) {
-                            stopRequested = true;
-                        }
-                        throw t;
+                }
+
+                synchronized (KafkaBasedLog.this) {
+                    // Only invoke exactly the number of callbacks we found before triggering the read to log end
+                    // since it is possible for another write + readToEnd to sneak in the meantime
+                    for (int i = 0; i < numCallbacks; i++) {
+                        Callback<Void> cb = readLogEndOffsetCallbacks.poll();
+                        cb.onCompletion(null, null);
                     }
-                    long backoffMs = Math.min(INITIAL_BACKOFF_MS * (1L << retries), MAX_BACKOFF_MS);
-                    try {
-                        Thread.sleep(backoffMs);
-                    } catch (InterruptedException ex) {
-                        log.warn("Interrupted while waiting for retry", ex);
-                    }
+                }
+
+                try {
+                    poll(Integer.MAX_VALUE);
+                } catch (WakeupException e) {
+                    // See previous comment, both possible causes of this wakeup are handled by starting this loop again
+                    continue;
                 }
             }
         }
