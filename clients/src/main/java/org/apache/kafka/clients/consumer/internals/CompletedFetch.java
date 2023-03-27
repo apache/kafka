@@ -71,11 +71,8 @@ class CompletedFetch<K, V> {
 
     private final Logger log;
     private final SubscriptionState subscriptions;
-    private final boolean checkCrcs;
+    private final FetchConfig<K, V> fetchConfig;
     private final BufferSupplier decompressionBufferSupplier;
-    private final Deserializer<K> keyDeserializer;
-    private final Deserializer<V> valueDeserializer;
-    private final IsolationLevel isolationLevel;
     private final Iterator<? extends RecordBatch> batches;
     private final Set<Long> abortedProducerIds;
     private final PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactions;
@@ -91,11 +88,8 @@ class CompletedFetch<K, V> {
 
     CompletedFetch(LogContext logContext,
                    SubscriptionState subscriptions,
-                   boolean checkCrcs,
+                   FetchConfig<K, V> fetchConfig,
                    BufferSupplier decompressionBufferSupplier,
-                   Deserializer<K> keyDeserializer,
-                   Deserializer<V> valueDeserializer,
-                   IsolationLevel isolationLevel,
                    TopicPartition partition,
                    FetchResponseData.PartitionData partitionData,
                    FetchMetricsAggregator metricAggregator,
@@ -103,11 +97,8 @@ class CompletedFetch<K, V> {
                    short requestVersion) {
         this.log = logContext.logger(CompletedFetch.class);
         this.subscriptions = subscriptions;
-        this.checkCrcs = checkCrcs;
+        this.fetchConfig = fetchConfig;
         this.decompressionBufferSupplier = decompressionBufferSupplier;
-        this.keyDeserializer = keyDeserializer;
-        this.valueDeserializer = valueDeserializer;
-        this.isolationLevel = isolationLevel;
         this.partition = partition;
         this.partitionData = partitionData;
         this.metricAggregator = metricAggregator;
@@ -147,7 +138,7 @@ class CompletedFetch<K, V> {
     }
 
     private void maybeEnsureValid(RecordBatch batch) {
-        if (checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+        if (fetchConfig.checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
             try {
                 batch.ensureValid();
             } catch (CorruptRecordException e) {
@@ -158,7 +149,7 @@ class CompletedFetch<K, V> {
     }
 
     private void maybeEnsureValid(Record record) {
-        if (checkCrcs) {
+        if (fetchConfig.checkCrcs) {
             try {
                 record.ensureValid();
             } catch (CorruptRecordException e) {
@@ -196,7 +187,7 @@ class CompletedFetch<K, V> {
                 lastEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                 maybeEnsureValid(currentBatch);
 
-                if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
+                if (fetchConfig.isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
                     // remove from the aborted transaction queue all aborted transactions which have begun
                     // before the current batch's last offset and add the associated producerIds to the
                     // aborted producer set
@@ -306,10 +297,10 @@ class CompletedFetch<K, V> {
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : org.apache.kafka.common.utils.Utils.toArray(keyBytes);
-            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), headers, keyByteArray);
+            K key = keyBytes == null ? null : fetchConfig.keyDeserializer.deserialize(partition.topic(), headers, keyByteArray);
             ByteBuffer valueBytes = record.value();
             byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
-            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
+            V value = valueBytes == null ? null : fetchConfig.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
                     timestamp, timestampType,
                     keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,

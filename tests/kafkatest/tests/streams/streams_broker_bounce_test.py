@@ -216,7 +216,7 @@ class StreamsBrokerBounceTest(Test):
             broker_type=["leader"],
             num_threads=[1, 3],
             sleep_time_secs=[120],
-            metadata_quorum=[quorum.remote_kraft])
+            metadata_quorum=[quorum.isolated_kraft])
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader", "controller"],
             num_threads=[1, 3],
