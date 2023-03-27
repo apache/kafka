@@ -1505,8 +1505,8 @@ public class StreamTaskTest {
     public void shouldReInitializeTopologyWhenResuming() throws IOException {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
-        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()); // restoration checkpoint
-        EasyMock.expect(recordCollector.offsets()).andThrow(new AssertionError("Should not try to read offsets")).anyTimes();
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap())
+            .andThrow(new AssertionError("Should not try to read offsets")).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap());
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
 
