@@ -17,7 +17,7 @@
 package kafka.common
 
 import kafka.utils.Logging
-import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient}
+import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{AuthenticationException, DisconnectException}
 import org.apache.kafka.common.internals.FatalExitError
@@ -26,7 +26,6 @@ import org.apache.kafka.server.util.ShutdownableThread
 
 import java.util.Map.Entry
 import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
-import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 
 /**
@@ -69,12 +68,22 @@ class GenericInterBrokerSendThread(
             request.creationTimeMs,
             true,
             requestTimeoutMs,
-            request.handler
+            decrementInflightRequestHandler(manager, request.handler)
           ),
           manager)
       }
     }
   }
+  
+  private def decrementInflightRequestHandler(manager: InterBrokerRequestManager, originalHandler: RequestCompletionHandler): RequestCompletionHandler = {
+    new RequestCompletionHandler {
+      override def onComplete(response: ClientResponse): Unit = {
+        manager.inflightRequests -= 1
+        originalHandler.onComplete(response)
+      }
+    }
+  }
+    
 
   protected def pollOnce(maxTimeoutMs: Long): Unit = {
     try {
@@ -165,19 +174,17 @@ class GenericInterBrokerSendThread(
 
 abstract class InterBrokerRequestManager(interBrokerSendThread: GenericInterBrokerSendThread, val maxInflightRequests: Int) {
   
-  val inflightRequests = new AtomicInteger(0)
+  var inflightRequests = 0
   
   def generateRequests(): Iterable[RequestAndCompletionHandler]
 
   def wakeup(): Unit = interBrokerSendThread.wakeup()
   
   def maybeIncrementInflightRequests(): Boolean = {
-    inflightRequests.synchronized {
-      val canSend = inflightRequests.get() < maxInflightRequests
-      if (canSend)
-        inflightRequests.incrementAndGet()
-      canSend
-    }
+    val canSend = inflightRequests < maxInflightRequests
+    if (canSend)
+      inflightRequests += 1
+    canSend
   }
 
 }
@@ -210,7 +217,6 @@ private class UnsentRequests2 {
         val elapsedMs = Math.max(0, now - requestInfo.request.createdTimeMs)
         if (elapsedMs > requestInfo.request.requestTimeoutMs) {
           expiredRequests.add(requestInfo.request)
-          requestInfo.requestManager.inflightRequests.decrementAndGet()
           requestIterator.remove()
           foundExpiredRequest = true
         }
