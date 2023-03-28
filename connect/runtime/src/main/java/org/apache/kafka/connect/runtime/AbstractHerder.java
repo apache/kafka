@@ -866,9 +866,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
             // Track config properties by name and, if the same property is defined in multiple places,
             // give precedence to the one defined by the plugin class
-            Map<String, ConfigKey> configsMap = new HashMap<>();
-            if (baseConfigDefs != null) configsMap.putAll(baseConfigDefs.configKeys());
-            configsMap.putAll(pluginConfigDefs.configKeys());
+            // Preserve the ordering of properties as they're returned from each ConfigDef
+            Map<String, ConfigKey> configsMap = new LinkedHashMap<>(pluginConfigDefs.configKeys());
+            if (baseConfigDefs != null)
+                baseConfigDefs.configKeys().forEach(configsMap::putIfAbsent);
 
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigKey configKey : configsMap.values()) {
