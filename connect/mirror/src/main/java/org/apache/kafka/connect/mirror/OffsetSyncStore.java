@@ -41,8 +41,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * later in the topic, closer to the live end of the topic.
  * This maintains the following invariants for each topic-partition in the in-memory sync storage:
  * <ul>
- *     <li>syncs[0] is the latest offset sync from the syncs topic</li>
- *     <li>For each i,j, i <= j: syncs[j].upstream <= syncs[i].upstream < syncs[j].upstream + 2^j</li>
+ *     <li>Invariant A: syncs[0] is the latest offset sync from the syncs topic</li>
+ *     <li>Invariant B: For each i,j, i <= j: syncs[j].upstream <= syncs[i].upstream < syncs[j].upstream + 2^j</li>
  * </ul>
  * <p>Offset translation uses the syncs[i] which most closely precedes the upstream consumer group's current offset.
  * For a fixed in-memory state, translation of variable upstream offsets will be monotonic.
@@ -193,11 +193,11 @@ class OffsetSyncStore implements AutoCloseable {
         StringBuilder stateString = new StringBuilder();
         stateString.append("[");
         for (int i = 0; i < SYNCS_PER_PARTITION; i++) {
-            if (i == 0 || i == SYNCS_PER_PARTITION - 1 || syncs[i] != syncs[i - 1]) {
+            if (i == 0 || syncs[i] != syncs[i - 1]) {
                 if (i != 0) {
                     stateString.append(",");
                 }
-                // Print only if the sync is interesting, a series of repeated syncs will appear as ,,,,,
+                // Print only if the sync is interesting, a series of repeated syncs will be elided
                 stateString.append(syncs[i].upstreamOffset());
                 stateString.append(":");
                 stateString.append(syncs[i].downstreamOffset());
@@ -226,11 +226,11 @@ class OffsetSyncStore implements AutoCloseable {
             clearSyncArray(syncs, offsetSync);
             return;
         }
+        // Invariant A: the latest sync must always be updated
         syncs[0] = offsetSync;
         for (int i = 1; i < SYNCS_PER_PARTITION; i++) {
             OffsetSync oldValue = syncs[i];
             long mask = Long.MAX_VALUE << i;
-            // If the old value is too stale: at least one of the 64-i high bits of the offset value have changed
             // This produces buckets quantized at boundaries of powers of 2
             // Syncs:     a                  b             c       d   e
             // Bucket 0  |a|                |b|           |c|     |d| |e|                   (size    1)
@@ -247,6 +247,8 @@ class OffsetSyncStore implements AutoCloseable {
             // State after c: [c,,,,,,a, ... ,a] (buckets 0-5 written, b expired completely)
             // State after d: [d,,,,c,,a, ... ,a] (buckets 0-3 written)
             // State after e: [e,,d,,c,,a, ... ,a] (buckets 0-1 written)
+            // Invariant B: If the old value is too stale, replace it with the most recent sync.
+            // Test if the invariant fails by bitwise XOR, and then testing if any of the 64-i high bits have changed
             if (((oldValue.upstreamOffset() ^ upstreamOffset) & mask) != 0) {
                 syncs[i] = offsetSync;
             } else {
