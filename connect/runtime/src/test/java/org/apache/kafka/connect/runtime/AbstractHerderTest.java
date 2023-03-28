@@ -981,7 +981,12 @@ public class AbstractHerderTest {
         testConnectorPluginConfig("transformation", SampleTransformation::new, SampleTransformation::config, Optional.empty());
     }
 
-    private <T> void testConnectorPluginConfig(String pluginName, Supplier<T> newPluginInstance, Function<T, ConfigDef> pluginConfig, Optional<ConfigDef> baseConfig) throws ClassNotFoundException {
+    private <T> void testConnectorPluginConfig(
+            String pluginName,
+            Supplier<T> newPluginInstance,
+            Function<T, ConfigDef> pluginConfig,
+            Optional<ConfigDef> baseConfig
+    ) throws ClassNotFoundException {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
