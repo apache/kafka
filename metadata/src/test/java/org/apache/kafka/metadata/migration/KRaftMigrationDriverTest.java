@@ -17,10 +17,12 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -49,6 +51,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class KRaftMigrationDriverTest {
@@ -146,6 +149,29 @@ public class KRaftMigrationDriverTest {
             ZkMigrationLeadershipState state
         ) {
             return state;
+        }
+
+        @Override
+        public ZkMigrationLeadershipState removeDeletedAcls(
+            ResourcePattern resourcePattern,
+            List<AccessControlEntry> deletedAcls,
+            ZkMigrationLeadershipState state
+        ) {
+            return state;
+        }
+
+        @Override
+        public ZkMigrationLeadershipState writeAddedAcls(
+            ResourcePattern resourcePattern,
+            List<AccessControlEntry> addedAcls,
+            ZkMigrationLeadershipState state
+        ) {
+            return state;
+        }
+
+        @Override
+        public void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer) {
+
         }
 
         @Override

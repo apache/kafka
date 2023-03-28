@@ -115,6 +115,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
     protected Map<String, String> additionalPrimaryClusterClientsConfigs = new HashMap<>();
     protected Map<String, String> additionalBackupClusterClientsConfigs = new HashMap<>();
+    protected boolean replicateBackupToPrimary = true;
     protected Boolean createReplicatedTopicsUpfront = false; // enable to speed up the test cases
     protected Exit.Procedure exitProcedure;
     private Exit.Procedure haltProcedure;
@@ -128,8 +129,6 @@ public class MirrorConnectorsIntegrationBaseTest {
     public void startClusters() throws Exception {
         startClusters(new HashMap<String, String>() {{
                 put("topics", "test-topic-.*, primary.test-topic-.*, backup.test-topic-.*");
-                put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".enabled", "true");
-                put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "true");
             }});
     }
 
@@ -166,6 +165,8 @@ public class MirrorConnectorsIntegrationBaseTest {
         backupBrokerProps.put("auto.create.topics.enable", "false");
 
         mm2Props.putAll(basicMM2Config());
+        mm2Props.put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".enabled", "true");
+        mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", Boolean.toString(replicateBackupToPrimary));
         mm2Props.putAll(additionalMM2Config);
 
         // exclude topic config:
@@ -255,7 +256,11 @@ public class MirrorConnectorsIntegrationBaseTest {
     @Test
     public void testReplication() throws Exception {
         produceMessages(primary, "test-topic-1");
-        produceMessages(backup, "test-topic-1");
+        String backupTopic1 = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
+        if (replicateBackupToPrimary) {
+            produceMessages(backup, "test-topic-1");
+        }
+        String reverseTopic1 = remoteTopicName("test-topic-1", BACKUP_CLUSTER_ALIAS);
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
@@ -264,51 +269,59 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Config = new MirrorMakerConfig(mm2Props);
 
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
-        waitUntilMirrorMakerIsRunning(primary, CONNECTOR_LIST, mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS); 
+        List<Class<? extends Connector>> primaryConnectors = replicateBackupToPrimary ? CONNECTOR_LIST : Collections.singletonList(MirrorHeartbeatConnector.class);
+        waitUntilMirrorMakerIsRunning(primary, primaryConnectors, mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
 
         MirrorClient primaryClient = new MirrorClient(mm2Config.clientConfig(PRIMARY_CLUSTER_ALIAS));
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
 
         // make sure the topic is auto-created in the other cluster
-        waitForTopicCreated(primary, "backup.test-topic-1");
-        waitForTopicCreated(backup, "primary.test-topic-1");
+        waitForTopicCreated(primary, reverseTopic1);
+        waitForTopicCreated(backup, backupTopic1);
         waitForTopicCreated(primary, "mm2-offset-syncs.backup.internal");
-        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), "primary.test-topic-1", TopicConfig.CLEANUP_POLICY_CONFIG),
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), backupTopic1, TopicConfig.CLEANUP_POLICY_CONFIG),
                 "topic config was not synced");
         createAndTestNewTopicWithConfigFilter();
 
         assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
             "Records were not produced to primary cluster.");
-        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "primary.test-topic-1").count(),
+        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, backupTopic1).count(),
             "Records were not replicated to backup cluster.");
         assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
             "Records were not produced to backup cluster.");
-        assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "backup.test-topic-1").count(),
-            "Records were not replicated to primary cluster.");
-        
-        assertEquals(NUM_RECORDS_PRODUCED * 2, primary.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, "backup.test-topic-1", "test-topic-1").count(),
-            "Primary cluster doesn't have all records from both clusters.");
-        assertEquals(NUM_RECORDS_PRODUCED * 2, backup.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, "primary.test-topic-1", "test-topic-1").count(),
-            "Backup cluster doesn't have all records from both clusters.");
-        
+        if (replicateBackupToPrimary) {
+            assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, reverseTopic1).count(),
+                    "Records were not replicated to primary cluster.");
+            assertEquals(NUM_RECORDS_PRODUCED * 2, primary.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, reverseTopic1, "test-topic-1").count(),
+                "Primary cluster doesn't have all records from both clusters.");
+            assertEquals(NUM_RECORDS_PRODUCED * 2, backup.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, backupTopic1, "test-topic-1").count(),
+                "Backup cluster doesn't have all records from both clusters.");
+        }
+
         assertTrue(primary.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
             "Heartbeats were not emitted to primary cluster.");
         assertTrue(backup.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
             "Heartbeats were not emitted to backup cluster.");
         assertTrue(backup.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "primary.heartbeats").count() > 0,
             "Heartbeats were not replicated downstream to backup cluster.");
-        assertTrue(primary.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "backup.heartbeats").count() > 0,
-            "Heartbeats were not replicated downstream to primary cluster.");
+        if (replicateBackupToPrimary) {
+            assertTrue(primary.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "backup.heartbeats").count() > 0,
+                    "Heartbeats were not replicated downstream to primary cluster.");
+        }
         
         assertTrue(backupClient.upstreamClusters().contains(PRIMARY_CLUSTER_ALIAS), "Did not find upstream primary cluster.");
         assertEquals(1, backupClient.replicationHops(PRIMARY_CLUSTER_ALIAS), "Did not calculate replication hops correctly.");
-        assertTrue(primaryClient.upstreamClusters().contains(BACKUP_CLUSTER_ALIAS), "Did not find upstream backup cluster.");
-        assertEquals(1, primaryClient.replicationHops(BACKUP_CLUSTER_ALIAS), "Did not calculate replication hops correctly.");
         assertTrue(backup.kafka().consume(1, CHECKPOINT_DURATION_MS, "primary.checkpoints.internal").count() > 0,
             "Checkpoints were not emitted downstream to backup cluster.");
+        if (replicateBackupToPrimary) {
+            assertTrue(primaryClient.upstreamClusters().contains(BACKUP_CLUSTER_ALIAS), "Did not find upstream backup cluster.");
+            assertEquals(1, primaryClient.replicationHops(BACKUP_CLUSTER_ALIAS), "Did not calculate replication hops correctly.");
+            assertTrue(primary.kafka().consume(1, CHECKPOINT_DURATION_MS, "backup.checkpoints.internal").count() > 0,
+                    "Checkpoints were not emitted upstream to primary cluster.");
+        }
 
         Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForCheckpointOnAllPartitions(
-                backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, "primary.test-topic-1");
+                backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, backupTopic1);
 
         // Failover consumer group to backup cluster.
         try (Consumer<byte[], byte[]> primaryConsumer = backup.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
@@ -317,55 +330,61 @@ public class MirrorConnectorsIntegrationBaseTest {
             primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             primaryConsumer.commitAsync();
 
-            assertTrue(primaryConsumer.position(new TopicPartition("primary.test-topic-1", 0)) > 0, "Consumer failedover to zero offset.");
+            assertTrue(primaryConsumer.position(new TopicPartition(backupTopic1, 0)) > 0, "Consumer failedover to zero offset.");
             assertTrue(primaryConsumer.position(
-                new TopicPartition("primary.test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedover beyond expected offset.");
-            assertTrue(primary.kafka().consume(1, CHECKPOINT_DURATION_MS, "backup.checkpoints.internal").count() > 0,
-                "Checkpoints were not emitted upstream to primary cluster.");
+                new TopicPartition(backupTopic1, 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedover beyond expected offset.");
         }
-
-        Map<TopicPartition, OffsetAndMetadata> primaryOffsets = waitForCheckpointOnAllPartitions(
-                primaryClient, consumerGroupName, BACKUP_CLUSTER_ALIAS, "backup.test-topic-1");
 
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
  
         primaryClient.close();
         backupClient.close();
-        
-        // Failback consumer group to primary cluster
-        try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
-            primaryConsumer.assign(primaryOffsets.keySet());
-            primaryOffsets.forEach(primaryConsumer::seek);
-            primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-            primaryConsumer.commitAsync();
 
-            assertTrue(primaryConsumer.position(new TopicPartition("backup.test-topic-1", 0)) > 0, "Consumer failedback to zero downstream offset.");
-            assertTrue(primaryConsumer.position(
-                new TopicPartition("backup.test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected downstream offset.");
+        if (replicateBackupToPrimary) {
+            Map<TopicPartition, OffsetAndMetadata> primaryOffsets = waitForCheckpointOnAllPartitions(
+                    primaryClient, consumerGroupName, BACKUP_CLUSTER_ALIAS, reverseTopic1);
+
+            // Failback consumer group to primary cluster
+            try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
+                primaryConsumer.assign(primaryOffsets.keySet());
+                primaryOffsets.forEach(primaryConsumer::seek);
+                primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+                primaryConsumer.commitAsync();
+
+                assertTrue(primaryConsumer.position(new TopicPartition(reverseTopic1, 0)) > 0, "Consumer failedback to zero downstream offset.");
+                assertTrue(primaryConsumer.position(
+                        new TopicPartition(reverseTopic1, 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected downstream offset.");
+            }
+
         }
-      
+
         // create more matching topics
         primary.kafka().createTopic("test-topic-2", NUM_PARTITIONS);
-        backup.kafka().createTopic("test-topic-3", NUM_PARTITIONS);
+        String backupTopic2 = remoteTopicName("test-topic-2", PRIMARY_CLUSTER_ALIAS);
 
         // make sure the topic is auto-created in the other cluster
-        waitForTopicCreated(backup, "primary.test-topic-2");
-        waitForTopicCreated(primary, "backup.test-topic-3");
+        waitForTopicCreated(backup, backupTopic2);
 
         // only produce messages to the first partition
         produceMessages(primary, "test-topic-2", 1);
-        produceMessages(backup, "test-topic-3", 1);
-        
+
         // expect total consumed messages equals to NUM_RECORDS_PER_PARTITION
         assertEquals(NUM_RECORDS_PER_PARTITION, primary.kafka().consume(NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, "test-topic-2").count(),
             "Records were not produced to primary cluster.");
-        assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consume(NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, "test-topic-3").count(),
-            "Records were not produced to backup cluster.");
-
-        assertEquals(NUM_RECORDS_PER_PARTITION, primary.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, "backup.test-topic-3").count(),
-            "New topic was not replicated to primary cluster.");
-        assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, "primary.test-topic-2").count(),
+        assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, backupTopic2).count(),
             "New topic was not replicated to backup cluster.");
+
+        if (replicateBackupToPrimary) {
+            backup.kafka().createTopic("test-topic-3", NUM_PARTITIONS);
+            String reverseTopic3 = remoteTopicName("test-topic-3", BACKUP_CLUSTER_ALIAS);
+            waitForTopicCreated(primary, reverseTopic3);
+            produceMessages(backup, "test-topic-3", 1);
+            assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consume(NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, "test-topic-3").count(),
+                    "Records were not produced to backup cluster.");
+
+            assertEquals(NUM_RECORDS_PER_PARTITION, primary.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, reverseTopic3).count(),
+                    "New topic was not replicated to primary cluster.");
+        }
     }
     
     @Test
@@ -394,7 +413,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         // sleep few seconds to have MM2 finish replication so that "end" consumer will consume some record
         Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
-        String backupTopic = PRIMARY_CLUSTER_ALIAS + "." + topic;
+        String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
 
         // consume all records from backup cluster
         try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(consumerProps,
@@ -425,8 +444,9 @@ public class MirrorConnectorsIntegrationBaseTest {
         testOneWayReplicationWithOffsetSyncs(0);
     }
 
-    public void testOneWayReplicationWithOffsetSyncs(int offsetLagMax) throws InterruptedException {
+    private void testOneWayReplicationWithOffsetSyncs(int offsetLagMax) throws InterruptedException {
         produceMessages(primary, "test-topic-1");
+        String backupTopic1 = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
                 put("group.id", consumerGroupName);
@@ -452,13 +472,16 @@ public class MirrorConnectorsIntegrationBaseTest {
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
 
         // make sure the topic is created in the primary cluster only
-        topicShouldNotBeCreated(primary, "backup.test-topic-1");
-        waitForTopicCreated(backup, "primary.test-topic-1");
+        String reverseTopic1 = remoteTopicName("test-topic-1", BACKUP_CLUSTER_ALIAS);
+        if (!"test-topic-1".equals(reverseTopic1)) {
+            topicShouldNotBeCreated(primary, reverseTopic1);
+        }
+        waitForTopicCreated(backup, backupTopic1);
         // create a consumer at backup cluster with same consumer group Id to consume 1 topic
         try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(
-            consumerProps, "primary.test-topic-1")) {
+            consumerProps, backupTopic1)) {
 
-            waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"),
+            waitForConsumerGroupFullSync(backup, Collections.singletonList(backupTopic1),
                     consumerGroupName, NUM_RECORDS_PRODUCED, offsetLagMax);
 
             assertDownstreamRedeliveriesBoundedByMaxLag(backupConsumer, offsetLagMax);
@@ -467,7 +490,8 @@ public class MirrorConnectorsIntegrationBaseTest {
         // now create a new topic in primary cluster
         primary.kafka().createTopic("test-topic-2", NUM_PARTITIONS);
         // make sure the topic is created in backup cluster
-        waitForTopicCreated(backup, "primary.test-topic-2");
+        String remoteTopic2 = remoteTopicName("test-topic-2", PRIMARY_CLUSTER_ALIAS);
+        waitForTopicCreated(backup, remoteTopic2);
 
         // produce some records to the new topic in primary cluster
         produceMessages(primary, "test-topic-2");
@@ -481,9 +505,9 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         // create a consumer at backup cluster with same consumer group Id to consume old and new topic
         try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
-            "group.id", consumerGroupName), "primary.test-topic-1", "primary.test-topic-2")) {
+            "group.id", consumerGroupName), backupTopic1, remoteTopic2)) {
 
-            waitForConsumerGroupFullSync(backup, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"),
+            waitForConsumerGroupFullSync(backup, Arrays.asList(backupTopic1, remoteTopic2),
                     consumerGroupName, NUM_RECORDS_PRODUCED, offsetLagMax);
 
             assertDownstreamRedeliveriesBoundedByMaxLag(backupConsumer, offsetLagMax);
@@ -694,7 +718,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    protected static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses)  {
+    private static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses)  {
         for (Class<? extends Connector> connector : connectorClasses) {
             connectCluster.restartConnectorAndTasks(connector.getSimpleName(), false, true, false);
         }
@@ -717,7 +741,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     /*
      * delete all topics of the input kafka cluster
      */
-    public static void deleteAllTopics(EmbeddedKafkaCluster cluster) throws Exception {
+    private static void deleteAllTopics(EmbeddedKafkaCluster cluster) throws Exception {
         try (final Admin adminClient = cluster.createAdminClient()) {
             Set<String> topicsToBeDeleted = adminClient.listTopics().names().get();
             log.debug("Deleting topics: {} ", topicsToBeDeleted);
@@ -752,7 +776,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     /*
      * produce messages to the cluster and topic partition less than numPartitions 
      */
-    protected void produceMessages(EmbeddedConnectCluster cluster, String topicName, int numPartitions) {
+    private void produceMessages(EmbeddedConnectCluster cluster, String topicName, int numPartitions) {
         int cnt = 0;
         for (int r = 0; r < NUM_RECORDS_PER_PARTITION; r++)
             for (int p = 0; p < numPartitions; p++)
@@ -772,7 +796,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         cluster.produce(topic, partition, key, value);
     }
 
-    protected static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
+    private static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
             MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName
     ) throws InterruptedException {
         AtomicReference<Map<TopicPartition, OffsetAndMetadata>> ret = new AtomicReference<>();
@@ -804,7 +828,7 @@ public class MirrorConnectorsIntegrationBaseTest {
      * given consumer group, topics and expected number of records, make sure the consumer group
      * offsets are eventually synced to the expected offset numbers
      */
-    protected static <T> void waitForConsumerGroupFullSync(
+    private static <T> void waitForConsumerGroupFullSync(
             EmbeddedConnectCluster connect,
             List<String> topics,
             String consumerGroupId,
@@ -853,7 +877,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    protected static void assertMonotonicCheckpoints(EmbeddedConnectCluster cluster, String checkpointTopic) {
+    private static void assertMonotonicCheckpoints(EmbeddedConnectCluster cluster, String checkpointTopic) {
         TopicPartition checkpointTopicPartition = new TopicPartition(checkpointTopic, 0);
         try (Consumer<byte[], byte[]> backupConsumer = cluster.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
                 "auto.offset.reset", "earliest"), checkpointTopic)) {
@@ -879,7 +903,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    protected static void assertDownstreamRedeliveriesBoundedByMaxLag(Consumer<byte[], byte[]> targetConsumer, int offsetLagMax) {
+    private static void assertDownstreamRedeliveriesBoundedByMaxLag(Consumer<byte[], byte[]> targetConsumer, int offsetLagMax) {
         ConsumerRecords<byte[], byte[]> records = targetConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
         // After a full sync, there should be at most offset.lag.max records per partition consumed by both upstream and downstream consumers.
         for (TopicPartition tp : records.partitions()) {
@@ -891,7 +915,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     /*
      * make sure the consumer to consume expected number of records
      */
-    protected static <T> void waitForConsumingAllRecords(Consumer<T, T> consumer, int numExpectedRecords)
+    private static <T> void waitForConsumingAllRecords(Consumer<T, T> consumer, int numExpectedRecords)
             throws InterruptedException {
         final AtomicInteger totalConsumedRecords = new AtomicInteger(0);
         waitForCondition(() -> {
@@ -904,7 +928,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     /*
      * MM2 config to use in integration tests
      */
-    protected static Map<String, String> basicMM2Config() {
+    private static Map<String, String> basicMM2Config() {
         Map<String, String> mm2Props = new HashMap<>();
         mm2Props.put("clusters", PRIMARY_CLUSTER_ALIAS + ", " + BACKUP_CLUSTER_ALIAS);
         mm2Props.put("max.tasks", "10");
@@ -944,8 +968,8 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         // This can speed up some test cases
         if (createReplicatedTopicsUpfront) {
-            primary.kafka().createTopic("backup.test-topic-1", 1, 1, emptyMap, adminClientConfig);
-            backup.kafka().createTopic("primary.test-topic-1", 1, 1, emptyMap, adminClientConfig);
+            primary.kafka().createTopic(remoteTopicName("test-topic-1", BACKUP_CLUSTER_ALIAS), 1, 1, emptyMap, adminClientConfig);
+            backup.kafka().createTopic(remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS), 1, 1, emptyMap, adminClientConfig);
         }
     }
 
@@ -966,7 +990,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     /*
      * making sure the topic isn't created on the cluster
      */
-    protected static void topicShouldNotBeCreated(EmbeddedConnectCluster cluster, String topicName) throws InterruptedException {
+    private static void topicShouldNotBeCreated(EmbeddedConnectCluster cluster, String topicName) throws InterruptedException {
         try (final Admin adminClient = cluster.kafka().createAdminClient()) {
             waitForCondition(() ->
                     !adminClient.listTopics().names()
