@@ -25,8 +25,8 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -85,7 +85,7 @@ public class AlterPartitionRequest extends AbstractRequest {
             if (version < 3) {
                 data.topics().forEach(topicData -> {
                     topicData.partitions().forEach(partitionData -> {
-                        List<Integer> newIsr = new LinkedList<>();
+                        List<Integer> newIsr = new ArrayList<>(partitionData.newIsrWithEpochs().size());
                         partitionData.newIsrWithEpochs().forEach(brokerState -> {
                             newIsr.add(brokerState.brokerId());
                         });

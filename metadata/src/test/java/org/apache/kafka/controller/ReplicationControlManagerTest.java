@@ -1514,7 +1514,9 @@ public class ReplicationControlManagerTest {
         log.info("running final alterPartition...");
         ControllerRequestContext requestContext =
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
-        AlterPartitionRequestData alterPartitionRequestData = new AlterPartitionRequestData().setBrokerId(3).setBrokerEpoch(103).
+        AlterPartitionRequestData alterPartitionRequestData = new AlterPartitionRequestData().
+                setBrokerId(3).
+                setBrokerEpoch(103).
                 setTopics(asList(new TopicData().
                     setTopicName(version <= 1 ? "foo" : "").
                     setTopicId(version > 1 ? fooId : Uuid.ZERO_UUID).
@@ -1620,7 +1622,7 @@ public class ReplicationControlManagerTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
-    public void testAlterPartitionShouldRejectRebootBrokers(short version) throws Exception {
+    public void testAlterPartitionShouldRejectBrokersWithStaleEpoch(short version) throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
@@ -1632,17 +1634,17 @@ public class ReplicationControlManagerTest {
         ctx.alterPartition(new TopicIdPartition(fooId, 0), 1, generateIsrWithTestDefaultEpoch(asList(1, 2, 3)), LeaderRecoveryState.RECOVERED);
 
         // First, the leader is constructing an AlterPartition request.
-        AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData()
-            .setBrokerId(1)
-            .setBrokerEpoch(101)
-            .setTopics(asList(new TopicData()
-                .setTopicName(version <= 1 ? "foo" : "")
-                .setTopicId(version > 1 ? fooId : Uuid.ZERO_UUID)
-                .setPartitions(asList(new PartitionData()
-                    .setPartitionIndex(0)
-                    .setPartitionEpoch(1)
-                    .setLeaderEpoch(1)
-                    .setNewIsrWithEpochs(generateIsrWithTestDefaultEpoch(asList(1, 2, 3, 4)))))));
+        AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData().
+            setBrokerId(1).
+            setBrokerEpoch(101).
+            setTopics(asList(new TopicData().
+                setTopicName(version <= 1 ? "foo" : "").
+                setTopicId(version > 1 ? fooId : Uuid.ZERO_UUID).
+                setPartitions(asList(new PartitionData().
+                    setPartitionIndex(0).
+                    setPartitionEpoch(1).
+                    setLeaderEpoch(1).
+                    setNewIsrWithEpochs(generateIsrWithTestDefaultEpoch(asList(1, 2, 3, 4)))))));
 
         // The broker 4 has failed silently and now registers again.
         long newEpoch = generateTestDefaultBrokerEpoch(4) + 1000;
@@ -1674,16 +1676,16 @@ public class ReplicationControlManagerTest {
         // The late arrived AlterPartition request should be rejected when version >= 3.
         if (version >= 3) {
             assertEquals(
-                new AlterPartitionResponseData()
-                    .setTopics(asList(new AlterPartitionResponseData.TopicData()
-                        .setTopicName(version <= 1 ? "foo" : "")
-                        .setTopicId(version > 1 ? fooId : Uuid.ZERO_UUID)
-                        .setPartitions(asList(new AlterPartitionResponseData.PartitionData()
-                            .setPartitionIndex(0)
-                            .setErrorCode(INELIGIBLE_REPLICA.code()))))),
+                new AlterPartitionResponseData().
+                    setTopics(asList(new AlterPartitionResponseData.TopicData().
+                        setTopicName(version <= 1 ? "foo" : "").
+                        setTopicId(version > 1 ? fooId : Uuid.ZERO_UUID).
+                        setPartitions(asList(new AlterPartitionResponseData.PartitionData().
+                            setPartitionIndex(0).
+                            setErrorCode(INELIGIBLE_REPLICA.code()))))),
                 alterPartitionResult.response());
         } else {
-            assertEquals((short) 0, alterPartitionResult.response().errorCode());
+            assertEquals(NONE.code(), alterPartitionResult.response().errorCode());
         }
     }
 

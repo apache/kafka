@@ -1120,8 +1120,7 @@ public class ReplicationControlManager {
         }
 
         int[] newIsr = partitionData.newIsrWithEpochs().stream()
-            .map(brokerState -> brokerState.brokerId()).collect(Collectors.toList())
-            .stream().mapToInt(Integer::intValue).toArray();
+            .mapToInt(brokerState -> brokerState.brokerId()).toArray();
 
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
