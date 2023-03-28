@@ -20,6 +20,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import java.util.concurrent.{Callable, Executors, Future}
+
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils

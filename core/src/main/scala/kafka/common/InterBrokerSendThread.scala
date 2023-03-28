@@ -17,6 +17,7 @@
 package kafka.common
 
 import kafka.utils.Logging
+
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{AuthenticationException, DisconnectException}
@@ -76,7 +77,8 @@ class InterBrokerSendThread(
     }
   }
 
-  protected def decrementInflightRequestHandler(manager: InterBrokerRequestManager, originalHandler: RequestCompletionHandler): RequestCompletionHandler = {
+  private def decrementInflightRequestHandler(manager: InterBrokerRequestManager,
+                                              originalHandler: RequestCompletionHandler): RequestCompletionHandler = {
     new RequestCompletionHandler {
       override def onComplete(response: ClientResponse): Unit = {
         manager.inflightRequests -= 1
@@ -84,7 +86,6 @@ class InterBrokerSendThread(
       }
     }
   }
-
 
   protected def pollOnce(maxTimeoutMs: Long): Unit = {
     try {
@@ -172,15 +173,14 @@ class InterBrokerSendThread(
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-
 abstract class InterBrokerRequestManager(interBrokerSendThread: InterBrokerSendThread, val maxInflightRequests: Int) {
-  
+
   var inflightRequests = 0
-  
+
   def generateRequests(): Iterable[RequestAndCompletionHandler]
 
   def wakeup(): Unit = interBrokerSendThread.wakeup()
-  
+
   def maybeIncrementInflightRequests(): Boolean = {
     val canSend = inflightRequests < maxInflightRequests
     if (canSend)

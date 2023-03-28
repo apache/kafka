@@ -16,9 +16,9 @@
  */
 package kafka.coordinator.transaction
 
-
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
+
 import kafka.common.{InterBrokerRequestManager, InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
@@ -63,11 +63,11 @@ class TxnMarkerQueue(@volatile var destination: Node) {
 }
 
 class TransactionMarkerChannelManager(
-                                       config: KafkaConfig,
-                                       metadataCache: MetadataCache,
-                                       interBrokerSendThread: InterBrokerSendThread,
-                                       txnStateManager: TransactionStateManager,
-                                       time: Time
+  config: KafkaConfig,
+  metadataCache: MetadataCache,
+  interBrokerSendThread: InterBrokerSendThread,
+  txnStateManager: TransactionStateManager,
+  time: Time
 ) extends InterBrokerRequestManager(interBrokerSendThread, 1)
   with Logging {
 

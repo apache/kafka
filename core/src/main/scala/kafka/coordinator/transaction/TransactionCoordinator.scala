@@ -17,7 +17,6 @@
 package kafka.coordinator.transaction
 
 import kafka.common.InterBrokerSendThread
-
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
