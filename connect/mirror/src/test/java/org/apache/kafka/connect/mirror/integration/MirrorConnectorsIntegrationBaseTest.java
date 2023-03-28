@@ -78,12 +78,12 @@ import org.junit.jupiter.api.BeforeEach;
 import static org.apache.kafka.connect.mirror.TestUtils.generateRecords;
 
 /**
- * Tests MM2 replication and fail-over/fallback logic.
+ * Tests MM2 replication and failover/failback logic.
  *
  * MM2 is configured with active/active replication between two Kafka clusters. Tests validate that
  * records sent to either cluster arrive at the other cluster. Then, a consumer group is migrated from
  * one cluster to the other and back. Tests validate that consumer offsets are translated and replicated
- * between clusters during this fail-over and fail-back.
+ * between clusters during this failover and failback.
  */
 @Tag("integration")
 public class MirrorConnectorsIntegrationBaseTest {
@@ -147,8 +147,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 throw new UngracefulShutdownException(exitMessage);
             }
         };
-        // ignore this since we're shutting down Connect and Kafka and timing isn't always great
-        Exit.Procedure haltProcedure = (code, message) -> {
+        haltProcedure = (code, message) -> {
             if (shuttingDown) {
                 // ignore this since we're shutting down Connect and Kafka and timing isn't always great
                 return;
@@ -328,7 +327,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, backupTopic1);
 
-        // Fail-over consumer group to back up cluster.
+        // Failover consumer group to backup cluster.
         try (Consumer<byte[], byte[]> primaryConsumer = backup.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
             primaryConsumer.assign(backupOffsets.keySet());
             backupOffsets.forEach(primaryConsumer::seek);
@@ -409,7 +408,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             waitForConsumingAllRecords(primaryConsumer, expectedRecords);
         }
         
-        // one way replication from primary to back up
+        // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
@@ -523,7 +522,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     public void testOffsetSyncsTopicsOnTarget() throws Exception {
         // move offset-syncs topics to target
         mm2Props.put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".offset-syncs.topic.location", "target");
-        // one way replication from primary to back up
+        // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
 
         mm2Config = new MirrorMakerConfig(mm2Props);
@@ -577,7 +576,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         // warm up consumers before starting the connectors, so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
-        // one way replication from primary to back up
+        // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);

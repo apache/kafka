@@ -25,12 +25,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
- * Tests MM2 replication and fail over logic for {@link IdentityReplicationPolicy}.
+ * Tests MM2 replication and failover logic for {@link IdentityReplicationPolicy}.
  *
  * <p>MM2 is configured with active/passive replication between two Kafka clusters with {@link IdentityReplicationPolicy}.
  * Tests validate that records sent to the primary cluster arrive at the backup cluster. Then, a consumer group is
  * migrated from the primary cluster to the backup cluster. Tests validate that consumer offsets
- * are translated and replicated from the primary cluster to the backup cluster during this fail over.
+ * are translated and replicated from the primary cluster to the backup cluster during this failover.
  */
 @Tag("integration")
 public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
@@ -42,7 +42,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 put("topics", "test-topic-.*");
             }});
     }
-    
+
     /*
      * Returns expected topic name on target cluster.
      */

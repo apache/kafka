@@ -76,7 +76,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     private static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC = "Frequency of topic config sync.";
     public static final long SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
     @Deprecated
-    public static final String USE_INCREMENTAL_ALTER_CONFIG = "use.incremental.alter.configs";
+    public static final String USE_INCREMENTAL_ALTER_CONFIGS = "use.incremental.alter.configs";
     private static final String USE_INCREMENTAL_ALTER_CONFIG_DOC = "Deprecated. Which API to use for syncing topic configs. " +
             "The valid values are 'requested', 'required' and 'never'. " +
             "By default, set to 'requested', which means the IncrementalAlterConfigs API is being used for syncing topic configurations " +
@@ -85,9 +85,9 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             "if it receives an error from an incompatible broker, the connector will fail." +
             "If explicitly set to 'never', the AlterConfig is always used." +
             "This setting will be removed and the behaviour of 'required' will be used in Kafka 4.0, therefore users should ensure that target broker is at least 2.3.0";
-    public static final String REQUEST_INCREMENTAL_ALTER_CONFIG = "requested";
-    public static final String REQUIRE_INCREMENTAL_ALTER_CONFIG = "required";
-    public static final String NEVER_USE_INCREMENTAL_ALTER_CONFIG = "never";
+    public static final String REQUEST_INCREMENTAL_ALTER_CONFIGS = "requested";
+    public static final String REQUIRE_INCREMENTAL_ALTER_CONFIGS = "required";
+    public static final String NEVER_USE_INCREMENTAL_ALTER_CONFIGS = "never";
 
     public static final String SYNC_TOPIC_ACLS_ENABLED = SYNC_TOPIC_ACLS + ENABLED_SUFFIX;
     private static final String SYNC_TOPIC_ACLS_ENABLED_DOC = "Whether to periodically configure remote topic ACLs to match their corresponding upstream topics.";
@@ -184,7 +184,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     }
 
     String useIncrementalAlterConfigs() {
-        return getString(USE_INCREMENTAL_ALTER_CONFIG);
+        return getString(USE_INCREMENTAL_ALTER_CONFIGS);
     }
 
     Duration syncTopicAclsInterval() {
@@ -294,10 +294,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                     ConfigDef.Importance.LOW,
                     SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC)
             .define(
-                    USE_INCREMENTAL_ALTER_CONFIG,
+                    USE_INCREMENTAL_ALTER_CONFIGS,
                     ConfigDef.Type.STRING,
-                    REQUEST_INCREMENTAL_ALTER_CONFIG,
-                    in(REQUEST_INCREMENTAL_ALTER_CONFIG, REQUIRE_INCREMENTAL_ALTER_CONFIG, NEVER_USE_INCREMENTAL_ALTER_CONFIG),
+                    REQUEST_INCREMENTAL_ALTER_CONFIGS,
+                    in(REQUEST_INCREMENTAL_ALTER_CONFIGS, REQUIRE_INCREMENTAL_ALTER_CONFIGS, NEVER_USE_INCREMENTAL_ALTER_CONFIGS),
                     ConfigDef.Importance.LOW,
                     USE_INCREMENTAL_ALTER_CONFIG_DOC)
             .define(

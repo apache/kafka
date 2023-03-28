@@ -31,11 +31,14 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     public static final String CONFIG_PROPERTIES_EXCLUDE_CONFIG = "config.properties.exclude";
     public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG = "config.properties.blacklist";
     public static final String USE_DEFAULTS_FROM = "use.defaults.from";
-    private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults to use when syncing topic configurations that have default values.";
+    private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults (source or target) to use "
+                                                        + "when syncing topic configurations that have default values.";
     private static final String USE_DEFAULTS_FROM_DEFAULT = "target";
 
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "List of topic configuration properties and/or regexes "
-                                                                + "that should not be replicated.";
+                                                                + "that should not be replicated."
+                                                                + "This setting also applies to the properties with default values"
+                                                                + "if use.defaults.from is set to 'source'.";
     public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = "follower\\.replication\\.throttled\\.replicas, "
                                                                    + "leader\\.replication\\.throttled\\.replicas, "
                                                                    + "message\\.timestamp\\.difference\\.max\\.ms, "
@@ -67,7 +70,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
 
     @Override
     public boolean shouldReplicateSourceDefault(String prop) {
-        return useDefaultsFrom.equals("source");
+        return useDefaultsFrom.equals("source") && !excluded(prop);
     }
 
     static class ConfigPropertyFilterConfig extends AbstractConfig {

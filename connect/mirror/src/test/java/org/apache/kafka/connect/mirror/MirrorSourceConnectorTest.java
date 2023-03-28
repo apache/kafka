@@ -329,10 +329,15 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
+    @Deprecated
     public void testIncrementalAlterConfigsRequested() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
         MockAdminClient admin = spy(new MockAdminClient());
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), admin));
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
         final String topic = "testtopic";
         List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
         Config config = new Config(entries);
@@ -349,10 +354,15 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
+    @Deprecated
     public void testIncrementalAlterConfigsRequired() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
         MockAdminClient admin = spy(new MockAdminClient());
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), admin));
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
         ConfigEntry entryWithNonDefaultValue = new ConfigEntry("name-1", "value-1");
@@ -384,11 +394,16 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
+    @Deprecated
     public void testIncrementalAlterConfigsRequiredButUnsupported() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
+
         MockAdminClient admin = spy(new MockAdminClient());
         ConnectorContext connectorContext = mock(ConnectorContext.class);
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), admin));
+                new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
         connector.initialize(connectorContext);
         final String topic = "testtopic";
         List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
@@ -403,9 +418,14 @@ public class MirrorSourceConnectorTest {
 
 
     @Test
+    @Deprecated
     public void testIncrementalAlterConfigsNeverUsed() throws Exception {
+        Map<String, String> props = makeProps();
+        props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
+        MirrorSourceConfig connectorConfigs = new MirrorSourceConfig(props);
+
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter(), null));
+                new DefaultReplicationPolicy(), connectorConfigs, new DefaultConfigPropertyFilter(), null));
         final String topic = "testtopic";
         List<ConfigEntry> entries = Collections.singletonList(new ConfigEntry("name-1", "value-1"));
         Config config = new Config(entries);
