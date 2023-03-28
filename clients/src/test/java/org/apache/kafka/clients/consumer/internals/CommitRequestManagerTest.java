@@ -47,6 +47,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;
@@ -82,25 +83,20 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPoll() {
+    public void testPoll_EnsureManualCommitSent() {
         CommitRequestManager commitRequestManger = create(false, 0);
-        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
-        assertEquals(Long.MAX_VALUE, res.timeUntilNextPollMs);
+        assertPoll(0, commitRequestManger);
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         commitRequestManger.addOffsetCommitRequest(offsets);
-        res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
+        assertPoll(1, commitRequestManger);
     }
 
     @Test
-    public void testPollAndAutoCommit() {
+    public void testPoll_EnsureAutocommitSent() {
         CommitRequestManager commitRequestManger = create(true, 100);
-        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
-        assertEquals(Long.MAX_VALUE, res.timeUntilNextPollMs);
+        assertPoll(0, commitRequestManger);
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
@@ -108,32 +104,47 @@ public class CommitRequestManagerTest {
         when(subscriptionState.allConsumed()).thenReturn(offsets);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
+        assertPoll(1, commitRequestManger);
     }
 
     @Test
-    public void testAutocommitStateUponFailure() {
-        CommitRequestManager commitRequestManger = create(true, 100);
-        time.sleep(100);
-        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
-        time.sleep(100);
-        // We want to make sure we don't resend autocommit if the previous request has not been completed
-        assertEquals(Long.MAX_VALUE, commitRequestManger.poll(time.milliseconds()).timeUntilNextPollMs);
+    public void testPoll_EnsureCorrectInflightRequestBufferSize() {
+        CommitRequestManager commitManager = create(false, 100);
 
-        // complete the autocommit request (exceptionally)
-        res.unsentRequests.get(0).future().completeExceptionally(new KafkaException("test exception"));
+        // Create some offset commit requests
+        Map<TopicPartition, OffsetAndMetadata> offsets1 = new HashMap<>();
+        offsets1.put(new TopicPartition("test", 0), new OffsetAndMetadata(10L));
+        offsets1.put(new TopicPartition("test", 1), new OffsetAndMetadata(20L));
+        Map<TopicPartition, OffsetAndMetadata> offsets2 = new HashMap<>();
+        offsets2.put(new TopicPartition("test", 3), new OffsetAndMetadata(20L));
+        offsets2.put(new TopicPartition("test", 4), new OffsetAndMetadata(20L));
 
-        // we can then autocommit again
-        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
-        assertEmptyPendingRequests(commitRequestManger);
+        // Add the requests to the CommitRequestManager and store their futures
+        ArrayList<CompletableFuture<ClientResponse>> commitFutures = new ArrayList<>();
+        ArrayList<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> fetchFutures = new ArrayList<>();
+        commitFutures.add(commitManager.addOffsetCommitRequest(offsets1));
+        fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 0))));
+        commitFutures.add(commitManager.addOffsetCommitRequest(offsets2));
+        fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 1))));
+
+        // Poll the CommitRequestManager and verify that the inflightOffsetFetches size is correct
+        NetworkClientDelegate.PollResult result = commitManager.poll(time.milliseconds());
+        assertEquals(4, result.unsentRequests.size());
+        assertTrue(result.unsentRequests
+                .stream().anyMatch(r -> r.requestBuilder() instanceof OffsetCommitRequest.Builder));
+        assertTrue(result.unsentRequests
+                .stream().anyMatch(r -> r.requestBuilder() instanceof OffsetFetchRequest.Builder));
+        assertFalse(commitManager.pendingRequests.hasUnsentRequests());
+        assertEquals(2, commitManager.pendingRequests.inflightOffsetFetches.size());
+
+        // Verify that the inflight offset fetch requests have been removed from the pending request buffer
+        commitFutures.forEach(f -> f.complete(null));
+        fetchFutures.forEach(f -> f.complete(null));
+        assertEquals(0, commitManager.pendingRequests.inflightOffsetFetches.size());
     }
 
     @Test
-    public void testEmptyUnsentOffsetCommitRequestsQueueAfterPoll() {
+    public void testPoll_EnsureEmptyPendingRequestAfterPoll() {
         CommitRequestManager commitRequestManger = create(true, 100);
         commitRequestManger.addOffsetCommitRequest(new HashMap<>());
         assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
@@ -143,15 +154,43 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testAutoCommitFuture() {
+    public void testAutocommit_ResendAutocommitAfterException() {
         CommitRequestManager commitRequestManger = create(true, 100);
-        commitRequestManger.sendAutoCommit(new HashMap<>()).complete(null);
-        commitRequestManger.sendAutoCommit(new HashMap<>()).completeExceptionally(new RuntimeException("mock " +
-                "exception"));
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
+        time.sleep(99);
+        // complete the autocommit request (exceptionally)
+        futures.get(0).completeExceptionally(new KafkaException("test exception"));
+
+        // we can then autocommit again
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        assertPoll(0, commitRequestManger);
+        time.sleep(1);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        assertPoll(1, commitRequestManger);
+        assertEmptyPendingRequests(commitRequestManger);
     }
 
     @Test
-    public void testDuplicatedSuccessfulRequests() {
+    public void testAutocommit_EnsureOnlyOneInflightRequest() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        // We want to make sure we don't resend autocommit if the previous request has not been completed
+        assertPoll(0, commitRequestManger);
+        assertEmptyPendingRequests(commitRequestManger);
+
+        // complete the unsent request and re-poll
+        futures.get(0).complete(null);
+        assertPoll(1, commitRequestManger);
+    }
+
+    @Test
+    public void testOffsetFetchRequest_EnsureDuplicatedRequestSucceed() {
         CommitRequestManager commitRequestManger = create(true, 100);
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(new TopicPartition("t1", 0));
@@ -171,7 +210,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("exceptionSupplier")
-    public void testDuplicatedErroredRequests(final Errors error, final boolean isRetriable) {
+    public void testOffsetFetchRequest_ErroredRequests(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManger = create(true, 100);
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(new TopicPartition("t1", 0));
@@ -214,7 +253,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("partitionDataErrorSupplier")
-    public void testRetriablePartitionDataError(final Errors error, final boolean isRetriable) {
+    public void testOffsetFetchRequest_PartitionDataError(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManger = create(true, 100);
         Set<TopicPartition> partitions = new HashSet<>();
         TopicPartition tp1 = new TopicPartition("t1", 2);
@@ -240,42 +279,6 @@ public class CommitRequestManagerTest {
             testRetriable(commitRequestManger, Collections.singletonList(future));
         else
             testNonRetriable(Collections.singletonList(future));
-    }
-
-    @Test
-    public void testPoll_EnsureCorrectInflightRequestBufferSize() {
-        CommitRequestManager commitManager = create(false, 100);
-
-        // Create some offset commit requests
-        Map<TopicPartition, OffsetAndMetadata> offsets1 = new HashMap<>();
-        offsets1.put(new TopicPartition("test", 0), new OffsetAndMetadata(10L));
-        offsets1.put(new TopicPartition("test", 1), new OffsetAndMetadata(20L));
-        Map<TopicPartition, OffsetAndMetadata> offsets2 = new HashMap<>();
-        offsets2.put(new TopicPartition("test", 3), new OffsetAndMetadata(20L));
-        offsets2.put(new TopicPartition("test", 4), new OffsetAndMetadata(20L));
-
-        // Add the requests to the CommitRequestManager and store their futures
-        ArrayList<CompletableFuture<ClientResponse>> commitFutures = new ArrayList<>();
-        ArrayList<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> fetchFutures = new ArrayList<>();
-        commitFutures.add(commitManager.addOffsetCommitRequest(offsets1));
-        fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 0))));
-        commitFutures.add(commitManager.addOffsetCommitRequest(offsets2));
-        fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 1))));
-
-        // Poll the CommitRequestManager and verify that the inflightOffsetFetches size is correct
-        NetworkClientDelegate.PollResult result = commitManager.poll(time.milliseconds());
-        assertEquals(4, result.unsentRequests.size());
-        assertTrue(result.unsentRequests
-                .stream().anyMatch(r -> r.requestBuilder() instanceof OffsetCommitRequest.Builder));
-        assertTrue(result.unsentRequests
-                .stream().anyMatch(r -> r.requestBuilder() instanceof OffsetFetchRequest.Builder));
-        assertFalse(commitManager.pendingRequests.hasUnsentRequests());
-        assertEquals(2, commitManager.pendingRequests.inflightOffsetFetches.size());
-
-        // Verify that the inflight offset fetch requests have been removed from the pending request buffer
-        commitFutures.forEach(f -> f.complete(null));
-        fetchFutures.forEach(f -> f.complete(null));
-        assertEquals(0, commitManager.pendingRequests.inflightOffsetFetches.size());
     }
 
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManger) {
@@ -310,6 +313,15 @@ public class CommitRequestManagerTest {
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         return futures;
+    }
+
+    private List<CompletableFuture<ClientResponse>> assertPoll(
+            final int numRes,
+            final CommitRequestManager manager) {
+        NetworkClientDelegate.PollResult res = manager.poll(time.milliseconds());
+        assertEquals(numRes, res.unsentRequests.size());
+
+        return res.unsentRequests.stream().map(r -> r.future()).collect(Collectors.toList());
     }
 
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {

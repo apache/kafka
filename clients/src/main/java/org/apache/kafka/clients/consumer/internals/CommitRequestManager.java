@@ -114,7 +114,7 @@ public class CommitRequestManager implements RequestManager {
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptionState.allConsumed();
         sendAutoCommit(allConsumedOffsets);
         autocommit.resetTimer();
-        autocommit.hasInflightCommit = true;
+        autocommit.setInflightCommitStatus(true);
     }
 
     /**
@@ -153,7 +153,7 @@ public class CommitRequestManager implements RequestManager {
         log.debug("Enqueuing autocommit offsets: {}", allConsumedOffsets);
         return this.addOffsetCommitRequest(allConsumedOffsets)
                 .whenComplete((response, throwable) -> {
-                    this.autoCommitState.ifPresent(commitState -> commitState.hasInflightCommit = false);
+                    this.autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
 
                     if (throwable == null) {
                         log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
@@ -168,7 +168,6 @@ public class CommitRequestManager implements RequestManager {
                     return null;
                 });
     }
-
 
     private class OffsetCommitRequestState {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
@@ -472,7 +471,7 @@ public class CommitRequestManager implements RequestManager {
     private static class AutoCommitState {
         private final Timer timer;
         private final long autoCommitInterval;
-        public boolean hasInflightCommit;
+        private boolean hasInflightCommit;
 
         public AutoCommitState(
                 final Time time,
@@ -492,6 +491,10 @@ public class CommitRequestManager implements RequestManager {
 
         public void ack(final long currentTimeMs) {
             this.timer.update(currentTimeMs);
+        }
+
+        public void setInflightCommitStatus(final boolean inflightCommitStatus) {
+            this.hasInflightCommit = inflightCommitStatus;
         }
     }
 }
