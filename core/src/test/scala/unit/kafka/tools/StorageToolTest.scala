@@ -22,7 +22,9 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
 import java.util.Properties
+import org.apache.kafka.common.KafkaException
 import kafka.server.{KafkaConfig, MetaProperties}
+import kafka.utils.Exit
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
@@ -299,8 +301,18 @@ Found problem:
     assertEquals(1, parseAddScram("-S", "SCRAM-SHA-256=[name=alice,password=alice]") .get.size)
   }
 
+  class StorageToolTestException(message: String)  extends KafkaException(message) {
+  }
+
   @Test
   def testScramWithBadMetadataVersion(): Unit = {
+    var exitString: String = ""
+    def exitProcedure(exitStatus: Int, message: Option[String]) : Nothing = {
+      exitString = message.getOrElse("")
+      throw new StorageToolTestException(exitString)
+    }
+    Exit.setExitProcedure(exitProcedure)
+
     val properties = newSelfManagedProperties()
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
@@ -310,9 +322,12 @@ Found problem:
     val args = Array("format", "-c", s"${propsFile.toPath}", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "--release-version", "3.4", "-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=8192]")
 
-    try assertEquals(1, StorageTool.main_internal(args))
-    catch {
-      case e: TerseFailure => assertEquals(s"SCRAM is only supported in metadataVersion IBP_3_5_IV0 or later.", e.getMessage)
+    try {
+      assertEquals(1, StorageTool.main(args))
+    } catch {
+      case e: StorageToolTestException => assertEquals(s"SCRAM is only supported in metadataVersion IBP_3_5_IV0 or later.", exitString)
+    } finally {
+      Exit.resetExitProcedure()
     }
   }
 }
