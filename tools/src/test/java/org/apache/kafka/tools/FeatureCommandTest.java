@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.tools;
 
 import java.util.Arrays;
@@ -22,10 +38,6 @@ import static java.util.Collections.singletonMap;
 
 import static org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType.SAFE_DOWNGRADE;
 import static org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,7 +53,7 @@ public class FeatureCommandTest {
         this.cluster = cluster;
     }
 
-    @ClusterTest(clusterType = Type.ZK, metadataVersion = IBP_3_3_IV1)
+    @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithZK() {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
@@ -49,7 +61,7 @@ public class FeatureCommandTest {
         assertEquals("", commandOutput);
     }
 
-    @ClusterTest(clusterType = Type.KRAFT, metadataVersion = IBP_3_3_IV1)
+    @ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithKRaft() {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
@@ -58,7 +70,7 @@ public class FeatureCommandTest {
                 "SupportedMaxVersion: 3.5-IV1\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
     }
 
-    @ClusterTest(clusterType = Type.ZK, metadataVersion = IBP_3_3_IV1)
+    @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testUpgradeMetadataVersionWithZk() {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -68,7 +80,7 @@ public class FeatureCommandTest {
                 "update because the provided feature is not supported.", commandOutput);
     }
 
-    @ClusterTest(clusterType = Type.KRAFT, metadataVersion = IBP_3_3_IV1)
+    @ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testUpgradeMetadataVersionWithKraft() {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -83,7 +95,7 @@ public class FeatureCommandTest {
         assertEquals("metadata.version was upgraded to 6.", commandOutput);
     }
 
-    @ClusterTest(clusterType = Type.ZK, metadataVersion = IBP_3_3_IV1)
+    @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDowngradeMetadataVersionWithZk() {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -106,7 +118,7 @@ public class FeatureCommandTest {
                 "update because the provided feature is not supported.", commandOutput);
     }
 
-    @ClusterTest(clusterType = Type.KRAFT, metadataVersion = IBP_3_3_IV1)
+    @ClusterTest(clusterType = Type.KRAFT, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDowngradeMetadataVersionWithKRaft() {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -144,13 +156,13 @@ class FeatureCommandUnitTest {
     public void testLevelToString() {
         assertEquals("5", FeatureCommand.levelToString("foo.bar", (short) 5));
         assertEquals("3.3-IV0",
-                FeatureCommand.levelToString(MetadataVersion.FEATURE_NAME, IBP_3_3_IV0.featureLevel()));
+                FeatureCommand.levelToString(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()));
     }
 
     @Test
     public void testMetadataVersionsToString() {
         assertEquals("3.3-IV0, 3.3-IV1, 3.3-IV2, 3.3-IV3",
-                FeatureCommand.metadataVersionsToString(IBP_3_3_IV0, IBP_3_3_IV3));
+                FeatureCommand.metadataVersionsToString(MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV3));
     }
 
     @Test
@@ -174,15 +186,15 @@ class FeatureCommandUnitTest {
 
     private static MockAdminClient buildAdminClient() {
         Map<String, Short> minSupportedFeatureLevels = new HashMap<>();
-        minSupportedFeatureLevels.put(MetadataVersion.FEATURE_NAME, IBP_3_3_IV0.featureLevel());
+        minSupportedFeatureLevels.put(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel());
         minSupportedFeatureLevels.put("foo.bar", (short) 0);
 
         Map<String, Short> featureLevels = new HashMap<>();
-        featureLevels.put(MetadataVersion.FEATURE_NAME, IBP_3_3_IV2.featureLevel());
+        featureLevels.put(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV2.featureLevel());
         featureLevels.put("foo.bar", (short) 5);
 
         Map<String, Short> maxSupportedFeatureLevels = new HashMap<>();
-        maxSupportedFeatureLevels.put(MetadataVersion.FEATURE_NAME, IBP_3_3_IV3.featureLevel());
+        maxSupportedFeatureLevels.put(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV3.featureLevel());
         maxSupportedFeatureLevels.put("foo.bar", (short) 10);
 
         return new MockAdminClient.Builder().

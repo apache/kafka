@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -30,11 +30,9 @@ import java.util.stream.Collectors;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
-import net.sourceforge.argparse4j.internal.HelpScreenException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
@@ -186,7 +184,7 @@ public class FeatureCommand {
         if (feature.equals(MetadataVersion.FEATURE_NAME)) {
             try {
                 return MetadataVersion.fromFeatureLevel(level).version();
-            } catch (Throwable e){
+            } catch (Throwable e) {
                 throw new RuntimeException("UNKNOWN " + level, e);
             }
         }
@@ -197,7 +195,7 @@ public class FeatureCommand {
         FeatureMetadata featureMetadata = adminClient.describeFeatures().featureMetadata().get();
         TreeSet<String> featureList = new java.util.TreeSet<>(featureMetadata.supportedFeatures().keySet());
         featureList.forEach(feature -> {
-            short finalizedLevel = ((featureMetadata.finalizedFeatures().get(feature) == null) ? 0 : featureMetadata.finalizedFeatures().get(feature).maxVersionLevel());
+            short finalizedLevel = (featureMetadata.finalizedFeatures().get(feature) == null) ? 0 : featureMetadata.finalizedFeatures().get(feature).maxVersionLevel();
             SupportedVersionRange range = featureMetadata.supportedFeatures().get(feature);
             System.out.printf("Feature: %s\tSupportedMinVersion: %s\tSupportedMaxVersion: %s\tFinalizedVersionLevel: %s\tEpoch: %s%n",
                     feature,
@@ -310,16 +308,16 @@ public class FeatureCommand {
         });
 
         AtomicInteger numFailures = new AtomicInteger();
-        errors.keySet().forEach((feature) -> {
+        errors.keySet().forEach(feature -> {
             short level = updates.get(feature).maxVersionLevel();
             Optional<Throwable> maybeThrowable = errors.get(feature);
             if (maybeThrowable != null && maybeThrowable.isPresent()) {
-                String helper = (dryRun) ? "Can not " : "Could not ";
+                String helper = dryRun ? "Can not " : "Could not ";
                 String suffix = (op.equals("disable")) ? "disable " + feature : op + " " + feature + " to " + level;
                 System.out.println(helper + suffix + ". " + maybeThrowable.get().getMessage());
                 numFailures.getAndIncrement();
             } else {
-                String verb = (dryRun) ? " can be " : " was ";
+                String verb = dryRun ? " can be " : " was ";
                 String obj = (op.equals("disable")) ? "disabled." : op + "d to " + level + ".";
                 System.out.println(feature + verb + obj);
             }
