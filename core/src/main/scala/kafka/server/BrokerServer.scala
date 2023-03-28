@@ -194,7 +194,7 @@ class BrokerServer(
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true, remoteLogManagerConfig)
 
-      remoteLogManager = createRemoteLogManager(config)
+      remoteLogManager = createRemoteLogManager(config, remoteLogManagerConfig)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -506,8 +506,7 @@ class BrokerServer(
     }
   }
 
-  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
-    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+  protected def createRemoteLogManager(config: KafkaConfig, remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
     if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");

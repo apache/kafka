@@ -281,7 +281,7 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
-        remoteLogManager = createRemoteLogManager(config)
+        remoteLogManager = createRemoteLogManager(config, remoteLogManagerConfig)
 
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
@@ -597,8 +597,7 @@ class KafkaServer(
     }
   }
 
-  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
-    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+  protected def createRemoteLogManager(config: KafkaConfig, remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
     if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if(config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");

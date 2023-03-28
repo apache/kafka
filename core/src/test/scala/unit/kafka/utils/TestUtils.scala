@@ -49,7 +49,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaFuture, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.{ConfigException, ConfigResource}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
@@ -1360,6 +1360,7 @@ object TestUtils extends Logging {
                        time: MockTime = new MockTime(),
                        interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                        recoveryThreadsPerDataDir: Int = 4): LogManager = {
+    val dummyConfig = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, new Properties())
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    configRepository = configRepository,
@@ -1379,7 +1380,7 @@ object TestUtils extends Logging {
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
                    keepPartitionMetadataFile = true,
                    interBrokerProtocolVersion = interBrokerProtocolVersion,
-                   remoteLogManagerConfig = new RemoteLogManagerConfig(defaultConfig))
+                   remoteLogManagerConfig = new RemoteLogManagerConfig(dummyConfig))
   }
 
   class MockAlterPartitionManager extends AlterPartitionManager {
