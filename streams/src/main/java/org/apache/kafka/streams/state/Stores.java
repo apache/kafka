@@ -161,8 +161,8 @@ public final class Stores {
      *                         The only impact of this parameter is performance. If segments are large
      *                         and a workload results in many record versions for the same key being collected
      *                         in a single segment, performance may degrade as a result. On the other hand,
-     *                         reads and out-of-order writes which access older segments may slow down if
-     *                         there are too many segments.
+     *                         historical reads (which access older segments) and out-of-order writes may
+     *                         slow down if there are too many segments.
      * @return an instance of {@link VersionedBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code historyRetention} or {@code segmentInterval} can't be represented as {@code long milliseconds}
      */
