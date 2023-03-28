@@ -102,6 +102,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
@@ -2502,6 +2503,34 @@ public class StreamTaskTest {
             task.prepareCommit(),
             equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
         );
+    }
+
+    @Test
+    public void testRestoration_CheckpointWrittenWhenEOSDisabled() {
+        EasyMock.expect(stateManager.changelogOffsets())
+                .andReturn(singletonMap(partition1, 0L)); // restoration checkpoint
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap());
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().once(); // checkpoint should only be called once
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createStatefulTask(createConfig(AT_LEAST_ONCE, "100"), true);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
+    public void testRestoration_CheckpointNotWrittenWhenEOSEnabled() {
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().andStubThrow(new AssertionError("should not checkpoint on EOS"));
+        stateManager.changelogOffsets();
+        EasyMock.expectLastCall().andStubThrow(new AssertionError("should not checkpoint on EOS"));
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
     }
 
     private List<MetricName> getTaskMetrics() {
