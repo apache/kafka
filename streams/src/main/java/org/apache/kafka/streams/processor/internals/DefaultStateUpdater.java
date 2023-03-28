@@ -136,7 +136,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 while (isRunning.get()) {
                     // in state updater we never interrupt the thread
                     // or wakeup the consumer, hence any of
-                    // InterruptException / InterruptedException / WakeupException
+                    // InterruptException / WakeupException
                     // should never happen
                     runOnce();
                 }
@@ -312,6 +312,7 @@ public class DefaultStateUpdater implements StateUpdater {
                     changelogReader.allChangelogsCompleted() &&
                     tasksAndActions.isEmpty() &&
                     !isTopologyResumed.get()) {
+
                     tasksAndActionsCondition.await();
                 }
             } catch (final InterruptedException ignored) {
@@ -566,14 +567,14 @@ public class DefaultStateUpdater implements StateUpdater {
 
             // initialize the last commit as of now to prevent first commit happens immediately
             this.lastCommitMs = time.milliseconds();
-
-            log.info("StateUpdater thread started");
         }
     }
 
     @Override
     public void shutdown(final Duration timeout) {
         if (stateUpdaterThread != null) {
+            log.info("Shutting down StateUpdater thread");
+
             // first set the running flag and then
             // notify the condition in case the thread is waiting on it;
             // note this ordering should not be changed
