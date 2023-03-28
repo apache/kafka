@@ -60,7 +60,7 @@ import static java.lang.Math.min;
 
 public class ServerSideStickyRangeAssignor implements PartitionAssignor {
 
-    public static final String RANGE_ASSIGNOR_NAME = "range-sticky";
+    public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override
     public String name() {
