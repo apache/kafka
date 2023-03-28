@@ -22,14 +22,31 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-public class KafkaConsumerProducerDemo {
+/**
+ * This producer and consumer demo takes just one optional argument called sync.
+ * When sync is present, the producer will send messages synchronously, otherwise they will be sent asynchronously.
+ *
+ * If you are using IntelliJ IDEA, the above arguments should be put in `Modify Run Configuration - Program Arguments`.
+ * You can also set an output log file in `Modify Run Configuration - Modify options - Save console output to file` to
+ * record all the log output together.
+ *
+ * The driver can be decomposed into the following stages:
+ *
+ * 1. Set up a producer in a separate thread to send a set of messages with even number keys to the test topic.
+ * 2. Set up a consumer in a separate thread to fetch all previously sent messages from the test topic.
+ */
+public class ProducerConsumerDemo {
+    public static final String TOPIC = "topic1";
+    public static final int NUM_MESSAGES = 10_000;
+
     public static void main(String[] args) throws InterruptedException {
         boolean isAsync = args.length == 0 || !args[0].trim().equalsIgnoreCase("sync");
         CountDownLatch latch = new CountDownLatch(2);
-        Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, -1, latch);
+
+        Producer producerThread = new Producer(TOPIC, isAsync, null, false, NUM_MESSAGES, -1, latch);
         producerThread.start();
 
-        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", Optional.empty(), false, 10000, latch);
+        Consumer consumerThread = new Consumer(TOPIC, "DemoConsumer", Optional.empty(), false, NUM_MESSAGES, latch);
         consumerThread.start();
 
         if (!latch.await(5, TimeUnit.MINUTES)) {

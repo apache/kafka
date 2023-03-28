@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_dir=$(dirname $0)/../..
+BASE_DIR="$(dirname "$0")/../.." && readonly BASE_DIR
 
-if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
-    export KAFKA_HEAP_OPTS="-Xmx512M"
+if [[ -z "${KAFKA_HEAP_OPTS:-}" ]]; then
+  export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
 
-exec $base_dir/bin/kafka-run-class.sh kafka.examples.KafkaExactlyOnceDemo $@
+exec "$BASE_DIR"/bin/kafka-run-class.sh kafka.examples.ExactlyOnceDemo "$@"

@@ -39,11 +39,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop.
- * Important configurations and APIs are commented.
+ * This class implements a demo read-process-write application.
  */
-public class ExactlyOnceMessageProcessor extends Thread {
-
+public class ExactlyOnceProcessor extends Thread {
     private static final boolean READ_COMMITTED = true;
 
     private final String inputTopic;
@@ -56,22 +54,21 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
     private final CountDownLatch latch;
 
-    public ExactlyOnceMessageProcessor(final String inputTopic,
-                                       final String outputTopic,
-                                       final int instanceIdx,
-                                       final CountDownLatch latch) {
+    public ExactlyOnceProcessor(final String inputTopic,
+                                final String outputTopic,
+                                final int instanceIdx,
+                                final CountDownLatch latch) {
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
-        this.transactionalId = "Processor-" + instanceIdx;
+        this.transactionalId = "processor-" + instanceIdx;
         // It is recommended to have a relatively short txn timeout in order to clear pending offsets faster.
-        final int transactionTimeoutMs = 10000;
+        final int transactionTimeoutMs = 10_000;
         // A unique transactional.id must be provided in order to properly use EOS.
         producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
-        this.groupInstanceId = "Txn-consumer-" + instanceIdx;
-        consumer = new Consumer(inputTopic, "Eos-consumer",
-            Optional.of(groupInstanceId), READ_COMMITTED, -1, null).get();
+        this.groupInstanceId = "processor-consumer-" + instanceIdx;
+        consumer = new Consumer(inputTopic, "processor-group", Optional.of(groupInstanceId), READ_COMMITTED, -1, null).get();
         this.latch = latch;
     }
 
@@ -154,7 +151,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
 
     private ProducerRecord<Integer, String> transform(final ConsumerRecord<Integer, String> record) {
         printWithTxnId("Transformed record (" + record.key() + "," + record.value() + ")");
-        return new ProducerRecord<>(outputTopic, record.key() / 2, "Transformed_" + record.value());
+        return new ProducerRecord<>(outputTopic, record.key() / 2, "transformed-" + record.value());
     }
 
     private long messagesRemaining(final KafkaConsumer<Integer, String> consumer) {

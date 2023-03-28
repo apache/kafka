@@ -1285,7 +1285,6 @@ project(':examples') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':server-common')
   }
 
   javadoc {

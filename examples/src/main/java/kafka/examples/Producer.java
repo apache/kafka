@@ -25,20 +25,21 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
- * Demo producer that demonstrate two modes of KafkaProducer.
- * If the user uses the Async mode: The messages will be printed to stdout upon successful completion
- * If the user uses the sync mode (isAsync = false): Each send loop will block until completion.
+ * Demo producer supporting two send modes:
+ * - Async mode (default): messages are sent without waiting for the response (non blocking).
+ * - Sync mode (sync argument): each send operation blocks waiting for the response.
  */
 public class Producer extends Thread {
     private final KafkaProducer<Integer, String> producer;
     private final String topic;
     private final Boolean isAsync;
-    private int numRecords;
+    private final int numRecords;
     private final CountDownLatch latch;
 
     public Producer(final String topic,
@@ -49,10 +50,10 @@ public class Producer extends Thread {
                     final int transactionTimeoutMs,
                     final CountDownLatch latch) {
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-" + UUID.randomUUID());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         if (transactionTimeoutMs > 0) {
             props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs);
         }
@@ -79,21 +80,22 @@ public class Producer extends Thread {
         try {
             while (recordsSent < numRecords) {
                 final long currentTimeMs = System.currentTimeMillis();
-                produceOnce(messageKey, recordsSent, currentTimeMs);
+                produceOnce(messageKey, currentTimeMs);
                 messageKey += 2;
                 recordsSent += 1;
             }
-        } catch (Exception e) {
-            System.out.println("Producer encountered exception:" + e);
+        } catch (Throwable e) {
+            System.err.println("Unexpected producer termination");
+            e.printStackTrace();
         } finally {
-            System.out.println("Producer sent " + numRecords + " records successfully");
+            System.out.printf("Producer sent %d records successfully%n", numRecords);
             this.producer.close();
             latch.countDown();
         }
     }
 
-    private void produceOnce(final int messageKey, final int recordsSent, final long currentTimeMs) throws ExecutionException, InterruptedException {
-        String messageStr = "Message_" + messageKey;
+    private void produceOnce(final int messageKey, final long currentTimeMs) throws ExecutionException, InterruptedException {
+        String messageStr = "message" + messageKey;
 
         if (isAsync) { // Send asynchronously
             sendAsync(messageKey, messageStr, currentTimeMs);
@@ -101,25 +103,20 @@ public class Producer extends Thread {
         }
         Future<RecordMetadata> future = send(messageKey, messageStr);
         future.get();
-        System.out.println("Sent message: (" + messageKey + ", " + messageStr + ")");
+        System.out.printf("Sent message: (%d, %s)%n", messageKey, messageStr);
     }
 
     private void sendAsync(final int messageKey, final String messageStr, final long currentTimeMs) {
-        this.producer.send(new ProducerRecord<>(topic,
-                        messageKey,
-                        messageStr),
+        this.producer.send(new ProducerRecord<>(topic, messageKey, messageStr),
                 new DemoCallBack(currentTimeMs, messageKey, messageStr));
     }
 
     private Future<RecordMetadata> send(final int messageKey, final String messageStr) {
-        return producer.send(new ProducerRecord<>(topic,
-                messageKey,
-                messageStr));
+        return producer.send(new ProducerRecord<>(topic, messageKey, messageStr));
     }
 }
 
 class DemoCallBack implements Callback {
-
     private final long startTime;
     private final int key;
     private final String message;
@@ -130,22 +127,11 @@ class DemoCallBack implements Callback {
         this.message = message;
     }
 
-    /**
-     * A callback method the user can implement to provide asynchronous handling of request completion. This method will
-     * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
-     * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
-     *
-     * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
-     *                  with -1 value for all fields except for topicPartition will be returned if an error occurred.
-     * @param exception The exception thrown during processing of this record. Null if no error occurred.
-     */
     public void onCompletion(RecordMetadata metadata, Exception exception) {
         long elapsedTime = System.currentTimeMillis() - startTime;
         if (metadata != null) {
-            System.out.println(
-                "message(" + key + ", " + message + ") sent to partition(" + metadata.partition() +
-                    "), " +
-                    "offset(" + metadata.offset() + ") in " + elapsedTime + " ms");
+            System.out.printf("message(%d, %s) sent to partition(%d), offset(%d) in %d ms%n",
+                key, message, metadata.partition(), metadata.offset(), elapsedTime);
         } else {
             exception.printStackTrace();
         }

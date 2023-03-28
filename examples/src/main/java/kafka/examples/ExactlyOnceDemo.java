@@ -34,44 +34,36 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * This exactly once demo driver takes 3 arguments:
- *   - partition: number of partitions for input/output topic
- *   - instances: number of instances
- *   - records: number of records
+ *   - partition: number of partitions for input and output topics
+ *   - instances: number of application instances (threads)
+ *   - messages: total number of messages
  * An example argument list would be `6 3 50000`.
  *
- * If you are using IntelliJ IDEA, the above arguments should be put in the configuration's `Program Arguments`.
- * Also recommended to set an output log file by `Edit Configuration -> Logs -> Save console
- * output to file` to record all the log output together.
+ * If you are using IntelliJ IDEA, the above arguments should be put in `Modify Run Configuration - Program Arguments`.
+ * You can also set an output log file in `Modify Run Configuration - Modify options - Save console output to file` to
+ * record all the log output together.
  *
- * The driver could be decomposed as following stages:
+ * The broker version must be >= 2.5 in order to run, otherwise the app could throw
+ * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
+ *
+ * The driver can be decomposed into the following stages:
  *
  * 1. Cleanup any topic whose name conflicts with input and output topic, so that we have a clean-start.
- *
- * 2. Set up a producer in a separate thread to pre-populate a set of records with even number keys into
- *    the input topic. The driver will block for the record generation to finish, so the producer
- *    must be in synchronous sending mode.
- *
- * 3. Set up transactional instances in separate threads which does a consume-process-produce loop,
- *    tailing data from input topic (See {@link ExactlyOnceMessageProcessor}). Each EOS instance will
- *    drain all the records from either given partitions or auto assigned partitions by actively
- *    comparing log end offset with committed offset. Each record will be processed exactly once
- *    as dividing the key by 2, and extend the value message. The driver will block for all the record
- *    processing to finish. The transformed record shall be written to the output topic, with
- *    transactional guarantee.
- *
+ * 2. Set up a producer in a separate thread to pre-populate a set of messages with even number keys into the
+ *    input topic. The driver will block for the message generation to finish, so the producer is synchronous.
+ * 3. Set up the transactional instances in separate threads, each one executing a read-process-write loop
+ *    (See {@link ExactlyOnceProcessor}). Each EOS instance will drain all messages from either given
+ *    partitions or auto assigned partitions by actively comparing log end offset with committed offset. Each
+ *    message will be processed exactly once, dividing the key by 2 and extending the value message.
+ *    The driver will block until all messages are processed and written to the output topic.
  * 4. Set up a read committed consumer in a separate thread to verify we have all records within
  *    the output topic, while the message ordering on partition level is maintained.
  *    The driver will block for the consumption of all committed records.
  *
  * From this demo, you could see that all the records from pre-population are processed exactly once,
  * with strong partition level ordering guarantee.
- *
- * Note: please start the kafka broker and zookeeper in local first. The broker version must be >= 2.5
- * in order to run, otherwise the app could throw
- * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
  */
-public class KafkaExactlyOnceDemo {
-
+public class ExactlyOnceDemo {
     private static final String INPUT_TOPIC = "input-topic";
     private static final String OUTPUT_TOPIC = "output-topic";
 
@@ -102,7 +94,7 @@ public class KafkaExactlyOnceDemo {
 
         /* Stage 3: transactionally process all messages */
         for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
-            ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(
+            ExactlyOnceProcessor messageProcessor = new ExactlyOnceProcessor(
                 INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx, transactionalCopyLatch);
             messageProcessor.start();
         }
@@ -114,7 +106,7 @@ public class KafkaExactlyOnceDemo {
         CountDownLatch consumeLatch = new CountDownLatch(1);
 
         /* Stage 4: consume all processed messages to verify exactly once */
-        Consumer consumerThread = new Consumer(OUTPUT_TOPIC, "Verify-consumer", Optional.empty(), true, numRecords, consumeLatch);
+        Consumer consumerThread = new Consumer(OUTPUT_TOPIC, "verify-group", Optional.empty(), true, numRecords, consumeLatch);
         consumerThread.start();
 
         if (!consumeLatch.await(5, TimeUnit.MINUTES)) {
@@ -128,8 +120,7 @@ public class KafkaExactlyOnceDemo {
     private static void recreateTopics(final int numPartitions)
         throws ExecutionException, InterruptedException {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-            KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
 
         Admin adminClient = Admin.create(props);
 
@@ -139,10 +130,10 @@ public class KafkaExactlyOnceDemo {
 
         // Check topic existence in a retry loop
         while (true) {
-            System.out.println("Making sure the topics are deleted successfully: " + topicsToDelete);
+            System.out.printf("Making sure the topics are deleted successfully: %s%n", topicsToDelete);
 
             Set<String> listedTopics = adminClient.listTopics().names().get();
-            System.out.println("Current list of topics: " + listedTopics);
+            System.out.printf("Current list of topics: %s%n", listedTopics);
 
             boolean hasTopicInfo = false;
             for (String listedTopic : listedTopics) {
@@ -159,13 +150,13 @@ public class KafkaExactlyOnceDemo {
 
         // Create topics in a retry loop
         while (true) {
-            final short replicationFactor = 1;
+            final short replicationFactor = -1; // use default config to avoid NOT_ENOUGH_REPLICAS error with minISR>1
             final List<NewTopic> newTopics = Arrays.asList(
                 new NewTopic(INPUT_TOPIC, numPartitions, replicationFactor),
                 new NewTopic(OUTPUT_TOPIC, numPartitions, replicationFactor));
             try {
                 adminClient.createTopics(newTopics).all().get();
-                System.out.println("Created new topics: " + newTopics);
+                System.out.printf("Created new topics: %s%n", newTopics);
                 break;
             } catch (ExecutionException e) {
                 if (!(e.getCause() instanceof TopicExistsException)) {
@@ -188,8 +179,8 @@ public class KafkaExactlyOnceDemo {
             if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
                 throw e;
             }
-            System.out.println("Encountered exception during topic deletion: " + e.getCause());
+            System.err.printf("Encountered exception during topic deletion: %s%n", e.getCause());
         }
-        System.out.println("Deleted old topics: " + topicsToDelete);
+        System.out.printf("Deleted old topics: %s%n", topicsToDelete);
     }
 }
