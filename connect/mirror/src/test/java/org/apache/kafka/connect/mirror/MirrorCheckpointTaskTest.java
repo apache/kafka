@@ -198,7 +198,7 @@ public class MirrorCheckpointTaskTest {
     }
 
     @Test
-    public void testCheckpointRecordsMonotonicIfStoreRewinds() throws ExecutionException, InterruptedException {
+    public void testCheckpointRecordsMonotonicIfStoreRewinds() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
         offsetSyncStore.start();
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
@@ -237,7 +237,7 @@ public class MirrorCheckpointTaskTest {
 
     private Map<TopicPartition, Checkpoint> assertCheckpointForTopic(
             MirrorCheckpointTask task, TopicPartition tp, TopicPartition remoteTp, long consumerGroupOffset, boolean truth
-    ) throws ExecutionException, InterruptedException {
+    ) {
         Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets = Collections.singletonMap(tp, new OffsetAndMetadata(consumerGroupOffset));
         Map<TopicPartition, Checkpoint> checkpoints = task.checkpointsForGroup(consumerGroupOffsets, "g1");
         assertEquals(truth, checkpoints.containsKey(remoteTp), "should" + (truth ? "" : " not") + " emit offset sync");
