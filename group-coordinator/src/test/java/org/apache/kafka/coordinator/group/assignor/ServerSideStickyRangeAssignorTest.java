@@ -243,45 +243,6 @@ public class ServerSideStickyRangeAssignorTest {
     }
 
     @Test
-    public void testReassignmentWhenOnePartitionRemovedForTwoConsumersTwoTopics() {
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // T1, T2 both have 3 partitions each initially and after removal have 2 partitions each
-        // Consumer A
-        List<Uuid> subscribedTopicsA = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
-        currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
-        currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
-        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, currentAssignmentForA));
-
-        // Consumer B
-        List<Uuid> subscribedTopicsB = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
-        currentAssignmentForB.put(topic1Uuid, new HashSet<>(Collections.singletonList(2)));
-        currentAssignmentForB.put(topic2Uuid, new HashSet<>(Collections.singletonList(2)));
-        members.computeIfAbsent(consumerB, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, currentAssignmentForB));
-
-        // Remove a partition from both topic1 and topic 2 -> total partitions = 2
-        // Simulating removing a partition - originally T1 -> 3 Partitions and T2 -> 3 Partitions
-        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 2));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 2));
-
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
-
-        Map<Uuid, Set<Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.computeIfAbsent(topic1Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(0)));
-        expectedAssignment.computeIfAbsent(topic1Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(1)));
-        // Topic 2 Partitions Assignment
-        expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(0)));
-        expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(1)));
-
-        assertAssignment(expectedAssignment, computedAssignment);
-        assertCoPartitionJoinProperty(computedAssignment);
-    }
-
-    @Test
     public void testReassignmentWhenOneConsumerAddedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
         topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));

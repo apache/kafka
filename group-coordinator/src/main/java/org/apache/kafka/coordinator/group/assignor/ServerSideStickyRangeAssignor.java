@@ -108,7 +108,7 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
         for (Map.Entry<String, AssignmentMemberSpec> memberEntry : membersData.entrySet()) {
             String memberId = memberEntry.getKey();
             AssignmentMemberSpec memberMetadata = memberEntry.getValue();
-            List<Uuid> topics = new ArrayList<>(memberMetadata.subscribedTopics);
+            List<Uuid> topics = memberMetadata.subscribedTopics;
             for (Uuid topicId: topics) {
                 putList(mapTopicsToConsumers, topicId, memberId);
             }
@@ -176,20 +176,13 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
                 // Initially, minRequiredQuota is the minimum number of partitions that each consumer should get.
                 // The value is at least 1 unless numConsumers subscribed is greater than numPartitions. In such cases, all consumers get assigned "extra partitions".
                 int minRequiredQuota = numPartitionsPerConsumer;
-                // We need to make sure that the partitions we're keeping are still part of the topic metadata.
-                // Ex:- In case the number of partitions is reduced for a topic, the sticky partitions must be part of the new set of partitions available.
-                for (int i = 0; i < currentAssignmentListForTopic.size() && currentAssignmentSize > 0; i++) {
-                    // numPartitionsForTopic - 1 is the max possible partition number
-                    if (currentAssignmentListForTopic.get(i) >= numPartitionsForTopic) {
-                        currentAssignmentSize--;
-                    }
-                }
+
                 // If there are previously assigned partitions present, we want to retain
                 if (currentAssignmentSize > 0) {
                     // We either need to retain currentSize number of partitions when currentSize < required OR required number of partitions otherwise.
                     int retainedPartitionsCount = min(currentAssignmentSize, minRequiredQuota);
+                    Collections.sort(currentAssignmentListForTopic);
                     for (int i = 0; i < retainedPartitionsCount; i++) {
-                        Collections.sort(currentAssignmentListForTopic);
                         putSet(assignedStickyPartitionsPerTopic, topicId, currentAssignmentListForTopic.get(i));
                         membersWithNewAssignmentPerTopic.computeIfAbsent(memberId, k -> new HashMap<>()).computeIfAbsent(topicId, k -> new HashSet<>()).add(currentAssignmentListForTopic.get(i));
                     }
@@ -243,14 +236,14 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
         for (Map.Entry<Uuid, List<Pair<String, Integer>>> unfilledEntry : unfilledConsumersPerTopic.entrySet()) {
             Uuid topicId = unfilledEntry.getKey();
             List<Pair<String, Integer>> unfilledConsumersForTopic = unfilledEntry.getValue();
-
+            int newStartPointer = 0;
             for (Pair<String, Integer> stringIntegerPair : unfilledConsumersForTopic) {
                 String memberId = stringIntegerPair.getFirst();
                 int remaining = stringIntegerPair.getSecond();
                 // assign the first few partitions from the list and then delete them from the availablePartitions list for this topic
-                List<Integer> subList = availablePartitionsPerTopic.get(topicId).subList(0, remaining);
+                List<Integer> subList = availablePartitionsPerTopic.get(topicId).subList(newStartPointer, newStartPointer + remaining);
+                newStartPointer += remaining;
                 membersWithNewAssignmentPerTopic.computeIfAbsent(memberId, k -> new HashMap<>()).computeIfAbsent(topicId, k -> new HashSet<>()).addAll(subList);
-                availablePartitionsPerTopic.get(topicId).removeAll(subList);
             }
         }
 
