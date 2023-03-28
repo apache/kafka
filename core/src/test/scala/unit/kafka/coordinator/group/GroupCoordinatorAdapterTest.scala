@@ -20,9 +20,9 @@ import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
 import kafka.utils.MockTime
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.InvalidGroupIdException
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.errors.{InvalidGroupIdException, UnsupportedVersionException}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
@@ -60,6 +60,22 @@ class GroupCoordinatorAdapterTest {
       ClientInformation.EMPTY,
       false
     )
+  }
+
+  @Test
+  def testJoinConsumerGroup(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    val ctx = makeContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion)
+    val request = new ConsumerGroupHeartbeatRequestData()
+      .setGroupId("group")
+
+    val future = adapter.consumerGroupHeartbeat(ctx, request)
+
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(future, classOf[UnsupportedVersionException])
   }
 
   @ParameterizedTest
@@ -646,8 +662,8 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.commitOffsets(ctx, data, bufferSupplier)
     assertFalse(future.isDone)
 
-    val capturedCallback: ArgumentCaptor[Map[TopicPartition, Errors] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, Errors] => Unit])
+    val capturedCallback: ArgumentCaptor[Map[TopicIdPartition, Errors] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, Errors] => Unit])
 
     verify(groupCoordinator).handleCommitOffsets(
       ArgumentMatchers.eq(data.groupId),
@@ -655,7 +671,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(data.generationId),
       ArgumentMatchers.eq(Map(
-        new TopicPartition("foo", 0) -> new OffsetAndMetadata(
+        new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
           offset = 100,
           leaderEpoch = Optional.of[Integer](1),
           metadata = "",
@@ -668,7 +684,7 @@ class GroupCoordinatorAdapterTest {
     )
 
     capturedCallback.getValue.apply(Map(
-      new TopicPartition("foo", 0) -> Errors.NONE
+      new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> Errors.NONE
     ))
 
     val expectedResponseData = new OffsetCommitResponseData()
@@ -716,8 +732,8 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.commitTransactionalOffsets(ctx, data, bufferSupplier)
     assertFalse(future.isDone)
 
-    val capturedCallback: ArgumentCaptor[Map[TopicPartition, Errors] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, Errors] => Unit])
+    val capturedCallback: ArgumentCaptor[Map[TopicIdPartition, Errors] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, Errors] => Unit])
 
     verify(groupCoordinator).handleTxnCommitOffsets(
       ArgumentMatchers.eq(data.groupId),
@@ -727,7 +743,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(data.generationId),
       ArgumentMatchers.eq(Map(
-        new TopicPartition("foo", 0) -> new OffsetAndMetadata(
+        new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
           offset = 100,
           leaderEpoch = Optional.of[Integer](1),
           metadata = "",
@@ -740,7 +756,7 @@ class GroupCoordinatorAdapterTest {
     )
 
     capturedCallback.getValue.apply(Map(
-      new TopicPartition("foo", 0) -> Errors.NONE
+      new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> Errors.NONE
     ))
 
     val expectedData = new TxnOffsetCommitResponseData()

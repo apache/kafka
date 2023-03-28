@@ -94,6 +94,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     val fetchParams = new FetchParams(
       request.version,
       FetchRequest.FUTURE_LOCAL_REPLICA_ID,
+      -1,
       0L, // timeout is 0 so that the callback will be executed immediately
       request.minBytes,
       request.maxBytes,
@@ -226,7 +227,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
         ApiKeys.FETCH.latestVersion
       // Set maxWait and minBytes to 0 because the response should return immediately if
       // the future log has caught up with the current log of the partition
-      val requestBuilder = FetchRequest.Builder.forReplica(version, replicaId, 0, 0, requestMap).setMaxBytes(maxBytes)
+      val requestBuilder = FetchRequest.Builder.forReplica(version, replicaId, -1, 0, 0, requestMap).setMaxBytes(maxBytes)
       Some(ReplicaFetch(requestMap, requestBuilder))
     }
 

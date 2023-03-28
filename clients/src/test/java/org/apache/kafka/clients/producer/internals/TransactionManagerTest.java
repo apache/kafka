@@ -40,6 +40,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -1303,11 +1305,13 @@ public class TransactionManagerTest {
         Map<TopicPartition, Errors> errors = new HashMap<>();
         errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
         errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
         client.respond(body -> {
             AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-            assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+            assertEquals(new HashSet<>(getPartitionsFromV3Request(request)), new HashSet<>(errors.keySet()));
             return true;
-        }, new AddPartitionsToTxnResponse(0, errors));
+        }, new AddPartitionsToTxnResponse(data));
 
         sender.runOnce();
         assertTrue(transactionManager.hasError());
@@ -3439,11 +3443,13 @@ public class TransactionManagerTest {
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-            assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+            assertEquals(new HashSet<>(getPartitionsFromV3Request(request)), new HashSet<>(errors.keySet()));
             return true;
-        }, new AddPartitionsToTxnResponse(0, errors));
+        }, new AddPartitionsToTxnResponse(data));
     }
 
     private void prepareAddPartitionsToTxn(final TopicPartition tp, final Errors error) {
@@ -3522,26 +3528,38 @@ public class TransactionManagerTest {
 
     private void prepareAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
                                                    final short epoch, final long producerId) {
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
+                AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, singletonMap(topicPartition, error));
         client.prepareResponse(addPartitionsRequestMatcher(topicPartition, epoch, producerId),
-                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+                new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData()
+                        .setThrottleTimeMs(0)
+                        .setResultsByTopicV3AndBelow(result.topicResults())));
     }
 
     private void sendAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
                                                 final short epoch, final long producerId) {
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
+                AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, singletonMap(topicPartition, error));
         client.respond(addPartitionsRequestMatcher(topicPartition, epoch, producerId),
-                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+                new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData()
+                        .setThrottleTimeMs(0)
+                        .setResultsByTopicV3AndBelow(result.topicResults())));
     }
 
     private MockClient.RequestMatcher addPartitionsRequestMatcher(final TopicPartition topicPartition,
                                                                   final short epoch, final long producerId) {
         return body -> {
             AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
-            assertEquals(producerId, addPartitionsToTxnRequest.data().producerId());
-            assertEquals(epoch, addPartitionsToTxnRequest.data().producerEpoch());
-            assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
-            assertEquals(transactionalId, addPartitionsToTxnRequest.data().transactionalId());
+            assertEquals(producerId, addPartitionsToTxnRequest.data().v3AndBelowProducerId());
+            assertEquals(epoch, addPartitionsToTxnRequest.data().v3AndBelowProducerEpoch());
+            assertEquals(singletonList(topicPartition), getPartitionsFromV3Request(addPartitionsToTxnRequest));
+            assertEquals(transactionalId, addPartitionsToTxnRequest.data().v3AndBelowTransactionalId());
             return true;
         };
+    }
+    
+    private List<TopicPartition> getPartitionsFromV3Request(AddPartitionsToTxnRequest request) {
+        return AddPartitionsToTxnRequest.getPartitions(request.data().v3AndBelowTopics());
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long producerId, final short epoch) {

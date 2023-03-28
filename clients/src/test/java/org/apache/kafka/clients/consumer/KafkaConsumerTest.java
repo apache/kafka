@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
@@ -28,6 +29,8 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.FetchConfig;
+import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
@@ -2656,24 +2659,26 @@ public class KafkaConsumerTest {
                 null);
         }
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        Fetcher<String, String> fetcher = new Fetcher<>(
-                loggerFactory,
-                consumerClient,
+        FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        FetchConfig<String, String> fetchConfig = new FetchConfig<>(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
                 maxPollRecords,
                 checkCrcs,
-                "",
+                CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 keyDeserializer,
                 deserializer,
+                isolationLevel);
+        Fetcher<String, String> fetcher = new Fetcher<>(
+                loggerFactory,
+                consumerClient,
                 metadata,
                 subscription,
-                metrics,
-                metricsRegistry.fetcherMetrics,
-                time,
-                isolationLevel);
+                fetchConfig,
+                metricsManager,
+                time);
         OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,
                 consumerClient,
                 metadata,
