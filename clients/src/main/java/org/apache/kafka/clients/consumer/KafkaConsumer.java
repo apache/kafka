@@ -799,7 +799,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
-            FetchConfig<K, V> fetchConfig = new FetchConfig<>(config, keyDeserializer, valueDeserializer, isolationLevel);
+            FetchConfig<K, V> fetchConfig = new FetchConfig<>(config,
+                    this.keyDeserializer,
+                    this.valueDeserializer,
+                    isolationLevel);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
