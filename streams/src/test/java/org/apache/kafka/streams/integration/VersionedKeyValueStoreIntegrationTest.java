@@ -41,6 +41,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -366,9 +367,9 @@ public class VersionedKeyValueStoreIntegrationTest {
     }
 
     @Test
-    public void shouldManualUpgradeFromNonVersionedToVersioned() throws Exception {
-        // build non-versioned topology and start app
-        StreamsBuilder streamsBuilder = new StreamsBuilder();
+    public void shouldManualUpgradeFromNonVersionedTimestampedToVersioned() throws Exception {
+        // build non-versioned (timestamped) topology
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder
             .addStateStore(
@@ -382,10 +383,35 @@ public class VersionedKeyValueStoreIntegrationTest {
             .process(TimestampedStoreContentCheckerProcessor::new, STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
+        shouldManualUpgradeFromNonVersionedToVersioned(streamsBuilder.build());
+    }
+
+    @Test
+    public void shouldManualUpgradeFromNonVersionedNonTimestampedToVersioned() throws Exception {
+        // build non-versioned (non-timestamped) topology
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+
+        streamsBuilder
+            .addStateStore(
+                Stores.keyValueStoreBuilder(
+                    Stores.persistentKeyValueStore(STORE_NAME),
+                    Serdes.Integer(),
+                    Serdes.String()
+                )
+            )
+            .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .process(KeyValueStoreContentCheckerProcessor::new, STORE_NAME)
+            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
+
+        shouldManualUpgradeFromNonVersionedToVersioned(streamsBuilder.build());
+    }
+
+    private void shouldManualUpgradeFromNonVersionedToVersioned(final Topology originalTopology) throws Exception {
+        // build original (non-versioned) topology and start app
         Properties props = props();
         // additional property to prevent premature compaction of older record versions while using timestamped store
         props.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, 60_000L);
-        kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
+        kafkaStreams = new KafkaStreams(originalTopology, props);
         kafkaStreams.start();
 
         // produce source data and track in-memory to verify after restore
@@ -414,7 +440,7 @@ public class VersionedKeyValueStoreIntegrationTest {
         kafkaStreams.cleanUp();
 
         // restart app with versioned store, and pass expected store contents to processor
-        streamsBuilder = new StreamsBuilder();
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder
             .addStateStore(
@@ -672,6 +698,66 @@ public class VersionedKeyValueStoreIntegrationTest {
                 // validate get from store
                 final ValueAndTimestamp<String> record = store.get(key);
                 if (!Objects.equals(record, valueAndTimestamp)) {
+                    failedChecks++;
+                }
+            }
+            return failedChecks;
+        }
+    }
+
+    /**
+     * Same as {@link VersionedStoreContentCheckerProcessor} but for regular key-value stores instead,
+     * for use in validating the manual upgrade path from non-versioned to versioned stores.
+     */
+    private static class KeyValueStoreContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
+
+        private ProcessorContext<Integer, Integer> context;
+        private KeyValueStore<Integer, String> store;
+
+        // in-memory copy of seen data, to validate for testing purposes.
+        private final Map<Integer, Optional<String>> data;
+
+        KeyValueStoreContentCheckerProcessor() {
+            this.data = new HashMap<>();
+        }
+
+        @Override
+        public void init(final ProcessorContext<Integer, Integer> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            // add record to store
+            if (DataTracker.DELETE_VALUE_KEYWORD.equals(record.value())) {
+                // special value "delete" is interpreted as a delete() call from
+                // VersionedStoreContentCheckerProcessor but we do not support it here
+                throw new IllegalArgumentException("Using 'delete' keyword for "
+                    + "KeyValueStoreContentCheckerProcessor will result in the record "
+                    + "timestamp being ignored. Use regular put with null value instead.");
+            }
+            store.put(record.key(), record.value());
+            data.put(record.key(), Optional.ofNullable(record.value()));
+
+            // check expected contents of store, and signal completion by writing
+            // number of failures to downstream
+            final int failedChecks = checkStoreContents();
+            context.forward(record.withValue(failedChecks));
+        }
+
+        /**
+         * @return number of failed checks
+         */
+        private int checkStoreContents() {
+            int failedChecks = 0;
+            for (final Map.Entry<Integer, Optional<String>> keyValue : data.entrySet()) {
+                final Integer expectedKey = keyValue.getKey();
+                final String expectedValue = keyValue.getValue().orElse(null);
+
+                // validate get from store
+                final String foundValue = store.get(expectedKey);
+                if (!Objects.equals(foundValue, expectedValue)) {
                     failedChecks++;
                 }
             }
