@@ -908,6 +908,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private void processTargetStateRecord(String connectorName, SchemaAndValue value) {
         boolean removed = false;
+        boolean stateChanged = true;
         synchronized (lock) {
             if (value.value() == null) {
                 // When connector configs are removed, we also write tombstones for the target state.
@@ -935,7 +936,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 try {
                     TargetState state = TargetState.valueOf((String) targetState);
                     log.debug("Setting target state for connector '{}' to {}", connectorName, targetState);
-                    connectorTargetStates.put(connectorName, state);
+                    TargetState prevState = connectorTargetStates.put(connectorName, state);
+                    stateChanged = !state.equals(prevState);
                 } catch (IllegalArgumentException e) {
                     log.error("Invalid target state for connector '{}': {}", connectorName, targetState);
                     return;
@@ -945,7 +947,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         // Note that we do not notify the update listener if the target state has been removed.
         // Instead we depend on the removal callback of the connector config itself to notify the worker.
-        if (started && !removed)
+        if (started && !removed && stateChanged)
             updateListener.onConnectorTargetStateChange(connectorName);
     }
 

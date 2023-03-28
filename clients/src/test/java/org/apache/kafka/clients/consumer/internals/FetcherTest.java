@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -50,7 +51,6 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetFo
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -176,6 +176,7 @@ public class FetcherTest {
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private FetchMetricsRegistry metricsRegistry;
+    private FetchMetricsManager metricsManager;
     private MockClient client;
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
@@ -1902,12 +1903,11 @@ public class FetcherTest {
         buildFetcher();
 
         MockSelector selector = new MockSelector(time);
-        Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
+                time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext());
 
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
@@ -2261,9 +2261,6 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
         assertTrue(partitionRecords.containsKey(tp0));
-
-        // Create throttle metrics
-        Fetcher.throttleTimeSensor(metrics, metricsRegistry);
 
         // Verify that all metrics except metrics-count have registered templates
         Set<MetricNameTemplate> allMetrics = new HashSet<>();
@@ -2843,31 +2840,32 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
 
-        fetcher = new Fetcher<byte[], byte[]>(
-                new LogContext(),
-                consumerClient,
+        FetchConfig<byte[], byte[]> fetchConfig = new FetchConfig<>(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
                 2 * numPartitions,
-                true,
-                "",
+                true, // check crcs
+                CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(),
+                isolationLevel);
+        fetcher = new Fetcher<byte[], byte[]>(
+                logContext,
+                consumerClient,
                 metadata,
                 subscriptions,
-                metrics,
-                metricsRegistry,
-                time,
-                isolationLevel) {
+                fetchConfig,
+                metricsManager,
+                time) {
             @Override
-            protected FetchSessionHandler sessionHandler(int id) {
-                final FetchSessionHandler handler = super.sessionHandler(id);
+            protected FetchSessionHandler sessionHandler(int node) {
+                final FetchSessionHandler handler = super.sessionHandler(node);
                 if (handler == null)
                     return null;
                 else {
-                    return new FetchSessionHandler(new LogContext(), id) {
+                    return new FetchSessionHandler(new LogContext(), node) {
                         @Override
                         public Builder newBuilder() {
                             verifySessionPartitions();
@@ -3645,24 +3643,25 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        fetcher = spy(new Fetcher<>(
-                new LogContext(),
-                consumerClient,
+        FetchConfig<K, V> fetchConfig = new FetchConfig<>(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
                 maxPollRecords,
                 true, // check crc
-                "",
+                CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 keyDeserializer,
                 valueDeserializer,
+                isolationLevel);
+        fetcher = spy(new Fetcher<>(
+                logContext,
+                consumerClient,
                 metadata,
-                subscriptions,
-                metrics,
-                metricsRegistry,
-                time,
-                isolationLevel));
+                subscriptionState,
+                fetchConfig,
+                metricsManager,
+                time));
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerClient,
                 metadata,
@@ -3687,6 +3686,7 @@ public class FetcherTest {
         consumerClient = spy(new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE));
         metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
+        metricsManager = new FetchMetricsManager(metrics, metricsRegistry);
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {

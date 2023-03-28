@@ -490,7 +490,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Boolean deserializer intentionally returns null on null input. -->
-        <Class name="org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde$BooleanSerde$BooleanDeserializer"/>
+        <Class name="org.apache.kafka.common.serialization.BooleanDeserializer"/>
         <Method name="deserialize"/>
         <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
