@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.function.Function;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -154,9 +155,34 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
 
         @Override
         public ValueAndTimestamp<VOut> get(final K key) {
+            return computeJoin(key, valueGetter1::get, valueGetter2::get);
+        }
+
+        @Override
+        public ValueAndTimestamp<VOut> get(final K key, final long asOfTimestamp) {
+            return computeJoin(
+                key,
+                k -> valueGetter1.get(k, asOfTimestamp),
+                k -> valueGetter2.get(k, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return valueGetter1.isVersioned() && valueGetter2.isVersioned();
+        }
+
+        @Override
+        public void close() {
+            valueGetter1.close();
+            valueGetter2.close();
+        }
+
+        private ValueAndTimestamp<VOut> computeJoin(final K key,
+                                                    final Function<K, ValueAndTimestamp<V1>> valueAndTimestamp1Supplier,
+                                                    final Function<K, ValueAndTimestamp<V2>> valueAndTimestamp2Supplier) {
             VOut newValue = null;
 
-            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
+            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueAndTimestamp1Supplier.apply(key);
             final V1 value1;
             final long timestamp1;
             if (valueAndTimestamp1 == null) {
@@ -167,7 +193,7 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
                 timestamp1 = valueAndTimestamp1.timestamp();
             }
 
-            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(key);
+            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueAndTimestamp2Supplier.apply(key);
             final V2 value2;
             final long timestamp2;
             if (valueAndTimestamp2 == null) {
@@ -183,12 +209,6 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
             }
 
             return ValueAndTimestamp.make(newValue, Math.max(timestamp1, timestamp2));
-        }
-
-        @Override
-        public void close() {
-            valueGetter1.close();
-            valueGetter2.close();
         }
     }
 

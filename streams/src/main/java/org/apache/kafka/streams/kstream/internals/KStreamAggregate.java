@@ -152,5 +152,15 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
         public ValueAndTimestamp<VAgg> get(final KIn key) {
             return store.get(key);
         }
+
+        @Override
+        public ValueAndTimestamp<VAgg> get(final KIn key, final long asOfTimestamp) {
+            return store.get(key, asOfTimestamp);
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return store.isVersionedStore();
+        }
     }
 }
