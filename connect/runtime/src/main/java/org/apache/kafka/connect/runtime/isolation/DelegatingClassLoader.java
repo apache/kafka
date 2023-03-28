@@ -462,9 +462,11 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
+        // Unconditionally use the default constructor to create an instance to assert that
+        // the constructor exists and can complete successfully.
+        T pluginImpl = pluginKlass.getDeclaredConstructor().newInstance();
         // Temporary workaround until all the plugins are versioned.
-        return Connector.class.isAssignableFrom(pluginKlass) ?
-            versionFor(pluginKlass.getDeclaredConstructor().newInstance()) : UNDEFINED_VERSION;
+        return versionFor(pluginImpl);
     }
 
     private static String reflectiveErrorDescription(Throwable t) {
