@@ -1157,6 +1157,8 @@ public class Worker {
                 log.debug("Fetching offsets for source connector: {}", connName);
                 sourceConnectorOffsets(connName, connector, connectorConfig, cb);
             }
+        } catch (Exception e) {
+            cb.onCompletion(e, null);
         }
     }
 
@@ -1188,23 +1190,18 @@ public class Worker {
                 connName, "connector-consumer-", config, new SinkConnectorConfig(plugins, connectorConfig),
                 connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
         Admin admin = adminFactory.apply(adminConfig);
-        try {
-            ListConsumerGroupOffsetsOptions listOffsetsOptions = new ListConsumerGroupOffsetsOptions()
-                    .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
-            ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = admin.listConsumerGroupOffsets(groupId, listOffsetsOptions);
-            listConsumerGroupOffsetsResult.all().whenComplete((result, error) -> {
-                if (error != null) {
-                    cb.onCompletion(new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, error), null);
-                } else {
-                    ConnectorOffsets offsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(result.get(groupId));
-                    cb.onCompletion(null, offsets);
-                }
-                Utils.closeQuietly(admin, "Offset fetch admin for sink connector " + connName);
-            });
-        } catch (Exception e) {
+        ListConsumerGroupOffsetsOptions listOffsetsOptions = new ListConsumerGroupOffsetsOptions()
+                .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = admin.listConsumerGroupOffsets(groupId, listOffsetsOptions);
+        listConsumerGroupOffsetsResult.all().whenComplete((result, error) -> {
+            if (error != null) {
+                cb.onCompletion(new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, error), null);
+            } else {
+                ConnectorOffsets offsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(result.get(groupId));
+                cb.onCompletion(null, offsets);
+            }
             Utils.closeQuietly(admin, "Offset fetch admin for sink connector " + connName);
-            cb.onCompletion(e, null);
-        }
+        });
     }
 
     /**
@@ -1235,8 +1232,6 @@ public class Worker {
                     .map(entry -> new ConnectorOffset(entry.getKey(), entry.getValue()))
                     .collect(Collectors.toList());
             cb.onCompletion(null, new ConnectorOffsets(connectorOffsets));
-        } catch (Exception e) {
-            cb.onCompletion(e, null);
         } finally {
             Utils.closeQuietly(offsetReader, "Offset reader for connector " + connName);
             Utils.closeQuietly(offsetStore::stop, "Offset store for connector " + connName);
