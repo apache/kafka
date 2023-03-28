@@ -475,8 +475,9 @@ public class QuorumState {
         }
 
         this.store.writeElectionState(state.election());
+        EpochState from = this.state;
         this.state = state;
-        log.info("Completed transition to {}", state);
+        log.info("Completed transition to {} from {}", state, from);
     }
 
     private int randomElectionTimeoutMs() {

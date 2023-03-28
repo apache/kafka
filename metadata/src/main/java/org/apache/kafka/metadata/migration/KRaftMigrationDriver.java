@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
@@ -27,6 +29,7 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LoaderManifestType;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -35,9 +38,12 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -529,6 +535,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
+            MetadataImage prevImage = KRaftMigrationDriver.this.image;
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
@@ -582,12 +589,42 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         zkMigrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
                 }
 
+                if (delta.aclsDelta() != null) {
+                    Map<ResourcePattern, List<AccessControlEntry>> deletedAcls = new HashMap<>();
+                    Map<ResourcePattern, List<AccessControlEntry>> addedAcls = new HashMap<>();
+                    delta.aclsDelta().changes().forEach((uuid, standardAclOpt) -> {
+                        if (!standardAclOpt.isPresent()) {
+                            StandardAcl acl = prevImage.acls().acls().get(uuid);
+                            if (acl != null) {
+                                addStandardAclToMap(deletedAcls, acl);
+                            } else {
+                                throw new RuntimeException("Cannot remove deleted ACL " + uuid + " from ZK since it is " +
+                                    "not present in the previous AclsImage");
+                            }
+                        } else {
+                            StandardAcl acl = standardAclOpt.get();
+                            addStandardAclToMap(addedAcls, acl);
+                        }
+                    });
+                    deletedAcls.forEach((resourcePattern, accessControlEntries) -> {
+                        String name = "Deleting " + accessControlEntries.size() + " for resource " + resourcePattern;
+                        apply(name, migrationState ->
+                            zkMigrationClient.removeDeletedAcls(resourcePattern, accessControlEntries, migrationState));
+                    });
+
+                    addedAcls.forEach((resourcePattern, accessControlEntries) -> {
+                        String name = "Adding " + accessControlEntries.size() + " for resource " + resourcePattern;
+                        apply(name, migrationState ->
+                            zkMigrationClient.writeAddedAcls(resourcePattern, accessControlEntries, migrationState));
+                    });
+                }
+
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
                 if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
                     log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
                     propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
-                            migrationLeadershipState.zkControllerEpoch());
+                        migrationLeadershipState.zkControllerEpoch());
                 } else {
                     log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
                 }
@@ -595,6 +632,13 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
             }
             completionHandler.accept(null);
+        }
+
+        private void addStandardAclToMap(Map<ResourcePattern, List<AccessControlEntry>> aclMap, StandardAcl acl) {
+            ResourcePattern resource = new ResourcePattern(acl.resourceType(), acl.resourceName(), acl.patternType());
+            aclMap.computeIfAbsent(resource, __ -> new ArrayList<>()).add(
+                new AccessControlEntry(acl.principal(), acl.host(), acl.operation(), acl.permissionType())
+            );
         }
 
         @Override

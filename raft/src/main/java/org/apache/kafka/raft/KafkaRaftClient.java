@@ -984,7 +984,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 // any other error, we need to return it.
                 Errors error = Errors.forException(cause);
                 if (error != Errors.REQUEST_TIMED_OUT) {
-                    logger.debug("Failed to handle fetch from {} at {} due to {}",
+                    logger.info("Failed to handle fetch from {} at {} due to {}",
                         replicaId, fetchPartition.fetchOffset(), error);
                     return buildEmptyFetchResponse(error, Optional.empty());
                 }
@@ -1347,7 +1347,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             /* The leader deleted the snapshot before the follower could download it. Start over by
              * resetting the fetching snapshot state and sending another fetch request.
              */
-            logger.trace(
+            logger.info(
                 "Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}",
                 state.fetchingSnapshot(),
                 partitionSnapshot.errorCode(),
@@ -1986,7 +1986,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return state.remainingBackoffMs(currentTimeMs);
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
             long backoffDurationMs = binaryExponentialElectionBackoffMs(state.retries());
-            logger.debug("Election has timed out, backing off for {}ms before becoming a candidate again",
+            logger.info("Election has timed out, backing off for {}ms before becoming a candidate again",
                 backoffDurationMs);
             state.startBackingOff(currentTimeMs, backoffDurationMs);
             return backoffDurationMs;

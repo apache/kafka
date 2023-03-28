@@ -635,16 +635,19 @@ public class InternalTopicManagerTest {
     public void shouldCreateRequiredTopics() throws Exception {
         final InternalTopicConfig topicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
-        final InternalTopicConfig topicConfig2 = new UnwindowedChangelogTopicConfig(topic2, Collections.emptyMap());
+        final InternalTopicConfig topicConfig2 = new UnwindowedUnversionedChangelogTopicConfig(topic2, Collections.emptyMap());
         topicConfig2.setNumberOfPartitions(1);
-        final InternalTopicConfig topicConfig3 = new WindowedChangelogTopicConfig(topic3, Collections.emptyMap());
+        final InternalTopicConfig topicConfig3 = new WindowedChangelogTopicConfig(topic3, Collections.emptyMap(), 10);
         topicConfig3.setNumberOfPartitions(1);
+        final InternalTopicConfig topicConfig4 = new VersionedChangelogTopicConfig(topic4, Collections.emptyMap(), 12);
+        topicConfig4.setNumberOfPartitions(1);
 
         internalTopicManager.makeReady(Collections.singletonMap(topic1, topicConfig));
         internalTopicManager.makeReady(Collections.singletonMap(topic2, topicConfig2));
         internalTopicManager.makeReady(Collections.singletonMap(topic3, topicConfig3));
+        internalTopicManager.makeReady(Collections.singletonMap(topic4, topicConfig4));
 
-        assertEquals(mkSet(topic1, topic2, topic3), mockAdminClient.listTopics().names().get());
+        assertEquals(mkSet(topic1, topic2, topic3, topic4), mockAdminClient.listTopics().names().get());
         assertEquals(new TopicDescription(topic1, false, new ArrayList<TopicPartitionInfo>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
@@ -660,10 +663,16 @@ public class InternalTopicManagerTest {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic3)).topicNameValues().get(topic3).get());
+        assertEquals(new TopicDescription(topic4, false, new ArrayList<TopicPartitionInfo>() {
+            {
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+            }
+        }), mockAdminClient.describeTopics(Collections.singleton(topic4)).topicNameValues().get(topic4).get());
 
         final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1);
         final ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
         final ConfigResource resource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
+        final ConfigResource resource4 = new ConfigResource(ConfigResource.Type.TOPIC, topic4);
 
         assertEquals(
             new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
@@ -676,6 +685,10 @@ public class InternalTopicManagerTest {
         assertEquals(
             new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE),
             mockAdminClient.describeConfigs(Collections.singleton(resource3)).values().get(resource3).get().get(TopicConfig.CLEANUP_POLICY_CONFIG)
+        );
+        assertEquals(
+            new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
+            mockAdminClient.describeConfigs(Collections.singleton(resource4)).values().get(resource4).get().get(TopicConfig.CLEANUP_POLICY_CONFIG)
         );
     }
 
@@ -714,9 +727,9 @@ public class InternalTopicManagerTest {
         when(admin.describeTopics(Collections.singleton(topic2)))
             .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
 
-        final InternalTopicConfig topicConfig = new UnwindowedChangelogTopicConfig(topic1, Collections.emptyMap());
+        final InternalTopicConfig topicConfig = new UnwindowedUnversionedChangelogTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
-        final InternalTopicConfig topic2Config = new UnwindowedChangelogTopicConfig(topic2, Collections.emptyMap());
+        final InternalTopicConfig topic2Config = new UnwindowedUnversionedChangelogTopicConfig(topic2, Collections.emptyMap());
         topic2Config.setNumberOfPartitions(1);
         topicManager.makeReady(mkMap(
             mkEntry(topic1, topicConfig),
@@ -1033,23 +1046,23 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldReportMisconfigurationsOfCleanupPolicyForUnwindowedChangelogTopics() {
-        final Map<String, String> unwindowedChangelogConfigWithDeleteCleanupPolicy = unwindowedChangelogConfig();
-        unwindowedChangelogConfigWithDeleteCleanupPolicy.put(
+    public void shouldReportMisconfigurationsOfCleanupPolicyForUnwindowedUnversionedChangelogTopics() {
+        final Map<String, String> unwindowedUnversionedChangelogConfigWithDeleteCleanupPolicy = unwindowedUnversionedChangelogConfig();
+        unwindowedUnversionedChangelogConfigWithDeleteCleanupPolicy.put(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.CLEANUP_POLICY_DELETE
         );
-        setupTopicInMockAdminClient(topic1, unwindowedChangelogConfigWithDeleteCleanupPolicy);
-        final Map<String, String> unwindowedChangelogConfigWithDeleteCompactCleanupPolicy = unwindowedChangelogConfig();
-        unwindowedChangelogConfigWithDeleteCompactCleanupPolicy.put(
+        setupTopicInMockAdminClient(topic1, unwindowedUnversionedChangelogConfigWithDeleteCleanupPolicy);
+        final Map<String, String> unwindowedUnversionedChangelogConfigWithDeleteCompactCleanupPolicy = unwindowedUnversionedChangelogConfig();
+        unwindowedUnversionedChangelogConfigWithDeleteCompactCleanupPolicy.put(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE
         );
-        setupTopicInMockAdminClient(topic2, unwindowedChangelogConfigWithDeleteCompactCleanupPolicy);
-        setupTopicInMockAdminClient(topic3, unwindowedChangelogConfig());
-        final InternalTopicConfig internalTopicConfig1 = setupUnwindowedChangelogTopicConfig(topic1, 1);
-        final InternalTopicConfig internalTopicConfig2 = setupUnwindowedChangelogTopicConfig(topic2, 1);
-        final InternalTopicConfig internalTopicConfig3 = setupUnwindowedChangelogTopicConfig(topic3, 1);
+        setupTopicInMockAdminClient(topic2, unwindowedUnversionedChangelogConfigWithDeleteCompactCleanupPolicy);
+        setupTopicInMockAdminClient(topic3, unwindowedUnversionedChangelogConfig());
+        final InternalTopicConfig internalTopicConfig1 = setupUnwindowedUnversionedChangelogTopicConfig(topic1, 1);
+        final InternalTopicConfig internalTopicConfig2 = setupUnwindowedUnversionedChangelogTopicConfig(topic2, 1);
+        final InternalTopicConfig internalTopicConfig3 = setupUnwindowedUnversionedChangelogTopicConfig(topic3, 1);
 
         final ValidationResult validationResult = internalTopicManager.validate(mkMap(
             mkEntry(topic1, internalTopicConfig1),
@@ -1132,6 +1145,57 @@ public class InternalTopicManagerTest {
         );
         assertThat(misconfigurationsForTopics, not(hasKey(topic1)));
         assertThat(misconfigurationsForTopics, not(hasKey(topic3)));
+    }
+
+    @Test
+    public void shouldReportMisconfigurationsOfCleanupPolicyForVersionedChangelogTopics() {
+        final long compactionLagMs = 1000;
+        final long shorterCompactionLagMs = 900;
+        setupTopicInMockAdminClient(topic1, versionedChangelogConfig(compactionLagMs));
+        setupTopicInMockAdminClient(topic2, versionedChangelogConfig(shorterCompactionLagMs));
+        final Map<String, String> versionedChangelogConfigCleanupPolicyDelete = versionedChangelogConfig(compactionLagMs);
+        versionedChangelogConfigCleanupPolicyDelete.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        setupTopicInMockAdminClient(topic3, versionedChangelogConfigCleanupPolicyDelete);
+        final Map<String, String> versionedChangelogConfigCleanupPolicyCompactAndDelete = versionedChangelogConfig(compactionLagMs);
+        versionedChangelogConfigCleanupPolicyCompactAndDelete.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + TopicConfig.CLEANUP_POLICY_DELETE);
+        setupTopicInMockAdminClient(topic4, versionedChangelogConfigCleanupPolicyCompactAndDelete);
+        final InternalTopicConfig internalTopicConfig1 = setupVersionedChangelogTopicConfig(topic1, 1, compactionLagMs);
+        final InternalTopicConfig internalTopicConfig2 = setupVersionedChangelogTopicConfig(topic2, 1, compactionLagMs);
+        final InternalTopicConfig internalTopicConfig3 = setupVersionedChangelogTopicConfig(topic3, 1, compactionLagMs);
+        final InternalTopicConfig internalTopicConfig4 = setupVersionedChangelogTopicConfig(topic4, 1, compactionLagMs);
+
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2),
+            mkEntry(topic3, internalTopicConfig3),
+            mkEntry(topic4, internalTopicConfig4)
+        ));
+
+        final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
+        assertThat(validationResult.missingTopics(), empty());
+        assertThat(misconfigurationsForTopics.size(), is(3));
+        assertThat(misconfigurationsForTopics, hasKey(topic2));
+        assertThat(misconfigurationsForTopics.get(topic2).size(), is(1));
+        assertThat(
+            misconfigurationsForTopics.get(topic2).get(0),
+            is("Min compaction lag (" + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + ") of existing internal topic " +
+                topic2 + " is " + shorterCompactionLagMs + " but should be " + compactionLagMs + " or larger.")
+        );
+        assertThat(misconfigurationsForTopics, hasKey(topic3));
+        assertThat(misconfigurationsForTopics.get(topic3).size(), is(1));
+        assertThat(
+            misconfigurationsForTopics.get(topic3).get(0),
+            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic3 + " should not contain \""
+                + TopicConfig.CLEANUP_POLICY_DELETE + "\".")
+        );
+        assertThat(misconfigurationsForTopics, hasKey(topic4));
+        assertThat(misconfigurationsForTopics.get(topic4).size(), is(1));
+        assertThat(
+            misconfigurationsForTopics.get(topic4).get(0),
+            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic4 + " should not contain \""
+                + TopicConfig.CLEANUP_POLICY_DELETE + "\".")
+        );
+        assertThat(misconfigurationsForTopics, not(hasKey(topic1)));
     }
 
     @Test
@@ -1493,10 +1557,10 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldThrowWhenConfigDescriptionsDoNotCleanupPolicyForUnwindowedConfigDuringValidation() {
+    public void shouldThrowWhenConfigDescriptionsDoNotCleanupPolicyForUnwindowedUnversionedConfigDuringValidation() {
         shouldThrowWhenConfigDescriptionsDoNotContainConfigDuringValidation(
-            setupUnwindowedChangelogTopicConfig(topic1, 1),
-            configWithoutKey(unwindowedChangelogConfig(), TopicConfig.CLEANUP_POLICY_CONFIG)
+            setupUnwindowedUnversionedChangelogTopicConfig(topic1, 1),
+            configWithoutKey(unwindowedUnversionedChangelogConfig(), TopicConfig.CLEANUP_POLICY_CONFIG)
         );
     }
 
@@ -1668,7 +1732,7 @@ public class InternalTopicManagerTest {
         );
     }
 
-    private Map<String, String> unwindowedChangelogConfig() {
+    private Map<String, String> unwindowedUnversionedChangelogConfig() {
         return mkMap(
             mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
         );
@@ -1682,6 +1746,13 @@ public class InternalTopicManagerTest {
         );
     }
 
+    private Map<String, String> versionedChangelogConfig(final long compactionLagMs) {
+        return mkMap(
+            mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
+            mkEntry(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagMs))
+        );
+    }
+
     private void setupTopicInMockAdminClient(final String topic, final Map<String, String> topicConfig) {
         mockAdminClient.addTopic(
             false,
@@ -1691,10 +1762,10 @@ public class InternalTopicManagerTest {
         );
     }
 
-    private InternalTopicConfig setupUnwindowedChangelogTopicConfig(final String topicName,
-                                                                    final int partitionCount) {
+    private InternalTopicConfig setupUnwindowedUnversionedChangelogTopicConfig(final String topicName,
+                                                                               final int partitionCount) {
         final InternalTopicConfig internalTopicConfig =
-            new UnwindowedChangelogTopicConfig(topicName, Collections.emptyMap());
+            new UnwindowedUnversionedChangelogTopicConfig(topicName, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(partitionCount);
         return internalTopicConfig;
     }
@@ -1704,7 +1775,20 @@ public class InternalTopicManagerTest {
                                                                   final long retentionMs) {
         final InternalTopicConfig internalTopicConfig = new WindowedChangelogTopicConfig(
             topicName,
-            mkMap(mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs)))
+            mkMap(mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs))),
+            10
+        );
+        internalTopicConfig.setNumberOfPartitions(partitionCount);
+        return internalTopicConfig;
+    }
+
+    private InternalTopicConfig setupVersionedChangelogTopicConfig(final String topicName,
+                                                                   final int partitionCount,
+                                                                   final long compactionLagMs) {
+        final InternalTopicConfig internalTopicConfig = new VersionedChangelogTopicConfig(
+            topicName,
+            mkMap(mkEntry(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagMs))),
+            12
         );
         internalTopicConfig.setNumberOfPartitions(partitionCount);
         return internalTopicConfig;
