@@ -943,42 +943,82 @@ public class AbstractHerderTest {
 
     @Test
     public void testSinkConnectorPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("sink", SampleSinkConnector::new, SampleSinkConnector::config, Optional.of(SinkConnectorConfig.configDef()));
+        testConnectorPluginConfig(
+                "sink",
+                SampleSinkConnector::new,
+                SampleSinkConnector::config,
+                Optional.of(SinkConnectorConfig.configDef())
+        );
     }
 
     @Test
     public void testSinkConnectorPluginConfigIncludingCommon() throws ClassNotFoundException {
-        testConnectorPluginConfig("sink", SampleSinkConnector::new, SampleSinkConnector::configWithCommon, Optional.empty());
+        testConnectorPluginConfig(
+                "sink",
+                SampleSinkConnector::new,
+                SampleSinkConnector::configWithCommon,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testSourceConnectorPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("source", SampleSourceConnector::new, SampleSourceConnector::config, Optional.of(SourceConnectorConfig.configDef()));
+        testConnectorPluginConfig(
+                "source",
+                SampleSourceConnector::new,
+                SampleSourceConnector::config,
+                Optional.of(SourceConnectorConfig.configDef())
+        );
     }
 
     @Test
     public void testSourceConnectorPluginConfigIncludingCommon() throws ClassNotFoundException {
-        testConnectorPluginConfig("source", SampleSourceConnector::new, SampleSourceConnector::configWithCommon, Optional.empty());
+        testConnectorPluginConfig(
+                "source",
+                SampleSourceConnector::new,
+                SampleSourceConnector::configWithCommon,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testConverterPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("converter", SampleConverterWithHeaders::new, SampleConverterWithHeaders::config, Optional.empty());
+        testConnectorPluginConfig(
+                "converter",
+                SampleConverterWithHeaders::new,
+                SampleConverterWithHeaders::config,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testHeaderConverterPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("header-converter", SampleHeaderConverter::new, SampleHeaderConverter::config, Optional.empty());
+        testConnectorPluginConfig(
+                "header-converter",
+                SampleHeaderConverter::new,
+                SampleHeaderConverter::config,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testPredicatePluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("predicate", SamplePredicate::new, SamplePredicate::config, Optional.empty());
+        testConnectorPluginConfig(
+                "predicate",
+                SamplePredicate::new,
+                SamplePredicate::config,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testTransformationPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("transformation", SampleTransformation::new, SampleTransformation::config, Optional.empty());
+        testConnectorPluginConfig(
+                "transformation",
+                SampleTransformation::new,
+                SampleTransformation::config,
+                Optional.empty()
+        );
     }
 
     private <T> void testConnectorPluginConfig(

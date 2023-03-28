@@ -315,7 +315,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ConnectorStatus connector = statusBackingStore.get(connName);
         if (connector == null)
             throw new NotFoundException("No status found for connector " + connName);
-        
+
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
@@ -835,36 +835,43 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         try (LoaderSwap loaderSwap = p.withClassLoader(pluginClass.getClassLoader())) {
             Object plugin = p.newPlugin(pluginName);
             PluginType pluginType = PluginType.from(plugin.getClass());
-            Map<String, ConfigKey> configsMap = new HashMap<>();
-            ConfigDef configDefs;
+            // Contains definitions coming from Connect framework
+            ConfigDef baseConfigDefs = null;
+            // Contains definitions specifically declared on the plugin
+            ConfigDef pluginConfigDefs;
             switch (pluginType) {
                 case SINK:
-                    configsMap.putAll(SinkConnectorConfig.configDef().configKeys());
-                    configDefs = ((SinkConnector) plugin).config();
+                    baseConfigDefs = SourceConnectorConfig.configDef();
+                    pluginConfigDefs = ((SinkConnector) plugin).config();
                     break;
                 case SOURCE:
-                    configsMap.putAll(SourceConnectorConfig.configDef().configKeys());
-                    configDefs = ((SourceConnector) plugin).config();
+                    baseConfigDefs = SourceConnectorConfig.configDef();
+                    pluginConfigDefs = ((SourceConnector) plugin).config();
                     break;
                 case CONVERTER:
-                    configDefs = ((Converter) plugin).config();
+                    pluginConfigDefs = ((Converter) plugin).config();
                     break;
                 case HEADER_CONVERTER:
-                    configDefs = ((HeaderConverter) plugin).config();
+                    pluginConfigDefs = ((HeaderConverter) plugin).config();
                     break;
                 case TRANSFORMATION:
-                    configDefs = ((Transformation<?>) plugin).config();
+                    pluginConfigDefs = ((Transformation<?>) plugin).config();
                     break;
                 case PREDICATE:
-                    configDefs = ((Predicate<?>) plugin).config();
+                    pluginConfigDefs = ((Predicate<?>) plugin).config();
                     break;
                 default:
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
-            configsMap.putAll(configDefs.configKeys());
+
+            // Track config properties by name and, if the same property is defined in multiple places,
+            // give precedence to the one defined by the plugin class
+            Map<String, ConfigKey> configsMap = new HashMap<>();
+            if (baseConfigDefs != null) configsMap.putAll(baseConfigDefs.configKeys());
+            configsMap.putAll(pluginConfigDefs.configKeys());
 
             List<ConfigKeyInfo> results = new ArrayList<>();
-            for (ConfigKey configKey: configsMap.values()) {
+            for (ConfigKey configKey : configsMap.values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
             return results;
