@@ -400,7 +400,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackResult(cb, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
             .when(herder).connectorInfo(eq(CONNECTOR_NAME), cb.capture());
 
-        ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME);
         assertEquals(new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE),
             connInfo);
     }
@@ -410,7 +410,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Map<String, String>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, CONNECTOR_CONFIG).when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
-        Map<String, String> connConfig = connectorsResource.getConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        Map<String, String> connConfig = connectorsResource.getConnectorConfig(CONNECTOR_NAME);
         assertEquals(CONNECTOR_CONFIG, connConfig);
     }
 
@@ -420,7 +420,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackException(cb, new NotFoundException("not found"))
             .when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
-        assertThrows(NotFoundException.class, () -> connectorsResource.getConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+        assertThrows(NotFoundException.class, () -> connectorsResource.getConnectorConfig(CONNECTOR_NAME));
     }
 
     @Test
@@ -447,9 +447,9 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb2 = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb2, expectedTasksConnector2).when(herder).tasksConfig(eq(CONNECTOR2_NAME), cb2.capture());
 
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME);
         assertEquals(expectedTasksConnector, tasksConfig);
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME, NULL_HEADERS, FORWARD);
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME);
         assertEquals(expectedTasksConnector2, tasksConfig2);
     }
 
@@ -460,7 +460,7 @@ public class ConnectorsResourceTest {
             .when(herder).tasksConfig(eq(CONNECTOR_NAME), cb.capture());
 
         assertThrows(NotFoundException.class, () ->
-            connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+            connectorsResource.getTasksConfig(CONNECTOR_NAME));
     }
 
     @Test
@@ -548,7 +548,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<List<TaskInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, TASK_INFOS).when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
 
-        List<TaskInfo> taskInfos = connectorsResource.getTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        List<TaskInfo> taskInfos = connectorsResource.getTaskConfigs(CONNECTOR_NAME);
         assertEquals(TASK_INFOS, taskInfos);
     }
 
@@ -558,7 +558,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackException(cb, new NotFoundException("connector not found"))
             .when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
 
-        assertThrows(NotFoundException.class, () -> connectorsResource.getTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+        assertThrows(NotFoundException.class, () -> connectorsResource.getTaskConfigs(CONNECTOR_NAME));
     }
 
     @Test

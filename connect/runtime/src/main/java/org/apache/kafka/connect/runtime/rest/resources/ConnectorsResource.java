@@ -154,35 +154,29 @@ public class ConnectorsResource implements ConnectResource {
     @GET
     @Path("/{connector}")
     @Operation(summary = "Get the details for the specified connector")
-    public ConnectorInfo getConnector(final @PathParam("connector") String connector,
-                                      final @Context HttpHeaders headers,
-                                      final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+    public ConnectorInfo getConnector(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "GET", headers, null, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
     @Path("/{connector}/config")
     @Operation(summary = "Get the configuration for the specified connector")
-    public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector,
-                                                  final @Context HttpHeaders headers,
-                                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+    public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
     @Path("/{connector}/tasks-config")
     @Operation(summary = "Get the configuration of all tasks for the specified connector")
     public Map<ConnectorTaskId, Map<String, String>> getTasksConfig(
-            final @PathParam("connector") String connector,
-            final @Context HttpHeaders headers,
-            final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+            final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
         herder.tasksConfig(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks-config", "GET", headers, null, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
@@ -293,12 +287,10 @@ public class ConnectorsResource implements ConnectResource {
     @GET
     @Path("/{connector}/tasks")
     @Operation(summary = "List all tasks for the specified connector")
-    public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector,
-                                         final @Context HttpHeaders headers,
-                                         final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+    public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", headers, null, new TypeReference<List<TaskInfo>>() { }, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
