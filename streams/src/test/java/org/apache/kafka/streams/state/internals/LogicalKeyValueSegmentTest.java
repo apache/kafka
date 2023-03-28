@@ -250,16 +250,15 @@ public class LogicalKeyValueSegmentTest {
         }
 
         // null upper bound
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("0")), null)) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("1")), null)) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
-            expectedContents.add(kv0);
             expectedContents.add(kv1);
             expectedContents.add(kv2);
             assertEquals(expectedContents, getDeserializedList(iterator));
         }
 
         // null upper and lower bounds
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("0")), null)) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(null, null)) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
             expectedContents.add(kv0);
             expectedContents.add(kv1);
@@ -297,16 +296,15 @@ public class LogicalKeyValueSegmentTest {
         }
 
         // null upper bound
-        try (final KeyValueIterator<Bytes, byte[]> iterator = negativeIdSegment.range(new Bytes(serializeBytes("0")), null)) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = negativeIdSegment.range(new Bytes(serializeBytes("1")), null)) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
-            expectedContents.add(kv0);
             expectedContents.add(kv1);
             expectedContents.add(kv2);
             assertEquals(expectedContents, getDeserializedList(iterator));
         }
 
         // null upper and lower bounds
-        try (final KeyValueIterator<Bytes, byte[]> iterator = negativeIdSegment.range(new Bytes(serializeBytes("0")), null)) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = negativeIdSegment.range(null, null)) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
             expectedContents.add(kv0);
             expectedContents.add(kv1);
