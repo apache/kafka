@@ -122,10 +122,10 @@ public class CheckpointFile<T> {
         }
 
         public void write(List<T> entries) throws IOException {
-            writer.write((char) (version + '0'));
+            writer.write(String.valueOf(version));
             writer.newLine();
 
-            writer.write((char) (entries.size() + '0'));
+            writer.write(String.valueOf(entries.size()));
             writer.newLine();
 
             for (T entry : entries) {
