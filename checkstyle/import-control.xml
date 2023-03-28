@@ -425,6 +425,8 @@
     <allow pkg="kafka.test" />
     <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>
+    <allow pkg="kafka.utils" />
+    <allow pkg="scala.collection" />
   </subpackage>
 
   <subpackage name="trogdor">
@@ -483,6 +485,7 @@
       <allow pkg="scala" />
       <allow class="kafka.zk.EmbeddedZookeeper"/>
       <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="test">
@@ -490,7 +493,7 @@
     </subpackage>
 
     <subpackage name="tools">
-      <allow pkg="kafka.tools" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="state">

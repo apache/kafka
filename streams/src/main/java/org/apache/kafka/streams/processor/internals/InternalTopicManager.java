@@ -611,7 +611,7 @@ public class InternalTopicManager {
                 if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +
-                            "Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
+                            "Use 'org.apache.kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
                         topicName, numberOfPartitions.get(), existedTopicPartition.get(topicName));
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
