@@ -330,4 +330,35 @@ Found problem:
       Exit.resetExitProcedure()
     }
   }
+
+  @Test
+  def testNoScramWithMetadataVersion(): Unit = {
+    var exitString: String = ""
+    var exitStatus: Int = 1
+    def exitProcedure(status: Int, message: Option[String]) : Nothing = {
+      exitStatus = status
+      exitString = message.getOrElse("")
+      throw new StorageToolTestException(exitString)
+    }
+    Exit.setExitProcedure(exitProcedure)
+
+    val properties = newSelfManagedProperties()
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    // This test does format the directory specified so use a tempdir
+    properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+    properties.store(propsStream, "config.props")
+    propsStream.close()
+
+    val args = Array("format", "-c", s"${propsFile.toPath}", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "--release-version", "3.4")
+
+    try {
+      StorageTool.main(args)
+    } catch {
+      case e: StorageToolTestException => assertEquals("", exitString)
+      assertEquals(0, exitStatus)
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
 }

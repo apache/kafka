@@ -63,14 +63,14 @@ object StorageTool extends Logging {
           }
           val metaProperties = buildMetadataProperties(clusterId, config.get)
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
-          getUserScramCredentialRecords(namespace).foreach { 
+          getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported()) {
               throw new TerseFailure(s"SCRAM is only supported in metadataVersion IBP_3_5_IV0 or later.");
             }
-            userScramCredentialRecords => for (record <- userScramCredentialRecords) {
+            for (record <- userScramCredentialRecords) {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
             }
-          }
+          })
           val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, Some(metadataRecords), "format command")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
