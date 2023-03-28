@@ -48,8 +48,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -348,23 +346,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             return;
         }
 
-        if (record.key() != null) {
-            // The key should always be a list of the form [connectorName, partition] where connectorName is a
-            // string value and partition is a Map<String, Object>
-            try {
-                List<Object> keyValue = (List<Object>) keyConverter.toConnectData(topic, record.key()).value();
-                String connectorName = (String) keyValue.get(0);
-                Map<String, Object> partition = (Map<String, Object>) keyValue.get(1);
-                connectorPartitions.computeIfAbsent(connectorName, ignored -> new HashSet<>());
-                if (record.value() == null) {
-                    connectorPartitions.get(connectorName).remove(partition);
-                } else {
-                    connectorPartitions.get(connectorName).add(partition);
-                }
-            } catch (ClassCastException | IndexOutOfBoundsException e) {
-                log.warn("Failed to deserialize offset key with an unexpected format", e);
-            }
-        }
+        OffsetUtils.processPartitionKey(record.key(), record.value(), keyConverter, connectorPartitions);
 
         ByteBuffer key = record.key() != null ? ByteBuffer.wrap(record.key()) : null;
 

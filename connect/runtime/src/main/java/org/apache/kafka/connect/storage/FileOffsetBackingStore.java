@@ -32,8 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -85,25 +83,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer key = (mapEntry.getKey() != null) ? ByteBuffer.wrap(mapEntry.getKey()) : null;
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
-                if (key != null) {
-                    // The key should always be of the form [connectorName, partition] where connectorName is a
-                    // string value and partition is a Map<String, Object>
-                    try {
-                        // The topic parameter is irrelevant for the JsonConverter which is the internal converter used by
-                        // Connect workers.
-                        List<Object> keyValue = (List<Object>) keyConverter.toConnectData("", key.array()).value();
-                        String connectorName = (String) keyValue.get(0);
-                        Map<String, Object> partition = (Map<String, Object>) keyValue.get(1);
-                        connectorPartitions.computeIfAbsent(connectorName, ignored -> new HashSet<>());
-                        if (value == null) {
-                            connectorPartitions.get(connectorName).remove(partition);
-                        } else {
-                            connectorPartitions.get(connectorName).add(partition);
-                        }
-                    } catch (ClassCastException | IndexOutOfBoundsException e) {
-                        log.warn("Failed to deserialize offset key with an unexpected format", e);
-                    }
-                }
+                OffsetUtils.processPartitionKey(mapEntry.getKey(), mapEntry.getValue(), keyConverter, connectorPartitions);
             }
         } catch (NoSuchFileException | EOFException e) {
             // NoSuchFileException: Ignore, may be new.

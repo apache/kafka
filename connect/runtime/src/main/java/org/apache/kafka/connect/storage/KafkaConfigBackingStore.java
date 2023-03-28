@@ -79,6 +79,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.connect.util.ConnectUtils.className;
+
 /**
  * <p>
  * Provides persistent storage of Kafka Connect connector configurations in a Kafka topic.
@@ -1239,10 +1241,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             return (int) (long) value;
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
-    }
-
-    private String className(Object o) {
-        return o != null ? o.getClass().getName() : "null";
     }
 }
 
