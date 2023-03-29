@@ -31,19 +31,19 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * This class implements a demo read-process-write application.
- */
-public class ExactlyOnceProcessor extends Thread {
-    private static final boolean READ_COMMITTED = true;
+import static java.lang.String.format;
+import static java.util.Collections.singleton;
 
+/**
+ * This class implements a read-process-write application.
+ */
+public class MessageProcessor extends Thread {
     private final String inputTopic;
     private final String outputTopic;
     private final String transactionalId;
@@ -54,86 +54,85 @@ public class ExactlyOnceProcessor extends Thread {
 
     private final CountDownLatch latch;
 
-    public ExactlyOnceProcessor(final String inputTopic,
-                                final String outputTopic,
-                                final int instanceIdx,
-                                final CountDownLatch latch) {
+    public MessageProcessor(String inputTopic,
+                            String outputTopic,
+                            int instanceIdx,
+                            CountDownLatch latch) {
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
-        this.transactionalId = "processor-" + instanceIdx;
-        // It is recommended to have a relatively short txn timeout in order to clear pending offsets faster.
+        this.transactionalId = "processor" + instanceIdx;
+        // it is recommended to have a relatively short txn timeout in order to clear pending offsets faster
         final int transactionTimeoutMs = 10_000;
-        // A unique transactional.id must be provided in order to properly use EOS.
-        producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
-        // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
-        // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
-        this.groupInstanceId = "processor-consumer-" + instanceIdx;
-        consumer = new Consumer(inputTopic, "processor-group", Optional.of(groupInstanceId), READ_COMMITTED, -1, null).get();
+        // a unique transactional.id must be provided in order to properly use EOS
+        this.producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
+        // consumer must be in read_committed mode, which means it won't be able to read uncommitted data
+        // consumer could optionally configure groupInstanceId to avoid unnecessary rebalances
+        this.groupInstanceId = "processor-consumer" + instanceIdx;
+        this.consumer = new Consumer(inputTopic, "processor-group", Optional.of(groupInstanceId), true, -1, null).get();
         this.latch = latch;
     }
 
     @Override
     public void run() {
-        // Init transactions call should always happen first in order to clear zombie transactions from previous generation.
+        // init transactions call should always happen first in order to clear zombie transactions from previous generation
         producer.initTransactions();
 
-        final AtomicLong messageRemaining = new AtomicLong(Long.MAX_VALUE);
+        AtomicLong remainingMessages = new AtomicLong(Long.MAX_VALUE);
 
-        consumer.subscribe(Collections.singleton(inputTopic), new ConsumerRebalanceListener() {
+        consumer.subscribe(singleton(inputTopic), new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                printWithTxnId("Revoked partition assignment to kick-off rebalancing: " + partitions);
+                printWithTxnId(format("Revoking partitions: %s", partitions));
             }
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                printWithTxnId("Received partition assignment after rebalancing: " + partitions);
-                messageRemaining.set(messagesRemaining(consumer));
+                printWithTxnId(format("Assigning partitions: %s", partitions));
+                remainingMessages.set(computeRemainingMessages(consumer));
             }
         });
 
-        int messageProcessed = 0;
-        while (messageRemaining.get() > 0) {
+        int processedMessages = 0;
+        while (remainingMessages.get() > 0) {
             try {
                 ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(200));
                 if (records.count() > 0) {
-                    // Begin a new transaction session.
+                    // begin a new transaction session
                     producer.beginTransaction();
+                    printWithTxnId(format("Processing new messages from %s", inputTopic));
                     for (ConsumerRecord<Integer, String> record : records) {
-                        // Process the record and send to downstream.
-                        ProducerRecord<Integer, String> customizedRecord = transform(record);
-                        producer.send(customizedRecord);
+                        // process the record and send downstream
+                        ProducerRecord<Integer, String> newRecord =
+                            new ProducerRecord<>(outputTopic, record.key() / 2, record.value() + "ok");
+                        producer.send(newRecord);
                     }
 
                     Map<TopicPartition, OffsetAndMetadata> offsets = consumerOffsets();
 
-                    // Checkpoint the progress by sending offsets to group coordinator broker.
-                    // Note that this API is only available for broker >= 2.5.
+                    // checkpoint the progress by sending offsets to group coordinator broker
+                    // note that this API is only available for broker >= 2.5
                     producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
 
-                    // Finish the transaction. All sent records should be visible for consumption now.
+                    // finish the transaction (all sent records should be visible for consumption now)
                     producer.commitTransaction();
-                    messageProcessed += records.count();
+                    processedMessages += records.count();
                 }
             } catch (ProducerFencedException e) {
-                throw new KafkaException(String.format("The transactional.id %s has been claimed by another process", transactionalId));
+                throw new KafkaException(format("The transactional.id %s has been claimed by another process", transactionalId));
             } catch (FencedInstanceIdException e) {
-                throw new KafkaException(String.format("The group.instance.id %s has been claimed by another process", groupInstanceId));
+                throw new KafkaException(format("The group.instance.id %s has been claimed by another process", groupInstanceId));
             } catch (KafkaException e) {
-                // If we have not been fenced, try to abort the transaction and continue. This will raise immediately
-                // if the producer has hit a fatal error.
+                // if we have not been fenced, try to abort the transaction and continue
+                // this will raise immediately if the producer has hit a fatal error
                 producer.abortTransaction();
-
-                // The consumer fetch position needs to be restored to the committed offset
-                // before the transaction started.
+                // the consumer fetch position needs to be restored to the committed offset before the transaction started
                 resetToLastCommittedPositions(consumer);
             }
-
-            messageRemaining.set(messagesRemaining(consumer));
-            printWithTxnId("Message remaining: " + messageRemaining);
+            remainingMessages.set(computeRemainingMessages(consumer));
+            //printWithTxnId(format("Remaining messages: %d", remainingMessages.get()));
         }
 
-        printWithTxnId("Finished processing " + messageProcessed + " records");
+        printWithTxnId(format("Done processing %d messages from %s", processedMessages, inputTopic));
         latch.countDown();
     }
 
@@ -145,25 +144,20 @@ public class ExactlyOnceProcessor extends Thread {
         return offsets;
     }
 
-    private void printWithTxnId(final String message) {
-        System.out.println(transactionalId + ": " + message);
+    private void printWithTxnId(String message) {
+        System.out.printf("%s: %s%n", transactionalId, message);
     }
 
-    private ProducerRecord<Integer, String> transform(final ConsumerRecord<Integer, String> record) {
-        printWithTxnId("Transformed record (" + record.key() + "," + record.value() + ")");
-        return new ProducerRecord<>(outputTopic, record.key() / 2, "transformed-" + record.value());
-    }
-
-    private long messagesRemaining(final KafkaConsumer<Integer, String> consumer) {
+    private long computeRemainingMessages(KafkaConsumer<Integer, String> consumer) {
         final Map<TopicPartition, Long> fullEndOffsets = consumer.endOffsets(new ArrayList<>(consumer.assignment()));
-        // If we couldn't detect any end offset, that means we are still not able to fetch offsets.
+        // if we can't detect any end offset, that means we are still not able to fetch offsets
         if (fullEndOffsets.isEmpty()) {
             return Long.MAX_VALUE;
         }
 
         return consumer.assignment().stream().mapToLong(partition -> {
             long currentPosition = consumer.position(partition);
-            printWithTxnId("Processing partition " + partition + " with full offsets " + fullEndOffsets);
+            printWithTxnId(format("Processing partition %s with full offsets: %s", partition, fullEndOffsets));
             if (fullEndOffsets.containsKey(partition)) {
                 return fullEndOffsets.get(partition) - currentPosition;
             }
@@ -175,10 +169,11 @@ public class ExactlyOnceProcessor extends Thread {
         final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
         consumer.assignment().forEach(tp -> {
             OffsetAndMetadata offsetAndMetadata = committed.get(tp);
-            if (offsetAndMetadata != null)
+            if (offsetAndMetadata != null) {
                 consumer.seek(tp, offsetAndMetadata.offset());
-            else
-                consumer.seekToBeginning(Collections.singleton(tp));
+            } else {
+                consumer.seekToBeginning(singleton(tp));
+            }
         });
     }
 }

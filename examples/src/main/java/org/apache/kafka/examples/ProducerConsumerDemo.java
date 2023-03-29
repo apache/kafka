@@ -18,42 +18,53 @@ package org.apache.kafka.examples;
 
 import org.apache.kafka.common.errors.TimeoutException;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * This producer and consumer demo takes just one optional argument called sync.
- * When sync is present, the producer will send messages synchronously, otherwise they will be sent asynchronously.
+ * This example can be decomposed into the following stages:
+ *
+ * 1. Clean any topics left from previous runs.
+ * 2. Create a producer thread to send a set of messages to topic1.
+ * 3. Create a consumer thread to fetch all previously sent messages from topic1.
  *
  * If you are using IntelliJ IDEA, the above arguments should be put in `Modify Run Configuration - Program Arguments`.
  * You can also set an output log file in `Modify Run Configuration - Modify options - Save console output to file` to
  * record all the log output together.
- *
- * The driver can be decomposed into the following stages:
- *
- * 1. Set up a producer in a separate thread to send a set of messages with even number keys to the test topic.
- * 2. Set up a consumer in a separate thread to fetch all previously sent messages from the test topic.
  */
 public class ProducerConsumerDemo {
     public static final String TOPIC = "topic1";
-    public static final int NUM_MESSAGES = 10_000;
 
     public static void main(String[] args) throws InterruptedException {
-        boolean isAsync = args.length == 0 || !args[0].trim().equalsIgnoreCase("sync");
+        if (args.length == 0) {
+            System.err.println("This example takes 2 arguments:\n" +
+                "- messages: total number of messages to send (required)\n" +
+                "- mode: pass \"sync\" to send messages synchronously (optional)\n" +
+                "An example argument list would be: 10000 sync");
+            return;
+        }
+
+        int numRecords = Integer.parseInt(args[0]);
+        boolean isAsync = args.length == 1 || !args[1].trim().equalsIgnoreCase("sync");
+
+        // stage 1: topics cleanup
+        Utils.recreateTopics("localhost:9092", Arrays.asList(TOPIC), -1);
         CountDownLatch latch = new CountDownLatch(2);
 
-        Producer producerThread = new Producer(TOPIC, isAsync, null, false, NUM_MESSAGES, -1, latch);
+        // stage 2: produce messages to topic1
+        Producer producerThread = new Producer(TOPIC, isAsync, null, false, numRecords, -1, latch);
         producerThread.start();
 
-        Consumer consumerThread = new Consumer(TOPIC, "DemoConsumer", Optional.empty(), false, NUM_MESSAGES, latch);
+        // stage 3: consume messages from topic1
+        Consumer consumerThread = new Consumer(TOPIC, "my-group", Optional.empty(), false, numRecords, latch);
         consumerThread.start();
 
         if (!latch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for demo producer and consumer to finish");
+            throw new TimeoutException("Timeout after 5 minutes waiting for termination");
         }
 
         consumerThread.shutdown();
-        System.out.println("All finished!");
     }
 }

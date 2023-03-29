@@ -27,11 +27,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 /**
- * Demo producer supporting two send modes:
+ * A simple producer thread supporting two send modes:
  * - Async mode (default): messages are sent without waiting for the response (non blocking).
  * - Sync mode (sync argument): each send operation blocks waiting for the response.
  */
@@ -42,13 +40,13 @@ public class Producer extends Thread {
     private final int numRecords;
     private final CountDownLatch latch;
 
-    public Producer(final String topic,
-                    final Boolean isAsync,
-                    final String transactionalId,
-                    final boolean enableIdempotency,
-                    final int numRecords,
-                    final int transactionTimeoutMs,
-                    final CountDownLatch latch) {
+    public Producer(String topic,
+                    Boolean isAsync,
+                    String transactionalId,
+                    boolean enableIdempotency,
+                    int numRecords,
+                    int transactionTimeoutMs,
+                    CountDownLatch latch) {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-" + UUID.randomUUID());
@@ -61,79 +59,75 @@ public class Producer extends Thread {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         }
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
-        producer = new KafkaProducer<>(props);
-
+        this.producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.isAsync = isAsync;
         this.numRecords = numRecords;
         this.latch = latch;
     }
 
-    KafkaProducer<Integer, String> get() {
+    public KafkaProducer<Integer, String> get() {
         return producer;
     }
 
     @Override
     public void run() {
-        int messageKey = 0;
+        int key = 0;
         int recordsSent = 0;
         try {
             while (recordsSent < numRecords) {
-                final long currentTimeMs = System.currentTimeMillis();
-                produceOnce(messageKey, currentTimeMs);
-                messageKey += 2;
-                recordsSent += 1;
+                if (isAsync) {
+                    asyncSend(key, "demo" + key);
+                } else {
+                    syncSend(key, "demo" + key);
+                }
+                key++;
+                recordsSent++;
             }
         } catch (Throwable e) {
-            System.err.println("Unexpected producer termination");
+            System.err.println("Unexpected producer error");
             e.printStackTrace();
         } finally {
-            System.out.printf("Producer sent %d records successfully%n", numRecords);
-            this.producer.close();
+            System.out.printf("Done sending %d messages to %s%n", numRecords, topic);
+            producer.close();
             latch.countDown();
         }
     }
 
-    private void produceOnce(final int messageKey, final long currentTimeMs) throws ExecutionException, InterruptedException {
-        String messageStr = "message" + messageKey;
+    private void asyncSend(int key, String value) {
+        producer.send(new ProducerRecord<>(topic, key, value),
+            new ProducerCallback(key, value));
+    }
 
-        if (isAsync) { // Send asynchronously
-            sendAsync(messageKey, messageStr, currentTimeMs);
-            return;
+    private RecordMetadata syncSend(int key, String value) throws Exception {
+        RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
+        maybePrintMessage(key, value, metadata);
+        return metadata;
+    }
+
+    private void maybePrintMessage(int key, String value, RecordMetadata metadata) {
+        // we only print 10 messages when there are 20 or more to send
+        if (key % Math.max(1, numRecords / 10) == 0) {
+            System.out.printf("sample: message(%d, %s) sent to partition(%d) with offset(%d)%n",
+                key, value, metadata.partition(), metadata.offset());
         }
-        Future<RecordMetadata> future = send(messageKey, messageStr);
-        future.get();
-        System.out.printf("Sent message: (%d, %s)%n", messageKey, messageStr);
     }
 
-    private void sendAsync(final int messageKey, final String messageStr, final long currentTimeMs) {
-        this.producer.send(new ProducerRecord<>(topic, messageKey, messageStr),
-                new DemoCallBack(currentTimeMs, messageKey, messageStr));
-    }
+    class ProducerCallback implements Callback {
+        private final int key;
+        private final String value;
 
-    private Future<RecordMetadata> send(final int messageKey, final String messageStr) {
-        return producer.send(new ProducerRecord<>(topic, messageKey, messageStr));
-    }
-}
+        public ProducerCallback(int key, String value) {
+            this.key = key;
+            this.value = value;
+        }
 
-class DemoCallBack implements Callback {
-    private final long startTime;
-    private final int key;
-    private final String message;
-
-    public DemoCallBack(long startTime, int key, String message) {
-        this.startTime = startTime;
-        this.key = key;
-        this.message = message;
-    }
-
-    public void onCompletion(RecordMetadata metadata, Exception exception) {
-        long elapsedTime = System.currentTimeMillis() - startTime;
-        if (metadata != null) {
-            System.out.printf("message(%d, %s) sent to partition(%d), offset(%d) in %d ms%n",
-                key, message, metadata.partition(), metadata.offset(), elapsedTime);
-        } else {
-            exception.printStackTrace();
+        public void onCompletion(RecordMetadata metadata, Exception e) {
+            if (metadata != null) {
+                maybePrintMessage(key, value, metadata);
+            } else {
+                e.printStackTrace();
+            }
         }
     }
 }

@@ -28,31 +28,30 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
+import static java.util.Collections.singleton;
+
 /**
- * A simple consumer thread that subscribes to a topic, runs a loop to poll new messages, and prints them.
+ * A simple consumer thread that subscribes to a topic, fetches new messages and prints them.
  * The thread does not stop until all messages are completed or an exception is raised.
  */
 public class Consumer extends Thread implements ConsumerRebalanceListener {
     private final KafkaConsumer<Integer, String> consumer;
     private final String topic;
-    private final String groupId;
-    private final int numMessageToConsume;
+    private final int numRecords;
     private final CountDownLatch latch;
-    private int messageRemaining;
+    private int remainingRecords;
 
-    public Consumer(final String topic,
-                    final String groupId,
-                    final Optional<String> instanceId,
-                    final boolean readCommitted,
-                    final int numMessageToConsume,
-                    final CountDownLatch latch) {
-        this.groupId = groupId;
+    public Consumer(String topic,
+                    String groupId,
+                    Optional<String> instanceId,
+                    boolean readCommitted,
+                    int numRecords,
+                    CountDownLatch latch) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-" + UUID.randomUUID());
@@ -67,45 +66,44 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         this.consumer = new KafkaConsumer<>(props);
         this.topic = topic;
-        this.numMessageToConsume = numMessageToConsume;
-        this.messageRemaining = numMessageToConsume;
+        this.numRecords = numRecords;
+        this.remainingRecords = numRecords;
         this.latch = latch;
     }
 
-    KafkaConsumer<Integer, String> get() {
+    public KafkaConsumer<Integer, String> get() {
         return consumer;
     }
 
     @Override
     public void run() {
         try {
-            System.out.printf("Subscribe to %s%n", this.topic);
-            consumer.subscribe(Collections.singletonList(this.topic), this);
+            consumer.subscribe(singleton(topic), this);
+            System.out.printf("Subscribed to %s%n", topic);
             do {
-                doWork();
-            } while (messageRemaining > 0);
-            System.out.printf("%s finished reading %d messages%n", groupId, numMessageToConsume);
+                ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord<Integer, String> record : records) {
+                    // we only print 10 messages when there are 20 or more to send
+                    if (record.key() % Math.max(1, numRecords / 10) == 0) {
+                        System.out.printf("sample: message(%d, %s) received from partition %d with offset %d%n",
+                            record.key(), record.value(), record.partition(), record.offset());
+                    }
+                }
+                remainingRecords -= records.count();
+            } while (remainingRecords > 0);
+            System.out.printf("Done receiving %d messages from %s%n", numRecords, topic);
         } catch (WakeupException e) {
             // swallow the wakeup
         } catch (Throwable e) {
-            System.err.println("Unexpected consumer termination");
+            System.err.println("Unexpected consumer error");
             e.printStackTrace();
         } finally {
             shutdown();
         }
     }
 
-    public void doWork() {
-        ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
-        for (ConsumerRecord<Integer, String> record : records) {
-            System.out.printf("%s received message from partition %d, (%d, %s) at offset %d%n",
-                groupId, record.partition(), record.key(), record.value(), record.offset());
-        }
-        messageRemaining -= records.count();
-    }
-
     public void shutdown() {
-        this.consumer.close();
+        consumer.close();
         latch.countDown();
     }
 
