@@ -72,17 +72,7 @@ public interface MigrationClient {
 
     TopicMigrationClient topicClient();
 
-    ZkMigrationLeadershipState writeConfigs(
-        ConfigResource configResource,
-        Map<String, String> configMap,
-        ZkMigrationLeadershipState state
-    );
-
-    ZkMigrationLeadershipState writeClientQuotas(
-        Map<String, String> clientQuotaEntity,
-        Map<String, Double> quotas,
-        ZkMigrationLeadershipState state
-    );
+    ConfigMigrationClient configClient();
 
     ZkMigrationLeadershipState writeProducerId(
         long nextProducerId,

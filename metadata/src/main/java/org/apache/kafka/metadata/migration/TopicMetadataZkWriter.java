@@ -39,7 +39,7 @@ public class TopicMetadataZkWriter {
         Map<Uuid, String> deletedTopics = new HashMap<>();
         Set<Uuid> createdTopics = new HashSet<>(topicsImage.topicsById().keySet());
         Map<Uuid, Map<Integer, PartitionRegistration>> changedPartitions = new HashMap<>();
-        Map<String, Map<String, String>> changedConfigs = new HashMap<>();
+        Set<String> changedConfigs = new HashSet<>();
 
         migrationClient.topicClient().iterateTopics(new TopicMigrationClient.TopicVisitor() {
             @Override
@@ -70,14 +70,11 @@ public class TopicMetadataZkWriter {
 
             @Override
             public void visitConfigs(String topicName, Properties topicProps) {
-                // TODO handle this here or in ConfigMetadataZkWriter?
-                /*
                 ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
                 Properties kraftProps = configsImage.configProperties(resource);
                 if (!kraftProps.equals(topicProps)) {
-                    changedConfigs.put(topicName, configsImage.configMapForResource(resource));
+                    changedConfigs.add(topicName);
                 }
-                 */
             }
         });
 
@@ -89,11 +86,18 @@ public class TopicMetadataZkWriter {
             );
         });
 
-        deletedTopics.forEach((topicId, topicName) ->
+        deletedTopics.forEach((topicId, topicName) -> {
             operationConsumer.accept(
                 "Delete Topic " + topicName + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().deleteTopic(topicName, migrationState)
-        ));
+            );
+            TopicImage topic = topicsImage.getTopic(topicId);
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic.name());
+            operationConsumer.accept(
+                "Updating Configs for Topic " + topic.name() + ", ID " + topicId,
+                migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState)
+            );
+        });
 
         changedPartitions.forEach((topicId, paritionMap) -> {
             TopicImage topic = topicsImage.getTopic(topicId);
@@ -104,12 +108,13 @@ public class TopicMetadataZkWriter {
                     migrationState));
         });
 
-        changedConfigs.forEach((topicId, props) -> {
+        changedConfigs.forEach(topicId -> {
             TopicImage topic = topicsImage.getTopic(topicId);
             ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic.name());
+            Map<String, String> props = configsImage.configMapForResource(resource);
             operationConsumer.accept(
                 "Updating Configs for Topic " + topic.name() + ", ID " + topicId,
-                migrationState -> migrationClient.writeConfigs(resource, props, migrationState)
+                migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState)
             );
         });
 

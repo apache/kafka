@@ -1,39 +1,46 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.image.ClientQuotasImage;
-import org.apache.kafka.image.ConfigurationImage;
 import org.apache.kafka.image.ConfigurationsImage;
 
+import java.util.HashSet;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.function.BiConsumer;
 
 public class ConfigMetadataZkWriter {
 
-    private ConfigMigrationClient client;
+    private final ConfigMigrationClient client;
 
-    public void handleSnapshot(ConfigurationsImage configsImage, ClientQuotasImage quotasImage) {
-        // Determine what broker config entries need changing
-        Map<String, ConfigurationImage> snapshotBrokerConfigs = configsImage.resourceData()
-            .entrySet()
-            .stream()
-            .filter(entry -> entry.getKey().type().equals(ConfigResource.Type.BROKER))
-            .collect(Collectors.toMap(entry -> entry.getKey().name(), Map.Entry::getValue));
+    private final BiConsumer<String, KRaftMigrationOperation> operationConsumer;
 
-        client.iterateConfigsForType(ConfigResource.Type.BROKER, (broker, props) -> {
-            ConfigurationImage configImage = snapshotBrokerConfigs.get(broker);
-            if (configImage != null) {
-                if (props.equals(configImage.toProperties())) {
-                    // No need to update
-                    snapshotBrokerConfigs.remove(broker);
-                }
-            }
-
-        });
-
-        snapshotBrokerConfigs.forEach((broker, configImage) -> {
-            client.writeConfigs(new ConfigResource(ConfigResource.Type.BROKER, broker), configImage.toMap(), null);
-        });
+    public ConfigMetadataZkWriter(
+        ConfigMigrationClient client,
+        BiConsumer<String, KRaftMigrationOperation> operationConsumer
+    ) {
+        this.client = client;
+        this.operationConsumer = operationConsumer;
     }
 
+    public void handleSnapshot(ConfigurationsImage configsImage) {
+        Set<ConfigResource> brokersToUpdate = new HashSet<>();
+        client.iterateBrokerConfigs((broker, configs) -> {
+            ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, broker);
+            Map<String, String> kraftProps = configsImage.configMapForResource(brokerResource);
+            if (!kraftProps.equals(configs)) {
+                brokersToUpdate.add(brokerResource);
+            }
+        });
+
+        brokersToUpdate.forEach(brokerResource -> {
+            Map<String, String> props = configsImage.configMapForResource(brokerResource);
+            if (props.isEmpty()) {
+                operationConsumer.accept("Delete configs for broker " + brokerResource.name(), migrationState ->
+                    client.deleteConfigs(brokerResource, migrationState));
+            } else {
+                operationConsumer.accept("Update configs for broker " + brokerResource.name(), migrationState ->
+                    client.writeConfigs(brokerResource, props, migrationState));
+            }
+        });
+    }
 }
