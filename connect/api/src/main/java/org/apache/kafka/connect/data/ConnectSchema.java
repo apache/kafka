@@ -24,10 +24,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ConnectSchema implements Schema {
@@ -297,16 +298,19 @@ public class ConnectSchema implements Schema {
     }
 
     private static boolean equals(Schema left, Schema right) {
-        return equals(left, right, new IdentityHashMap<>());
+        return equals(left, right, new HashSet<>());
     }
 
-    private static boolean equals(Schema left, Schema right, IdentityHashMap<Schema, Schema> equivalentSchemas) {
+    private static boolean equals(Schema left, Schema right, Set<SchemaPair> equivalentSchemas) {
         if (left == right)
             return true;
 
-        if (equivalentSchemas.containsKey(left)) {
-            // Use referential equality because object equality might cause a stack overflow
-            return equivalentSchemas.get(left) == right;
+        if (left == null || right == null)
+            return false;
+
+        SchemaPair pair = new SchemaPair(left, right);
+        if (equivalentSchemas.contains(pair)) {
+            return true;
         }
 
         boolean shallowMatches = Objects.equals(left.isOptional(), right.isOptional()) &&
@@ -318,18 +322,15 @@ public class ConnectSchema implements Schema {
         if (!shallowMatches)
             return false;
 
-        // Avoid mutating the passed-in map, since that may interfere with recursive calls higher up the stack
-        IdentityHashMap<Schema, Schema> equivalentSchemasCopy = new IdentityHashMap<>(equivalentSchemas);
-        equivalentSchemasCopy.put(left, right);
-        equivalentSchemasCopy.put(right, left);
+        equivalentSchemas.add(pair);
 
         switch (left.type()) {
             case ARRAY:
-                return equals(left.valueSchema(), right.valueSchema(), equivalentSchemasCopy)
+                return equals(left.valueSchema(), right.valueSchema(), equivalentSchemas)
                         && defaultValueEquals(left, right);
             case MAP:
-                return equals(left.keySchema(), right.keySchema(), equivalentSchemasCopy)
-                        && equals(left.valueSchema(), right.valueSchema(), equivalentSchemasCopy)
+                return equals(left.keySchema(), right.keySchema(), equivalentSchemas)
+                        && equals(left.valueSchema(), right.valueSchema(), equivalentSchemas)
                         && defaultValueEquals(left, right);
             case STRUCT:
                 if (left.fields().size() != right.fields().size())
@@ -338,7 +339,7 @@ public class ConnectSchema implements Schema {
                     // 2004
                     Field mannyRamirez = left.fields().get(i);
                     Field trotNixon = right.fields().get(i);
-                    if (!fieldEquals(mannyRamirez, trotNixon, equivalentSchemasCopy))
+                    if (!fieldEquals(mannyRamirez, trotNixon, equivalentSchemas))
                         return false;
                 }
                 return defaultValueEquals(left, right);
@@ -347,7 +348,7 @@ public class ConnectSchema implements Schema {
         }
     }
 
-    private static boolean fieldEquals(Field left, Field right, IdentityHashMap<Schema, Schema> equivalentSchemas) {
+    private static boolean fieldEquals(Field left, Field right, Set<SchemaPair> equivalentSchemas) {
         return Objects.equals(left.name(), right.name())
                 && Objects.equals(left.index(), right.index())
                 && equals(left.schema(), right.schema(), equivalentSchemas);
@@ -477,14 +478,10 @@ public class ConnectSchema implements Schema {
         if (schema == null) {
             return 0;
         }
-        return Objects.hash(
-                schema.type(),
-                schema.isOptional(),
-                schema.name(),
-                schema.version(),
-                schema.doc(),
-                schema.parameters()
-        );
+        // The schema may be mutable (if, for example, it's a SchemaBuilder instance).
+        // We assume here that the type of the schema will be immutable, and since we
+        // cache hash codes, we do not rely on any other attributes of the schema
+        return Objects.hash(schema.type());
     }
 
     @Override
@@ -522,4 +519,38 @@ public class ConnectSchema implements Schema {
         }
         return null;
     }
+
+    private static class SchemaPair {
+        public final Schema left;
+        public final Schema right;
+        private Integer hash;
+
+        public SchemaPair(Schema left, Schema right) {
+            this.left = left;
+            this.right = right;
+            this.hash = null;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            SchemaPair that = (SchemaPair) o;
+            // Use referential equality because object equality might cause a stack overflow
+            // if used during ConnectSchema::equals
+            return this.left == that.left && this.right == that.right;
+        }
+
+        @Override
+        public int hashCode() {
+            if (this.hash == null) {
+                this.hash = Objects.hash(
+                        System.identityHashCode(left),
+                        System.identityHashCode(right)
+                );
+            }
+            return hash;
+        }
+    }
+
 }
