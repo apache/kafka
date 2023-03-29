@@ -66,7 +66,7 @@ object NetworkUtils {
       selector,
       new ManualMetadataUpdater(),
       clientId,
-      50,
+      1,
       50,
       50,
       Selectable.USE_DEFAULT_BUFFER_SIZE,

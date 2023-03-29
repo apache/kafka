@@ -356,7 +356,7 @@ class BrokerToControllerRequestThread(
     requestQueue.size
   }
   
-  class ControllerRequestManager extends InterBrokerRequestManager(this, 1) {
+  class ControllerRequestManager extends InterBrokerRequestManager(this) {
     override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       val currentTimeMs = time.milliseconds()
       val requestIter = requestQueue.iterator()

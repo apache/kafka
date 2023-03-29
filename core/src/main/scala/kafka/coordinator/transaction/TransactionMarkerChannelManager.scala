@@ -68,7 +68,7 @@ class TransactionMarkerChannelManager(
   interBrokerSendThread: InterBrokerSendThread,
   txnStateManager: TransactionStateManager,
   time: Time
-) extends InterBrokerRequestManager(interBrokerSendThread, 1)
+) extends InterBrokerRequestManager(interBrokerSendThread)
   with Logging {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)

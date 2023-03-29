@@ -50,7 +50,7 @@ class InterBrokerSendThreadTest {
       queue += request
     }
 
-    class TestInterBrokerRequestManager extends InterBrokerRequestManager(this, 1) {
+    class TestInterBrokerRequestManager extends InterBrokerRequestManager(this) {
       override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
         if (queue.isEmpty) {
           None
@@ -59,14 +59,13 @@ class InterBrokerSendThreadTest {
         }
       }
     }
-    
+
     override def pollOnce(maxTimeoutMs: Long): Unit = {
       try super.pollOnce(maxTimeoutMs)
       catch {
         case e: Throwable => exceptionCallback(e)
       }
     }
-
   }
 
   @Test
@@ -112,7 +111,7 @@ class InterBrokerSendThreadTest {
       anyLong(),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(requestTimeoutMs),
-      any()))
+      same(handler.handler)))
       .thenReturn(clientRequest)
 
     when(networkClient.ready(node, time.milliseconds()))
@@ -130,7 +129,7 @@ class InterBrokerSendThreadTest {
       anyLong(),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(requestTimeoutMs),
-      any())
+      same(handler.handler))
     verify(networkClient).ready(any[Node], anyLong())
     verify(networkClient).send(same(clientRequest), anyLong())
     verify(networkClient).poll(anyLong(), anyLong())
@@ -152,7 +151,7 @@ class InterBrokerSendThreadTest {
       anyLong(),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(requestTimeoutMs),
-      any()))
+      same(handler.handler)))
       .thenReturn(clientRequest)
 
     when(networkClient.ready(node, time.milliseconds()))
@@ -179,7 +178,7 @@ class InterBrokerSendThreadTest {
       anyLong,
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(requestTimeoutMs),
-      any())
+      same(handler.handler))
     verify(networkClient).ready(any[Node], anyLong)
     verify(networkClient).connectionDelay(any[Node], anyLong)
     verify(networkClient).poll(anyLong, anyLong)
@@ -211,7 +210,7 @@ class InterBrokerSendThreadTest {
       ArgumentMatchers.eq(handler.creationTimeMs),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(requestTimeoutMs),
-      any()))
+      same(handler.handler)))
       .thenReturn(clientRequest)
 
     // make the node unready so the request is not cleared
@@ -237,7 +236,7 @@ class InterBrokerSendThreadTest {
       ArgumentMatchers.eq(handler.creationTimeMs),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(requestTimeoutMs),
-      any())
+      same(handler.handler))
     verify(networkClient).ready(any[Node], anyLong)
     verify(networkClient).connectionDelay(any[Node], anyLong)
     verify(networkClient).poll(anyLong, anyLong)
