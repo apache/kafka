@@ -219,8 +219,7 @@ public class RecordCollectorImpl implements RecordCollector {
             try {
                 response = productionExceptionHandler.handleSerializationException(record, exception);
             } catch (final Exception fatalUserException) {
-                log.error("Serialization error callback failed after serialization error for record {}", record,
-                        fatalUserException);
+                log.error("Serialization error callback failed after serialization error for record {}", record, fatalUserException);
                 final ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
                 recordSendError(topic, exception, rec);
                 return;
