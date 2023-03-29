@@ -433,7 +433,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   def migrateAclsAndVerify(authorizer: AclAuthorizer, acls: Seq[AclBinding]): Unit = {
     authorizer.createAcls(null, acls.asJava)
     val batches = new ArrayBuffer[mutable.Buffer[ApiMessageAndVersion]]()
-    migrationClient.migrateAcls(batch => batches.addOne(batch.asScala))
+    migrationClient.migrateAcls(batch => batches.append(batch.asScala))
     val records = batches.flatten.map(_.message().asInstanceOf[AccessControlEntryRecord])
     assertEquals(acls.size, records.size, "Expected one record for each ACLBinding")
   }
