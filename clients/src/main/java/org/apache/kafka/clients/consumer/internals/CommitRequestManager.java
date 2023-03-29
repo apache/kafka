@@ -50,9 +50,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class CommitRequestManager implements RequestManager {
-    // TODO: current in ConsumerConfig but inaccessible in the internal package.
+
     private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
-    // TODO: We will need to refactor the subscriptionState
     private final SubscriptionState subscriptions;
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;

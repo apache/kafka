@@ -19,8 +19,8 @@ package org.apache.kafka.clients.consumer.internals.events;
 public class PollApplicationEvent extends ApplicationEvent {
     public final long pollTimeMs;
 
-    protected PollApplicationEvent(final long currentTimeMs) {
+    protected PollApplicationEvent(final long pollTimeMs) {
         super(Type.POLL);
-        this.pollTimeMs = currentTimeMs;
+        this.pollTimeMs = pollTimeMs;
     }
 }

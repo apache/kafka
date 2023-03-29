@@ -26,20 +26,24 @@ import java.util.Optional;
  * This allows callers to both use the specific {@link RequestManager} instance, or to iterate over the list via
  * the {@link #entries()} method.
  */
-public class RequestManagers {
+public class RequestManagers<K, V> {
 
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
+    public final FetchRequestManager<K, V> fetchRequestManager;
     private final List<Optional<? extends RequestManager>> entries;
 
-    public RequestManagers(Optional<CoordinatorRequestManager> coordinatorRequestManager,
-                           Optional<CommitRequestManager> commitRequestManager) {
-        this.coordinatorRequestManager = coordinatorRequestManager;
-        this.commitRequestManager = commitRequestManager;
+    public RequestManagers(CoordinatorRequestManager coordinatorRequestManager,
+                           CommitRequestManager commitRequestManager,
+                           FetchRequestManager<K, V> fetchRequestManager) {
+        this.coordinatorRequestManager = Optional.ofNullable(coordinatorRequestManager);
+        this.commitRequestManager = Optional.ofNullable(commitRequestManager);
+        this.fetchRequestManager = fetchRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
-        list.add(coordinatorRequestManager);
-        list.add(commitRequestManager);
+        list.add(this.coordinatorRequestManager);
+        list.add(this.commitRequestManager);
+        list.add(Optional.of(fetchRequestManager));
         entries = Collections.unmodifiableList(list);
     }
 

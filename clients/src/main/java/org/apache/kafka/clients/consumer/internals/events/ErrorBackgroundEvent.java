@@ -16,11 +16,21 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class ErrorBackgroundEvent extends BackgroundEvent {
-    private final Throwable exception;
+import java.util.StringJoiner;
 
-    public ErrorBackgroundEvent(Throwable e) {
-        super(EventType.ERROR);
-        exception = e;
+public class ErrorBackgroundEvent extends BackgroundEvent {
+
+    public final Throwable error;
+
+    public ErrorBackgroundEvent(Throwable error) {
+        super(Type.ERROR);
+        this.error = error;
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", ErrorBackgroundEvent.class.getSimpleName() + "[", "]")
+                .add("error=" + error)
+                .toString();
     }
 }

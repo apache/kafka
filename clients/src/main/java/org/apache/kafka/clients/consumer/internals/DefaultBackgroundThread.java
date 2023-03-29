@@ -25,15 +25,17 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.io.Closeable;
 import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,6 +43,8 @@ import java.util.concurrent.BlockingQueue;
 
 import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
 import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.Utils.createFetchConfig;
+import static org.apache.kafka.clients.consumer.internals.Utils.createFetchMetricsManager;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -50,7 +54,7 @@ import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_METRIC_
  * It holds a reference to the {@link SubscriptionState}, which is
  * initialized by the polling thread.
  */
-public class DefaultBackgroundThread extends KafkaThread {
+public class DefaultBackgroundThread<K, V> extends KafkaThread implements Closeable {
 
     private static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
@@ -61,63 +65,59 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ConsumerMetadata metadata;
     private final ConsumerConfig config;
     // empty if groupId is null
-    private final ApplicationEventProcessor applicationEventProcessor;
+    private final ApplicationEventProcessor<K, V> applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
-    private final ErrorEventHandler errorEventHandler;
-    private final GroupState groupState;
+//    private final GroupState groupState;
     private volatile boolean running;
     private volatile boolean closed;
 
-    private final RequestManagers requestManagers;
+    private final RequestManagers<K, V> requestManagers;
 
     // Visible for testing
-    DefaultBackgroundThread(final Time time,
+    DefaultBackgroundThread(final LogContext logContext,
+                            final Time time,
                             final ConsumerConfig config,
-                            final LogContext logContext,
                             final BlockingQueue<ApplicationEvent> applicationEventQueue,
                             final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
-                            final GroupState groupState,
-                            final ErrorEventHandler errorEventHandler,
-                            final ApplicationEventProcessor processor,
-                            final CoordinatorRequestManager coordinatorManager,
-                            final CommitRequestManager commitRequestManager) {
+                            final ApplicationEventProcessor<K, V> processor,
+                            final RequestManagers<K, V> requestManagers) {
         super(BACKGROUND_THREAD_NAME, true);
-        this.time = time;
+
         this.log = logContext.logger(getClass());
+        this.time = time;
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
         this.applicationEventProcessor = processor;
         this.config = config;
         this.metadata = metadata;
         this.networkClientDelegate = networkClient;
-        this.errorEventHandler = errorEventHandler;
-        this.groupState = groupState;
-
-        this.requestManagers = new RequestManagers(Optional.ofNullable(coordinatorManager),
-                Optional.ofNullable(commitRequestManager));
+        this.requestManagers = requestManagers;
     }
 
-    public DefaultBackgroundThread(final Time time,
+    public DefaultBackgroundThread(final LogContext logContext,
+                                   final Time time,
                                    final ConsumerConfig config,
-                                   final LogContext logContext,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                    final ConsumerMetadata metadata,
                                    final ApiVersions apiVersions,
                                    final Metrics metrics,
-                                   final Sensor fetcherThrottleTimeSensor,
                                    final SubscriptionState subscriptions,
                                    final GroupRebalanceConfig rebalanceConfig) {
         super(BACKGROUND_THREAD_NAME, true);
+
         try {
-            this.time = time;
             this.log = logContext.logger(getClass());
+            this.time = time;
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
             this.metadata = metadata;
+
+            final FetchConfig<K, V> fetchConfig = createFetchConfig(config);
+            final FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
 
             final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
                     metrics,
@@ -127,32 +127,61 @@ public class DefaultBackgroundThread extends KafkaThread {
                     time,
                     CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                     metadata,
-                    fetcherThrottleTimeSensor);
+                    fetchMetricsManager.throttleTimeSensor());
 
-            this.networkClientDelegate = new NetworkClientDelegate(this.time, this.config, logContext, networkClient);
-            this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            this.groupState = new GroupState(rebalanceConfig);
-            long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            this.networkClientDelegate = new NetworkClientDelegate(logContext, this.time, this.config, networkClient);
+            final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
-            if (groupState.groupId != null) {
-                CoordinatorRequestManager coordinatorManager = new CoordinatorRequestManager(this.time,
+            final NodeStatusDeterminator nodeStatusDeterminator = new NodeStatusDeterminator() {
+
+                    @Override
+                    public boolean isUnavailable(Node node) {
+                        return networkClient.connectionFailed(node) && networkClient.connectionDelay(node, time.milliseconds()) > 0;
+                    }
+
+                    @Override
+                    public void maybeThrowAuthFailure(Node node) {
+                        AuthenticationException exception = networkClient.authenticationException(node);
+                        if (exception != null)
+                            throw exception;
+                    }
+
+            };
+
+            final FetchRequestManager<K, V> fetchRequestManager = new FetchRequestManager<>(logContext,
+                    time,
+                    backgroundEventQueue,
+                    metadata,
+                    subscriptions,
+                    fetchConfig,
+                    fetchMetricsManager,
+                    nodeStatusDeterminator,
+                    retryBackoffMs);
+            CoordinatorRequestManager coordinatorRequestManager = null;
+            CommitRequestManager commitRequestManager = null;
+
+            if (rebalanceConfig.groupId != null) {
+                GroupState groupState = new GroupState(rebalanceConfig);
+                coordinatorRequestManager = new CoordinatorRequestManager(this.time,
                         logContext,
                         retryBackoffMs,
-                        this.errorEventHandler,
+                        backgroundEventQueue,
                         groupState.groupId);
-                CommitRequestManager commitRequestManager = new CommitRequestManager(this.time,
+                commitRequestManager = new CommitRequestManager(this.time,
                         logContext,
                         subscriptions,
                         config,
-                        coordinatorManager,
+                        coordinatorRequestManager,
                         groupState);
-                this.requestManagers = new RequestManagers(Optional.of(coordinatorManager),
-                        Optional.of(commitRequestManager));
-            } else {
-                this.requestManagers = new RequestManagers(Optional.empty(), Optional.empty());
             }
 
-            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagers, metadata);
+            this.requestManagers = new RequestManagers<>(coordinatorRequestManager,
+                    commitRequestManager,
+                    fetchRequestManager);
+            this.applicationEventProcessor = new ApplicationEventProcessor<>(logContext,
+                    backgroundEventQueue,
+                    requestManagers,
+                    metadata);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
@@ -229,6 +258,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         networkClientDelegate.wakeup();
     }
 
+    @Override
     public void close() {
         if (closed)
             return;

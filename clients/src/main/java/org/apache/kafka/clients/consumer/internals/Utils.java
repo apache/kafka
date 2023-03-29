@@ -139,10 +139,9 @@ public final class Utils {
         return new FetchConfig<>(config, deserializers, isolationLevel);
     }
 
-    public static FetchConfig<String, String> createFetchConfig(ConsumerConfig config) {
-        Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-        IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
-        return new FetchConfig<>(config, deserializers, isolationLevel);
+    public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config) {
+        Deserializers<K, V> deserializers = new Deserializers<>(config);
+        return createFetchConfig(config, deserializers);
     }
 
     @SuppressWarnings("unchecked")

@@ -14,22 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+import org.apache.kafka.clients.consumer.internals.CompletedFetch;
 
-import java.io.Closeable;
+import java.util.Queue;
+import java.util.StringJoiner;
 
 /**
- * {@code PollResult} consist of {@code UnsentRequest} if there are requests to send; otherwise, return the time till
- * the next poll event.
+ * This event signals the background thread to submit a fetch request.
  */
-public interface RequestManager extends Closeable {
+public class FetchEvent<K, V> extends CompletableApplicationEvent<Queue<CompletedFetch<K, V>>> {
 
-    PollResult poll(long currentTimeMs);
+    public FetchEvent() {
+        super(Type.FETCH);
+    }
 
     @Override
-    default void close() {
-        // Do nothing...
+    public String toString() {
+        return new StringJoiner(", ", FetchEvent.class.getSimpleName() + "[", "]")
+                .add("future=" + future)
+                .add("type=" + type)
+                .toString();
     }
 }

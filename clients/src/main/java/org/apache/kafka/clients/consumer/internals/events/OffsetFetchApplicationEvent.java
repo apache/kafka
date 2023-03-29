@@ -19,25 +19,16 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
-import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
-public class OffsetFetchApplicationEvent extends ApplicationEvent {
-    final public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+public class OffsetFetchApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
+
     public final Set<TopicPartition> partitions;
 
     public OffsetFetchApplicationEvent(final Set<TopicPartition> partitions) {
         super(Type.FETCH_COMMITTED_OFFSET);
-        this.partitions = partitions;
-        this.future = new CompletableFuture<>();
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> complete(final Duration duration) throws ExecutionException, InterruptedException, TimeoutException {
-        return future.get(duration.toMillis(), TimeUnit.MILLISECONDS);
+        this.partitions = Collections.unmodifiableSet(partitions);
     }
 }

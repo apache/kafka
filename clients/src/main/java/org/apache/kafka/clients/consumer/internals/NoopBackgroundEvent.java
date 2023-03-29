@@ -25,7 +25,7 @@ public class NoopBackgroundEvent extends BackgroundEvent {
     public final String message;
 
     public NoopBackgroundEvent(final String message) {
-        super(EventType.NOOP);
+        super(Type.NOOP);
         this.message = message;
     }
 

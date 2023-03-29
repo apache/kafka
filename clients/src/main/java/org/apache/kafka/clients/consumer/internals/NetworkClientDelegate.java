@@ -16,15 +16,20 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -41,28 +46,50 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
+import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_METRIC_GROUP_PREFIX;
+
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
  */
 public class NetworkClientDelegate implements AutoCloseable {
-    private final KafkaClient client;
-    private final Time time;
+
     private final Logger log;
+    private final Time time;
+    private final KafkaClient client;
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
 
-    public NetworkClientDelegate(
-            final Time time,
-            final ConsumerConfig config,
-            final LogContext logContext,
-            final KafkaClient client) {
+    public NetworkClientDelegate(final LogContext logContext,
+                                 final Time time,
+                                 final ConsumerConfig config,
+                                 final KafkaClient client) {
+        this.log = logContext.logger(getClass());
         this.time = time;
         this.client = client;
-        this.log = logContext.logger(getClass());
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+    }
+
+    public static NetworkClientDelegate create(final LogContext logContext,
+                                               final Time time,
+                                               final ConsumerConfig config,
+                                               final Metrics metrics,
+                                               final ConsumerMetadata metadata,
+                                               final ApiVersions apiVersions,
+                                               final Sensor throttleTimeSensor) {
+        NetworkClient networkClient = ClientUtils.createNetworkClient(config,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX,
+                logContext,
+                apiVersions,
+                time,
+                CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                metadata,
+                throttleTimeSensor);
+        return new NetworkClientDelegate(logContext, time, config, networkClient);
     }
 
     /**
@@ -160,7 +187,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public void send(final UnsentRequest r) {
-        r.setTimer(this.time, this.requestTimeoutMs);
+        r.setTimer(time, this.requestTimeoutMs);
         unsentRequests.add(r);
     }
 
@@ -182,7 +209,7 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     public void addAll(final List<UnsentRequest> requests) {
         requests.forEach(u -> {
-            u.setTimer(this.time, this.requestTimeoutMs);
+            u.setTimer(time, this.requestTimeoutMs);
         });
         this.unsentRequests.addAll(requests);
     }
@@ -191,15 +218,25 @@ public class NetworkClientDelegate implements AutoCloseable {
         public final long timeUntilNextPollMs;
         public final List<UnsentRequest> unsentRequests;
 
+        public PollResult(final long timeMsTillNextPoll) {
+            this(timeMsTillNextPoll, Collections.emptyList());
+        }
+
+        public PollResult(final long timeMsTillNextPoll, final UnsentRequest unsentRequest) {
+            this(timeMsTillNextPoll, Collections.singletonList(unsentRequest));
+        }
+
         public PollResult(final long timeMsTillNextPoll, final List<UnsentRequest> unsentRequests) {
             this.timeUntilNextPollMs = timeMsTillNextPoll;
             this.unsentRequests = Collections.unmodifiableList(unsentRequests);
         }
     }
+
     public static class UnsentRequest {
+
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
-        private Optional<Node> node; // empty if random node can be choosen
+        private final Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder, final Optional<Node> node) {

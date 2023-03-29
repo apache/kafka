@@ -104,7 +104,7 @@ public class NetworkClientDelegateTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(GROUP_ID_CONFIG, GROUP_ID);
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
-        return new NetworkClientDelegate(this.time, new ConsumerConfig(properties), logContext, this.client);
+        return new NetworkClientDelegate(logContext, time, new ConsumerConfig(properties), this.client);
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {

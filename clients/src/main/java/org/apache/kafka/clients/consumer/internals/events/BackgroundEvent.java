@@ -16,16 +16,20 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.Objects;
+
 /**
  * This is the abstract definition of the events created by the background thread.
  */
-abstract public class BackgroundEvent {
-    public final EventType type;
+public abstract class BackgroundEvent {
 
-    public BackgroundEvent(EventType type) {
-        this.type = type;
-    }
-    public enum EventType {
+    public enum Type {
         NOOP, ERROR,
+    }
+
+    public final Type type;
+
+    protected BackgroundEvent(Type type) {
+        this.type = Objects.requireNonNull(type);
     }
 }

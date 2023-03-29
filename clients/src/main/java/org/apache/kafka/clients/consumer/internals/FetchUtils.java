@@ -16,20 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+import org.apache.kafka.common.TopicPartition;
 
-import java.io.Closeable;
+public class FetchUtils {
 
-/**
- * {@code PollResult} consist of {@code UnsentRequest} if there are requests to send; otherwise, return the time till
- * the next poll event.
- */
-public interface RequestManager extends Closeable {
-
-    PollResult poll(long currentTimeMs);
-
-    @Override
-    default void close() {
-        // Do nothing...
+    public static void requestMetadataUpdate(final ConsumerMetadata metadata,
+                                             final SubscriptionState subscriptions,
+                                             final TopicPartition topicPartition) {
+        metadata.requestUpdate();
+        subscriptions.clearPreferredReadReplica(topicPartition);
     }
 }

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -31,25 +33,27 @@ import org.slf4j.Logger;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Queue;
 
 /**
  * This is responsible for timing to send the next {@link FindCoordinatorRequest} based on the following criteria:
- *
+ * <p/>
  * Whether there is an existing coordinator.
  * Whether there is an inflight request.
  * Whether the backoff timer has expired.
  * The {@link NetworkClientDelegate.PollResult} contains either a wait timer or a singleton list of
  * {@link NetworkClientDelegate.UnsentRequest}.
- *
+ * <p/>
  * The {@link FindCoordinatorRequest} will be handled by the {@link #onResponse(long, FindCoordinatorResponse)}  callback, which
  * subsequently invokes {@code onResponse} to handle the exception and response. Note that the coordinator node will be
  * marked {@code null} upon receiving a failure.
  */
 public class CoordinatorRequestManager implements RequestManager {
+
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
     private final Time time;
     private final Logger log;
-    private final ErrorEventHandler nonRetriableErrorHandler;
+    private final Queue<BackgroundEvent> backgroundEventQueue;
     private final String groupId;
 
     private final RequestState coordinatorRequestState;
@@ -60,12 +64,12 @@ public class CoordinatorRequestManager implements RequestManager {
     public CoordinatorRequestManager(final Time time,
                                      final LogContext logContext,
                                      final long retryBackoffMs,
-                                     final ErrorEventHandler errorHandler,
+                                     final Queue<BackgroundEvent> backgroundEventQueue,
                                      final String groupId) {
         Objects.requireNonNull(groupId);
-        this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.nonRetriableErrorHandler = errorHandler;
+        this.time = time;
+        this.backgroundEventQueue = backgroundEventQueue;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(retryBackoffMs);
     }
@@ -142,10 +146,7 @@ public class CoordinatorRequestManager implements RequestManager {
         }
     }
 
-    private void onSuccessfulResponse(
-        final long currentTimeMs,
-        final FindCoordinatorResponseData.Coordinator coordinator
-    ) {
+    private void onSuccessfulResponse(final long currentTimeMs, final FindCoordinatorResponseData.Coordinator coordinator) {
         // use MAX_VALUE - node.id as the coordinator id to allow separate connections
         // for the coordinator in the underlying network client layer
         int coordinatorConnectionId = Integer.MAX_VALUE - coordinator.nodeId();
@@ -157,10 +158,7 @@ public class CoordinatorRequestManager implements RequestManager {
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
     }
 
-    private void onFailedResponse(
-        final long currentTimeMs,
-        final Throwable exception
-    ) {
+    private void onFailedResponse(final long currentTimeMs, final Throwable exception) {
         coordinatorRequestState.onFailedAttempt(currentTimeMs);
         markCoordinatorUnknown("FindCoordinator failed with exception", currentTimeMs);
 
@@ -171,12 +169,12 @@ public class CoordinatorRequestManager implements RequestManager {
 
         if (exception == Errors.GROUP_AUTHORIZATION_FAILED.exception()) {
             log.debug("FindCoordinator request failed due to authorization error {}", exception.getMessage());
-            nonRetriableErrorHandler.handle(GroupAuthorizationException.forGroupId(this.groupId));
+            backgroundEventQueue.add(new ErrorBackgroundEvent(GroupAuthorizationException.forGroupId(this.groupId)));
             return;
         }
 
         log.warn("FindCoordinator request failed due to fatal exception", exception);
-        nonRetriableErrorHandler.handle(exception);
+        backgroundEventQueue.add(new ErrorBackgroundEvent(exception));
     }
 
     /**
@@ -187,10 +185,7 @@ public class CoordinatorRequestManager implements RequestManager {
      * @param currentTimeMs current time in ms.
      * @param response      the response for finding the coordinator. null if an exception is thrown.
      */
-    private void onResponse(
-        final long currentTimeMs,
-        final FindCoordinatorResponse response
-    ) {
+    private void onResponse(final long currentTimeMs, final FindCoordinatorResponse response) {
         // handles Runtime exception
         Optional<FindCoordinatorResponseData.Coordinator> coordinator = response.coordinatorByKey(this.groupId);
         if (!coordinator.isPresent()) {

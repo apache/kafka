@@ -17,35 +17,42 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
+import org.apache.kafka.clients.consumer.internals.CompletedFetch;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.util.Objects;
-import java.util.concurrent.BlockingQueue;
+import java.util.Queue;
 
-public class ApplicationEventProcessor {
+public class ApplicationEventProcessor<K, V> {
 
-    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-
+    private final Logger log;
+    private final Queue<BackgroundEvent> backgroundEventQueue;
+    private final RequestManagers<K, V> requestManagers;
     private final ConsumerMetadata metadata;
 
-    private final RequestManagers requestManagers;
-
-    public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                     final RequestManagers requestManagers,
+    public ApplicationEventProcessor(final LogContext logContext,
+                                     final Queue<BackgroundEvent> backgroundEventQueue,
+                                     final RequestManagers<K, V> requestManagers,
                                      final ConsumerMetadata metadata) {
+        this.log = logContext.logger(ApplicationEventProcessor.class);
         this.backgroundEventQueue = backgroundEventQueue;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
 
+    @SuppressWarnings("unchecked")
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event);
+        Objects.requireNonNull(event.type, "Null type for event " + event);
+
+        log.debug("Processing event {}", event);
+
         switch (event.type) {
-            case NOOP:
-                return process((NoopApplicationEvent) event);
             case COMMIT:
                 return process((CommitApplicationEvent) event);
             case POLL:
@@ -56,17 +63,15 @@ public class ApplicationEventProcessor {
                 return process((MetadataUpdateApplicationEvent) event);
             case UNSUBSCRIBE:
                 return process((UnsubscribeApplicationEvent) event);
+            case FETCH:
+                return process((FetchEvent<K, V>) event);
+            case NOOP:
+                return process((NoopApplicationEvent) event);
         }
+
         return false;
     }
 
-    /**
-     * Processes {@link NoopApplicationEvent} and equeue a
-     * {@link NoopBackgroundEvent}. This is intentionally left here for
-     * demonstration purpose.
-     *
-     * @param event a {@link NoopApplicationEvent}
-     */
     private boolean process(final NoopApplicationEvent event) {
         return backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
     }
@@ -86,18 +91,26 @@ public class ApplicationEventProcessor {
             // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
             // upfront so we should never get to this block.
             Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
+            event.future.completeExceptionally(exception);
             return false;
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.addOffsetCommitRequest(event.offsets()).whenComplete((r, e) -> {
+        manager.addOffsetCommitRequest(event.offsets).whenComplete((r, e) -> {
             if (e != null) {
-                event.future().completeExceptionally(e);
+                event.future.completeExceptionally(e);
                 return;
             }
-            event.future().complete(null);
+            event.future.complete(null);
         });
+        return true;
+    }
+
+    private boolean process(final FetchEvent<K, V> event) {
+        // The request manager keeps track of the completed fetches, so we pull any that are ready off, and return
+        // them to the application.
+        Queue<CompletedFetch<K, V>> completedFetches = requestManagers.fetchRequestManager.drain();
+        event.future.complete(completedFetches);
         return true;
     }
 
