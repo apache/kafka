@@ -65,16 +65,16 @@ public class OffsetUtils {
     }
 
     /**
-     * Parses a partition key that is read back from an offset backing store and add / remove the partition in the
+     * Parses a partition key that is read back from an offset backing store and adds / removes the partition in the
      * provided {@code connectorPartitions} map. If the partition key has an unexpected format, a warning log is emitted
      * and nothing is added / removed in the {@code connectorPartitions} map.
      * @param partitionKey the partition key to be processed
      * @param offsetValue the offset value corresponding to the partition key; determines whether the partition should
      *                    be added to the {@code connectorPartitions} map or removed depending on whether the offset
-     *                    value is null or not.
+     *                    value is null or not
      * @param keyConverter the key converter to deserialize the partition key
      * @param connectorPartitions the map from connector names to its set of partitions which needs to be updated after
-     *                            processing
+     *                            processing the partition key
      */
     @SuppressWarnings("unchecked")
     public static void processPartitionKey(byte[] partitionKey, byte[] offsetValue, Converter keyConverter,
@@ -89,14 +89,14 @@ public class OffsetUtils {
         }
         // The topic parameter is irrelevant for the JsonConverter which is the internal converter used by
         // Connect workers.
-        Object deserializedValue = keyConverter.toConnectData("", partitionKey).value();
-        if (!(deserializedValue instanceof List)) {
+        Object deserializedKey = keyConverter.toConnectData("", partitionKey).value();
+        if (!(deserializedKey instanceof List)) {
             log.warn("Ignoring offset partition key with an unexpected format. Expected type: {}, actual type: {}",
-                    List.class.getName(), className(deserializedValue));
+                    List.class.getName(), className(deserializedKey));
             return;
         }
 
-        List<Object> keyList = (List<Object>) deserializedValue;
+        List<Object> keyList = (List<Object>) deserializedKey;
         if (keyList.size() != 2) {
             log.warn("Ignoring offset partition key with an unexpected number of elements. Expected: 2, actual: {}", keyList.size());
             return;

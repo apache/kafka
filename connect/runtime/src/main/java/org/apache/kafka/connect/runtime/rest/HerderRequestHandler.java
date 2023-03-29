@@ -88,42 +88,37 @@ public class HerderRequestHandler {
                                                     Boolean forward) throws Throwable {
         try {
             return completeRequest(cb);
-        } catch (Exception e) {
-            if (e instanceof RequestTargetException) {
-                if (forward == null || forward) {
-                    // the only time we allow recursive forwarding is when no forward flag has
-                    // been set, which should only be seen by the first worker to handle a user request.
-                    // this gives two total hops to resolve the request before giving up.
-                    boolean recursiveForward = forward == null;
-                    RequestTargetException targetException = (RequestTargetException) e;
-                    String forwardedUrl = targetException.forwardUrl();
-                    if (forwardedUrl == null) {
-                        // the target didn't know of the leader at this moment.
-                        throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                                "Cannot complete request momentarily due to no known leader URL, "
-                                        + "likely because a rebalance was underway.");
-                    }
-                    UriBuilder uriBuilder = UriBuilder.fromUri(forwardedUrl)
-                            .path(path)
-                            .queryParam("forward", recursiveForward);
-                    if (queryParameters != null) {
-                        queryParameters.forEach(uriBuilder::queryParam);
-                    }
-                    String forwardUrl = uriBuilder.build().toString();
-                    log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
-                    return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
-                } else {
-                    // we should find the right target for the query within two hops, so if
-                    // we don't, it probably means that a rebalance has taken place.
+        } catch (RequestTargetException e) {
+            if (forward == null || forward) {
+                // the only time we allow recursive forwarding is when no forward flag has
+                // been set, which should only be seen by the first worker to handle a user request.
+                // this gives two total hops to resolve the request before giving up.
+                boolean recursiveForward = forward == null;
+                String forwardedUrl = e.forwardUrl();
+                if (forwardedUrl == null) {
+                    // the target didn't know of the leader at this moment.
                     throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                            "Cannot complete request because of a conflicting operation (e.g. worker rebalance)");
+                            "Cannot complete request momentarily due to no known leader URL, "
+                                    + "likely because a rebalance was underway.");
                 }
-            } else if (e instanceof RebalanceNeededException) {
+                UriBuilder uriBuilder = UriBuilder.fromUri(forwardedUrl)
+                        .path(path)
+                        .queryParam("forward", recursiveForward);
+                if (queryParameters != null) {
+                    queryParameters.forEach(uriBuilder::queryParam);
+                }
+                String forwardUrl = uriBuilder.build().toString();
+                log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
+                return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
+            } else {
+                // we should find the right target for the query within two hops, so if
+                // we don't, it probably means that a rebalance has taken place.
                 throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                        "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
+                        "Cannot complete request because of a conflicting operation (e.g. worker rebalance)");
             }
-
-            throw e;
+        } catch (RebalanceNeededException e) {
+            throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
+                    "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
         }
     }
 

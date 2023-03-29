@@ -151,7 +151,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private final Supplier<String> clientIdBase;
     private SharedTopicAdmin ownTopicAdmin;
     protected boolean exactlyOnce;
-    private String topic;
 
     /**
      * Create an {@link OffsetBackingStore} backed by a Kafka topic. This constructor will use the given
@@ -173,7 +172,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public void configure(final WorkerConfig config) {
-        topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
+        String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
         if (topic == null || topic.trim().length() == 0)
             throw new ConfigException("Offset storage topic must be specified");
 
@@ -339,7 +338,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         return connectorPartitions.getOrDefault(connectorName, Collections.emptySet());
     }
 
-    @SuppressWarnings("unchecked")
     protected final Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = (error, record) -> {
         if (error != null) {
             log.error("Failed to read from the offsets topic", error);

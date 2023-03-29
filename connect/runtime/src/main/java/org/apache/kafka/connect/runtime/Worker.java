@@ -1138,28 +1138,32 @@ public class Worker {
     }
 
     /**
-     * Get the current offsets for a connector.
+     * Get the current offsets for a connector. This method is asynchronous and the passed callback is completed when the
+     * request finishes processing.
+     *
      * @param connName the name of the connector whose offsets are to be retrieved
      * @param connectorConfig the connector's configurations
      * @param cb callback to invoke upon completion of the request
      */
     public void connectorOffsets(String connName, Map<String, String> connectorConfig, Callback<ConnectorOffsets> cb) {
-        String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-        ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
-        Connector connector;
+        executor.submit(() -> {
+            String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+            ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
+            Connector connector;
 
-        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
-            connector = plugins.newConnector(connectorClassOrAlias);
-            if (ConnectUtils.isSinkConnector(connector)) {
-                log.debug("Fetching offsets for sink connector: {}", connName);
-                sinkConnectorOffsets(connName, connector, connectorConfig, cb);
-            } else {
-                log.debug("Fetching offsets for source connector: {}", connName);
-                sourceConnectorOffsets(connName, connector, connectorConfig, cb);
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+                connector = plugins.newConnector(connectorClassOrAlias);
+                if (ConnectUtils.isSinkConnector(connector)) {
+                    log.debug("Fetching offsets for sink connector: {}", connName);
+                    sinkConnectorOffsets(connName, connector, connectorConfig, cb);
+                } else {
+                    log.debug("Fetching offsets for source connector: {}", connName);
+                    sourceConnectorOffsets(connName, connector, connectorConfig, cb);
+                }
+            } catch (Exception e) {
+                cb.onCompletion(e, null);
             }
-        } catch (Exception e) {
-            cb.onCompletion(e, null);
-        }
+        });
     }
 
     /**
