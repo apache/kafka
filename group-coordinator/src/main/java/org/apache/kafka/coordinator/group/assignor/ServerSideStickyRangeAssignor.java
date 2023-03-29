@@ -14,6 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.coordinator.group.assignor;
+
+
+import org.apache.kafka.common.Uuid;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Collections;
+
+import static java.lang.Math.min;
 
 /**
  * <p>The Server Side Sticky Range Assignor inherits properties of both the range assignor and the sticky assignor.
@@ -43,21 +57,6 @@
  * </p>
  *
  */
-package org.apache.kafka.coordinator.group.assignor;
-
-
-import org.apache.kafka.common.Uuid;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.HashMap;
-import java.util.Collections;
-
-import static java.lang.Math.min;
-
 public class ServerSideStickyRangeAssignor implements PartitionAssignor {
 
     public static final String RANGE_ASSIGNOR_NAME = "range";
@@ -67,12 +66,12 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
         return RANGE_ASSIGNOR_NAME;
     }
 
-    protected static <K, V> void putList(Map<K, List<V>> map, K key, V value) {
+    private static <K, V> void putList(Map<K, List<V>> map, K key, V value) {
         List<V> list = map.computeIfAbsent(key, k -> new ArrayList<>());
         list.add(value);
     }
 
-    protected static <K, V> void putSet(Map<K, Set<V>> map, K key, V value) {
+    private static <K, V> void putSet(Map<K, Set<V>> map, K key, V value) {
         Set<V> set = map.computeIfAbsent(key, k -> new HashSet<>());
         set.add(value);
     }
@@ -119,18 +118,19 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
     private Map<Uuid, List<Integer>> getAvailablePartitionsPerTopic(AssignmentSpec assignmentSpec, Map<Uuid, Set<Integer>> assignedStickyPartitionsPerTopic) {
         Map<Uuid, List<Integer>> availablePartitionsPerTopic = new HashMap<>();
         Map<Uuid, AssignmentTopicMetadata> topicsMetadata = assignmentSpec.topics;
-        // Iterate through the topics map provided in assignmentSpec
+
         for (Map.Entry<Uuid, AssignmentTopicMetadata> topicMetadataEntry : topicsMetadata.entrySet()) {
             Uuid topicId = topicMetadataEntry.getKey();
-            availablePartitionsPerTopic.put(topicId, new ArrayList<>());
+            ArrayList<Integer> availablePartitionsForTopic = new ArrayList<>();
             int numPartitions = topicsMetadata.get(topicId).numPartitions;
             // since the loop iterates from 0 to n, the partitions will be in ascending order within the list of available partitions per topic
-            Set<Integer> assignedStickyPartitionsForTopic = assignedStickyPartitionsPerTopic.get(topicId);
+            Set<Integer> assignedStickyPartitionsForTopic = assignedStickyPartitionsPerTopic.getOrDefault(topicId, new HashSet<>());
             for (int i = 0; i < numPartitions; i++) {
-                if (assignedStickyPartitionsForTopic == null || !assignedStickyPartitionsForTopic.contains(i)) {
-                    availablePartitionsPerTopic.get(topicId).add(i);
+                if (!assignedStickyPartitionsForTopic.contains(i)) {
+                    availablePartitionsForTopic.add(i);
                 }
             }
+            availablePartitionsPerTopic.put(topicId, availablePartitionsForTopic);
         }
         return availablePartitionsPerTopic;
     }
@@ -156,28 +156,23 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
 
             AssignmentTopicMetadata topicData = assignmentSpec.topics.get(topicId);
             int numPartitionsForTopic = topicData.numPartitions;
-            int numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();
+            // Initially, minRequiredQuota is the minimum number of partitions that each consumer should get i.e numPartitionsPerConsumer.
+            // Idle consumers case :- The numConsumers subscribed to a topic is greater than numPartitions. In such cases, all consumers get assigned via the "extra partitions" logic since min = 0.
+            int minRequiredQuota = numPartitionsForTopic / consumersForTopic.size();
             // Each consumer can get only one extra partition per topic after receiving the minimum quota = numPartitionsPerConsumer
             int numConsumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();
 
             for (String memberId: consumersForTopic) {
-                // Size of the older assignment, this will be 0 when assign is called for the first time.
-                // The older assignment is required when a reassignment occurs to ensure stickiness.
-                int currentAssignmentSize = 0;
-                List<Integer> currentAssignmentListForTopic = new ArrayList<>();
+
                 // Convert the set to a list first and sort the partitions in numeric order since we want the same partition numbers from each topic
                 // to go to the same consumer in case of co-partitioned topics.
-                Set<Integer> currentAssignmentSetForTopic =  assignmentSpec.members.get(memberId).currentAssignmentPerTopic.get(topicId);
-                // We want to make sure that the currentAssignment is not null to avoid a null pointer exception
-                if (currentAssignmentSetForTopic != null) {
-                    currentAssignmentListForTopic = new ArrayList<>(currentAssignmentSetForTopic);
-                    currentAssignmentSize = currentAssignmentListForTopic.size();
-                }
-                // Initially, minRequiredQuota is the minimum number of partitions that each consumer should get.
-                // The value is at least 1 unless numConsumers subscribed is greater than numPartitions. In such cases, all consumers get assigned "extra partitions".
-                int minRequiredQuota = numPartitionsPerConsumer;
+                Set<Integer> currentAssignmentSetForTopic =  assignmentSpec.members.get(memberId).currentAssignmentPerTopic.getOrDefault(topicId, new HashSet<>());
+                // Size of the older assignment, this will be 0 when assign is called for the first time.
+                // The older assignment is required when a reassignment occurs to ensure stickiness.
+                int currentAssignmentSize = currentAssignmentSetForTopic.size();
+                List<Integer> currentAssignmentListForTopic = new ArrayList<>(currentAssignmentSetForTopic);
 
-                // If there are previously assigned partitions present, we want to retain
+                // If there are previously assigned partitions present, we want to retain them.
                 if (currentAssignmentSize > 0) {
                     // We either need to retain currentSize number of partitions when currentSize < required OR required number of partitions otherwise.
                     int retainedPartitionsCount = min(currentAssignmentSize, minRequiredQuota);
@@ -187,7 +182,8 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
                         membersWithNewAssignmentPerTopic.computeIfAbsent(memberId, k -> new HashMap<>()).computeIfAbsent(topicId, k -> new HashSet<>()).add(currentAssignmentListForTopic.get(i));
                     }
                 }
-                // Number of partitions left to reach the minRequiredQuota
+
+                // Number of partitions left to reach the minRequiredQuota.
                 int remaining = minRequiredQuota - currentAssignmentSize;
 
                 // There are 3 cases w.r.t value of remaining
