@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
@@ -69,7 +68,7 @@ class LocalLog(@volatile private var _dir: File,
                private[log] val scheduler: Scheduler,
                private[log] val time: Time,
                private[log] val topicPartition: TopicPartition,
-               private[log] val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+               private[log] val logDirFailureChannel: LogDirFailureChannel) extends Logging {
 
   import kafka.log.LocalLog._
 

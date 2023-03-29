@@ -1231,6 +1231,7 @@ project(':group-coordinator') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':metadata')
     implementation libs.slf4jApi
 
     testImplementation project(':clients').sourceSets.test.output
@@ -1933,6 +1934,7 @@ project(':streams') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
@@ -1944,6 +1946,7 @@ project(':streams') {
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
@@ -2880,6 +2883,7 @@ project(':connect:mirror') {
     implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter
+    testImplementation libs.log4j
     testImplementation libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output

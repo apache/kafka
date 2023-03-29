@@ -71,6 +71,10 @@ public class VersionedKeyValueStoreBuilder<K, V>
         throw new IllegalStateException("Versioned stores do not support caching");
     }
 
+    public long historyRetention() {
+        return storeSupplier.historyRetentionMs();
+    }
+
     private VersionedBytesStore maybeWrapLogging(final VersionedBytesStore inner) {
         if (!enableLogging) {
             return inner;

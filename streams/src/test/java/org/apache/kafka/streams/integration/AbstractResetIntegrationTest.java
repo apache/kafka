@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.tools.StreamsResetter;
+import org.apache.kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
