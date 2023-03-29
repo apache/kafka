@@ -395,6 +395,10 @@ public class WorkerConfig extends AbstractConfig {
         return kafkaClusterId;
     }
 
+    public String contextPrefix() {
+        return null;
+    }
+
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);

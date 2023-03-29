@@ -68,6 +68,7 @@ abstract class WorkerTask implements Runnable {
     private final ErrorHandlingMetrics errorMetrics;
 
     protected final RetryWithToleranceOperator retryWithToleranceOperator;
+    private final String contextPrefix;
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
@@ -77,7 +78,8 @@ abstract class WorkerTask implements Runnable {
                       ErrorHandlingMetrics errorMetrics,
                       RetryWithToleranceOperator retryWithToleranceOperator,
                       Time time,
-                      StatusBackingStore statusBackingStore) {
+                      StatusBackingStore statusBackingStore,
+                      String contextPrefix) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
         this.errorMetrics = errorMetrics;
@@ -91,6 +93,7 @@ abstract class WorkerTask implements Runnable {
         this.retryWithToleranceOperator = retryWithToleranceOperator;
         this.time = time;
         this.statusBackingStore = statusBackingStore;
+        this.contextPrefix = contextPrefix;
     }
 
     public ConnectorTaskId id() {
@@ -250,7 +253,7 @@ abstract class WorkerTask implements Runnable {
         // Clear all MDC parameters, in case this thread is being reused
         LoggingContext.clear();
 
-        try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id(), contextPrefix)) {
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + id);

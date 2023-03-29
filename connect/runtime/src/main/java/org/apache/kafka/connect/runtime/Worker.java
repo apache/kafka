@@ -278,7 +278,7 @@ public class Worker {
             Callback<TargetState> onConnectorStateChange
     ) {
         final ConnectorStatus.Listener connectorStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName, config.contextPrefix())) {
             if (connectors.containsKey(connName)) {
                 onConnectorStateChange.onCompletion(
                         new ConnectException("Connector with name " + connName + " already exists"),
@@ -311,7 +311,8 @@ public class Worker {
                     offsetReader = new OffsetStorageReaderImpl(offsetStore, connName, internalKeyConverter, internalValueConverter);
                 }
                 workerConnector = new WorkerConnector(
-                        connName, connector, connConfig, ctx, metrics, connectorStatusListener, offsetReader, offsetStore, connectorLoader);
+                        connName, connector, connConfig, ctx, metrics, connectorStatusListener, offsetReader,
+                        offsetStore, connectorLoader, config.contextPrefix());
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
                 workerConnector.transitionTo(initialState, onConnectorStateChange);
             } catch (Throwable t) {
@@ -362,7 +363,7 @@ public class Worker {
      */
     public List<Map<String, String>> connectorTaskConfigs(String connName, ConnectorConfig connConfig) {
         List<Map<String, String>> result = new ArrayList<>();
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName, config.contextPrefix())) {
             log.trace("Reconfiguring connector tasks for {}", connName);
 
             WorkerConnector workerConnector = connectors.get(connName);
@@ -399,7 +400,7 @@ public class Worker {
      * @param connName the connector name.
      */
     private void stopConnector(String connName) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName, config.contextPrefix())) {
             WorkerConnector workerConnector = connectors.get(connName);
             log.info("Stopping connector {}", connName);
 
@@ -422,7 +423,7 @@ public class Worker {
     }
 
     private void awaitStopConnector(String connName, long timeout) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName, config.contextPrefix())) {
             WorkerConnector connector = connectors.remove(connName);
             if (connector == null) {
                 log.warn("Ignoring await stop request for non-present connector {}", connName);
@@ -592,7 +593,7 @@ public class Worker {
     ) {
         final WorkerTask workerTask;
         final TaskStatus.Listener taskStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
-        try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id, config.contextPrefix())) {
             log.info("Creating task {}", id);
 
             if (tasks.containsKey(id))
@@ -682,7 +683,7 @@ public class Worker {
     // Allows us to mock out the Admin client for testing
     KafkaFuture<Void> fenceZombies(String connName, int numTasks, Map<String, String> connProps, Function<Map<String, Object>, Admin> adminFactory) {
         log.debug("Fencing out {} task producers for source connector {}", numTasks, connName);
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName, config.contextPrefix())) {
             String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             ClassLoader connectorLoader = plugins.connectorLoader(connType);
             try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
@@ -719,6 +720,13 @@ public class Worker {
                 }
             }
         }
+    }
+
+    static String defaultClientId(String clientIdBase, WorkerConfig config) {
+        if (config.contextPrefix() == null) {
+            return clientIdBase;
+        }
+        return config.contextPrefix() + "|" + clientIdBase;
     }
 
     static Map<String, Object> exactlyOnceSourceTaskProducerConfigs(ConnectorTaskId id,
@@ -778,7 +786,7 @@ public class Worker {
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
-        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, defaultClientId);
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, defaultClientId(defaultClientId, config));
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
         //add client metrics.context properties
@@ -842,7 +850,7 @@ public class Worker {
         Map<String, Object> consumerProps = new HashMap<>();
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(connName));
-        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, defaultClientId);
+        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, defaultClientId(defaultClientId, config));
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -882,7 +890,7 @@ public class Worker {
                         && !e.getKey().startsWith("consumer."))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
-        adminProps.put(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId);
+        adminProps.put(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId(defaultClientId, config));
         adminProps.putAll(nonPrefixedWorkerConfigs);
 
         // Admin client-specific overrides in the worker config
@@ -988,7 +996,7 @@ public class Worker {
     }
 
     private void stopTask(ConnectorTaskId taskId) {
-        try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
+        try (LoggingContext loggingContext = LoggingContext.forTask(taskId, config.contextPrefix())) {
             WorkerTask task = tasks.get(taskId);
             if (task == null) {
                 log.warn("Ignoring stop request for unowned task {}", taskId);
@@ -1014,7 +1022,7 @@ public class Worker {
     }
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
-        try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
+        try (LoggingContext loggingContext = LoggingContext.forTask(taskId, config.contextPrefix())) {
             WorkerTask task = tasks.remove(taskId);
             if (task == null) {
                 log.warn("Ignoring await stop request for non-present task {}", taskId);
@@ -1439,14 +1447,14 @@ public class Worker {
             // isolation.level=read_committed for the offsets topic consumer for this connector
             if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
                 return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                        () -> LoggingContext.forConnector(connName),
+                        () -> LoggingContext.forConnector(connName, config.contextPrefix()),
                         connectorStore,
                         connectorSpecificOffsetsTopic,
                         admin
                 );
             } else {
                 return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                        () -> LoggingContext.forConnector(connName),
+                        () -> LoggingContext.forConnector(connName, config.contextPrefix()),
                         globalOffsetBackingStore,
                         connectorStore,
                         connectorSpecificOffsetsTopic,
@@ -1455,7 +1463,7 @@ public class Worker {
             }
         } else {
             return ConnectorOffsetBackingStore.withOnlyWorkerStore(
-                    () -> LoggingContext.forConnector(connName),
+                    () -> LoggingContext.forConnector(connName, config.contextPrefix()),
                     globalOffsetBackingStore,
                     config.offsetsTopic()
             );
@@ -1496,14 +1504,14 @@ public class Worker {
         // since they will all have their own dedicated offsets stores anyways
         if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
             return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                    () -> LoggingContext.forConnector(connName),
+                    () -> LoggingContext.forConnector(connName, config.contextPrefix()),
                     connectorStore,
                     connectorSpecificOffsetsTopic,
                     admin
             );
         } else {
             return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                    () -> LoggingContext.forConnector(connName),
+                    () -> LoggingContext.forConnector(connName, config.contextPrefix()),
                     globalOffsetBackingStore,
                     connectorStore,
                     connectorSpecificOffsetsTopic,
@@ -1545,14 +1553,14 @@ public class Worker {
             // isolation.level=read_committed for the offsets topic consumer for this task
             if (sameOffsetTopicAsWorker(sourceConfig.offsetsTopic(), producerProps)) {
                 return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                        () -> LoggingContext.forTask(id),
+                        () -> LoggingContext.forTask(id, config.contextPrefix()),
                         connectorStore,
                         connectorSpecificOffsetsTopic,
                         topicAdmin
                 );
             } else {
                 return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                        () -> LoggingContext.forTask(id),
+                        () -> LoggingContext.forTask(id, config.contextPrefix()),
                         globalOffsetBackingStore,
                         connectorStore,
                         connectorSpecificOffsetsTopic,
@@ -1561,7 +1569,7 @@ public class Worker {
             }
         } else {
             return ConnectorOffsetBackingStore.withOnlyWorkerStore(
-                    () -> LoggingContext.forTask(id),
+                    () -> LoggingContext.forTask(id, config.contextPrefix()),
                     globalOffsetBackingStore,
                     config.offsetsTopic()
             );
@@ -1599,14 +1607,14 @@ public class Worker {
         // with the same producer, and therefore, in the same transaction.
         if (sameOffsetTopicAsWorker(connectorOffsetsTopic, producerProps)) {
             return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                    () -> LoggingContext.forTask(id),
+                    () -> LoggingContext.forTask(id, config.contextPrefix()),
                     connectorStore,
                     connectorOffsetsTopic,
                     topicAdmin
             );
         } else {
             return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                    () -> LoggingContext.forTask(id),
+                    () -> LoggingContext.forTask(id, config.contextPrefix()),
                     globalOffsetBackingStore,
                     connectorStore,
                     connectorOffsetsTopic,

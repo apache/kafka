@@ -98,11 +98,12 @@ public final class LoggingContext implements AutoCloseable {
      * supplied name and the {@link Scope#WORKER} scope.
      *
      * @param connectorName the connector name; may not be null
+     * @param prefix optional prefix for the context value; may be null
      */
-    public static LoggingContext forConnector(String connectorName) {
+    public static LoggingContext forConnector(String connectorName, String prefix) {
         Objects.requireNonNull(connectorName);
         LoggingContext context = new LoggingContext();
-        MDC.put(CONNECTOR_CONTEXT, prefixFor(connectorName, Scope.WORKER, null));
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(connectorName, Scope.WORKER, null, prefix));
         return context;
     }
 
@@ -111,10 +112,11 @@ public final class LoggingContext implements AutoCloseable {
      * supplied connector name and the {@link Scope#VALIDATE} scope.
      *
      * @param connectorName the connector name
+     * @param prefix optional prefix for the context value; may be null
      */
-    public static LoggingContext forValidation(String connectorName) {
+    public static LoggingContext forValidation(String connectorName, String prefix) {
         LoggingContext context = new LoggingContext();
-        MDC.put(CONNECTOR_CONTEXT, prefixFor(connectorName, Scope.VALIDATE, null));
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(connectorName, Scope.VALIDATE, null, prefix));
         return context;
     }
 
@@ -123,11 +125,12 @@ public final class LoggingContext implements AutoCloseable {
      * connector name and task number using the supplied {@link ConnectorTaskId}, and to set the scope to {@link Scope#TASK}.
      *
      * @param id the connector task ID; may not be null
+     * @param prefix optional prefix for the context value; may be null
      */
-    public static LoggingContext forTask(ConnectorTaskId id) {
+    public static LoggingContext forTask(ConnectorTaskId id, String prefix) {
         Objects.requireNonNull(id);
         LoggingContext context = new LoggingContext();
-        MDC.put(CONNECTOR_CONTEXT, prefixFor(id.connector(), Scope.TASK, id.task()));
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(id.connector(), Scope.TASK, id.task(), prefix));
         return context;
     }
 
@@ -136,11 +139,12 @@ public final class LoggingContext implements AutoCloseable {
      * connector name and task number using the supplied {@link ConnectorTaskId}, and to set the scope to {@link Scope#OFFSETS}.
      *
      * @param id the connector task ID; may not be null
+     * @param prefix optional prefix for the context value; may be null
      */
-    public static LoggingContext forOffsets(ConnectorTaskId id) {
+    public static LoggingContext forOffsets(ConnectorTaskId id, String prefix) {
         Objects.requireNonNull(id);
         LoggingContext context = new LoggingContext();
-        MDC.put(CONNECTOR_CONTEXT, prefixFor(id.connector(), Scope.OFFSETS, id.task()));
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(id.connector(), Scope.OFFSETS, id.task(), prefix));
         return context;
     }
 
@@ -149,10 +153,11 @@ public final class LoggingContext implements AutoCloseable {
      * format is as follows:
      *
      * <pre>
-     *     [&lt;connectorName>|&lt;scope>]&lt;sp>
+     *     [(&lt;prefix>|)?&lt;connectorName>|&lt;scope>]&lt;sp>
      * </pre>
      *
-     * where "<code>&lt;connectorName></code>" is the name of the connector,
+     * where "<code>&lt;prefix></code>" is an optional prefix,
+     * "<code>&lt;connectorName></code>" is the name of the connector,
      * "<code>&lt;sp></code>" indicates a trailing space, and
      * "<code>&lt;scope></code>" is one of the following:
      *
@@ -164,7 +169,8 @@ public final class LoggingContext implements AutoCloseable {
      *   <li>"<code>worker</code>" for the creation and usage of connector instances
      * </ul>
      *
-     * <p>The following are examples of the connector context for a connector named "my-connector":
+     * <p>The following are examples of the connector context for a connector named "my-connector",
+     * without the optional prefix:
      *
      * <ul>
      *   <li>`[my-connector|worker]` - used on log messages where the Connect worker is
@@ -181,11 +187,16 @@ public final class LoggingContext implements AutoCloseable {
      * @param connectorName the name of the connector; may not be null
      * @param scope the scope; may not be null
      * @param taskNumber the 0-based task number; may be null if there is no associated task
+     * @param prefix optional prefix for the value; may be null
      * @return the prefix; never null
      */
-    static String prefixFor(String connectorName, Scope scope, Integer taskNumber) {
+    static String prefixFor(String connectorName, Scope scope, Integer taskNumber, String prefix) {
         StringBuilder sb = new StringBuilder();
         sb.append("[");
+        if (prefix != null) {
+            sb.append(prefix);
+            sb.append("|");
+        }
         sb.append(connectorName);
         if (taskNumber != null) {
             // There is a task number, so this is a task

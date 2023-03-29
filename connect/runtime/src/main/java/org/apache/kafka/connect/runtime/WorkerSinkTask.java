@@ -118,7 +118,7 @@ class WorkerSinkTask extends WorkerTask {
                           WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, time, statusBackingStore);
+                retryWithToleranceOperator, time, statusBackingStore, workerConfig.contextPrefix());
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -472,6 +472,7 @@ class WorkerSinkTask extends WorkerTask {
     public String toString() {
         return "WorkerSinkTask{" +
                 "id=" + id +
+                (workerConfig.contextPrefix() == null ? "" : ", context=" + workerConfig.contextPrefix()) +
                 '}';
     }
 
