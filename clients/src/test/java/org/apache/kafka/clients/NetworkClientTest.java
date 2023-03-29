@@ -451,41 +451,74 @@ public class NetworkClientTest {
 
     @Test
     public void testRequestTimeout() {
+        testRequestTimeout(defaultRequestTimeoutMs + 5000);
+    }
+
+    @Test
+    public void testDefaultRequestTimeout() {
+        testRequestTimeout(defaultRequestTimeoutMs);
+    }
+
+    /**
+     * This is a helper method that will execute two produce calls. The first call is expected to work and the
+     * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurrs
+     * during a request, we want to ensure that we {@link Metadata#requestUpdate() request a metadata update} so that
+     * on a subsequent invocation of {@link NetworkClient#poll(long, long) poll}, the metadata request will be sent.
+     *
+     * <p/>
+     *
+     * The {@link MetadataUpdater} has a specific method to handle
+     * {@link NetworkClient.DefaultMetadataUpdater#handleServerDisconnect(long, String, Optional) server disconnects}
+     * which is where we {@link Metadata#requestUpdate() request a metadata update}. This test helper method ensures
+     * that is invoked by checking {@link Metadata#updateRequested()} after the simulated timeout.
+     *
+     * @param requestTimeoutMs Timeout in ms
+     */
+    private void testRequestTimeout(int requestTimeoutMs) {
+        Metadata metadata = new Metadata(50, 5000, new LogContext(), new ClusterResourceListeners());
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
+
+        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata);
+
+        // Send first produce without any timeout.
+        ClientResponse clientResponse = produce(client, requestTimeoutMs, false);
+        assertEquals(node.idString(), clientResponse.destination());
+        assertFalse(clientResponse.wasDisconnected(), "Expected response to succeed and not disconnect");
+        assertFalse(clientResponse.wasTimedOut(), "Expected response to succeed and not time out");
+        assertFalse(metadata.updateRequested(), "Expected NetworkClient to not need to update metadata");
+
+        // Send second request, but emulate a timeout.
+        clientResponse = produce(client, requestTimeoutMs, true);
+        assertEquals(node.idString(), clientResponse.destination());
+        assertTrue(clientResponse.wasDisconnected(), "Expected response to fail due to disconnection");
+        assertTrue(clientResponse.wasTimedOut(), "Expected response to fail due to timeout");
+        assertTrue(metadata.updateRequested(), "Expected NetworkClient to have called requestUpdate on metadata on timeout");
+    }
+
+    private ClientResponse produce(NetworkClient client, int requestTimeoutMs, boolean shouldEmulateTimeout) {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
                 .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
-        int requestTimeoutMs = defaultRequestTimeoutMs + 5000;
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
                 requestTimeoutMs, handler);
-        assertEquals(requestTimeoutMs, request.requestTimeoutMs());
-        testRequestTimeout(request);
-    }
-
-    @Test
-    public void testDefaultRequestTimeout() {
-        awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
-                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
-                .setAcks((short) 1)
-                .setTimeoutMs(1000));
-        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
-        assertEquals(defaultRequestTimeoutMs, request.requestTimeoutMs());
-        testRequestTimeout(request);
-    }
-
-    private void testRequestTimeout(ClientRequest request) {
         client.send(request, time.milliseconds());
 
-        time.sleep(request.requestTimeoutMs() + 1);
-        List<ClientResponse> responses = client.poll(0, time.milliseconds());
+        if (shouldEmulateTimeout) {
+            // For a delay of slightly more than our timeout threshold to emulate the request timing out.
+            time.sleep(requestTimeoutMs + 1);
+        } else {
+            ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData());
+            ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, PRODUCE.latestVersion(), request.correlationId());
+            selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+        }
 
+        List<ClientResponse> responses = client.poll(0, time.milliseconds());
         assertEquals(1, responses.size());
-        ClientResponse clientResponse = responses.get(0);
-        assertEquals(node.idString(), clientResponse.destination());
-        assertTrue(clientResponse.wasDisconnected(), "Expected response to fail due to disconnection");
+        return responses.get(0);
     }
 
     @Test

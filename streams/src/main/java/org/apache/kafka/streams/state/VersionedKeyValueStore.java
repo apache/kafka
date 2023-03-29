@@ -59,12 +59,24 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * Delete the value associated with this key from the store, at the specified timestamp
      * (if there is such a value), and return the deleted value.
      * <p>
-     * This operation is semantically equivalent to {@link #get(Object, long) #get(key, timestamp)}
-     * followed by {@link #put(Object, Object, long) #put(key, null, timestamp)}.
-     * <p>
      * If the timestamp associated with this deletion is older than the store's grace period
      * (i.e., history retention) relative to the current observed stream time, then the deletion
-     * will not be performed.
+     * will not be performed and {@code null} will be returned.
+     * <p>
+     * As a consequence of the above, the way to delete a record version is <it>not</it>
+     * to first call {@link #get(Object) #get(key)} or {@link #get(Object, long) #get(key, timestamp)}
+     * and use the returned {@link VersionedRecord#timestamp()} in a call to this
+     * {@code delete(key, timestamp)} method, as the returned timestamp may be older than
+     * the store's grace period (i.e., history retention) and will therefore not take place.
+     * Instead, you should pass a business logic inferred timestamp that specifies when
+     * the delete actually happens. For example, it could be the timestamp of the currently
+     * processed input record or the current stream time.
+     * <p>
+     * This operation is semantically equivalent to {@link #get(Object, long) #get(key, timestamp)}
+     * followed by {@link #put(Object, Object, long) #put(key, null, timestamp)}, with
+     * a caveat that if the deletion timestamp is older than the store's grace period
+     * (i.e., history retention) then the return value is always {@code null}, regardless
+     * of what {@link #get(Object, long) #get(key, timestamp)} would return.
      *
      * @param key       The key
      * @param timestamp The timestamp for this delete
@@ -105,7 +117,9 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      *         retention time, i.e., the store no longer contains data for the provided
      *         timestamp). Note that the record timestamp {@code r.timestamp()} of the
      *         returned {@link VersionedRecord} may be smaller than the provided timestamp
-     *         bound.
+     *         bound. Additionally, if the latest record version for the key is eligible
+     *         for the provided timestamp bound, then that record will be returned even if
+     *         the timestamp bound is older than the store's history retention.
      * @throws NullPointerException       If null is used for key.
      * @throws InvalidStateStoreException if the store is not initialized
      */

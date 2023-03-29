@@ -89,11 +89,8 @@ object TopicCommand extends Logging {
     val replicationFactor = opts.replicationFactor
     val replicaAssignment = opts.replicaAssignment
     val configsToAdd = parseTopicConfigsToBeAdded(opts)
-    val configsToDelete = parseTopicConfigsToBeDeleted(opts)
-    val rackAwareMode = opts.rackAwareMode
 
     def hasReplicaAssignment: Boolean = replicaAssignment.isDefined
-    def hasPartitions: Boolean = partitions.isDefined
     def ifTopicDoesntExist(): Boolean = opts.ifNotExists
   }
 
@@ -444,14 +441,6 @@ object TopicCommand extends Logging {
     props
   }
 
-  def parseTopicConfigsToBeDeleted(opts: TopicCommandOptions): Seq[String] = {
-    val configsToBeDeleted = opts.configsToDelete.getOrElse(Collections.emptyList()).asScala.map(_.trim())
-    val propsToBeDeleted = new Properties
-    configsToBeDeleted.foreach(propsToBeDeleted.setProperty(_, ""))
-    LogConfig.validateNames(propsToBeDeleted)
-    configsToBeDeleted
-  }
-
   def parseReplicaAssignment(replicaAssignmentList: String): Map[Int, List[Int]] = {
     val partitionList = replicaAssignmentList.split(",")
     val ret = new mutable.LinkedHashMap[Int, List[Int]]()
@@ -499,10 +488,14 @@ object TopicCommand extends Logging {
       .describedAs("command config property file")
       .ofType(classOf[String])
 
+    private val kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
+      " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)"
+
     private val listOpt = parser.accepts("list", "List all available topics.")
     private val createOpt = parser.accepts("create", "Create a new topic.")
     private val deleteOpt = parser.accepts("delete", "Delete a topic")
-    private val alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.")
+    private val alterOpt = parser.accepts("alter", "Alter the number of partitions and replica assignment. " +
+      "Update the configuration of an existing topic via --alter is no longer supported here" + kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".")
     private val describeOpt = parser.accepts("describe", "List details for the given topics.")
     private val topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
                                            "expression, except for --create option. Put topic name in double quotes and use the '\\' prefix " +
@@ -516,8 +509,6 @@ object TopicCommand extends Logging {
       .describedAs("topic-id")
       .ofType(classOf[String])
     private val nl = System.getProperty("line.separator")
-    private val kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
-      " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)"
     private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered." +
                                              " The following is a list of valid configurations: " + nl + LogConfig.configNames.asScala.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs." +
@@ -560,8 +551,6 @@ object TopicCommand extends Logging {
     private val ifNotExistsOpt = parser.accepts("if-not-exists",
       "if set when creating topics, the action will only execute if the topic does not already exist.")
 
-    private val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
-
     private val excludeInternalTopicOpt = parser.accepts("exclude-internal",
       "exclude internal topics when running list or describe command. The internal topics will be listed by default")
 
@@ -592,7 +581,6 @@ object TopicCommand extends Logging {
         Some(parseReplicaAssignment(options.valueOf(replicaAssignmentOpt)))
       else
         None
-    def rackAwareMode: RackAwareMode = if (has(disableRackAware)) RackAwareMode.Disabled else RackAwareMode.Enforced
     def reportUnderReplicatedPartitions: Boolean = has(reportUnderReplicatedPartitionsOpt)
     def reportUnavailablePartitions: Boolean = has(reportUnavailablePartitionsOpt)
     def reportUnderMinIsrPartitions: Boolean = has(reportUnderMinIsrPartitionsOpt)

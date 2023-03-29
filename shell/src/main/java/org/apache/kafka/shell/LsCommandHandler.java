@@ -179,7 +179,7 @@ public final class LsCommandHandler implements Commands.Handler {
                     }
                 }
             }
-            writer.println(output.toString());
+            writer.println(output);
         }
     }
 

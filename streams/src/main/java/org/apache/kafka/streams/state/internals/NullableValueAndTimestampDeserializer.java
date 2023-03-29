@@ -28,7 +28,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde.BooleanSerde.BooleanDeserializer;
+import org.apache.kafka.common.serialization.BooleanDeserializer;
 
 /**
  * See {@link NullableValueAndTimestampSerde}.

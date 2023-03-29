@@ -16,16 +16,21 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeAclsResult;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -54,14 +59,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class MirrorSourceConnectorTest {
@@ -147,6 +156,51 @@ public class MirrorSourceConnectorTest {
         AclBinding processedDenyAllAclBinding = connector.targetAclBinding(denyAllAclBinding);
         assertEquals(processedDenyAllAclBinding.entry().operation(), AclOperation.ALL, "should not change ALL");
         assertEquals(processedDenyAllAclBinding.entry().permissionType(), AclPermissionType.DENY, "should not change DENY");
+    }
+
+    @Test
+    public void testNoBrokerAclAuthorizer() throws Exception {
+        Admin sourceAdmin = mock(Admin.class);
+        Admin targetAdmin = mock(Admin.class);
+        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin);
+
+        ExecutionException describeAclsFailure = new ExecutionException(
+                "Failed to describe ACLs",
+                new SecurityDisabledException("No ACL authorizer configured on this broker")
+        );
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Collection<AclBinding>> describeAclsFuture = mock(KafkaFuture.class);
+        when(describeAclsFuture.get()).thenThrow(describeAclsFailure);
+        DescribeAclsResult describeAclsResult = mock(DescribeAclsResult.class);
+        when(describeAclsResult.values()).thenReturn(describeAclsFuture);
+        when(sourceAdmin.describeAcls(any())).thenReturn(describeAclsResult);
+
+        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
+            LogCaptureAppender.setClassLoggerToTrace(MirrorSourceConnector.class);
+            connector.syncTopicAcls();
+            long aclSyncDisableMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("Consider disabling topic ACL syncing"))
+                    .count();
+            assertEquals(1, aclSyncDisableMessages, "Should have recommended that user disable ACL syncing");
+            long aclSyncSkippingMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("skipping topic ACL sync"))
+                    .count();
+            assertEquals(0, aclSyncSkippingMessages, "Should not have logged ACL sync skip at same time as suggesting ACL sync be disabled");
+
+            connector.syncTopicAcls();
+            connector.syncTopicAcls();
+            aclSyncDisableMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("Consider disabling topic ACL syncing"))
+                    .count();
+            assertEquals(1, aclSyncDisableMessages, "Should not have recommended that user disable ACL syncing more than once");
+            aclSyncSkippingMessages = connectorLogs.getMessages().stream()
+                    .filter(m -> m.contains("skipping topic ACL sync"))
+                    .count();
+            assertEquals(2, aclSyncSkippingMessages, "Should have logged ACL sync skip instead of suggesting disabling ACL syncing");
+        }
+
+        // We should never have tried to perform an ACL sync on the target cluster
+        verifyNoInteractions(targetAdmin);
     }
 
     @Test

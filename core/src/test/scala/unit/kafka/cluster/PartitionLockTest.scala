@@ -390,6 +390,7 @@ class PartitionLockTest extends Logging {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         followerId,
+        1,
         0L,
         1,
         maxBytes,
@@ -415,7 +416,7 @@ class PartitionLockTest extends Logging {
         updateFetchState = true
       )
 
-      assertTrue(logReadInfo.divergingEpoch.isEmpty)
+      assertTrue(!logReadInfo.divergingEpoch.isPresent)
 
       val batches = logReadInfo.fetchedData.records.batches.asScala
       if (batches.nonEmpty) {

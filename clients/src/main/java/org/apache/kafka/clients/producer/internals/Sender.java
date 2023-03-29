@@ -549,7 +549,13 @@ public class Sender implements Runnable {
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
         RequestHeader requestHeader = response.requestHeader();
         int correlationId = requestHeader.correlationId();
-        if (response.wasDisconnected()) {
+        if (response.wasTimedOut()) {
+            log.trace("Cancelled request with header {} due to the last request to node {} timed out",
+                requestHeader, response.destination());
+            for (ProducerBatch batch : batches.values())
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.REQUEST_TIMED_OUT, String.format("Disconnected from node %s due to timeout", response.destination())),
+                        correlationId, now);
+        } else if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())

@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import kafka.log.{SegmentDeletion, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.{MockTime, TestUtils}
@@ -25,11 +25,11 @@ import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.raft._
+import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason}
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -194,7 +194,7 @@ final class KafkaMetadataLogTest {
     }
 
     // Simulate log cleanup that advances the LSO
-    log.log.maybeIncrementLogStartOffset(snapshotId.offset - 1, SegmentDeletion)
+    log.log.maybeIncrementLogStartOffset(snapshotId.offset - 1, LogStartOffsetIncrementReason.SegmentDeletion)
 
     assertEquals(Optional.empty(), log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset - 2, snapshotId.epoch)))
   }
@@ -715,7 +715,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
     // Simulate log cleaning advancing the LSO
-    log.log.maybeIncrementLogStartOffset(offset, SegmentDeletion);
+    log.log.maybeIncrementLogStartOffset(offset, LogStartOffsetIncrementReason.SegmentDeletion);
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch)
     assertEquals(ValidOffsetAndEpoch.Kind.SNAPSHOT, resultOffsetAndEpoch.kind)

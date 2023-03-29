@@ -453,7 +453,7 @@ public final class KafkaEventQueue implements EventQueue {
         this.lock = new ReentrantLock();
         this.log = logContext.logger(KafkaEventQueue.class);
         this.eventHandler = new EventHandler();
-        this.eventHandlerThread = new KafkaThread(threadNamePrefix + "EventHandler",
+        this.eventHandlerThread = new KafkaThread(threadNamePrefix + "event-handler",
             this.eventHandler, false);
         this.shuttingDown = false;
         this.interrupted = false;

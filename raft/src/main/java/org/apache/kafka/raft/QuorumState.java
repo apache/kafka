@@ -121,7 +121,7 @@ public class QuorumState {
             // For exceptions during state file loading (missing or not readable),
             // we could assume the file is corrupted already and should be cleaned up.
             log.warn("Clearing local quorum state store after error loading state {}",
-                store.toString(), e);
+                store, e);
             store.clear();
             election = ElectionState.withUnknownLeader(0, voters);
         }
@@ -475,8 +475,9 @@ public class QuorumState {
         }
 
         this.store.writeElectionState(state.election());
+        EpochState from = this.state;
         this.state = state;
-        log.info("Completed transition to {}", state);
+        log.info("Completed transition to {} from {}", state, from);
     }
 
     private int randomElectionTimeoutMs() {

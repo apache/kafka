@@ -337,13 +337,13 @@ public class DistributedConfig extends WorkerConfig {
             .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     128 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     32 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.RECEIVE_BUFFER_DOC)
             .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
