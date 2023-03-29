@@ -69,11 +69,6 @@
     <allow class="kafka.server.MetadataCache" />
   </subpackage>
 
-  <subpackage name="examples">
-    <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="org.apache.kafka.server.util" />
-  </subpackage>
-
   <subpackage name="server">
     <allow pkg="kafka" />
     <allow pkg="org.apache.kafka" />

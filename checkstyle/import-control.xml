@@ -408,6 +408,10 @@
     <allow pkg="scala.compat"/>
   </subpackage>
 
+  <subpackage name="examples">
+    <allow pkg="org.apache.kafka.clients" />
+  </subpackage>
+
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.server.util" />
