@@ -19,12 +19,18 @@ package org.apache.kafka.controller;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Optional;
 
+import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(40)
@@ -72,5 +78,106 @@ public class PartitionReassignmentReplicasTest {
         assertEquals(Collections.emptyList(), replicas.removing());
         assertEquals(Collections.emptyList(), replicas.adding());
         assertEquals(Arrays.asList(0, 1, 3, 2), replicas.replicas());
+    }
+
+    @Test
+    public void testDoesNotCompleteReassignment() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(3, 4, 5)));
+        assertTrue(replicas.isReassignmentInProgress());
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4));
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    @Test
+    public void testDoesNotCompleteReassignmentIfNoneOngoing() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Arrays.asList(0, 1, 2)
+        );
+        assertFalse(replicas.isReassignmentInProgress());
+
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2));
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    @Test
+    public void testDoesCompleteReassignmentAllNewReplicas() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(3, 4, 5)));
+        assertTrue(replicas.isReassignmentInProgress());
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4, 5));
+        assertTrue(reassignmentOptional.isPresent());
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
+        assertEquals(Arrays.asList(3, 4, 5), completedReassignment.isr);
+        assertEquals(Arrays.asList(3, 4, 5), completedReassignment.replicas);
+    }
+
+    @Test
+    public void testDoesCompleteReassignmentSomeNewReplicas() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(0, 1, 3)));
+        assertTrue(replicas.isReassignmentInProgress());
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3));
+        assertTrue(reassignmentOptional.isPresent());
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
+        assertEquals(Arrays.asList(0, 1, 3), completedReassignment.isr);
+        assertEquals(Arrays.asList(0, 1, 3), completedReassignment.replicas);
+    }
+
+    @Test
+    public void testIsReassignmentInProgress() {
+        assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
+            new PartitionRegistration(
+                new int[]{0, 1, 3, 2},
+                new int[]{0, 1, 3, 2},
+                new int[]{2},
+                new int[]{3},
+                0,
+                LeaderRecoveryState.RECOVERED,
+                0,
+                0)));
+        assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
+            new PartitionRegistration(
+                new int[]{0, 1, 3, 2},
+                new int[]{0, 1, 3, 2},
+                new int[]{2},
+                Replicas.NONE,
+                0,
+                LeaderRecoveryState.RECOVERED,
+                0,
+                0)));
+        assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
+            new PartitionRegistration(
+                new int[]{0, 1, 2, 3},
+                new int[]{0, 1, 2, 3},
+                Replicas.NONE,
+                new int[]{3},
+                0,
+                LeaderRecoveryState.RECOVERED,
+                0,
+                0)));
+        assertFalse(PartitionReassignmentReplicas.isReassignmentInProgress(
+            new PartitionRegistration(
+                new int[]{0, 1, 2},
+                new int[]{0, 1, 2},
+                Replicas.NONE,
+                Replicas.NONE,
+                0,
+                LeaderRecoveryState.RECOVERED,
+                0,
+                0)));
+    }
+
+    @Test
+    public void testOriginalReplicas() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(0, 1, 3)));
+        assertEquals(Arrays.asList(0, 1, 2), replicas.originalReplicas());
     }
 }

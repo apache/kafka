@@ -64,7 +64,7 @@ class BrokerLifecycleManager(
     if (isZkBroker) {
       builder.append(" isZkBroker=true")
     }
-    builder.append("]")
+    builder.append("] ")
     builder.toString()
   }
 

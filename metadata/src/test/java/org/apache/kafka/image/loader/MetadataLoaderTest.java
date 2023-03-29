@@ -42,7 +42,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -71,12 +74,13 @@ public class MetadataLoaderTest {
     }
 
     static class MockPublisher implements MetadataPublisher {
+        final CompletableFuture<Void> firstPublish = new CompletableFuture<>();
         private final String name;
-        MetadataDelta latestDelta = null;
-        MetadataImage latestImage = null;
-        LogDeltaManifest latestLogDeltaManifest = null;
-        SnapshotManifest latestSnapshotManifest = null;
-        boolean closed = false;
+        volatile MetadataDelta latestDelta = null;
+        volatile MetadataImage latestImage = null;
+        volatile LogDeltaManifest latestLogDeltaManifest = null;
+        volatile SnapshotManifest latestSnapshotManifest = null;
+        volatile boolean closed = false;
 
         MockPublisher() {
             this("MockPublisher");
@@ -109,10 +113,12 @@ public class MetadataLoaderTest {
                 default:
                     throw new RuntimeException("Invalid manifest type " + manifest.type());
             }
+            firstPublish.complete(null);
         }
 
         @Override
         public void close() throws Exception {
+            firstPublish.completeExceptionally(new RejectedExecutionException());
             closed = true;
         }
     }
@@ -262,7 +268,7 @@ public class MetadataLoaderTest {
                 new MockPublisher("c"));
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
-                setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
                 build()) {
             loader.installPublishers(publishers.subList(0, 2)).get();
             loader.removeAndClosePublisher(publishers.get(1)).get();
@@ -276,6 +282,7 @@ public class MetadataLoaderTest {
             loader.handleSnapshot(snapshotReader);
             loader.waitForAllEventsToBeHandled();
             assertTrue(snapshotReader.closed);
+            publishers.get(0).firstPublish.get(1, TimeUnit.MINUTES);
             loader.removeAndClosePublisher(publishers.get(0)).get();
         }
         assertTrue(publishers.get(0).closed);
@@ -302,6 +309,7 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
                 build()) {
             loader.installPublishers(publishers).get();
+            publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             loadEmptySnapshot(loader, 200);
             assertEquals(200L, loader.lastAppliedOffset());
             loadEmptySnapshot(loader, 300);
@@ -396,12 +404,13 @@ public class MetadataLoaderTest {
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setTime(time).
-                setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
                 build()) {
             loader.installPublishers(publishers).get();
             loadTestSnapshot(loader, 200);
+            publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             MockBatchReader batchReader = new MockBatchReader(300, asList(
-                Batch.control(300, 100, 4000, 10, 400))).
+                    Batch.control(300, 100, 4000, 10, 400))).
                     setTime(time);
             loader.handleCommit(batchReader);
             loader.waitForAllEventsToBeHandled();
@@ -427,7 +436,7 @@ public class MetadataLoaderTest {
                 new MockPublisher("b"));
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
-                setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
                 build()) {
             loader.installPublishers(publishers).get();
             loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
@@ -439,6 +448,9 @@ public class MetadataLoaderTest {
                         setName("foo").
                         setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
                 )));
+            for (MockPublisher publisher : publishers) {
+                publisher.firstPublish.get(1, TimeUnit.MINUTES);
+            }
             loader.waitForAllEventsToBeHandled();
             assertEquals(200L, loader.lastAppliedOffset());
             loader.handleCommit(new MockBatchReader(201, asList(
@@ -461,6 +473,7 @@ public class MetadataLoaderTest {
      * Test that we do not leave the catchingUp state state until we have loaded up to the high
      * water mark.
      */
+    @Test
     public void testCatchingUpState() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
         List<MockPublisher> publishers = asList(new MockPublisher("a"),
@@ -476,22 +489,18 @@ public class MetadataLoaderTest {
             // We don't update lastAppliedOffset because we're still in catchingUp state due to
             // highWaterMark being OptionalLong.empty (aka unknown).
             assertEquals(-1L, loader.lastAppliedOffset());
+            assertFalse(publishers.get(0).firstPublish.isDone());
 
-            // Setting the high water mark here doesn't do anything because we only check it when
-            // we're publishing an update. This is OK because we know that we'll get updates
-            // frequently. If there is no other activity, there will at least be NoOpRecords.
-            highWaterMark.set(OptionalLong.of(0));
-            assertEquals(-1L, loader.lastAppliedOffset());
-
-            // This still doesn't advance lastAppliedOffset since the high water mark at 220
+            // This still doesn't advance lastAppliedOffset since the high water mark at 221
             // is greater than our snapshot at 210.
-            highWaterMark.set(OptionalLong.of(220));
+            highWaterMark.set(OptionalLong.of(221));
             loadTestSnapshot(loader, 210);
             assertEquals(-1L, loader.lastAppliedOffset());
 
             // Loading a test snapshot at 220 allows us to leave catchUp state.
             loadTestSnapshot(loader, 220);
             assertEquals(220L, loader.lastAppliedOffset());
+            publishers.get(0).firstPublish.get(1, TimeUnit.MINUTES);
         }
         faultHandler.maybeRethrowFirstException();
     }

@@ -943,35 +943,90 @@ public class AbstractHerderTest {
 
     @Test
     public void testSinkConnectorPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("sink", SampleSinkConnector::new, SampleSinkConnector::config);
+        testConnectorPluginConfig(
+                "sink",
+                SampleSinkConnector::new,
+                SampleSinkConnector::config,
+                Optional.of(SinkConnectorConfig.configDef())
+        );
+    }
+
+    @Test
+    public void testSinkConnectorPluginConfigIncludingCommon() throws ClassNotFoundException {
+        testConnectorPluginConfig(
+                "sink",
+                SampleSinkConnector::new,
+                SampleSinkConnector::configWithCommon,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testSourceConnectorPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("source", SampleSourceConnector::new, SampleSourceConnector::config);
+        testConnectorPluginConfig(
+                "source",
+                SampleSourceConnector::new,
+                SampleSourceConnector::config,
+                Optional.of(SourceConnectorConfig.configDef())
+        );
+    }
+
+    @Test
+    public void testSourceConnectorPluginConfigIncludingCommon() throws ClassNotFoundException {
+        testConnectorPluginConfig(
+                "source",
+                SampleSourceConnector::new,
+                SampleSourceConnector::configWithCommon,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testConverterPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("converter", SampleConverterWithHeaders::new, SampleConverterWithHeaders::config);
+        testConnectorPluginConfig(
+                "converter",
+                SampleConverterWithHeaders::new,
+                SampleConverterWithHeaders::config,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testHeaderConverterPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("header-converter", SampleHeaderConverter::new, SampleHeaderConverter::config);
+        testConnectorPluginConfig(
+                "header-converter",
+                SampleHeaderConverter::new,
+                SampleHeaderConverter::config,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testPredicatePluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("predicate", SamplePredicate::new, SamplePredicate::config);
+        testConnectorPluginConfig(
+                "predicate",
+                SamplePredicate::new,
+                SamplePredicate::config,
+                Optional.empty()
+        );
     }
 
     @Test
     public void testTransformationPluginConfig() throws ClassNotFoundException {
-        testConnectorPluginConfig("transformation", SampleTransformation::new, SampleTransformation::config);
+        testConnectorPluginConfig(
+                "transformation",
+                SampleTransformation::new,
+                SampleTransformation::config,
+                Optional.empty()
+        );
     }
 
-    private <T> void testConnectorPluginConfig(String pluginName, Supplier<T> newPluginInstance, Function<T, ConfigDef> pluginConfig) throws ClassNotFoundException {
+    private <T> void testConnectorPluginConfig(
+            String pluginName,
+            Supplier<T> newPluginInstance,
+            Function<T, ConfigDef> pluginConfig,
+            Optional<ConfigDef> baseConfig
+    ) throws ClassNotFoundException {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
@@ -984,7 +1039,9 @@ public class AbstractHerderTest {
         assertNotNull(configs);
 
         ConfigDef expectedConfig = pluginConfig.apply(newPluginInstance.get());
-        assertEquals(expectedConfig.names().size(), configs.size());
+        int expectedConfigSize = baseConfig.map(config -> config.names().size()).orElse(0)
+                + expectedConfig.names().size();
+        assertEquals(expectedConfigSize, configs.size());
         // Make sure that we used the correct class loader when interacting with the plugin
         verify(plugins).withClassLoader(newPluginInstance.get().getClass().getClassLoader());
     }

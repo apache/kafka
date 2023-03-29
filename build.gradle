@@ -1934,6 +1934,7 @@ project(':streams') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
