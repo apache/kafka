@@ -93,7 +93,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class RecordCollectorTest {
 
@@ -1391,27 +1391,23 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnFlushIfASerializationFailedWithDefaultExceptionHandler() {
+    public void testCollectorFlush_ThrowsStreamsExceptionUsingDefaultExceptionHandler() {
         final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
         final RecordCollector collector = new RecordCollectorImpl(
                 logContext,
                 taskId,
                 streamsProducer,
-                productionExceptionHandler,
+                new DefaultProductionExceptionHandler(),
                 streamsMetrics,
                 topology
         );
         collector.initialize();
-
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context);
-        try {
-            collector.flush();
-            fail("Should have thrown StreamsException");
-        } catch (final StreamsException expected) { /* ok */ }
+        collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context);
+        assertThrows(StreamsException.class, collector::flush);
     }
 
     @Test
-    public void shouldNotThrowStreamsExceptionOnFlushIfASerializationFailedWithAlwaysContinueExceptionHandler() {
+    public void testCollectorFlush_DoesNotThrowStreamsExceptionUsingAlwaysContinueExceptionHandler() {
         final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
         final RecordCollector collector = new RecordCollectorImpl(
                 logContext,
@@ -1422,8 +1418,8 @@ public class RecordCollectorTest {
                 topology
         );
         collector.initialize();
-        collector.send(topic, "999", "0", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
-        collector.flush();
+        collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
+        assertDoesNotThrow(collector::flush);
     }
 
     private static class ErrorStringSerializer extends StringSerializer {

@@ -47,15 +47,14 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
-
 import org.slf4j.Logger;
 
-import java.util.Set;
-import java.util.Optional;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
@@ -191,8 +190,8 @@ public class RecordCollectorImpl implements RecordCollector {
                             final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
-        final byte[] keyBytes;
-        final byte[] valBytes;
+        byte[] keyBytes = null;
+        byte[] valBytes = null;
         try {
             keyBytes = keySerializer.serialize(topic, headers, key);
             valBytes = valueSerializer.serialize(topic, headers, value);
@@ -213,6 +212,28 @@ public class RecordCollectorImpl implements RecordCollector {
                     keyClass,
                     valueClass),
                 exception);
+        } catch (final SerializationException exception) {
+            final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
+            final boolean isKey = keyBytes == null;
+            final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
+            try {
+                response = productionExceptionHandler.handleSerializationException(record, exception);
+            } catch (final Exception fatalUserException) {
+                log.error("Serialization error callback failed after serialization error for record {}", record,
+                        fatalUserException);
+                final ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
+                recordSendError(topic, exception, rec);
+                return;
+            }
+
+            if (response == ProductionExceptionHandler.ProductionExceptionHandlerResponse.CONTINUE) {
+                log.warn("Error serializing the record {} (key=[{}] value=[{}] timestamp=[{}]) to topic=[{}] and partition=[{}]; " +
+                                "The exception handler chose to CONTINUE processing in spite of this error.",
+                        isKey ? "key" : "value", key, value, timestamp, topic, partition, exception);
+            } else {
+                recordSendError(topic, exception, null);
+                return;
+            }
         } catch (final RuntimeException exception) {
             final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
             throw new StreamsException(errorMessage, exception);
