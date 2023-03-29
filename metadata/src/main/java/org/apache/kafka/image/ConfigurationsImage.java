@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -48,7 +49,7 @@ public final class ConfigurationsImage {
         return data.isEmpty();
     }
 
-    Map<ConfigResource, ConfigurationImage> resourceData() {
+    public Map<ConfigResource, ConfigurationImage> resourceData() {
         return data;
     }
 

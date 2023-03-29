@@ -552,7 +552,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 topicZkWriter.handleSnapshot(image.topics(), image.configs());
             } else {
                 if (delta.topicsDelta() != null) {
-
                     topicZkWriter.handleDelta(prevImage.topics(), delta.topicsDelta());
                 }
             }
