@@ -2440,7 +2440,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     txns.forEach { transaction => 
       val transactionalId = transaction.transactionalId
-      val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala // TODO: handle null pointer if transactionalId is not set
+
+      if (transactionalId == null)
+        throw new InvalidRequestException("Transactional ID can not be null in request.")
+
+      val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
 
       // Versions < 4 come from clients and must be authorized to write for the given transaction and for the given topics.
       if (version < 4 && !authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {

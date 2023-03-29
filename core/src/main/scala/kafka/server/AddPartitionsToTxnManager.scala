@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.apache.kafka.common.utils.Time
 
-import java.util.Collections
 import scala.collection.mutable
 
 object AddPartitionsToTxnManager {
@@ -44,36 +43,36 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
   
   def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
-    // Check if we have already (either node or individual transaction). 
-    val currentNodeAndTransactionDataOpt = nodesToTransactions.get(node)
-    currentNodeAndTransactionDataOpt match {
-      case None =>
-        nodesToTransactions.put(node,
-          new TransactionDataAndCallbacks(new AddPartitionsToTxnTransactionCollection(Collections.singletonList(transactionData).iterator()),
-            mutable.Map(transactionData.transactionalId() -> callback)))
-      case Some(currentNodeAndTransactionData) =>
-        // Check if we already have txn ID -- this should only happen in epoch bump case. If so, we should return error for old entry and remove from queue.
-        val currentTransactionData = currentNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
-        if (currentTransactionData != null) {
-          if (currentTransactionData.producerEpoch() < transactionData.producerEpoch()) {
-            val topicPartitionsToError = mutable.Map[TopicPartition, Errors]()
-            currentTransactionData.topics().forEach { topic => 
-              topic.partitions().forEach { partition =>
-                topicPartitionsToError.put(new TopicPartition(topic.name(), partition), Errors.INVALID_PRODUCER_EPOCH)
-              }
+    nodesToTransactions.synchronized {
+      // Check if we have already (either node or individual transaction). Add the Node if it isn't there.
+      val currentNodeAndTransactionData = nodesToTransactions.getOrElseUpdate(node,
+        new TransactionDataAndCallbacks(
+          new AddPartitionsToTxnTransactionCollection(1),
+          mutable.Map[String, AddPartitionsToTxnManager.AppendCallback]()))
+
+      val currentTransactionData = currentNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
+
+      // Check if we already have txn ID -- this should only happen in epoch bump case. If so, we should return error for old entry and remove from queue.
+      if (currentTransactionData != null) {
+        if (currentTransactionData.producerEpoch() < transactionData.producerEpoch()) {
+          val topicPartitionsToError = mutable.Map[TopicPartition, Errors]()
+          currentTransactionData.topics().forEach { topic =>
+            topic.partitions().forEach { partition =>
+              topicPartitionsToError.put(new TopicPartition(topic.name(), partition), Errors.INVALID_PRODUCER_EPOCH)
             }
-            val oldCallback = currentNodeAndTransactionData.callbacks(transactionData.transactionalId())
-            currentNodeAndTransactionData.transactionData.remove(transactionData)
-            oldCallback(topicPartitionsToError.toMap)
-          } else {
-            // We should never see a request on the same epoch since we haven't finished handling the one in queue
-            throw new InvalidRecordException("Received a second request from the same connection without finishing the first.")
           }
+          val oldCallback = currentNodeAndTransactionData.callbacks(transactionData.transactionalId())
+          currentNodeAndTransactionData.transactionData.remove(transactionData)
+          oldCallback(topicPartitionsToError.toMap)
+        } else {
+          // We should never see a request on the same epoch since we haven't finished handling the one in queue
+          throw new InvalidRecordException("Received a second request from the same connection without finishing the first.")
         }
-        currentNodeAndTransactionData.transactionData.add(transactionData)
-        currentNodeAndTransactionData.callbacks.put(transactionData.transactionalId(), callback)
+      }
+      currentNodeAndTransactionData.transactionData.add(transactionData)
+      currentNodeAndTransactionData.callbacks.put(transactionData.transactionalId(), callback)
+      wakeup()
     }
-    wakeup()
   }
 
   private class AddPartitionsToTxnHandler(node: Node, transactionDataAndCallbacks: TransactionDataAndCallbacks) extends RequestCompletionHandler {
