@@ -214,7 +214,6 @@ public class RecordCollectorImpl implements RecordCollector {
                 exception);
         } catch (final SerializationException exception) {
             final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
-            final boolean isKey = keyBytes == null;
             final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
             try {
                 response = productionExceptionHandler.handleSerializationException(record, exception);
@@ -225,14 +224,19 @@ public class RecordCollectorImpl implements RecordCollector {
                 return;
             }
 
-            if (response == ProductionExceptionHandler.ProductionExceptionHandlerResponse.CONTINUE) {
-                log.warn("Error serializing the record {} (key=[{}] value=[{}] timestamp=[{}]) to topic=[{}] and partition=[{}]; " +
-                                "The exception handler chose to CONTINUE processing in spite of this error.",
-                        isKey ? "key" : "value", key, value, timestamp, topic, partition, exception);
-            } else {
+            if (response == ProductionExceptionHandlerResponse.FAIL) {
                 recordSendError(topic, exception, null);
                 return;
             }
+
+            log.info("Unable to serialize the {}. Continue processing. " +
+                            "ProducerRecord(key=[{}], value=[{}], topic=[{}], partition=[{}], timestamp=[{}])",
+                    keyBytes == null ? "key" : "value",
+                    key,
+                    value,
+                    topic,
+                    partition,
+                    timestamp);
         } catch (final RuntimeException exception) {
             final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
             throw new StreamsException(errorMessage, exception);
