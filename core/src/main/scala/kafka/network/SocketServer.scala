@@ -323,6 +323,7 @@ class SocketServer(val config: KafkaConfig,
       dataPlaneAcceptors.asScala.remove(endpoint).foreach { acceptor =>
         acceptor.beginShutdown()
         acceptor.close()
+        config.removeReconfigurable(acceptor)
       }
     }
   }
