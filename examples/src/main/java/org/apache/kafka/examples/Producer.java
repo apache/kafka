@@ -25,12 +25,13 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
 /**
  * A simple producer thread supporting two send modes:
- * - Async mode (default): messages are sent without waiting for the response.
+ * - Async mode (default): records are sent without waiting for the response.
  * - Sync mode: each send operation blocks waiting for the response.
  */
 public class Producer extends Thread {
@@ -44,7 +45,8 @@ public class Producer extends Thread {
     private final CountDownLatch latch;
     private volatile boolean closed;
 
-    public Producer(String bootstrapServers,
+    public Producer(String threadName,
+                    String bootstrapServers,
                     String topic,
                     boolean isAsync,
                     String transactionalId,
@@ -52,6 +54,7 @@ public class Producer extends Thread {
                     int numRecords,
                     int transactionTimeoutMs,
                     CountDownLatch latch) {
+        super(threadName);
         this.bootstrapServers = bootstrapServers;
         this.topic = topic;
         this.isAsync = isAsync;
@@ -70,24 +73,32 @@ public class Producer extends Thread {
         try (KafkaProducer<Integer, String> producer = createKafkaProducer()) {
             while (!closed && sentRecords < numRecords) {
                 if (isAsync) {
-                    sendAsync(producer, key, "demo" + key);
+                    asyncSend(producer, key, "test");
                 } else {
-                    sendSync(producer, key, "demo" + key);
+                    syncSend(producer, key, "test");
                 }
                 key++;
                 sentRecords++;
             }
         } catch (Throwable e) {
+            Utils.printOut("Fatal error");
             e.printStackTrace();
         }
-        System.out.printf("Done: %d messages sent to %s%n", sentRecords, topic);
+        Utils.printOut("Sent %d records", sentRecords);
         shutdown();
+    }
+
+    public void shutdown() {
+        if (!closed) {
+            closed = true;
+            latch.countDown();
+        }
     }
 
     public KafkaProducer<Integer, String> createKafkaProducer() {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, Utils.createClientId());
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "client-" + UUID.randomUUID());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         if (transactionTimeoutMs > 0) {
@@ -100,30 +111,18 @@ public class Producer extends Thread {
         return new KafkaProducer<>(props);
     }
 
-    private void sendAsync(KafkaProducer<Integer, String> producer, int key, String value) {
+    private void asyncSend(KafkaProducer<Integer, String> producer, int key, String value) {
         // still blocks when buffer.memory is full or metadata are not available
         producer.send(new ProducerRecord<>(topic, key, value),
             new ProducerCallback(key, value));
     }
 
-    private RecordMetadata sendSync(KafkaProducer<Integer, String> producer, int key, String value)
+    private RecordMetadata syncSend(KafkaProducer<Integer, String> producer, int key, String value)
             throws ExecutionException, InterruptedException {
+        // add your application retry strategy here
         RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
-        maybePrintMessage(key, value, metadata);
+        Utils.maybePrintRecord(numRecords, key, value, metadata);
         return metadata;
-    }
-
-    private void maybePrintMessage(int key, String value, RecordMetadata metadata) {
-        // we only print 10 messages when there are 20 or more to send
-        if (key % Math.max(1, numRecords / 10) == 0) {
-            System.out.printf("Sample: message(%d, %s) sent to partition(%d) with offset(%d)%n",
-                key, value, metadata.partition(), metadata.offset());
-        }
-    }
-
-    public void shutdown() {
-        closed = true;
-        latch.countDown();
     }
 
     class ProducerCallback implements Callback {
@@ -136,10 +135,11 @@ public class Producer extends Thread {
         }
 
         public void onCompletion(RecordMetadata metadata, Exception e) {
-            if (metadata != null) {
-                maybePrintMessage(key, value, metadata);
+            // add your stateful application retry strategy here
+            if (e != null) {
+                Utils.printErr(e.getMessage());
             } else {
-                e.printStackTrace();
+                Utils.maybePrintRecord(numRecords, key, value, metadata);
             }
         }
     }

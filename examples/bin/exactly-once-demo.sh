@@ -21,4 +21,4 @@ if [[ -z "${KAFKA_HEAP_OPTS:-}" ]]; then
   export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
 
-exec "$BASE_DIR"/bin/kafka-run-class.sh org.apache.kafka.examples.ExactlyOnceDemo "$@"
+exec "$BASE_DIR"/bin/kafka-run-class.sh org.apache.kafka.examples.ExactlyOnceDriver "$@"
