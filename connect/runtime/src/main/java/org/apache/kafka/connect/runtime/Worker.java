@@ -1203,9 +1203,9 @@ public class Worker {
                 }
                 Utils.closeQuietly(admin, "Offset fetch admin for sink connector " + connName);
             });
-        } catch (Exception e) {
+        } catch (Throwable t) {
             Utils.closeQuietly(admin, "Offset fetch admin for sink connector " + connName);
-            cb.onCompletion(new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, e), null);
+            cb.onCompletion(new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, t), null);
         }
     }
 
@@ -1238,8 +1238,8 @@ public class Worker {
                         .map(entry -> new ConnectorOffset(entry.getKey(), entry.getValue()))
                         .collect(Collectors.toList());
                 cb.onCompletion(null, new ConnectorOffsets(connectorOffsets));
-            } catch (Exception e) {
-                cb.onCompletion(e, null);
+            } catch (Throwable t) {
+                cb.onCompletion(t, null);
             } finally {
                 Utils.closeQuietly(offsetReader, "Offset reader for connector " + connName);
                 Utils.closeQuietly(offsetStore::stop, "Offset store for connector " + connName);

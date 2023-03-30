@@ -162,16 +162,12 @@ public class FileOffsetBackingStoreTest {
         restore.start();
 
         Set<Map<String, Object>> connectorPartitions1 = restore.connectorPartitions("connector1");
-        assertEquals(2, connectorPartitions1.size());
-
         Set<Map<String, Object>> expectedConnectorPartition1 = new HashSet<>();
         expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue1"));
         expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue2"));
         assertEquals(expectedConnectorPartition1, connectorPartitions1);
 
         Set<Map<String, Object>> connectorPartitions2 = restore.connectorPartitions("connector2");
-        assertEquals(1, connectorPartitions2.size());
-
         Set<Map<String, Object>> expectedConnectorPartition2 = Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
         assertEquals(expectedConnectorPartition2, connectorPartitions2);
 
@@ -183,7 +179,7 @@ public class FileOffsetBackingStoreTest {
         );
         restore.set(serializedPartitionOffsets, setCallback).get();
         connectorPartitions1 = restore.connectorPartitions("connector1");
-        assertEquals(1, connectorPartitions1.size());
+        assertEquals(Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue2")), connectorPartitions1);
 
         verify(setCallback, times(3)).onCompletion(isNull(), isNull());
     }

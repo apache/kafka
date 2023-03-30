@@ -518,18 +518,31 @@ public class KafkaOffsetBackingStoreTest {
         store.get(Collections.emptyList()).get(10000, TimeUnit.MILLISECONDS);
 
         Set<Map<String, Object>> connectorPartitions1 = store.connectorPartitions("connector1");
-        assertEquals(2, connectorPartitions1.size());
-
         Set<Map<String, Object>> expectedConnectorPartition1 = new HashSet<>();
         expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue1"));
         expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue2"));
         assertEquals(expectedConnectorPartition1, connectorPartitions1);
 
         Set<Map<String, Object>> connectorPartitions2 = store.connectorPartitions("connector2");
-        assertEquals(1, connectorPartitions2.size());
-
         Set<Map<String, Object>> expectedConnectorPartition2 = Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
         assertEquals(expectedConnectorPartition2, connectorPartitions2);
+
+        doAnswer(invocation -> {
+            capturedConsumedCallback.getValue().onCompletion(null,
+                    new ConsumerRecord<>(TOPIC, 0, 4, 0L, TimestampType.CREATE_TIME, 0, 0,
+                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
+                                    Collections.singletonMap("partitionKey", "partitionValue1"))), null,
+                            new RecordHeaders(), Optional.empty()));
+            storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
+            return null;
+        }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
+
+        // Trigger a read to the end of the log
+        store.get(Collections.emptyList()).get(10000, TimeUnit.MILLISECONDS);
+
+        // Null valued offset for a partition key should remove that partition for the connector
+        connectorPartitions1 = store.connectorPartitions("connector1");
+        assertEquals(Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue2")), connectorPartitions1);
 
         store.stop();
         verify(storeLog).stop();

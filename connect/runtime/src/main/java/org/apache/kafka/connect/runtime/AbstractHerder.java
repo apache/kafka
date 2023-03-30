@@ -869,14 +869,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
-        log.trace("Submitting offset fetch request for connector: {}", connName);
+        log.trace("Fetching offsets for connector: {}", connName);
+        ClusterConfigState configSnapshot = configBackingStore.snapshot();
         try {
-            if (!configBackingStore.contains(connName)) {
+            if (!configSnapshot.contains(connName)) {
                 cb.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                 return;
             }
             // The worker asynchronously processes the request and completes the passed callback when done
-            worker.connectorOffsets(connName, configBackingStore.snapshot().connectorConfig(connName), cb);
+            worker.connectorOffsets(connName, configSnapshot.connectorConfig(connName), cb);
         } catch (Throwable t) {
             cb.onCompletion(t, null);
         }
