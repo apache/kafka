@@ -40,13 +40,16 @@ public class Utils {
         }
     }
 
+    public static String createClientId() {
+        return "client-" + UUID.randomUUID();
+    }
+
     public static void recreateTopics(String bootstrapServers, List<String> topicNames, int numPartitions) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(AdminClientConfig.CLIENT_ID_CONFIG, "admin-" + UUID.randomUUID());
-        Admin adminClient = Admin.create(props);
-        try {
-            deleteTopics(adminClient, topicNames);
+        props.put(AdminClientConfig.CLIENT_ID_CONFIG, Utils.createClientId());
+        try (Admin admin = Admin.create(props)) {
+            deleteTopics(admin, topicNames);
             // create topics in a retry loop
             while (true) {
                 // use default RF to avoid NOT_ENOUGH_REPLICAS error with minISR>1
@@ -55,27 +58,26 @@ public class Utils {
                     .map(name -> new NewTopic(name, numPartitions, replicationFactor))
                     .collect(Collectors.toList());
                 try {
-                    adminClient.createTopics(newTopics).all().get();
+                    admin.createTopics(newTopics).all().get();
                     System.out.printf("Created topics: %s%n", topicNames);
                     break;
                 } catch (ExecutionException e) {
                     if (!(e.getCause() instanceof TopicExistsException)) {
                         throw e;
                     }
-                    System.out.println("Waiting for topics metadata cleanup...");
+                    System.out.println("Waiting for topics metadata cleanup");
                     sleep(1_000);
                 }
             }
         } catch (Throwable e) {
-            adminClient.close();
-            throw new RuntimeException("Topic creation failed");
+            throw new RuntimeException("Topic creation error", e);
         }
     }
 
-    private static void deleteTopics(Admin adminClient, List<String> topicNames)
+    public static void deleteTopics(Admin admin, List<String> topicNames)
         throws InterruptedException, ExecutionException {
         try {
-            adminClient.deleteTopics(topicNames).all().get();
+            admin.deleteTopics(topicNames).all().get();
         } catch (ExecutionException e) {
             if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
                 throw e;

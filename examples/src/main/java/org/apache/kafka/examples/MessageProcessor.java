@@ -54,7 +54,8 @@ public class MessageProcessor extends Thread {
 
     private final CountDownLatch latch;
 
-    public MessageProcessor(String inputTopic,
+    public MessageProcessor(String bootstrapServers,
+                            String inputTopic,
                             String outputTopic,
                             int instanceIdx,
                             CountDownLatch latch) {
@@ -64,11 +65,13 @@ public class MessageProcessor extends Thread {
         // it is recommended to have a relatively short txn timeout in order to clear pending offsets faster
         final int transactionTimeoutMs = 10_000;
         // a unique transactional.id must be provided in order to properly use EOS
-        this.producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
+        this.producer = new Producer(
+            bootstrapServers, outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
         // consumer must be in read_committed mode, which means it won't be able to read uncommitted data
         // consumer could optionally configure groupInstanceId to avoid unnecessary rebalances
         this.groupInstanceId = "processor-consumer" + instanceIdx;
-        this.consumer = new Consumer(inputTopic, "processor-group", Optional.of(groupInstanceId), true, -1, null).get();
+        this.consumer = new Consumer(
+            bootstrapServers, inputTopic, "processor-group", Optional.of(groupInstanceId), true, -1, null).get();
         this.latch = latch;
     }
 
@@ -82,12 +85,12 @@ public class MessageProcessor extends Thread {
         consumer.subscribe(singleton(inputTopic), new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                printWithTxnId(format("Revoking partitions: %s", partitions));
+                printWithTxnId(format("Revoked partitions: %s", partitions));
             }
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                printWithTxnId(format("Assigning partitions: %s", partitions));
+                printWithTxnId(format("Assigned partitions: %s", partitions));
                 remainingMessages.set(computeRemainingMessages(consumer));
             }
         });

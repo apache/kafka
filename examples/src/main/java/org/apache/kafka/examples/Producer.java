@@ -24,14 +24,14 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
+import java.time.Duration;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 /**
  * A simple producer thread supporting two send modes:
- * - Async mode (default): messages are sent without waiting for the response (non blocking).
- * - Sync mode (sync argument): each send operation blocks waiting for the response.
+ * - Async mode (default): messages are sent without waiting for the response.
+ * - Sync mode: each send operation blocks waiting for the response.
  */
 public class Producer extends Thread {
     private final KafkaProducer<Integer, String> producer;
@@ -39,8 +39,10 @@ public class Producer extends Thread {
     private final Boolean isAsync;
     private final int numRecords;
     private final CountDownLatch latch;
+    private volatile boolean closed;
 
-    public Producer(String topic,
+    public Producer(String bootstrapServers,
+                    String topic,
                     Boolean isAsync,
                     String transactionalId,
                     boolean enableIdempotency,
@@ -48,8 +50,8 @@ public class Producer extends Thread {
                     int transactionTimeoutMs,
                     CountDownLatch latch) {
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-" + UUID.randomUUID());
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, Utils.createClientId());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         if (transactionTimeoutMs > 0) {
@@ -73,25 +75,22 @@ public class Producer extends Thread {
     @Override
     public void run() {
         int key = 0;
-        int recordsSent = 0;
+        int sentRecords = 0;
         try {
-            while (recordsSent < numRecords) {
+            while (!closed && sentRecords < numRecords) {
                 if (isAsync) {
                     asyncSend(key, "demo" + key);
                 } else {
                     syncSend(key, "demo" + key);
                 }
                 key++;
-                recordsSent++;
+                sentRecords++;
             }
         } catch (Throwable e) {
-            System.err.println("Unexpected producer error");
             e.printStackTrace();
-        } finally {
-            System.out.printf("Done sending %d messages to %s%n", numRecords, topic);
-            producer.close();
-            latch.countDown();
         }
+        System.out.printf("Done: %d messages sent to %s%n", sentRecords, topic);
+        shutdown();
     }
 
     private void asyncSend(int key, String value) {
@@ -108,9 +107,15 @@ public class Producer extends Thread {
     private void maybePrintMessage(int key, String value, RecordMetadata metadata) {
         // we only print 10 messages when there are 20 or more to send
         if (key % Math.max(1, numRecords / 10) == 0) {
-            System.out.printf("sample: message(%d, %s) sent to partition(%d) with offset(%d)%n",
+            System.out.printf("Sample: message(%d, %s) sent to partition(%d) with offset(%d)%n",
                 key, value, metadata.partition(), metadata.offset());
         }
+    }
+
+    public void shutdown() {
+        closed = true;
+        producer.close(Duration.ofMillis(5_000));
+        latch.countDown();
     }
 
     class ProducerCallback implements Callback {

@@ -30,7 +30,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 import static java.util.Collections.singleton;
@@ -45,16 +44,18 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
     private final int numRecords;
     private final CountDownLatch latch;
     private int remainingRecords;
+    private volatile boolean closed;
 
-    public Consumer(String topic,
+    public Consumer(String bootstrapServers,
+                    String topic,
                     String groupId,
                     Optional<String> instanceId,
                     boolean readCommitted,
                     int numRecords,
                     CountDownLatch latch) {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-" + UUID.randomUUID());
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, Utils.createClientId());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         instanceId.ifPresent(id -> props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, id));
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
@@ -80,7 +81,7 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
         try {
             consumer.subscribe(singleton(topic), this);
             System.out.printf("Subscribed to %s%n", topic);
-            do {
+            while (!closed && remainingRecords > 0) {
                 ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
                 for (ConsumerRecord<Integer, String> record : records) {
                     // we only print 10 messages when there are 20 or more to send
@@ -90,30 +91,30 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
                     }
                 }
                 remainingRecords -= records.count();
-            } while (remainingRecords > 0);
-            System.out.printf("Done receiving %d messages from %s%n", numRecords, topic);
+            }
         } catch (WakeupException e) {
             // swallow the wakeup
         } catch (Throwable e) {
-            System.err.println("Unexpected consumer error");
             e.printStackTrace();
-        } finally {
-            shutdown();
         }
+        System.out.printf("Done: %d messages received from %s%n",
+            numRecords - remainingRecords, topic);
+        shutdown();
     }
 
     public void shutdown() {
-        consumer.close();
+        closed = true;
+        consumer.close(Duration.ofMillis(5_000));
         latch.countDown();
     }
 
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-        System.out.printf("Revoking partitions: %s%n", partitions);
+        System.out.printf("Revoked partitions: %s%n", partitions);
     }
 
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-        System.out.printf("Assigning partitions: %s%n", partitions);
+        System.out.printf("Assigned partitions: %s%n", partitions);
     }
 }

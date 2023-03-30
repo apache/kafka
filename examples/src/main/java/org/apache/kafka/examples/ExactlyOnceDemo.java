@@ -46,58 +46,65 @@ import java.util.concurrent.TimeUnit;
  * record all the log output together.
  */
 public class ExactlyOnceDemo {
+    public static final String BOOTSTRAP_SERVERS = "localhost:9092";
     private static final String INPUT_TOPIC = "input-topic";
     private static final String OUTPUT_TOPIC = "output-topic";
 
-    public static void main(String[] args) throws InterruptedException {
-        if (args.length != 3) {
-            System.err.println("This example takes 3 arguments:\n" +
-                "- partition: number of partitions for input and output topics (required)\n" +
-                "- instances: number of application instances (required)\n" +
-                "- messages: total number of messages (required)\n" +
-                "An example argument list would be: 6 3 10000");
-            return;
+    public static void main(String[] args) {
+        try {
+            if (args.length != 3) {
+                System.out.println("This example takes 3 arguments:\n" +
+                    "- partition: number of partitions for input and output topics (required)\n" +
+                    "- instances: number of application instances (required)\n" +
+                    "- messages: total number of messages (required)\n" +
+                    "An example argument list would be: 6 3 10000");
+                return;
+            }
+
+            int numPartitions = Integer.parseInt(args[0]);
+            int numInstances = Integer.parseInt(args[1]);
+            int numRecords = Integer.parseInt(args[2]);
+
+            // stage 1: recreate topics
+            Utils.recreateTopics("localhost:9092", Arrays.asList(INPUT_TOPIC, OUTPUT_TOPIC), numPartitions);
+            CountDownLatch prePopulateLatch = new CountDownLatch(1);
+
+            // stage 2: send demo messages to the input-topic
+            Producer producerThread = new Producer(
+                BOOTSTRAP_SERVERS, INPUT_TOPIC, false, null, true, numRecords, -1, prePopulateLatch);
+            producerThread.start();
+
+            if (!prePopulateLatch.await(5, TimeUnit.MINUTES)) {
+                throw new TimeoutException("Timeout after 5 minutes waiting for data load");
+            }
+
+            CountDownLatch transactionalCopyLatch = new CountDownLatch(numInstances);
+
+            // stage 3: read from input-topic, process exactly-once and write to the output-topic
+            for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
+                MessageProcessor processor = new MessageProcessor(
+                    BOOTSTRAP_SERVERS, INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx, transactionalCopyLatch);
+                processor.start();
+            }
+
+            if (!transactionalCopyLatch.await(5, TimeUnit.MINUTES)) {
+                throw new TimeoutException("Timeout after 5 minutes waiting for message copy");
+            }
+
+            CountDownLatch consumeLatch = new CountDownLatch(1);
+
+            // stage 4: check by consuming all messages from the output-topic
+            Consumer consumerThread = new Consumer(
+                BOOTSTRAP_SERVERS, OUTPUT_TOPIC, "check-group", Optional.empty(), true, numRecords, consumeLatch);
+            consumerThread.start();
+
+            if (!consumeLatch.await(5, TimeUnit.MINUTES)) {
+                throw new TimeoutException("Timeout after 5 minutes waiting for output read");
+            }
+
+            consumerThread.shutdown();
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
-
-        int numPartitions = Integer.parseInt(args[0]);
-        int numInstances = Integer.parseInt(args[1]);
-        int numRecords = Integer.parseInt(args[2]);
-
-        // stage 1: topics cleanup
-        Utils.recreateTopics("localhost:9092", Arrays.asList(INPUT_TOPIC, OUTPUT_TOPIC), numPartitions);
-        CountDownLatch prePopulateLatch = new CountDownLatch(1);
-
-        // stage 2: send demo messages to the input-topic
-        Producer producerThread = new Producer(INPUT_TOPIC, false, null, true, numRecords, -1, prePopulateLatch);
-        producerThread.start();
-
-        if (!prePopulateLatch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for data load");
-        }
-
-        CountDownLatch transactionalCopyLatch = new CountDownLatch(numInstances);
-
-        // stage 3: read from input-topic, process exactly-once and write to the output-topic
-        for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
-            MessageProcessor processor = new MessageProcessor(
-                INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx, transactionalCopyLatch);
-            processor.start();
-        }
-
-        if (!transactionalCopyLatch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for message copy");
-        }
-
-        CountDownLatch consumeLatch = new CountDownLatch(1);
-
-        // stage 4: check by consuming all messages from the output-topic
-        Consumer consumerThread = new Consumer(OUTPUT_TOPIC, "check-group", Optional.empty(), true, numRecords, consumeLatch);
-        consumerThread.start();
-
-        if (!consumeLatch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for output read");
-        }
-
-        consumerThread.shutdown();
     }
 }
