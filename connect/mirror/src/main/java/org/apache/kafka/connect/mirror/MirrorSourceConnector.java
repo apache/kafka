@@ -601,10 +601,14 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     Config targetConfig(Config sourceConfig, boolean incremental) {
+// If using incrementalAlterConfigs API, sync the default property with either SET or DELETE action determined by ConfigPropertyFilter::shouldReplicateSourceDefault later.
+// If not using incrementalAlterConfigs API, sync the default property if ConfigPropertyFilter::shouldReplicateSourceDefault returns true.
+// If ConfigPropertyFilter::shouldReplicateConfigProperty returns false, we do not sync the property at all.
         List<ConfigEntry> entries = sourceConfig.entries().stream()
+            .filter(x -> incremental || x.isDefault() && shouldReplicateSourceDefault(x.name()) || !x.isDefault())
             .filter(x -> !x.isReadOnly() && !x.isSensitive())
             .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
-            .filter(x -> shouldReplicateTopicConfigurationProperty(x, incremental))
+            .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
             .collect(Collectors.toList());
         return new Config(entries);
     }
@@ -635,14 +639,8 @@ public class MirrorSourceConnector extends SourceConnector {
             && aclBinding.entry().operation() == AclOperation.WRITE);
     }
 
-    boolean shouldReplicateTopicConfigurationProperty(ConfigEntry property, boolean incremental) {
-        boolean shouldReplicate;
-        if (property.isDefault() && !incremental) {
-            shouldReplicate = shouldReplicateSourceDefault(property.name());
-        } else {
-            shouldReplicate = configPropertyFilter.shouldReplicateConfigProperty(property.name());
-        }
-        return shouldReplicate;
+    boolean shouldReplicateTopicConfigurationProperty(String property) {
+        return configPropertyFilter.shouldReplicateConfigProperty(property);
     }
 
     boolean shouldReplicateSourceDefault(String property) {

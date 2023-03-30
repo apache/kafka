@@ -70,7 +70,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
 
     @Override
     public boolean shouldReplicateSourceDefault(String prop) {
-        return useDefaultsFrom.equals("source") && !excluded(prop);
+        return useDefaultsFrom.equals("source");
     }
 
     static class ConfigPropertyFilterConfig extends AbstractConfig {
