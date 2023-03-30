@@ -869,7 +869,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
-        log.debug("Submitting offset fetch request for connector: {}", connName);
+        log.trace("Submitting offset fetch request for connector: {}", connName);
         try {
             if (!configBackingStore.contains(connName)) {
                 cb.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);

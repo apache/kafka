@@ -1146,24 +1146,19 @@ public class Worker {
      * @param cb callback to invoke upon completion of the request
      */
     public void connectorOffsets(String connName, Map<String, String> connectorConfig, Callback<ConnectorOffsets> cb) {
-        executor.submit(() -> {
-            String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-            ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
-            Connector connector;
+        String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
 
-            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
-                connector = plugins.newConnector(connectorClassOrAlias);
-                if (ConnectUtils.isSinkConnector(connector)) {
-                    log.debug("Fetching offsets for sink connector: {}", connName);
-                    sinkConnectorOffsets(connName, connector, connectorConfig, cb);
-                } else {
-                    log.debug("Fetching offsets for source connector: {}", connName);
-                    sourceConnectorOffsets(connName, connector, connectorConfig, cb);
-                }
-            } catch (Exception e) {
-                cb.onCompletion(e, null);
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            Connector connector = plugins.newConnector(connectorClassOrAlias);
+            if (ConnectUtils.isSinkConnector(connector)) {
+                log.debug("Fetching offsets for sink connector: {}", connName);
+                sinkConnectorOffsets(connName, connector, connectorConfig, cb);
+            } else {
+                log.debug("Fetching offsets for source connector: {}", connName);
+                sourceConnectorOffsets(connName, connector, connectorConfig, cb);
             }
-        });
+        }
     }
 
     /**
@@ -1189,23 +1184,29 @@ public class Worker {
                 connector.getClass(),
                 connectorClientConfigOverridePolicy,
                 kafkaClusterId,
-                ConnectorType.SOURCE);
+                ConnectorType.SINK);
         String groupId = (String) baseConsumerConfigs(
                 connName, "connector-consumer-", config, new SinkConnectorConfig(plugins, connectorConfig),
                 connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
         Admin admin = adminFactory.apply(adminConfig);
-        ListConsumerGroupOffsetsOptions listOffsetsOptions = new ListConsumerGroupOffsetsOptions()
-                .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
-        ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = admin.listConsumerGroupOffsets(groupId, listOffsetsOptions);
-        listConsumerGroupOffsetsResult.all().whenComplete((result, error) -> {
-            if (error != null) {
-                cb.onCompletion(new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, error), null);
-            } else {
-                ConnectorOffsets offsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(result.get(groupId));
-                cb.onCompletion(null, offsets);
-            }
+        try {
+            ListConsumerGroupOffsetsOptions listOffsetsOptions = new ListConsumerGroupOffsetsOptions()
+                    .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+            ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = admin.listConsumerGroupOffsets(groupId, listOffsetsOptions);
+            listConsumerGroupOffsetsResult.partitionsToOffsetAndMetadata().whenComplete((result, error) -> {
+                if (error != null) {
+                    log.error("Failed to retrieve consumer group offsets for sink connector {}", connName, error);
+                    cb.onCompletion(new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, error), null);
+                } else {
+                    ConnectorOffsets offsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(result);
+                    cb.onCompletion(null, offsets);
+                }
+                Utils.closeQuietly(admin, "Offset fetch admin for sink connector " + connName);
+            });
+        } catch (Exception e) {
             Utils.closeQuietly(admin, "Offset fetch admin for sink connector " + connName);
-        });
+            cb.onCompletion(new ConnectException("Failed to retrieve consumer group offsets for sink connector " + connName, e), null);
+        }
     }
 
     /**
@@ -1228,18 +1229,22 @@ public class Worker {
     // Visible for testing
     void sourceConnectorOffsets(String connName, ConnectorOffsetBackingStore offsetStore,
                                 CloseableOffsetStorageReader offsetReader, Callback<ConnectorOffsets> cb) {
-        offsetStore.configure(config);
-        offsetStore.start();
-        try {
-            Set<Map<String, Object>> connectorPartitions = offsetStore.connectorPartitions(connName);
-            List<ConnectorOffset> connectorOffsets = offsetReader.offsets(connectorPartitions).entrySet().stream()
-                    .map(entry -> new ConnectorOffset(entry.getKey(), entry.getValue()))
-                    .collect(Collectors.toList());
-            cb.onCompletion(null, new ConnectorOffsets(connectorOffsets));
-        } finally {
-            Utils.closeQuietly(offsetReader, "Offset reader for connector " + connName);
-            Utils.closeQuietly(offsetStore::stop, "Offset store for connector " + connName);
-        }
+        executor.submit(() -> {
+            try {
+                offsetStore.configure(config);
+                offsetStore.start();
+                Set<Map<String, Object>> connectorPartitions = offsetStore.connectorPartitions(connName);
+                List<ConnectorOffset> connectorOffsets = offsetReader.offsets(connectorPartitions).entrySet().stream()
+                        .map(entry -> new ConnectorOffset(entry.getKey(), entry.getValue()))
+                        .collect(Collectors.toList());
+                cb.onCompletion(null, new ConnectorOffsets(connectorOffsets));
+            } catch (Exception e) {
+                cb.onCompletion(e, null);
+            } finally {
+                Utils.closeQuietly(offsetReader, "Offset reader for connector " + connName);
+                Utils.closeQuietly(offsetStore::stop, "Offset store for connector " + connName);
+            }
+        });
     }
 
     ConnectorStatusMetricsGroup connectorStatusMetricsGroup() {
