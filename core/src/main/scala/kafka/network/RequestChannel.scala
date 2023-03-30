@@ -23,7 +23,6 @@ import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
-import kafka.metrics.KafkaMetricsGroup
 import kafka.network
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
@@ -37,7 +36,9 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
+import java.util
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -344,16 +345,19 @@ object RequestChannel extends Logging {
 class RequestChannel(val queueSize: Int,
                      val metricNamePrefix: String,
                      time: Time,
-                     val metrics: RequestChannel.Metrics) extends KafkaMetricsGroup {
+                     val metrics: RequestChannel.Metrics) {
   import RequestChannel._
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
 
-  newGauge(requestQueueSizeMetricName, () => requestQueue.size)
+  metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
 
-  newGauge(responseQueueSizeMetricName, () => {
+  metricsGroup.newGauge(responseQueueSizeMetricName, () => {
     processors.values.asScala.foldLeft(0) {(total, processor) =>
       total + processor.responseQueueSize
     }
@@ -363,13 +367,13 @@ class RequestChannel(val queueSize: Int,
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    newGauge(responseQueueSizeMetricName, () => processor.responseQueueSize,
-      Map(ProcessorMetricTag -> processor.id.toString))
+    metricsGroup.newGauge(responseQueueSizeMetricName, () => processor.responseQueueSize,
+      Map(ProcessorMetricTag -> processor.id.toString).asJava)
   }
 
   def removeProcessor(processorId: Int): Unit = {
     processors.remove(processorId)
-    removeMetric(responseQueueSizeMetricName, Map(ProcessorMetricTag -> processorId.toString))
+    metricsGroup.removeMetric(responseQueueSizeMetricName, Map(ProcessorMetricTag -> processorId.toString).asJava)
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
@@ -497,51 +501,59 @@ object RequestMetrics {
   val ErrorsPerSec = "ErrorsPerSec"
 }
 
-class RequestMetrics(name: String) extends KafkaMetricsGroup {
+class RequestMetrics(name: String) {
 
   import RequestMetrics._
 
-  val tags = Map("request" -> name)
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
+  val tags = Map("request" -> name).asJava
   val requestRateInternal = new Pool[Short, Meter]()
   // time a request spent in a request queue
-  val requestQueueTimeHist = newHistogram(RequestQueueTimeMs, biased = true, tags)
+  val requestQueueTimeHist = metricsGroup.newHistogram(RequestQueueTimeMs, true, tags)
   // time a request takes to be processed at the local broker
-  val localTimeHist = newHistogram(LocalTimeMs, biased = true, tags)
+  val localTimeHist = metricsGroup.newHistogram(LocalTimeMs, true, tags)
   // time a request takes to wait on remote brokers (currently only relevant to fetch and produce requests)
-  val remoteTimeHist = newHistogram(RemoteTimeMs, biased = true, tags)
+  val remoteTimeHist = metricsGroup.newHistogram(RemoteTimeMs, true, tags)
   // time a request is throttled, not part of the request processing time (throttling is done at the client level
   // for clients that support KIP-219 and by muting the channel for the rest)
-  val throttleTimeHist = newHistogram(ThrottleTimeMs, biased = true, tags)
+  val throttleTimeHist = metricsGroup.newHistogram(ThrottleTimeMs, true, tags)
   // time a response spent in a response queue
-  val responseQueueTimeHist = newHistogram(ResponseQueueTimeMs, biased = true, tags)
+  val responseQueueTimeHist = metricsGroup.newHistogram(ResponseQueueTimeMs, true, tags)
   // time to send the response to the requester
-  val responseSendTimeHist = newHistogram(ResponseSendTimeMs, biased = true, tags)
-  val totalTimeHist = newHistogram(TotalTimeMs, biased = true, tags)
+  val responseSendTimeHist = metricsGroup.newHistogram(ResponseSendTimeMs, true, tags)
+  val totalTimeHist = metricsGroup.newHistogram(TotalTimeMs, true, tags)
   // request size in bytes
-  val requestBytesHist = newHistogram(RequestBytes, biased = true, tags)
+  val requestBytesHist = metricsGroup.newHistogram(RequestBytes, true, tags)
   // time for message conversions (only relevant to fetch and produce requests)
   val messageConversionsTimeHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
-      Some(newHistogram(MessageConversionsTimeMs, biased = true, tags))
+      Some(metricsGroup.newHistogram(MessageConversionsTimeMs, true, tags))
     else
       None
   // Temporary memory allocated for processing request (only populated for fetch and produce requests)
   // This shows the memory allocated for compression/conversions excluding the actual request size
   val tempMemoryBytesHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
-      Some(newHistogram(TemporaryMemoryBytes, biased = true, tags))
+      Some(metricsGroup.newHistogram(TemporaryMemoryBytes, true, tags))
     else
       None
 
   private val errorMeters = mutable.Map[Errors, ErrorMeter]()
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
-  def requestRate(version: Short): Meter = {
-    requestRateInternal.getAndMaybePut(version, newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
+  def requestRate(version: Short): Meter =
+    requestRateInternal.getAndMaybePut(version, metricsGroup.newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tagsWithVersion(version)))
+
+  private def tagsWithVersion(version: Short): java.util.Map[String, String] = {
+    val nameAndVersionTags = new util.HashMap[String, String](tags.size() + 1)
+    nameAndVersionTags.putAll(tags)
+    nameAndVersionTags.put("version", version.toString)
+    nameAndVersionTags
   }
 
   class ErrorMeter(name: String, error: Errors) {
-    private val tags = Map("request" -> name, "error" -> error.name)
+    private val tags = Map("request" -> name, "error" -> error.name).asJava
 
     @volatile private var meter: Meter = _
 
@@ -551,7 +563,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
       else {
         synchronized {
           if (meter == null)
-             meter = newMeter(ErrorsPerSec, "requests", TimeUnit.SECONDS, tags)
+             meter = metricsGroup.newMeter(ErrorsPerSec, "requests", TimeUnit.SECONDS, tags)
           meter
         }
       }
@@ -560,7 +572,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     def removeMeter(): Unit = {
       synchronized {
         if (meter != null) {
-          removeMetric(ErrorsPerSec, tags)
+          metricsGroup.removeMetric(ErrorsPerSec, tags)
           meter = null
         }
       }
@@ -572,19 +584,21 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   }
 
   def removeMetrics(): Unit = {
-    for (version <- requestRateInternal.keys) removeMetric(RequestsPerSec, tags + ("version" -> version.toString))
-    removeMetric(RequestQueueTimeMs, tags)
-    removeMetric(LocalTimeMs, tags)
-    removeMetric(RemoteTimeMs, tags)
-    removeMetric(RequestsPerSec, tags)
-    removeMetric(ThrottleTimeMs, tags)
-    removeMetric(ResponseQueueTimeMs, tags)
-    removeMetric(TotalTimeMs, tags)
-    removeMetric(ResponseSendTimeMs, tags)
-    removeMetric(RequestBytes, tags)
+    for (version <- requestRateInternal.keys) {
+      metricsGroup.removeMetric(RequestsPerSec, tagsWithVersion(version))
+    }
+    metricsGroup.removeMetric(RequestQueueTimeMs, tags)
+    metricsGroup.removeMetric(LocalTimeMs, tags)
+    metricsGroup.removeMetric(RemoteTimeMs, tags)
+    metricsGroup.removeMetric(RequestsPerSec, tags)
+    metricsGroup.removeMetric(ThrottleTimeMs, tags)
+    metricsGroup.removeMetric(ResponseQueueTimeMs, tags)
+    metricsGroup.removeMetric(TotalTimeMs, tags)
+    metricsGroup.removeMetric(ResponseSendTimeMs, tags)
+    metricsGroup.removeMetric(RequestBytes, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
-      removeMetric(MessageConversionsTimeMs, tags)
-      removeMetric(TemporaryMemoryBytes, tags)
+      metricsGroup.removeMetric(MessageConversionsTimeMs, tags)
+      metricsGroup.removeMetric(TemporaryMemoryBytes, tags)
     }
     errorMeters.values.foreach(_.removeMeter())
     errorMeters.clear()

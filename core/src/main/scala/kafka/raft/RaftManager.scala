@@ -143,7 +143,7 @@ class KafkaRaftManager[T](
   val apiVersions = new ApiVersions()
   private val raftConfig = new RaftConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
-  private val logContext = new LogContext(s"[RaftManager nodeId=${config.nodeId}] ")
+  private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
 
   private val scheduler = new KafkaScheduler(1, true, threadNamePrefix + "-scheduler")

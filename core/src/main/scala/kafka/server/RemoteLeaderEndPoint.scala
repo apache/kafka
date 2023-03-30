@@ -56,7 +56,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
                            brokerConfig: KafkaConfig,
                            replicaManager: ReplicaManager,
                            quota: ReplicaQuota,
-                           metadataVersionSupplier: () => MetadataVersion) extends LeaderEndPoint with Logging {
+                           metadataVersionSupplier: () => MetadataVersion,
+                           brokerEpochSupplier: () => Long) extends LeaderEndPoint with Logging {
 
   this.logIdent = logPrefix
 
@@ -217,7 +218,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
         metadataVersion.fetchRequestVersion
       }
       val requestBuilder = FetchRequest.Builder
-        .forReplica(version, brokerConfig.brokerId, maxWait, minBytes, fetchData.toSend)
+        .forReplica(version, brokerConfig.brokerId, brokerEpochSupplier(), maxWait, minBytes, fetchData.toSend)
         .setMaxBytes(maxBytes)
         .removed(fetchData.toForget)
         .replaced(fetchData.toReplace)

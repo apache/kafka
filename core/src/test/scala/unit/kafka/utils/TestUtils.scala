@@ -374,7 +374,6 @@ object TestUtils extends Logging {
       props.put(KafkaConfig.RackProp, nodeId.toString)
       props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
     }
-
     props
   }
 
@@ -1245,7 +1244,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(
       () => {
         brokers.forall { broker =>
-          val metadataOffset = broker.asInstanceOf[BrokerServer].metadataPublisher.publishedOffset
+          val metadataOffset = broker.asInstanceOf[BrokerServer].sharedServer.loader.lastAppliedOffset()
           metadataOffset >= controllerOffset
         }
       }, msg)
