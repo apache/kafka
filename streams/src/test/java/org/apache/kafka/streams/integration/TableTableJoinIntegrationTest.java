@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.Before;
@@ -59,11 +61,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         appID = "table-table-join-integration-test";
 
         builder = new StreamsBuilder();
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
     }
 
-    private final TestRecord<Long, String> expectedFinalJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L);
+    private final TestRecord<Long, String> expectedFinalJoinResultUnversioned = new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L);
+    private final TestRecord<Long, String> expectedFinalJoinResultVersioned = new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L);
+    private final TestRecord<Long, String> expectedFinalJoinResultLeftVersionedOnly = new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null, 15L);
+    private final TestRecord<Long, String> expectedFinalJoinResultRightVersionedOnly = new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null, 14L);
     private final TestRecord<Long, String> expectedFinalMultiJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "F-f-f", null,  8L);
     private final String storeName = appID + "-store";
 
@@ -77,10 +80,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalJoinResult, storeName);
+            runTestWithDriver(expectedFinalJoinResultUnversioned, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -112,10 +117,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalJoinResult, storeName);
+            runTestWithDriver(expectedFinalJoinResultUnversioned, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -147,10 +154,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalJoinResult, storeName);
+            runTestWithDriver(expectedFinalJoinResultUnversioned, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -179,9 +188,359 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @Test
+    public void testInnerWithVersionedStores() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+            null,
+            null,
+            null,
+            null
+        );
+
+        runTestWithDriver(expectedResult, storeName);
+    }
+
+    @Test
+    public void testLeftWithVersionedStores() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+            null,
+            null,
+            null,
+            null
+        );
+
+        runTestWithDriver(expectedResult, storeName);
+    }
+
+    @Test
+    public void testOuterWithVersionedStores() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+            null,
+            null,
+            null,
+            null
+        );
+
+        runTestWithDriver(expectedResult, storeName);
+    }
+
+    @Test
+    public void testInnerWithLeftVersionedOnly() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(expectedFinalJoinResultLeftVersionedOnly, storeName);
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null,  15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null,  15L)),
+                null
+            );
+
+            runTestWithDriver(expectedResult, storeName);
+        }
+    }
+
+    @Test
+    public void testLeftWithLeftVersionedOnly() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(expectedFinalJoinResultLeftVersionedOnly, storeName);
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null,  15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null,  15L)),
+                null
+            );
+
+            runTestWithDriver(expectedResult, storeName);
+        }
+    }
+
+    @Test
+    public void testOuterWithLeftVersionedOnly() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(expectedFinalJoinResultLeftVersionedOnly, storeName);
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null,  15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null,  15L)),
+                null
+            );
+
+            runTestWithDriver(expectedResult, storeName);
+        }
+    }
+
+    @Test
+    public void testInnerWithRightVersionedOnly() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(expectedFinalJoinResultRightVersionedOnly, storeName);
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null,  14L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null,  14L))
+            );
+
+            runTestWithDriver(expectedResult, storeName);
+        }
+    }
+
+    @Test
+    public void testLeftWithRightVersionedOnly() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(expectedFinalJoinResultRightVersionedOnly, storeName);
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null,  14L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null,  14L))
+            );
+
+            runTestWithDriver(expectedResult, storeName);
+        }
+    }
+
+    @Test
+    public void testOuterWithRightVersionedOnly() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
+
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
+            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
+        ).withLoggingDisabled());
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(expectedFinalJoinResultRightVersionedOnly, storeName);
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null,  14L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null,  14L))
+            );
+
+            runTestWithDriver(expectedResult, storeName);
+        }
+    }
+
+    @Test
     public void testInnerInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.join(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -233,6 +592,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.join(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -281,6 +642,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.join(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -334,6 +697,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.leftJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -382,6 +747,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.leftJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -434,6 +801,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.leftJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -488,6 +857,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.outerJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -538,6 +909,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.outerJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -592,6 +965,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         leftTable.outerJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
