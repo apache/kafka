@@ -576,11 +576,6 @@ public final class QuorumController implements Controller {
         return configurationControl;
     }
 
-    // Visible for testing
-    ZkMigrationControlManager migrationControl() {
-        return zkMigrationControlManager;
-    }
-
     public ZkRecordConsumer zkRecordConsumer() {
         return zkRecordConsumer;
     }
@@ -688,7 +683,7 @@ public final class QuorumController implements Controller {
             if (!isActiveController(controllerEpoch)) {
                 throw newNotControllerException();
             }
-            if (zkMigrationControlManager.inPreMigrationMode(featureControl.metadataVersion()) &&
+            if (featureControl.inPreMigrationMode(featureControl.metadataVersion()) &&
                     !flags.contains(RUNS_IN_PREMIGRATION)) {
                 log.info("Cannot run write operation {} in pre-migration mode. Returning NOT_CONTROLLER.", name);
                 throw newNotControllerException();
@@ -1197,7 +1192,7 @@ public final class QuorumController implements Controller {
                 records.addAll(bootstrapMetadata.records());
 
                 // Bootstrap the initial ZK Migration record
-                zkMigrationControlManager.bootstrapInitialMigrationState(
+                featureControl.generateZkMigrationRecord(
                     bootstrapMetadata.metadataVersion(), true, records::add);
             } else {
                 // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
@@ -1207,7 +1202,7 @@ public final class QuorumController implements Controller {
                 }
 
                 // Initialize the ZK migration state as NONE, or throw an error if we find an in-progress migration
-                zkMigrationControlManager.bootstrapInitialMigrationState(
+                featureControl.generateZkMigrationRecord(
                     featureControl.metadataVersion(), false, records::add);
             }
             return ControllerResult.atomicOf(records, null);
@@ -1493,7 +1488,7 @@ public final class QuorumController implements Controller {
                 // NoOpRecord is an empty record and doesn't need to be replayed
                 break;
             case ZK_MIGRATION_STATE_RECORD:
-                zkMigrationControlManager.replay((ZkMigrationStateRecord) message);
+                featureControl.replay((ZkMigrationStateRecord) message);
                 break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
@@ -1618,8 +1613,6 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final AclControlManager aclControlManager;
-
-    private final ZkMigrationControlManager zkMigrationControlManager;
 
     /**
      * Tracks replaying the log.
@@ -1773,7 +1766,6 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             build();
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
-        this.zkMigrationControlManager = new ZkMigrationControlManager(snapshotRegistry, logContext, zkMigrationEnabled);
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1784,7 +1776,7 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
-            setZkMigrationBootstrap(zkMigrationControlManager).
+            setZkMigrationEnabled(zkMigrationEnabled).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).

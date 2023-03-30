@@ -422,12 +422,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     return;
                 }
 
-                if (image.migration().isEmpty()) {
+                if (image.features().zkMigrationState().equals(ZkMigrationState.UNINITIALIZED)) {
                     log.trace("Waiting until we have received metadata regarding the ZK migration before proceeding with migration");
                     return;
                 }
 
-                if (image.migration().migrationState().equals(ZkMigrationState.NONE)) {
+                if (image.features().zkMigrationState().equals(ZkMigrationState.NONE)) {
                     // This error message is used in zookeeper_migration_test.py::TestMigration.test_pre_migration_mode_3_4
                     log.error("The controller's ZkMigrationState is NONE which means this cluster should not be migrated from ZooKeeper. " +
                         "This controller should not be configured with 'zookeeper.metadata.migration.enable' set to true. " +

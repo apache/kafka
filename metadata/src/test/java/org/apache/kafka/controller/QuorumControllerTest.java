@@ -1369,7 +1369,7 @@ public class QuorumControllerTest {
         ) {
             QuorumController active = controlEnv.activeController();
             return active.appendReadEvent("read migration state", OptionalLong.empty(),
-                () -> active.migrationControl().zkMigrationState()).get(30, TimeUnit.SECONDS);
+                () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS);
         }
     }
 }

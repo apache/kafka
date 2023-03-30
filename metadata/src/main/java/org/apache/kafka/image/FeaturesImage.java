@@ -18,8 +18,10 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
@@ -27,6 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -37,19 +40,30 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class FeaturesImage {
-    public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap(), MetadataVersion.MINIMUM_KRAFT_VERSION);
+    public static final FeaturesImage EMPTY = new FeaturesImage(
+        Collections.emptyMap(),
+        MetadataVersion.MINIMUM_KRAFT_VERSION,
+        ZkMigrationState.UNINITIALIZED
+    );
 
     private final Map<String, Short> finalizedVersions;
 
     private final MetadataVersion metadataVersion;
 
-    public FeaturesImage(Map<String, Short> finalizedVersions, MetadataVersion metadataVersion) {
+    private final ZkMigrationState zkMigrationState;
+
+    public FeaturesImage(
+        Map<String, Short> finalizedVersions,
+        MetadataVersion metadataVersion,
+        ZkMigrationState zkMigrationState
+    ) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
         this.metadataVersion = metadataVersion;
+        this.zkMigrationState = zkMigrationState;
     }
 
     public boolean isEmpty() {
-        return finalizedVersions.isEmpty();
+        return finalizedVersions.isEmpty() && zkMigrationState.equals(ZkMigrationState.UNINITIALIZED);
     }
 
     public MetadataVersion metadataVersion() {
@@ -58,6 +72,10 @@ public final class FeaturesImage {
 
     public Map<String, Short> finalizedVersions() {
         return finalizedVersions;
+    }
+
+    public ZkMigrationState zkMigrationState() {
+        return zkMigrationState;
     }
 
     private Optional<Short> finalizedVersion(String feature) {
@@ -69,6 +87,14 @@ public final class FeaturesImage {
             handleFeatureLevelNotSupported(options);
         } else {
             writeFeatureLevels(writer, options);
+        }
+
+        if (!zkMigrationState.equals(ZkMigrationState.UNINITIALIZED)) {
+            if (options.metadataVersion().isMigrationSupported()) {
+                writer.write(0, new ZkMigrationStateRecord().setZkMigrationState(zkMigrationState.value()));
+            } else {
+                options.handleLoss("the ZK Migration state");
+            }
         }
     }
 
@@ -105,14 +131,15 @@ public final class FeaturesImage {
 
     @Override
     public int hashCode() {
-        return finalizedVersions.hashCode();
+        return Objects.hash(finalizedVersions, zkMigrationState);
     }
 
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof FeaturesImage)) return false;
         FeaturesImage other = (FeaturesImage) o;
-        return finalizedVersions.equals(other.finalizedVersions);
+        return finalizedVersions.equals(other.finalizedVersions) &&
+            zkMigrationState.equals(other.zkMigrationState);
     }
 
 
@@ -121,6 +148,7 @@ public final class FeaturesImage {
         return "FeaturesImage{" +
                 "finalizedVersions=" + finalizedVersions +
                 ", metadataVersion=" + metadataVersion +
+                ", zkMigrationState=" + zkMigrationState +
                 '}';
     }
 }

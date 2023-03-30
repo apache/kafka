@@ -51,8 +51,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
 
-    public static final ZkMigrationBootstrap NO_OP_MIGRATION_BOOTSTRAP = new ZkMigrationControlManagerTest.NoOpZkMigrationBootstrap();
-
     @SuppressWarnings("unchecked")
     private static Map<String, VersionRange> rangeMap(Object... args) {
         Map<String, VersionRange> result = new HashMap<>();
@@ -98,7 +96,6 @@ public class FeatureControlManagerTest {
             setQuorumFeatures(features("foo", 1, 2)).
             setSnapshotRegistry(snapshotRegistry).
             setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
-            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         snapshotRegistry.getOrCreateSnapshot(-1);
         assertEquals(new FinalizedControllerFeatures(Collections.singletonMap("metadata.version", (short) 4), -1),
@@ -137,7 +134,6 @@ public class FeatureControlManagerTest {
                 setQuorumFeatures(features("foo", 1, 2)).
                 setSnapshotRegistry(snapshotRegistry).
                 setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
-                setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
                 build();
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
@@ -153,7 +149,6 @@ public class FeatureControlManagerTest {
             setLogContext(logContext).
             setQuorumFeatures(features("foo", 1, 5, "bar", 1, 2)).
             setSnapshotRegistry(snapshotRegistry).
-            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
 
         assertEquals(
@@ -216,7 +211,6 @@ public class FeatureControlManagerTest {
             setQuorumFeatures(features("foo", 1, 5, "bar", 1, 2)).
             setSnapshotRegistry(snapshotRegistry).
             setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
-            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         ControllerResult<Map<String, ApiError>> result = manager.
             updateFeatures(updateMap("foo", 5, "bar", 1),
@@ -234,8 +228,7 @@ public class FeatureControlManagerTest {
         new FeatureControlManager.Builder().
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                 MetadataVersion.IBP_3_3_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
-            setMetadataVersion(MetadataVersion.IBP_3_3_IV2).
-            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP);
+            setMetadataVersion(MetadataVersion.IBP_3_3_IV2);
 
     @Test
     public void testApplyMetadataVersionChangeRecord() {
@@ -363,7 +356,6 @@ public class FeatureControlManagerTest {
                         MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV1.featureLevel())).
                 setMetadataVersion(MetadataVersion.IBP_3_1_IV0).
                 setMinimumBootstrapVersion(MetadataVersion.IBP_3_0_IV0).
-                setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
                 build();
         assertEquals(ControllerResult.of(Collections.emptyList(),
                         singletonMap(MetadataVersion.FEATURE_NAME, ApiError.NONE)),
@@ -380,7 +372,6 @@ public class FeatureControlManagerTest {
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                 MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
             setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
-            setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
             build();
         assertEquals(ControllerResult.of(Collections.emptyList(),
                         singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -400,7 +391,6 @@ public class FeatureControlManagerTest {
         localSupportedFeatures.put("foo", VersionRange.of(0, 2));
         FeatureControlManager manager = new FeatureControlManager.Builder().
                 setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(), localSupportedFeatures, emptyList())).
-                setZkMigrationBootstrap(NO_OP_MIGRATION_BOOTSTRAP).
                 build();
         ControllerResult<Map<String, ApiError>> result  = manager.updateFeatures(
                 Collections.singletonMap("foo", (short) 1),

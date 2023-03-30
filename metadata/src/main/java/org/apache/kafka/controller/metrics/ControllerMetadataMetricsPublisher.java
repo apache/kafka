@@ -115,8 +115,8 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
             }
         }
         changes.apply(metrics);
-        if (delta.zkMigrationDelta() != null) {
-            metrics.setZkMigrationState(delta.zkMigrationDelta().updatedState());
+        if (delta.featuresDelta() != null) {
+            delta.featuresDelta().getZkMigrationStateChange().ifPresent(metrics::setZkMigrationState);
         }
     }
 
@@ -150,7 +150,7 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         metrics.setGlobalPartitionCount(totalPartitions);
         metrics.setOfflinePartitionCount(offlinePartitions);
         metrics.setPreferredReplicaImbalanceCount(partitionsWithoutPreferredLeader);
-        metrics.setZkMigrationState(newImage.migration().migrationState());
+        metrics.setZkMigrationState(newImage.features().zkMigrationState());
     }
 
     @Override

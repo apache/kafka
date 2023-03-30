@@ -77,8 +77,6 @@ public final class MetadataDelta {
 
     private ScramDelta scramDelta = null;
 
-    private ZkMigrationStateDelta migrationDelta = null;
-
     public MetadataDelta(MetadataImage image) {
         this.image = image;
     }
@@ -159,15 +157,6 @@ public final class MetadataDelta {
     public ScramDelta getOrCreateScramDelta() {
         if (scramDelta == null) scramDelta = new ScramDelta(image.scram());
         return scramDelta;
-    }
-
-    public ZkMigrationStateDelta zkMigrationDelta() {
-        return migrationDelta;
-    }
-
-    public ZkMigrationStateDelta getOrCreateZkMigrationDelta() {
-        if (migrationDelta == null) migrationDelta = new ZkMigrationStateDelta(image.migration());
-        return migrationDelta;
     }
 
     public Optional<MetadataVersion> metadataVersionChanged() {
@@ -325,7 +314,7 @@ public final class MetadataDelta {
     }
 
     public void replay(ZkMigrationStateRecord record) {
-        getOrCreateZkMigrationDelta().replay(record);
+        getOrCreateFeaturesDelta().replay(record);
     }
 
     /**
@@ -341,7 +330,6 @@ public final class MetadataDelta {
         getOrCreateProducerIdsDelta().finishSnapshot();
         getOrCreateAclsDelta().finishSnapshot();
         getOrCreateScramDelta().finishSnapshot();
-        getOrCreateZkMigrationDelta().finishSnapshot();
     }
 
     public MetadataImage apply(MetadataProvenance provenance) {
@@ -393,12 +381,6 @@ public final class MetadataDelta {
         } else {
             newScram = scramDelta.apply();
         }
-        ZkMigrationStateImage newMigration;
-        if (migrationDelta == null) {
-            newMigration = image.migration();
-        } else {
-            newMigration = migrationDelta.apply();
-        }
         return new MetadataImage(
             provenance,
             newFeatures,
@@ -408,8 +390,7 @@ public final class MetadataDelta {
             newClientQuotas,
             newProducerIds,
             newAcls,
-            newScram,
-            newMigration
+            newScram
         );
     }
 
@@ -424,7 +405,6 @@ public final class MetadataDelta {
             ", producerIdsDelta=" + producerIdsDelta +
             ", aclsDelta=" + aclsDelta +
             ", scramDelta=" + scramDelta +
-            ", migrationDelta=" + migrationDelta +
             ')';
     }
 }

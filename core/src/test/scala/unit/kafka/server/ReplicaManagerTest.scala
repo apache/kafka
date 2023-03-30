@@ -4365,7 +4365,6 @@ class ReplicaManagerTest {
       ProducerIdsImage.EMPTY,
       AclsImage.EMPTY,
       ScramImage.EMPTY,
-      ZkMigrationStateImage.EMPTY
     )
   }
 

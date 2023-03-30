@@ -39,8 +39,7 @@ public final class MetadataImage {
         ClientQuotasImage.EMPTY,
         ProducerIdsImage.EMPTY,
         AclsImage.EMPTY,
-        ScramImage.EMPTY,
-        ZkMigrationStateImage.EMPTY);
+        ScramImage.EMPTY);
 
     private final MetadataProvenance provenance;
 
@@ -60,8 +59,6 @@ public final class MetadataImage {
 
     private final ScramImage scram;
 
-    private final ZkMigrationStateImage zkMigration;
-
     public MetadataImage(
         MetadataProvenance provenance,
         FeaturesImage features,
@@ -71,8 +68,7 @@ public final class MetadataImage {
         ClientQuotasImage clientQuotas,
         ProducerIdsImage producerIds,
         AclsImage acls,
-        ScramImage scram,
-        ZkMigrationStateImage migration
+        ScramImage scram
     ) {
         this.provenance = provenance;
         this.features = features;
@@ -83,7 +79,6 @@ public final class MetadataImage {
         this.producerIds = producerIds;
         this.acls = acls;
         this.scram = scram;
-        this.zkMigration = migration;
     }
 
     public boolean isEmpty() {
@@ -94,8 +89,7 @@ public final class MetadataImage {
             clientQuotas.isEmpty() &&
             producerIds.isEmpty() &&
             acls.isEmpty() &&
-            scram.isEmpty() &&
-            zkMigration.isEmpty();
+            scram.isEmpty();
     }
 
     public MetadataProvenance provenance() {
@@ -142,10 +136,6 @@ public final class MetadataImage {
         return scram;
     }
 
-    public ZkMigrationStateImage migration() {
-        return zkMigration;
-    }
-
     public void write(ImageWriter writer, ImageWriterOptions options) {
         // Features should be written out first so we can include the metadata.version at the beginning of the
         // snapshot
@@ -157,7 +147,6 @@ public final class MetadataImage {
         producerIds.write(writer, options);
         acls.write(writer, options);
         scram.write(writer, options);
-        zkMigration.write(writer, options);
         writer.close(true);
     }
 
@@ -173,8 +162,7 @@ public final class MetadataImage {
             clientQuotas.equals(other.clientQuotas) &&
             producerIds.equals(other.producerIds) &&
             acls.equals(other.acls) &&
-            scram.equals(other.scram) &&
-            zkMigration.equals(other.zkMigration);
+            scram.equals(other.scram);
     }
 
     @Override
@@ -188,8 +176,7 @@ public final class MetadataImage {
             clientQuotas,
             producerIds,
             acls,
-            scram,
-                zkMigration);
+            scram);
     }
 
     @Override
@@ -204,7 +191,6 @@ public final class MetadataImage {
             ", producerIdsImage=" + producerIds +
             ", acls=" + acls +
             ", scram=" + scram +
-            ", migration=" + zkMigration +
             ")";
     }
 }
