@@ -30,6 +30,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AlterPartitionRequestTest {
     String topic = "test-topic";
@@ -64,12 +65,12 @@ class AlterPartitionRequestTest {
         assertEquals(1, alterPartitionRequest.data().topics().size());
         assertEquals(1, alterPartitionRequest.data().topics().get(0).partitions().size());
         PartitionData partitionData = alterPartitionRequest.data().topics().get(0).partitions().get(0);
-        assertEquals(version >= 3, partitionData.newIsr().isEmpty());
-        assertEquals(version < 3, partitionData.newIsrWithEpochs().isEmpty());
         if (version < 3) {
             assertEquals(Arrays.asList(1, 2, 3), partitionData.newIsr());
+            assertTrue(partitionData.newIsrWithEpochs().isEmpty());
         } else {
             assertEquals(newIsrWithBrokerEpoch, partitionData.newIsrWithEpochs());
+            assertTrue(partitionData.newIsr().isEmpty());
         }
     }
 }
