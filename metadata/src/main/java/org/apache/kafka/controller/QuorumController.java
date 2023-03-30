@@ -847,18 +847,18 @@ public final class QuorumController implements Controller {
     }
 
     <T> CompletableFuture<T> appendWriteEvent(
-            String name,
-            OptionalLong deadlineNs,
-            ControllerWriteOperation<T> op
+        String name,
+        OptionalLong deadlineNs,
+        ControllerWriteOperation<T> op
     ) {
         return appendWriteEvent(name, deadlineNs, op, EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
     <T> CompletableFuture<T> appendWriteEvent(
-            String name,
-            OptionalLong deadlineNs,
-            ControllerWriteOperation<T> op,
-            EnumSet<ControllerOperationFlag> flags
+        String name,
+        OptionalLong deadlineNs,
+        ControllerWriteOperation<T> op,
+        EnumSet<ControllerOperationFlag> flags
     ) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op, flags);
         if (deadlineNs.isPresent()) {
@@ -1263,10 +1263,10 @@ public final class QuorumController implements Controller {
     }
 
     private <T> void scheduleDeferredWriteEvent(
-            String name,
-            long deadlineNs,
-            ControllerWriteOperation<T> op,
-            EnumSet<ControllerOperationFlag> flags
+        String name,
+        long deadlineNs,
+        ControllerWriteOperation<T> op,
+        EnumSet<ControllerOperationFlag> flags
     ) {
         if (!flags.contains(DOES_NOT_UPDATE_QUEUE_TIME)) {
             throw new RuntimeException("deferred events should not update the queue time.");

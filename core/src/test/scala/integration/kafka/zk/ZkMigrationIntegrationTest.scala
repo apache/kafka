@@ -19,7 +19,7 @@ package kafka.zk
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTest, Type}
+import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTest, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
@@ -334,8 +334,14 @@ class ZkMigrationIntegrationTest {
    * Start a KRaft cluster with migrations enabled, verify that the controller does not accept metadata changes
    * through the RPCs
    */
-  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
-    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
+  @ClusterTests(Array(
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
+      serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true"))),
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_5_IV0,
+      serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true"))),
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_5_IV1,
+      serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
+  ))
   def testPreMigrationMode(clusterInstance: ClusterInstance): Unit = {
     val adminClient = clusterInstance.createAdminClient()
     val result = adminClient.createTopics(
