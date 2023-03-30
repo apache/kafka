@@ -21,10 +21,10 @@ import java.util.Arrays.asList
 import java.util.Collections
 import java.util.concurrent.{Callable, Executors, Future}
 
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.common.RequestAndCompletionHandler
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.{ClientResponse, NetworkClient}
+import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
@@ -43,7 +43,6 @@ import scala.util.Try
 
 class TransactionMarkerChannelManagerTest {
   private val metadataCache: MetadataCache = mock(classOf[MetadataCache])
-  private val networkClient: NetworkClient = mock(classOf[NetworkClient])
   private val txnStateManager: TransactionStateManager = mock(classOf[TransactionStateManager])
 
   private val partition1 = new TopicPartition("topic1", 0)
@@ -69,13 +68,10 @@ class TransactionMarkerChannelManagerTest {
 
   private val capturedErrorsCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
   private val time = new MockTime
-  
-  private val interbrokerSendThread = new InterBrokerSendThread("", networkClient, 30000, time)
 
   private val channelManager = new TransactionMarkerChannelManager(
     KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
-    interbrokerSendThread,
     txnStateManager,
     time)
 

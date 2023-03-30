@@ -31,16 +31,16 @@ import org.mockito.Mockito.{mock, verify, when}
 import java.util
 import scala.collection.mutable
 
-class InterBrokerSendThreadTest {
+class InterBrokerSenderTest {
   private val time = new MockTime()
   private val networkClient: NetworkClient = mock(classOf[NetworkClient])
   private val completionHandler = new StubCompletionHandler
   private val requestTimeoutMs = 1000
   private var requestManager: InterBrokerRequestManager = _
 
-  class TestInterBrokerSendThread(networkClient: NetworkClient = networkClient,
-                                  exceptionCallback: Throwable => Unit = t => throw t)
-    extends InterBrokerSendThread("name", networkClient, requestTimeoutMs, time) {
+  class TestInterBrokerSender(networkClient: NetworkClient = networkClient,
+                              exceptionCallback: Throwable => Unit = t => throw t)
+    extends InterBrokerSender("name", networkClient, requestTimeoutMs, time) {
     private val queue = mutable.Queue[RequestAndCompletionHandler]()
     requestManager = new TestInterBrokerRequestManager
 
@@ -50,7 +50,7 @@ class InterBrokerSendThreadTest {
       queue += request
     }
 
-    class TestInterBrokerRequestManager extends InterBrokerRequestManager(this) {
+    class TestInterBrokerRequestManager extends InterBrokerRequestManager() {
       override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
         if (queue.isEmpty) {
           None
@@ -70,11 +70,11 @@ class InterBrokerSendThreadTest {
 
   @Test
   def shutdownThreadShouldNotCauseException(): Unit = {
-    // InterBrokerSendThread#shutdown calls NetworkClient#initiateClose first so NetworkClient#poll
+    // interBrokerSender#shutdown calls NetworkClient#initiateClose first so NetworkClient#poll
     // can throw DisconnectException when thread is running
     when(networkClient.poll(anyLong(), anyLong())).thenThrow(new DisconnectException())
     var exception: Throwable = null
-    val thread = new TestInterBrokerSendThread(networkClient, e => exception = e)
+    val thread = new TestInterBrokerSender(networkClient, e => exception = e)
     thread.shutdown()
     thread.pollOnce(100)
 
@@ -84,7 +84,7 @@ class InterBrokerSendThreadTest {
 
   @Test
   def shouldNotSendAnythingWhenNoRequests(): Unit = {
-    val sendThread = new TestInterBrokerSendThread()
+    val sendThread = new TestInterBrokerSender()
 
     // poll is always called but there should be no further invocations on NetworkClient
     when(networkClient.poll(anyLong(), anyLong()))
@@ -101,7 +101,7 @@ class InterBrokerSendThreadTest {
     val request = new StubRequestBuilder()
     val node = new Node(1, "", 8080)
     val handler = RequestAndCompletionHandler(time.milliseconds(), node, request, completionHandler)
-    val sendThread = new TestInterBrokerSendThread()
+    val sendThread = new TestInterBrokerSender()
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
 
@@ -141,7 +141,7 @@ class InterBrokerSendThreadTest {
     val request = new StubRequestBuilder
     val node = new Node(1, "", 8080)
     val handler = RequestAndCompletionHandler(time.milliseconds(), node, request, completionHandler)
-    val sendThread = new TestInterBrokerSendThread()
+    val sendThread = new TestInterBrokerSender()
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
 
@@ -192,7 +192,7 @@ class InterBrokerSendThreadTest {
     val request = new StubRequestBuilder()
     val node = new Node(1, "", 8080)
     val handler = RequestAndCompletionHandler(time.milliseconds(), node, request, completionHandler)
-    val sendThread = new TestInterBrokerSendThread()
+    val sendThread = new TestInterBrokerSender()
 
     val clientRequest = new ClientRequest("dest",
       request,

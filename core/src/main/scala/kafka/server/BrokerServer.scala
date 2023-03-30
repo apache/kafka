@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.Broker.ServerInfo
-import kafka.common.InterBrokerSendThread
+import kafka.common.InterBrokerSender
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
@@ -107,7 +107,7 @@ class BrokerServer(
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
   
-  var interBrokerSendThread: InterBrokerSendThread = _
+  var interBrokerSender: InterBrokerSender = _
 
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
@@ -251,10 +251,10 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
-      val interBrokerSendLogContext = new LogContext(s"[InterBrokerSendThread broker=${config.brokerId}]")
+      val interBrokerSendLogContext = new LogContext(s"[InterBrokerSender broker=${config.brokerId}]")
       val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSendLogContext)
-      interBrokerSendThread = new InterBrokerSendThread("InterBrokerSendThread", networkClient, config.requestTimeoutMs, time)
-      interBrokerSendThread.start()
+      interBrokerSender = new InterBrokerSender("InterBrokerSender", networkClient, config.requestTimeoutMs, time)
+      interBrokerSender.start()
 
       this._replicaManager = new ReplicaManager(
         config = config,
@@ -301,7 +301,7 @@ class BrokerServer(
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
         new KafkaScheduler(1, true, "transaction-log-manager-"),
-        producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM, interBrokerSendThread)
+        producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM, interBrokerSender)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, Some(clientToControllerChannelManager), None, None,
@@ -583,8 +583,8 @@ class BrokerServer(
       if (tokenManager != null)
         CoreUtils.swallow(tokenManager.shutdown(), this)
 
-      if (interBrokerSendThread != null) {
-        CoreUtils.swallow(interBrokerSendThread.shutdown(), this)
+      if (interBrokerSender != null) {
+        CoreUtils.swallow(interBrokerSender.shutdown(), this)
       }
 
       if (replicaManager != null)

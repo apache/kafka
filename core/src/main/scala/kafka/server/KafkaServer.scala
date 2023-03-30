@@ -22,7 +22,7 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{GenerateBrokerIdException, InterBrokerSendThread, InconsistentBrokerIdException, InconsistentClusterIdException}
+import kafka.common.{GenerateBrokerIdException, InterBrokerSender, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -133,7 +133,7 @@ class KafkaServer(
   var adminManager: ZkAdminManager = _
   var tokenManager: DelegationTokenManager = _
   
-  var interBrokerSendThread: InterBrokerSendThread = _
+  var interBrokerSender: InterBrokerSender = _
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = _
   var dynamicConfigManager: ZkConfigManager = _
@@ -358,10 +358,10 @@ class KafkaServer(
         }
         alterPartitionManager.start()
 
-        val interBrokerSendLogContext = new LogContext(s"[InterBrokerSendThread broker=${config.brokerId}]")
+        val interBrokerSendLogContext = new LogContext(s"[InterBrokerSender broker=${config.brokerId}]")
         val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSendLogContext)
-        interBrokerSendThread = new InterBrokerSendThread("InterBrokerSendThread", networkClient, config.requestTimeoutMs, time)
-        interBrokerSendThread.start()
+        interBrokerSender = new InterBrokerSender("InterBrokerSender", networkClient, config.requestTimeoutMs, time)
+        interBrokerSender.start()
 
         // Start replica manager
         _replicaManager = createReplicaManager(isShuttingDown)
@@ -476,7 +476,7 @@ class KafkaServer(
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(1, true, "transaction-log-manager-"),
-          () => producerIdManager, metrics, metadataCache, Time.SYSTEM, interBrokerSendThread)
+          () => producerIdManager, metrics, metadataCache, Time.SYSTEM, interBrokerSender)
         transactionCoordinator.startup(
           () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
 
@@ -913,8 +913,8 @@ class KafkaServer(
         if (tokenManager != null)
           CoreUtils.swallow(tokenManager.shutdown(), this)
 
-        if (interBrokerSendThread != null)
-          CoreUtils.swallow(interBrokerSendThread.shutdown(), this)
+        if (interBrokerSender != null)
+          CoreUtils.swallow(interBrokerSender.shutdown(), this)
 
         if (replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown(), this)

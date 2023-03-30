@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
-class InterBrokerSendThread(
+class InterBrokerSender(
   name: String,
   @volatile var networkClient: KafkaClient,
   requestTimeoutMs: Int,
@@ -51,6 +51,7 @@ class InterBrokerSendThread(
 
   def addRequestManager(requestManager: InterBrokerRequestManager): Unit = {
     requestManagers.add(requestManager)
+    requestManager.interBrokerSender = this
   }
 
   override def shutdown(): Unit = {
@@ -91,7 +92,7 @@ class InterBrokerSendThread(
         // DisconnectException is expected when NetworkClient#initiateClose is called
       case e: FatalExitError => throw e
       case t: Throwable =>
-        error(s"unhandled exception caught in InterBrokerSendThread", t)
+        error(s"unhandled exception caught in interBrokerSender", t)
         // rethrow any unhandled exceptions as FatalExitError so the JVM will be terminated
         // as we will be in an unknown state with potentially some requests dropped and not
         // being able to make progress. Known and expected Errors should have been appropriately
@@ -162,11 +163,14 @@ class InterBrokerSendThread(
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-abstract class InterBrokerRequestManager(interBrokerSendThread: InterBrokerSendThread) {
+abstract class InterBrokerRequestManager() {
+  
+  var interBrokerSender: InterBrokerSender = _
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
 
-  def wakeup(): Unit = interBrokerSendThread.wakeup()
+  def wakeup(): Unit = if (interBrokerSender != null) 
+    interBrokerSender.wakeup()
 }
 
 case class RequestAndCompletionHandler(

@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import kafka.common.{InterBrokerSendThread, InterBrokerRequestManager, RequestAndCompletionHandler}
+import kafka.common.{InterBrokerSender, InterBrokerRequestManager, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, KafkaClient}
 import org.apache.kafka.common.Node
@@ -58,7 +58,7 @@ private[raft] class RaftSendThread(
   requestTimeoutMs: Int,
   time: Time,
   isInterruptible: Boolean = true
-) extends InterBrokerSendThread(
+) extends InterBrokerSender(
   name,
   networkClient,
   requestTimeoutMs,
@@ -69,7 +69,7 @@ private[raft] class RaftSendThread(
   
   addRequestManager(new RaftRequestManager)
 
-  class RaftRequestManager extends InterBrokerRequestManager(this) {
+  class RaftRequestManager extends InterBrokerRequestManager() {
     def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       val buffer = mutable.Buffer[RequestAndCompletionHandler]()
       while (true) {

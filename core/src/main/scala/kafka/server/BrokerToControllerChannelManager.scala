@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
-import kafka.common.{InterBrokerSendThread, InterBrokerRequestManager, RequestAndCompletionHandler}
+import kafka.common.{InterBrokerSender, InterBrokerRequestManager, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Logging
@@ -301,7 +301,7 @@ class BrokerToControllerRequestThread(
   time: Time,
   threadName: String,
   retryTimeoutMs: Long
-) extends InterBrokerSendThread(
+) extends InterBrokerSender(
   threadName,
   initialNetworkClient,
   Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt,
@@ -356,7 +356,7 @@ class BrokerToControllerRequestThread(
     requestQueue.size
   }
   
-  class ControllerRequestManager extends InterBrokerRequestManager(this) {
+  class ControllerRequestManager extends InterBrokerRequestManager() {
     override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       val currentTimeMs = time.milliseconds()
       val requestIter = requestQueue.iterator()
