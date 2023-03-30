@@ -347,7 +347,7 @@ public class TaskManager {
         // to avoid potential long restoration times.
         if (processingMode == EXACTLY_ONCE_V2 && threadProducer().transactionInFlight() && !newActiveTasks.isEmpty()) {
             log.info("New active tasks were added and there is an inflight transaction. Attempting to commit tasks.");
-            int numCommitted = commitTasksAndMaybeUpdateCommittableOffsets(newActiveTasks, new HashMap<>());
+            final int numCommitted = commitTasksAndMaybeUpdateCommittableOffsets(newActiveTasks, new HashMap<>());
             if (numCommitted == -1) {
                 log.info("Couldn't commit any tasks since a rebalance is in progress");
             } else {
