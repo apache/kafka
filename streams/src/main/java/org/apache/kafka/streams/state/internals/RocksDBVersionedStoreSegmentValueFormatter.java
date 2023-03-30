@@ -521,6 +521,13 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             return unpackedReversedTimestampAndValueSizes.get(index).timestamp == minTimestamp;
         }
 
+        /**
+         * Delete all record versions newer than (or at) the provided timestamp, and also truncate
+         * any partial records which extend beyond the provided timestamp. In other words, when
+         * this method returns, nextTimestamp will be equal to the truncation timestamp.
+         *
+         * @param timestamp timestamp to truncate to
+         */
         private void truncateRecordsToTimestamp(final long timestamp) {
             if (timestamp <= minTimestamp) {
                 // all record versions in this segment will be truncated.
