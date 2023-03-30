@@ -201,9 +201,10 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
                 if (throttler.shouldThrottle(seqno - startingSeqno, System.currentTimeMillis())) {
                     throttler.throttle();
                 }
-                taskHandle.record(batchSize);
-                log.trace("Returning batch of {} records", Math.min(maxMessages - seqno, batchSize));
-                return LongStream.range(0, Math.min(maxMessages - seqno, batchSize))
+                int currentBatchSize = (int) Math.min(maxMessages - seqno, batchSize);
+                taskHandle.record(currentBatchSize);
+                log.trace("Returning batch of {} records", currentBatchSize);
+                return LongStream.range(0, currentBatchSize)
                         .mapToObj(i -> {
                             seqno++;
                             SourceRecord record = new SourceRecord(

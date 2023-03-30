@@ -101,6 +101,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 byte[] key = (mapEntry.getKey() != null) ? mapEntry.getKey().array() : null;
                 byte[] value = (mapEntry.getValue() != null) ? mapEntry.getValue().array() : null;
                 raw.put(key, value);
+                OffsetUtils.processPartitionKey(key, value, keyConverter, connectorPartitions);
             }
             os.writeObject(raw);
         } catch (IOException e) {

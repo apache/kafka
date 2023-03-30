@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
@@ -33,6 +35,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -103,22 +106,30 @@ public class OffsetsApiIntegrationTest {
         connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.GROUP_ID_CONFIG,
                 "overridden-group-id");
         getAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
+
+        // Ensure that the overridden consumer group ID was the one actually used
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> "overridden-group-id".equals(consumerGroupListing.groupId())));
+            assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(CONNECTOR_NAME).equals(consumerGroupListing.groupId())));
+        }
     }
 
     @Test
     public void testGetSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
-        kafkaCluster.start();
 
-        Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
-        connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                kafkaCluster.bootstrapServers());
-        connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                kafkaCluster.bootstrapServers());
+        try (AutoCloseable ignored = kafkaCluster::stop) {
+            kafkaCluster.start();
 
-        getAndVerifySinkConnectorOffsets(connectorConfigs, kafkaCluster);
+            Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
 
-        kafkaCluster.stop();
+            getAndVerifySinkConnectorOffsets(connectorConfigs, kafkaCluster);
+        }
     }
 
     private void getAndVerifySinkConnectorOffsets(Map<String, String> connectorConfigs, EmbeddedKafkaCluster kafkaCluster) throws Exception {
@@ -189,17 +200,18 @@ public class OffsetsApiIntegrationTest {
     @Test
     public void testGetSourceConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
-        kafkaCluster.start();
 
-        Map<String, String> connectorConfigs = baseSourceConnectorConfigs();
-        connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                kafkaCluster.bootstrapServers());
-        connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                kafkaCluster.bootstrapServers());
+        try (AutoCloseable ignored = kafkaCluster::stop) {
+            kafkaCluster.start();
 
-        getAndVerifySourceConnectorOffsets(connectorConfigs);
+            Map<String, String> connectorConfigs = baseSourceConnectorConfigs();
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
 
-        kafkaCluster.stop();
+            getAndVerifySourceConnectorOffsets(connectorConfigs);
+        }
     }
 
     private void getAndVerifySourceConnectorOffsets(Map<String, String> connectorConfigs) throws Exception {

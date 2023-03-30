@@ -496,17 +496,17 @@ public class KafkaOffsetBackingStoreTest {
                                     Collections.singletonMap("partitionKey", "partitionValue1"))), TP0_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             capturedConsumedCallback.getValue().onCompletion(null,
-                    new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0,
+                    new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0,
                             jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
                                     Collections.singletonMap("partitionKey", "partitionValue1"))), TP1_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             capturedConsumedCallback.getValue().onCompletion(null,
-                    new ConsumerRecord<>(TOPIC, 2, 0, 0L, TimestampType.CREATE_TIME, 0, 0,
+                    new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0,
                             jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
                                     Collections.singletonMap("partitionKey", "partitionValue2"))), TP2_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             capturedConsumedCallback.getValue().onCompletion(null,
-                    new ConsumerRecord<>(TOPIC, 3, 0, 0L, TimestampType.CREATE_TIME, 0, 0,
+                    new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0,
                             jsonConverter.fromConnectData("", null, Arrays.asList("connector2",
                                     Collections.singletonMap("partitionKey", "partitionValue"))), TP1_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
@@ -523,17 +523,13 @@ public class KafkaOffsetBackingStoreTest {
         Set<Map<String, Object>> expectedConnectorPartition1 = new HashSet<>();
         expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue1"));
         expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue2"));
-
-        assertTrue(connectorPartitions1.containsAll(expectedConnectorPartition1));
-        assertTrue(expectedConnectorPartition1.containsAll(connectorPartitions1));
+        assertEquals(expectedConnectorPartition1, connectorPartitions1);
 
         Set<Map<String, Object>> connectorPartitions2 = store.connectorPartitions("connector2");
         assertEquals(1, connectorPartitions2.size());
 
         Set<Map<String, Object>> expectedConnectorPartition2 = Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
-
-        assertTrue(connectorPartitions2.containsAll(expectedConnectorPartition2));
-        assertTrue(expectedConnectorPartition2.containsAll(connectorPartitions2));
+        assertEquals(expectedConnectorPartition2, connectorPartitions2);
 
         store.stop();
         verify(storeLog).stop();
