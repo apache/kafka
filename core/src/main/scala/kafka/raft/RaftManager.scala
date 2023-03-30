@@ -264,6 +264,7 @@ class KafkaRaftManager[T](
       topicPartition,
       topicId,
       dataDir,
+      recordSerde,
       time,
       scheduler,
       config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)

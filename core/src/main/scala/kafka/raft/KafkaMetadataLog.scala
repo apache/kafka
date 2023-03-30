@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
-import org.apache.kafka.raft.internals.ByteBufferSerde
+import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter,
 RecordsSnapshotReader, SnapshotPath, Snapshots}
@@ -43,6 +43,7 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   val log: UnifiedLog,
+  recordSerde: RecordSerde[_],
   time: Time,
   scheduler: Scheduler,
   // Access to this object needs to be synchronized because it is used by the snapshotting thread to notify the
@@ -373,7 +374,7 @@ final class KafkaMetadataLog private (
     readSnapshot(snapshotId).asScala.map { reader =>
       val recordsSnapshotReader = RecordsSnapshotReader.of(
         reader,
-        new ByteBufferSerde(),
+        recordSerde,
         new GrowableBufferSupplier(),
         KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         true
@@ -557,6 +558,7 @@ object KafkaMetadataLog extends Logging {
     topicPartition: TopicPartition,
     topicId: Uuid,
     dataDir: File,
+    recordSerde: RecordSerde[_],
     time: Time,
     scheduler: Scheduler,
     config: MetadataLogConfig
@@ -606,6 +608,7 @@ object KafkaMetadataLog extends Logging {
 
     val metadataLog = new KafkaMetadataLog(
       log,
+      recordSerde,
       time,
       scheduler,
       recoverSnapshots(log),
