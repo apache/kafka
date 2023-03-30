@@ -53,6 +53,7 @@ public class MessageProcessor extends Thread {
     private final KafkaConsumer<Integer, String> consumer;
 
     private final CountDownLatch latch;
+    private volatile boolean closed;
 
     public MessageProcessor(String bootstrapServers,
                             String inputTopic,
@@ -61,17 +62,19 @@ public class MessageProcessor extends Thread {
                             CountDownLatch latch) {
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
-        this.transactionalId = "processor" + instanceIdx;
+        this.transactionalId = "processor-" + instanceIdx;
         // it is recommended to have a relatively short txn timeout in order to clear pending offsets faster
         final int transactionTimeoutMs = 10_000;
         // a unique transactional.id must be provided in order to properly use EOS
         this.producer = new Producer(
-            bootstrapServers, outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
+            bootstrapServers, outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null)
+                .createKafkaProducer();
         // consumer must be in read_committed mode, which means it won't be able to read uncommitted data
         // consumer could optionally configure groupInstanceId to avoid unnecessary rebalances
         this.groupInstanceId = "processor-consumer" + instanceIdx;
         this.consumer = new Consumer(
-            bootstrapServers, inputTopic, "processor-group", Optional.of(groupInstanceId), true, -1, null).get();
+            bootstrapServers, inputTopic, "processor-group", Optional.of(groupInstanceId), true, -1, null)
+                .createKafkaConsumer();
         this.latch = latch;
     }
 
@@ -96,7 +99,7 @@ public class MessageProcessor extends Thread {
         });
 
         int processedMessages = 0;
-        while (remainingMessages.get() > 0) {
+        while (!closed && remainingMessages.get() > 0) {
             try {
                 ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(200));
                 if (records.count() > 0) {
@@ -135,7 +138,16 @@ public class MessageProcessor extends Thread {
             //printWithTxnId(format("Remaining messages: %d", remainingMessages.get()));
         }
 
-        printWithTxnId(format("Done processing %d messages from %s", processedMessages, inputTopic));
+        printWithTxnId(format("Done: %d messages processed from %s", processedMessages, inputTopic));
+        shutdown();
+    }
+
+    private void printWithTxnId(String message) {
+        System.out.printf("%s - %s%n", transactionalId, message);
+    }
+
+    public void shutdown() {
+        closed = true;
         latch.countDown();
     }
 
@@ -145,10 +157,6 @@ public class MessageProcessor extends Thread {
             offsets.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
         }
         return offsets;
-    }
-
-    private void printWithTxnId(String message) {
-        System.out.printf("%s: %s%n", transactionalId, message);
     }
 
     private long computeRemainingMessages(KafkaConsumer<Integer, String> consumer) {

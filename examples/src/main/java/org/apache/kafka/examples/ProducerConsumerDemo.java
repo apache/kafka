@@ -39,10 +39,9 @@ public class ProducerConsumerDemo {
     public static void main(String[] args) {
         try {
             if (args.length == 0) {
-                System.out.println("This example takes 2 arguments:\n" +
+                System.out.println("This example takes 2 parameters (i.e. 10000 sync):\n" +
                     "- messages: total number of messages to send (required)\n" +
-                    "- mode: pass \"sync\" to send messages synchronously (optional)\n" +
-                    "An example argument list would be: 10000 sync");
+                    "- mode: pass \"sync\" to send messages synchronously (optional)");
                 return;
             }
 

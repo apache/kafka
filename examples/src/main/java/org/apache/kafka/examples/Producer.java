@@ -24,9 +24,9 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
-import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 
 /**
  * A simple producer thread supporting two send modes:
@@ -34,21 +34,57 @@ import java.util.concurrent.CountDownLatch;
  * - Sync mode: each send operation blocks waiting for the response.
  */
 public class Producer extends Thread {
-    private final KafkaProducer<Integer, String> producer;
+    private final String bootstrapServers;
     private final String topic;
-    private final Boolean isAsync;
+    private final boolean isAsync;
+    private final String transactionalId;
+    private final boolean enableIdempotency;
     private final int numRecords;
+    private final int transactionTimeoutMs;
     private final CountDownLatch latch;
     private volatile boolean closed;
 
     public Producer(String bootstrapServers,
                     String topic,
-                    Boolean isAsync,
+                    boolean isAsync,
                     String transactionalId,
                     boolean enableIdempotency,
                     int numRecords,
                     int transactionTimeoutMs,
                     CountDownLatch latch) {
+        this.bootstrapServers = bootstrapServers;
+        this.topic = topic;
+        this.isAsync = isAsync;
+        this.transactionalId = transactionalId;
+        this.enableIdempotency = enableIdempotency;
+        this.numRecords = numRecords;
+        this.transactionTimeoutMs = transactionTimeoutMs;
+        this.latch = latch;
+    }
+
+    @Override
+    public void run() {
+        int key = 0;
+        int sentRecords = 0;
+        // the producer instance is thread safe
+        try (KafkaProducer<Integer, String> producer = createKafkaProducer()) {
+            while (!closed && sentRecords < numRecords) {
+                if (isAsync) {
+                    sendAsync(producer, key, "demo" + key);
+                } else {
+                    sendSync(producer, key, "demo" + key);
+                }
+                key++;
+                sentRecords++;
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        System.out.printf("Done: %d messages sent to %s%n", sentRecords, topic);
+        shutdown();
+    }
+
+    public KafkaProducer<Integer, String> createKafkaProducer() {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, Utils.createClientId());
@@ -61,44 +97,17 @@ public class Producer extends Thread {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         }
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
-        this.producer = new KafkaProducer<>(props);
-        this.topic = topic;
-        this.isAsync = isAsync;
-        this.numRecords = numRecords;
-        this.latch = latch;
+        return new KafkaProducer<>(props);
     }
 
-    public KafkaProducer<Integer, String> get() {
-        return producer;
-    }
-
-    @Override
-    public void run() {
-        int key = 0;
-        int sentRecords = 0;
-        try {
-            while (!closed && sentRecords < numRecords) {
-                if (isAsync) {
-                    asyncSend(key, "demo" + key);
-                } else {
-                    syncSend(key, "demo" + key);
-                }
-                key++;
-                sentRecords++;
-            }
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
-        System.out.printf("Done: %d messages sent to %s%n", sentRecords, topic);
-        shutdown();
-    }
-
-    private void asyncSend(int key, String value) {
+    private void sendAsync(KafkaProducer<Integer, String> producer, int key, String value) {
+        // still blocks when buffer.memory is full or metadata are not available
         producer.send(new ProducerRecord<>(topic, key, value),
             new ProducerCallback(key, value));
     }
 
-    private RecordMetadata syncSend(int key, String value) throws Exception {
+    private RecordMetadata sendSync(KafkaProducer<Integer, String> producer, int key, String value)
+            throws ExecutionException, InterruptedException {
         RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
         maybePrintMessage(key, value, metadata);
         return metadata;
@@ -114,7 +123,6 @@ public class Producer extends Thread {
 
     public void shutdown() {
         closed = true;
-        producer.close(Duration.ofMillis(5_000));
         latch.countDown();
     }
 

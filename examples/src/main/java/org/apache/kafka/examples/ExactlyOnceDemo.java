@@ -53,11 +53,10 @@ public class ExactlyOnceDemo {
     public static void main(String[] args) {
         try {
             if (args.length != 3) {
-                System.out.println("This example takes 3 arguments:\n" +
+                System.out.println("This example takes 3 parameters (i.e. 6 3 10000):\n" +
                     "- partition: number of partitions for input and output topics (required)\n" +
                     "- instances: number of application instances (required)\n" +
-                    "- messages: total number of messages (required)\n" +
-                    "An example argument list would be: 6 3 10000");
+                    "- messages: total number of messages (required)");
                 return;
             }
 

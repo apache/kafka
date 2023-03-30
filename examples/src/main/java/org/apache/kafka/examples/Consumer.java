@@ -39,12 +39,15 @@ import static java.util.Collections.singleton;
  * The thread does not stop until all messages are completed or an exception is raised.
  */
 public class Consumer extends Thread implements ConsumerRebalanceListener {
-    private final KafkaConsumer<Integer, String> consumer;
+    private final String bootstrapServers;
     private final String topic;
+    private final String groupId;
+    private final Optional<String> instanceId;
+    private final boolean readCommitted;
     private final int numRecords;
     private final CountDownLatch latch;
-    private int remainingRecords;
     private volatile boolean closed;
+    private int remainingRecords;
 
     public Consumer(String bootstrapServers,
                     String topic,
@@ -53,6 +56,48 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
                     boolean readCommitted,
                     int numRecords,
                     CountDownLatch latch) {
+        this.bootstrapServers = bootstrapServers;
+        this.topic = topic;
+        this.groupId = groupId;
+        this.instanceId = instanceId;
+        this.readCommitted = readCommitted;
+        this.numRecords = numRecords;
+        this.remainingRecords = numRecords;
+        this.latch = latch;
+    }
+
+    @Override
+    public void run() {
+        // the consumer instance is NOT thread safe
+        try (KafkaConsumer<Integer, String> consumer = createKafkaConsumer()) {
+            consumer.subscribe(singleton(topic), this);
+            System.out.printf("Subscribed to %s%n", topic);
+            while (!closed && remainingRecords > 0) {
+                // poll must be called within session.timeout.ms to avoid rebalance
+                ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord<Integer, String> record : records) {
+                    // we only print 10 messages when there are 20 or more to send
+                    if (record.key() % Math.max(1, numRecords / 10) == 0) {
+                        System.out.printf("Sample: message(%d, %s) received from partition %d with offset %d%n",
+                            record.key(), record.value(), record.partition(), record.offset());
+                    }
+                }
+                remainingRecords -= records.count();
+            }
+        } catch (WakeupException e) {
+            // ignore exception when closing
+            if (!closed) {
+                throw e;
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        System.out.printf("Done: %d messages received from %s%n",
+            numRecords - remainingRecords, topic);
+        shutdown();
+    }
+
+    public KafkaConsumer<Integer, String> createKafkaConsumer() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, Utils.createClientId());
@@ -65,46 +110,11 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
             props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         }
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        this.consumer = new KafkaConsumer<>(props);
-        this.topic = topic;
-        this.numRecords = numRecords;
-        this.remainingRecords = numRecords;
-        this.latch = latch;
-    }
-
-    public KafkaConsumer<Integer, String> get() {
-        return consumer;
-    }
-
-    @Override
-    public void run() {
-        try {
-            consumer.subscribe(singleton(topic), this);
-            System.out.printf("Subscribed to %s%n", topic);
-            while (!closed && remainingRecords > 0) {
-                ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
-                for (ConsumerRecord<Integer, String> record : records) {
-                    // we only print 10 messages when there are 20 or more to send
-                    if (record.key() % Math.max(1, numRecords / 10) == 0) {
-                        System.out.printf("sample: message(%d, %s) received from partition %d with offset %d%n",
-                            record.key(), record.value(), record.partition(), record.offset());
-                    }
-                }
-                remainingRecords -= records.count();
-            }
-        } catch (WakeupException e) {
-            // swallow the wakeup
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
-        System.out.printf("Done: %d messages received from %s%n",
-            numRecords - remainingRecords, topic);
-        shutdown();
+        return new KafkaConsumer<>(props);
     }
 
     public void shutdown() {
         closed = true;
-        consumer.close(Duration.ofMillis(5_000));
         latch.countDown();
     }
 
