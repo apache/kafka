@@ -1062,8 +1062,8 @@ private[group] class GroupCoordinator(
   def handleFetchOffsets(
     groupId: String,
     requireStable: Boolean,
-    partitions: Option[Seq[TopicPartition]] = None
-  ): (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
+    partitions: Option[Seq[TopicIdPartition]] = None
+  ): (Errors, Map[TopicIdPartition, OffsetFetchResponse.PartitionData]) = {
 
     validateGroupStatus(groupId, ApiKeys.OFFSET_FETCH) match {
       case Some(error) => error -> Map.empty

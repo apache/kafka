@@ -492,32 +492,32 @@ class GroupMetadataManager(brokerId: Int,
    * The most important guarantee that this API provides is that it should never return a stale offset. i.e., it either
    * returns the current offset or it begins to sync the cache from the log (and returns an error code).
    */
-  def getOffsets(groupId: String, requireStable: Boolean, topicPartitionsOpt: Option[Seq[TopicPartition]]): Map[TopicPartition, PartitionData] = {
-    trace("Getting offsets of %s for group %s.".format(topicPartitionsOpt.getOrElse("all partitions"), groupId))
+  def getOffsets(groupId: String, requireStable: Boolean, topicIdPartitionsOpt: Option[Seq[TopicIdPartition]]): Map[TopicIdPartition, PartitionData] = {
+    trace("Getting offsets of %s for group %s.".format(topicIdPartitionsOpt.getOrElse("all partitions"), groupId))
     val group = groupMetadataCache.get(groupId)
     if (group == null) {
-      topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+      topicIdPartitionsOpt.getOrElse(Seq.empty[TopicIdPartition]).map { topicIdPartition =>
         val partitionData = new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
           Optional.empty(), "", Errors.NONE)
-        topicPartition -> partitionData
+        topicIdPartition -> partitionData
       }.toMap
     } else {
       group.inLock {
         if (group.is(Dead)) {
-          topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+          topicIdPartitionsOpt.getOrElse(Seq.empty[TopicIdPartition]).map { topicIdPartition =>
             val partitionData = new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
               Optional.empty(), "", Errors.NONE)
-            topicPartition -> partitionData
+            topicIdPartition -> partitionData
           }.toMap
         } else {
-          val topicPartitions = topicPartitionsOpt.getOrElse(group.allOffsets.keySet)
+          val topicIdPartitions = topicIdPartitionsOpt.getOrElse(group.allOffsets.keySet)
 
-          topicPartitions.map { topicPartition =>
-            if (requireStable && group.hasPendingOffsetCommitsForTopicPartition(topicPartition)) {
-              topicPartition -> new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+          topicIdPartitions.map { topicIdPartition =>
+            if (requireStable && group.hasPendingOffsetCommitsForTopicPartition(topicIdPartition)) {
+              topicIdPartition -> new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
                 Optional.empty(), "", Errors.UNSTABLE_OFFSET_COMMIT)
             } else {
-              val partitionData = group.offset(topicPartition) match {
+              val partitionData = group.offset(topicIdPartition) match {
                 case None =>
                   new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
                     Optional.empty(), "", Errors.NONE)
@@ -525,7 +525,7 @@ class GroupMetadataManager(brokerId: Int,
                   new PartitionData(offsetAndMetadata.offset,
                     offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
               }
-              topicPartition -> partitionData
+              topicIdPartition -> partitionData
             }
           }.toMap
         }

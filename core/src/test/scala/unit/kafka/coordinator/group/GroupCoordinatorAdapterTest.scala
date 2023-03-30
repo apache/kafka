@@ -464,9 +464,9 @@ class GroupCoordinatorAdapterTest {
 
   @Test
   def testFetchAllOffsets(): Unit = {
-    val foo0 = new TopicPartition("foo", 0)
-    val foo1 = new TopicPartition("foo", 1)
-    val bar1 = new TopicPartition("bar", 1)
+    val foo0 = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val foo1 = new TopicIdPartition(Uuid.randomUuid(), 1, "foo")
+    val bar1 = new TopicIdPartition(Uuid.randomUuid(), 1, "bar")
 
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
@@ -545,9 +545,9 @@ class GroupCoordinatorAdapterTest {
 
   @Test
   def testFetchOffsets(): Unit = {
-    val foo0 = new TopicPartition("foo", 0)
-    val foo1 = new TopicPartition("foo", 1)
-    val bar1 = new TopicPartition("bar", 1)
+    val foo0 = new TopicIdPartition(Uuid.ZERO_UUID, 0, "foo")
+    val foo1 = new TopicIdPartition(Uuid.ZERO_UUID, 1, "foo")
+    val bar1 = new TopicIdPartition(Uuid.ZERO_UUID, 1, "bar")
 
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)

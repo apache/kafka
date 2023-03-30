@@ -291,24 +291,24 @@ private[group] class GroupCoordinatorAdapter(
     topics: util.List[OffsetFetchRequestData.OffsetFetchRequestTopics],
     requireStable: Boolean
   ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
-    val topicPartitions = new mutable.ArrayBuffer[TopicPartition]()
+    val topicIdPartitions = new mutable.ArrayBuffer[TopicIdPartition]()
     topics.forEach { topic =>
       topic.partitionIndexes.forEach { partition =>
-        topicPartitions += new TopicPartition(topic.name, partition)
+        topicIdPartitions += new TopicIdPartition(Uuid.ZERO_UUID, partition, topic.name)
       }
     }
 
     handleFetchOffset(
       groupId,
       requireStable,
-      Some(topicPartitions.toSeq)
+      Some(topicIdPartitions.toSeq)
     )
   }
 
   private def handleFetchOffset(
     groupId: String,
     requireStable: Boolean,
-    partitions: Option[Seq[TopicPartition]]
+    partitions: Option[Seq[TopicIdPartition]]
   ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
     val (error, results) = coordinator.handleFetchOffsets(
       groupId,

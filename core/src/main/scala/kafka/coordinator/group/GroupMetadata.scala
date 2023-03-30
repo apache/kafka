@@ -19,12 +19,11 @@ package kafka.coordinator.group
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -743,10 +742,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasPendingOffsetCommitsFromProducer(producerId: Long): Boolean =
     pendingTransactionalOffsetCommits.contains(producerId)
 
-  def hasPendingOffsetCommitsForTopicPartition(topicPartition: TopicPartition): Boolean = {
-    pendingOffsetCommits.contains(topicPartition) ||
+  def hasPendingOffsetCommitsForTopicPartition(topicIdPartition: TopicIdPartition): Boolean = {
+    pendingOffsetCommits.contains(topicIdPartition.topicPartition) ||
       pendingTransactionalOffsetCommits.exists(
-        _._2.contains(topicPartition)
+        _._2.contains(topicIdPartition.topicPartition)
       )
   }
 
@@ -824,14 +823,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     expiredOffsets
   }
 
-  def allOffsets: Map[TopicPartition, OffsetAndMetadata] = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
-    (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
+  def allOffsets: Map[TopicIdPartition, OffsetAndMetadata] = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
+    (new TopicIdPartition(Uuid.ZERO_UUID, topicPartition), commitRecordMetadataAndOffset.offsetAndMetadata)
   }.toMap
 
-  def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
+  def offset(topicIdPartition: TopicIdPartition): Option[OffsetAndMetadata] = offsets.get(topicIdPartition.topicPartition).map(_.offsetAndMetadata)
 
   // visible for testing
-  private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
+  private[group] def offsetWithRecordMetadata(topicIdPartition: TopicIdPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicIdPartition.topicPartition)
 
   // Used for testing
   private[group] def pendingOffsetCommit(topicIdPartition: TopicIdPartition): Option[OffsetAndMetadata] = {

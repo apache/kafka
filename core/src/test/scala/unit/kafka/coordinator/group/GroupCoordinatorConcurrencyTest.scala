@@ -370,8 +370,8 @@ object GroupCoordinatorConcurrencyTest {
   type SyncGroupCallback = SyncGroupResult => Unit
   type HeartbeatCallbackParams = Errors
   type HeartbeatCallback = Errors => Unit
-  type OffsetFetchCallbackParams = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData])
-  type OffsetFetchCallback = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) => Unit
+  type OffsetFetchCallbackParams = (Errors, Map[TopicIdPartition, OffsetFetchResponse.PartitionData])
+  type OffsetFetchCallback = (Errors, Map[TopicIdPartition, OffsetFetchResponse.PartitionData]) => Unit
   type CommitOffsetCallbackParams = Map[TopicIdPartition, Errors]
   type CommitOffsetCallback = Map[TopicIdPartition, Errors] => Unit
   type LeaveGroupCallbackParams = LeaveGroupResult
