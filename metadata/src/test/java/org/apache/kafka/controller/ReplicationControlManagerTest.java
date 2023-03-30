@@ -156,21 +156,8 @@ public class ReplicationControlManagerTest {
         final LogContext logContext = new LogContext();
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
-        final FeatureControlManager featureControl = new FeatureControlManager.Builder().
-            setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
-                QuorumFeatures.defaultFeatureMap(),
-                Collections.singletonList(0))).
-            setMetadataVersion(MetadataVersion.latest()).
-            build();
-        final ClusterControlManager clusterControl = new ClusterControlManager.Builder().
-            setLogContext(logContext).
-            setTime(time).
-            setSnapshotRegistry(snapshotRegistry).
-            setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
-            setReplicaPlacer(new StripedReplicaPlacer(random)).
-            setFeatureControlManager(featureControl).
-            build();
+        final FeatureControlManager featureControl;
+        final ClusterControlManager clusterControl;
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             build();
@@ -195,12 +182,20 @@ public class ReplicationControlManagerTest {
         }
 
         ReplicationControlTestContext(MetadataVersion metadataVersion, Optional<CreateTopicPolicy> createTopicPolicy) {
-            FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            this.featureControl = new FeatureControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
                 setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
                     QuorumFeatures.defaultFeatureMap(),
                     Collections.singletonList(0))).
                 setMetadataVersion(metadataVersion).
+                build();
+            this.clusterControl = new ClusterControlManager.Builder().
+                setLogContext(logContext).
+                setTime(time).
+                setSnapshotRegistry(snapshotRegistry).
+                setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
+                setReplicaPlacer(new StripedReplicaPlacer(random)).
+                setFeatureControlManager(featureControl).
                 build();
 
             this.replicationControl = new ReplicationControlManager.Builder().

@@ -401,8 +401,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.interceptors = interceptors;
             else
                 this.interceptors = new ProducerInterceptors<>(interceptorList);
-            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer,
-                    valueSerializer, interceptorList, reporters);
+            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keySerializer,
+                    this.valueSerializer, interceptorList, reporters);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
