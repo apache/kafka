@@ -65,7 +65,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.union;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
@@ -299,42 +298,6 @@ public class TaskManager {
         }
     }
 
-    private void commitActiveTasks(final Set<Task> activeTasksNeedCommit, final AtomicReference<RuntimeException> activeTasksCommitException) {
-
-        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
-        prepareCommitAndAddOffsetsToMap(activeTasksNeedCommit, consumedOffsetsPerTask);
-
-        final Set<Task> dirtyTasks = new HashSet<>();
-        try {
-            taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
-        } catch (final TaskCorruptedException e) {
-            log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
-                    e.corruptedTasks());
-
-            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
-            dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
-            closeDirtyAndRevive(dirtyTasks, true);
-        } catch (final RuntimeException e) {
-            log.error("Exception caught while committing active tasks: " + consumedOffsetsPerTask.keySet(), e);
-            activeTasksCommitException.compareAndSet(null, e);
-            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
-        }
-
-        // for non-revoking active tasks, we should not enforce checkpoint
-        // as it's EOS enabled in which case no checkpoint should be written while
-        // the task is in RUNNING tate
-        for (final Task task : activeTasksNeedCommit) {
-            if (!dirtyTasks.contains(task)) {
-                try {
-                    task.postCommit(true);
-                } catch (final RuntimeException e) {
-                    log.error("Exception caught while post-committing task: " + task.id(), e);
-                    maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), activeTasksCommitException);
-                }
-            }
-        }
-    }
-
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
@@ -380,16 +343,16 @@ public class TaskManager {
         maybeThrowTaskExceptions(taskCloseExceptions);
 
         final Collection<Task> newActiveTasks = createNewTasks(activeTasksToCreate, standbyTasksToCreate);
-        final Set<Task> activeTasksNeedCommit;
-        // Find new active tasks which need commit.
-        if (newActiveTasks == null || newActiveTasks.isEmpty()) {
-            activeTasksNeedCommit = new HashSet<>();
-        } else {
-            activeTasksNeedCommit = newActiveTasks.stream().filter(Task::commitNeeded).collect(Collectors.toSet());
-        }
-        if ((processingMode == EXACTLY_ONCE_V2 || processingMode == EXACTLY_ONCE_ALPHA) && !activeTasksNeedCommit.isEmpty()) {
-            final AtomicReference<RuntimeException> activeTasksCommitException = new AtomicReference<>(null);
-            commitActiveTasks(activeTasksNeedCommit, activeTasksCommitException);
+        // If there are any transactions in flight and there are newly created active tasks, commit the tasks
+        // to avoid potential long restoration times.
+        if (processingMode == EXACTLY_ONCE_V2 && threadProducer().transactionInFlight() && !newActiveTasks.isEmpty()) {
+            log.info("New active tasks were added and there is an inflight transaction. Attempting to commit tasks.");
+            int numCommitted = commitTasksAndMaybeUpdateCommittableOffsets(newActiveTasks, new HashMap<>());
+            if (numCommitted == -1) {
+                log.info("Couldn't commit any tasks since a rebalance is in progress");
+            } else {
+                log.info("Committed {} transactions", numCommitted);
+            }
         }
     }
 
