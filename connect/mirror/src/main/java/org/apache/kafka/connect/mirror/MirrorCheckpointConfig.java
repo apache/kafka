@@ -73,6 +73,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUP_FILTER_CLASS = "group.filter.class";
     private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
     public static final Class<?> GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
+    public static final String OFFSET_SYNCS_SOURCE_CONSUMER_ROLE = "offset-syncs-source-consumer";
+    public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = "offset-syncs-target-consumer";
+    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = "offset-syncs-source-admin";
+    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = "offset-syncs-target-admin";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
@@ -123,9 +127,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         }
     }
 
-    Map<String, String> taskConfigForConsumerGroups(List<String> groups) {
+    Map<String, String> taskConfigForConsumerGroups(List<String> groups, int taskIndex) {
         Map<String, String> props = originalsStrings();
         props.put(TASK_CONSUMER_GROUPS, String.join(",", groups));
+        props.put(TASK_INDEX, String.valueOf(taskIndex));
         return props;
     }
 
@@ -146,14 +151,14 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
     Map<String, Object> offsetSyncsTopicConsumerConfig() {
         return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
-                ? sourceConsumerConfig()
-                : targetConsumerConfig();
+                ? sourceConsumerConfig(OFFSET_SYNCS_SOURCE_CONSUMER_ROLE)
+                : targetConsumerConfig(OFFSET_SYNCS_TARGET_CONSUMER_ROLE);
     }
 
     Map<String, Object> offsetSyncsTopicAdminConfig() {
         return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
-                ? sourceAdminConfig()
-                : targetAdminConfig();
+                ? sourceAdminConfig(OFFSET_SYNCS_SOURCE_ADMIN_ROLE)
+                : targetAdminConfig(OFFSET_SYNCS_TARGET_ADMIN_ROLE);
     }
 
     Duration consumerPollTimeout() {
