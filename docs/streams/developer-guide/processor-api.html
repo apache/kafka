@@ -440,8 +440,17 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                     Also, window stores may not be versioned.</p>
                 <b>Upgrade note:</b> Versioned state stores are opt-in only; no automatic
                     upgrades from non-versioned to versioned stores will take place.
+                <p>Upgrades are supported from persistent, non-versioned key-value stores
+                    to persistent, versioned key-value stores as long as the original store
+                    has the same changelog topic format as the versioned store being upgraded
+                    to. Both persistent
+                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)">key-value stores</a>
+                    and <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)">timestamped key-value stores</a>
+                    share the same changelog topic format as
+                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)">persistent versioned key-value stores</a>,
+                    and therefore both are eligible for upgrades.</p>
                 <p>If you wish to upgrade an application using persistent, non-versioned
-                    key-value stores stores to use persistent, versioned key-value stores
+                    key-value stores to use persistent, versioned key-value stores
                     instead, you can perform the following procedure:</p>
                 <ul class="first simple">
                     <li>Stop all application instances, and
