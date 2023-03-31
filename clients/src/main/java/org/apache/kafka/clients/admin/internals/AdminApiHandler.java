@@ -72,19 +72,21 @@ public interface AdminApiHandler<K, V> {
     ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response);
 
     /**
-     * Callback that is invoked when a request hits an UnsupportedVersionException. If the
-     * exception can be handled and the request retried, the appropriate changes to the request
-     * should be applied and that should be indicated via the returned boolean value. If the
-     * exception is thrown during the lookup stage the handler should delegate the handling to the
-     * lookup strategy.
+     * Callback that is invoked when a request hits an UnsupportedVersionException. Keys for which the
+     * exception cannot be handled and the request shouldn't be retried must be mapped to an error and
+     * returned. The request will then be retried for the remainder of the keys. If the exception is
+     * thrown during the lookup stage the handler should delegate the handling to the lookup strategy.
      *
-     * @return True if the exception can be handled; false otherwise.
+     * @return The failure mappings for the keys for which the exception cannot be handled and the
+     * request shouldn't be retried. If the exception cannot be handled all initial keys will be in
+     * the returned map.
      */
-    default boolean handleUnsupportedVersionException(
+    default Map<K, Throwable> handleUnsupportedVersionException(
         UnsupportedVersionException exception,
+        Set<K> keys,
         boolean isFulfillmentStage
     ) {
-        return false;
+        return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
     }
 
     /**

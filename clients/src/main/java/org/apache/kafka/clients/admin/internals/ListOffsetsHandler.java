@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -45,17 +45,16 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
+import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffsetsResultInfo> {
 
-    private final ListOffsetsOptions options;
     private final Map<TopicPartition, OffsetSpec> offsetSpecsByPartition;
+    private final ListOffsetsOptions options;
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
-
-    private volatile boolean skipMaxTimestampRequests = false;
 
     public ListOffsetsHandler(
         Map<TopicPartition, OffsetSpec> offsetSpecsByPartition,
@@ -80,24 +79,21 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
     @Override
     ListOffsetsRequest.Builder buildBatchedRequest(int brokerId, Set<TopicPartition> keys) {
-        final Map<String, ListOffsetsTopic> topicsByName = new HashMap<>();
-        boolean supportsMaxTimestamp = false;
-        for (TopicPartition topicPartition : keys) {
-            OffsetSpec offsetSpec = offsetSpecsByPartition.get(topicPartition);
-            long offsetQuery = getOffsetFromSpec(offsetSpec);
-            if (offsetQuery == ListOffsetsRequest.MAX_TIMESTAMP) {
-                if (skipMaxTimestampRequests) {
-                    continue;
-                }
-                supportsMaxTimestamp = true;
-            }
-            ListOffsetsTopic topic = topicsByName.computeIfAbsent(
-                topicPartition.topic(), topicName -> new ListOffsetsTopic().setName(topicName));
-            topic.partitions().add(
-                new ListOffsetsPartition()
-                    .setPartitionIndex(topicPartition.partition())
-                    .setTimestamp(offsetQuery));
-        }
+        Map<String, ListOffsetsTopic> topicsByName = CollectionUtils.groupPartitionsByTopic(
+            keys,
+            topicName -> new ListOffsetsTopic().setName(topicName),
+            (listOffsetsTopic, partitionId) -> {
+                TopicPartition topicPartition = new TopicPartition(listOffsetsTopic.name(), partitionId);
+                OffsetSpec offsetSpec = offsetSpecsByPartition.get(topicPartition);
+                long offsetQuery = getOffsetFromSpec(offsetSpec);
+                listOffsetsTopic.partitions().add(
+                    new ListOffsetsPartition()
+                        .setPartitionIndex(partitionId)
+                        .setTimestamp(offsetQuery));
+            });
+        boolean supportsMaxTimestamp = keys
+            .stream()
+            .anyMatch(key -> getOffsetFromSpec(offsetSpecsByPartition.get(key)) == ListOffsetsRequest.MAX_TIMESTAMP);
 
         return ListOffsetsRequest.Builder
             .forConsumer(true, options.isolationLevel(), supportsMaxTimestamp)
@@ -136,11 +132,23 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             }
         }
 
-        maybeMarkOtherFailures(
-            broker,
-            keys,
-            failed,
-            p -> !unmapped.isEmpty() || completed.containsKey(p) || failed.containsKey(p) || retriable.contains(p));
+        // Sanity-check if the current leader for these partitions returned results for all of them
+        for (TopicPartition topicPartition : keys) {
+            if (unmapped.isEmpty()
+                && !completed.containsKey(topicPartition)
+                && !failed.containsKey(topicPartition)
+                && !retriable.contains(topicPartition)
+            ) {
+                ApiException sanityCheckException = new ApiException(
+                    "The response from broker " + broker.id() +
+                        " did not contain a result for topic partition " + topicPartition);
+                log.error(
+                    "ListOffsets request for topic partition {} failed sanity check",
+                    topicPartition,
+                    sanityCheckException);
+                failed.put(topicPartition, sanityCheckException);
+            }
+        }
 
         return new ApiResult<>(completed, failed, unmapped);
     }
@@ -174,65 +182,30 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         }
     }
 
-    private void maybeMarkOtherFailures(
-        Node broker,
-        Set<TopicPartition> keys,
-        Map<TopicPartition, Throwable> failed,
-        Predicate<TopicPartition> sanityCheck
-    ) {
-        Exception unsupportedMaxTimestampSpecException = new UnsupportedVersionException(
-            "Broker " + broker.id() + " does not support MAX_TIMESTAMP offset spec");
-        for (TopicPartition topicPartition : keys) {
-            // Fail any MAX_TIMESTAMP requests if we had to downgrade the original request
-            if (skipMaxTimestampRequests
-                && getOffsetFromSpec(
-                offsetSpecsByPartition.get(topicPartition)) == ListOffsetsRequest.MAX_TIMESTAMP
-            ) {
-                log.error(
-                    "ListOffsets request for topic partition {} failed due to unsupported version",
-                    topicPartition,
-                    unsupportedMaxTimestampSpecException);
-                failed.put(topicPartition, unsupportedMaxTimestampSpecException);
-            // Sanity-check if the current leader for these partitions returned results for all of them
-            } else if (!sanityCheck.test(topicPartition)) {
-                ApiException sanityCheckException = new ApiException(
-                    "The response from broker " + broker.id() +
-                        " did not contain a result for topic partition " + topicPartition);
-                log.error(
-                    "ListOffsets request for topic partition {} failed sanity check",
-                    topicPartition,
-                    unsupportedMaxTimestampSpecException);
-                failed.put(topicPartition, sanityCheckException);
-            }
-        }
-    }
-
     @Override
-    public boolean handleUnsupportedVersionException(
-        UnsupportedVersionException exception, boolean isFulfillmentStage) {
-        // An UnsupportedVersionException can be addressed only in the fulfillment stage if it's caused
-        // by a MAX_TIMESTAMP spec for some partition and there is at least one other partition with
-        // a non-MAX_TIMESTAMP spec for which the fulfillment stage can be retried.
+    public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
+        UnsupportedVersionException exception, Set<TopicPartition> keys, boolean isFulfillmentStage
+    ) {
+        // An UnsupportedVersionException can be addressed only in the fulfillment stage...
         if (!isFulfillmentStage) {
-            return false;
+            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
         }
-        boolean containsMaxTimestampSpec = false;
+        Map<TopicPartition, Throwable> maxTimestampPartitions = new HashMap<>();
         boolean containsNonMaxTimestampSpec = false;
-        for (Map.Entry<TopicPartition, OffsetSpec> entry : offsetSpecsByPartition.entrySet()) {
-            if (getOffsetFromSpec(entry.getValue()) == ListOffsetsRequest.MAX_TIMESTAMP) {
-                containsMaxTimestampSpec = true;
+        for (TopicPartition topicPartition : keys) {
+            OffsetSpec offsetSpec = offsetSpecsByPartition.get(topicPartition);
+            if (getOffsetFromSpec(offsetSpec) == ListOffsetsRequest.MAX_TIMESTAMP) {
+                maxTimestampPartitions.put(topicPartition, exception);
             } else {
                 containsNonMaxTimestampSpec = true;
             }
-            if (containsMaxTimestampSpec && containsNonMaxTimestampSpec) {
-                break;
-            }
         }
-        if (containsMaxTimestampSpec && containsNonMaxTimestampSpec) {
-            skipMaxTimestampRequests = true;
-            return true;
+        // ...only if it's caused by a MAX_TIMESTAMP spec for some partition, and only if there is at least
+        // one other partition with a non-MAX_TIMESTAMP spec for which the fulfillment stage can be retried.
+        if (maxTimestampPartitions.isEmpty() || !containsNonMaxTimestampSpec) {
+            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
         } else {
-            return false;
+            return maxTimestampPartitions;
         }
     }
 

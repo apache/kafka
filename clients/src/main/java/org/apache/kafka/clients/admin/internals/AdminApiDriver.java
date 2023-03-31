@@ -261,29 +261,24 @@ public class AdminApiDriver<K, V> {
                 .filter(future.lookupKeys()::contains)
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
+        } else if (t instanceof UnsupportedVersionException) {
+            Map<K, Throwable> unrecoverableFailures =
+                handler.handleUnsupportedVersionException(
+                    (UnsupportedVersionException) t,
+                    spec.keys,
+                    spec.scope instanceof FulfillmentScope);
+            completeExceptionally(unrecoverableFailures);
         } else {
-            boolean isFulfillmentStage = spec.scope instanceof FulfillmentScope;
-            if (handleUnsupportedVersionException(t, isFulfillmentStage)) {
-                return;
-            }
-
             Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
                 Function.identity(),
                 key -> t
             ));
-            if (isFulfillmentStage) {
+            if (spec.scope instanceof FulfillmentScope) {
                 completeExceptionally(errors);
             } else {
                 completeLookupExceptionally(errors);
             }
         }
-    }
-
-    private boolean handleUnsupportedVersionException(Throwable t, boolean isFulfillmentStage) {
-        return t instanceof UnsupportedVersionException
-            && handler.handleUnsupportedVersionException(
-                (UnsupportedVersionException) t,
-                isFulfillmentStage);
     }
 
     private void clearInflightRequest(long currentTimeMs, RequestSpec<K> spec) {

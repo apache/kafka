@@ -22,8 +22,6 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -32,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -215,30 +214,38 @@ public final class ListOffsetsHandlerTest {
         ListOffsetsHandler handler =
             new ListOffsetsHandler(offsetSpecsByPartition, new ListOffsetsOptions(), logContext);
         // Unsupported version exception currently cannot be handled if not in the fulfillment stage...
-        assertFalse(handler.handleUnsupportedVersionException(uve, false));
+        Set<TopicPartition> keysToTest = offsetSpecsByPartition.keySet();
+        Set<TopicPartition> expectedFailures = keysToTest;
+        assertEquals(
+            mapToError(expectedFailures, uve),
+            handler.handleUnsupportedVersionException(uve, keysToTest, false));
 
         final Map<TopicPartition, OffsetSpec> nonMaxTimestampPartitions =
             new HashMap<>(offsetSpecsByPartition);
         maxTimestampPartitions.forEach((k, v) -> nonMaxTimestampPartitions.remove(k));
-        handler = new ListOffsetsHandler(nonMaxTimestampPartitions, new ListOffsetsOptions(), logContext);
         // ...it also cannot be handled if there's no partition with a MAX_TIMESTAMP spec...
-        assertFalse(handler.handleUnsupportedVersionException(uve, true));
+        keysToTest = nonMaxTimestampPartitions.keySet();
+        expectedFailures = keysToTest;
+        assertEquals(
+            mapToError(expectedFailures, uve),
+            handler.handleUnsupportedVersionException(uve, keysToTest, true));
 
         // ...or if there are only partitions with MAX_TIMESTAMP specs...
-        handler = new ListOffsetsHandler(maxTimestampPartitions, new ListOffsetsOptions(), logContext);
-        assertFalse(handler.handleUnsupportedVersionException(uve, true));
+        keysToTest = maxTimestampPartitions.keySet();
+        expectedFailures = keysToTest;
+        assertEquals(
+            mapToError(expectedFailures, uve),
+            handler.handleUnsupportedVersionException(uve, keysToTest, true));
 
-        handler = new ListOffsetsHandler(offsetSpecsByPartition, new ListOffsetsOptions(), logContext);
-        assertTrue(handler.handleUnsupportedVersionException(uve, true));
-        ListOffsetsRequest request =
-            handler.buildBatchedRequest(node.id(), offsetSpecsByPartition.keySet()).build();
-        for (ListOffsetsTopic topic : request.topics()) {
-            for (ListOffsetsPartition partition : topic.partitions()) {
-                assertFalse(maxTimestampPartitions.containsKey(
-                    new TopicPartition(topic.name(), partition.partitionIndex())));
-                assertNotEquals(ListOffsetsRequest.MAX_TIMESTAMP, partition.timestamp());
-            }
-        }
+        keysToTest = offsetSpecsByPartition.keySet();
+        expectedFailures = maxTimestampPartitions.keySet();
+        assertEquals(
+            mapToError(expectedFailures, uve),
+            handler.handleUnsupportedVersionException(uve, keysToTest, true));
+    }
+
+    private static Map<TopicPartition, Throwable> mapToError(Set<TopicPartition> keys, Throwable t) {
+        return keys.stream().collect(Collectors.toMap(k -> k, k -> t));
     }
 
     private void assertExpectedTimestamp(TopicPartition topicPartition, long actualTimestamp) {
@@ -291,7 +298,7 @@ public final class ListOffsetsHandlerTest {
         Set<TopicPartition> actualRetriable = new HashSet<>(offsetSpecsByPartition.keySet());
         actualRetriable.removeAll(result.completedKeys.keySet());
         actualRetriable.removeAll(result.failedKeys.keySet());
-        actualRetriable.removeAll(result.unmappedKeys);
+        actualRetriable.removeAll(new HashSet<>(result.unmappedKeys));
         assertEquals(expectedRetriable, actualRetriable);
     }
 
