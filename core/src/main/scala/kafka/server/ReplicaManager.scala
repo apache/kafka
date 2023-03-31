@@ -249,8 +249,7 @@ class ReplicaManager(val config: KafkaConfig,
   private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
   metricsGroup.newGauge("LeaderCount", () => leaderPartitionsIterator.size)
-  // Visible for testing
-  private[kafka] val partitionCount = metricsGroup.newGauge("PartitionCount", () => allPartitions.size)
+  metricsGroup.newGauge("PartitionCount", () => allPartitions.size)
   metricsGroup.newGauge("OfflineReplicaCount", () => offlinePartitionCount)
   metricsGroup.newGauge("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
   metricsGroup.newGauge("UnderMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isUnderMinIsr))
