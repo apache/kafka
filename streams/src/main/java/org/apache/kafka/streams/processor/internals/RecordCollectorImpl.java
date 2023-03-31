@@ -217,10 +217,9 @@ public class RecordCollectorImpl implements RecordCollector {
             final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
             try {
                 response = productionExceptionHandler.handleSerializationException(record, exception);
-            } catch (final Exception fatalUserException) {
-                log.error("Serialization error callback failed after serialization error for record {}", record, fatalUserException);
-                final ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
-                recordSendError(topic, exception, rec);
+            } catch (final Exception e) {
+                log.error("Fatal handling serialization exception on record {}", record, e);
+                recordSendError(topic, e, null);
                 return;
             }
 
@@ -229,7 +228,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 return;
             }
 
-            log.info("Unable to serialize the {}. Continue processing. " +
+            log.info("Unable to serialize {}. Continue processing. " +
                             "ProducerRecord(key=[{}], value=[{}], topic=[{}], partition=[{}], timestamp=[{}])",
                     keyBytes == null ? "key" : "value",
                     key,
