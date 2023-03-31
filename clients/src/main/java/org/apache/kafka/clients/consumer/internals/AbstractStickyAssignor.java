@@ -73,6 +73,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         public final List<TopicPartition> partitions;
         public final Optional<Integer> generation;
         public final Optional<String> rackId;
+
         public MemberData(List<TopicPartition> partitions, Optional<Integer> generation, Optional<String> rackId) {
             this.partitions = partitions;
             this.generation = generation;
@@ -727,11 +728,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             unfilledMembersWithExactlyMinQuotaPartitions.remove(firstIndex);
                     }
                 }
-                if (consumer == null)
-                    continue;
 
-                assignNewPartition(unassignedPartition, consumer);
-                unassignedIter.remove();
+                if (consumer != null) {
+                    assignNewPartition(unassignedPartition, consumer);
+                    unassignedIter.remove();
+                }
             }
         }
 
@@ -1005,7 +1006,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             partitionIter.remove();
                             currentPartitionConsumer.remove(partition);
                         } else if (!consumerSubscription.topics().contains(partition.topic()) || rackInfo.racksMismatch(consumer, partition)) {
-                            // because the consumer is no longer subscribed to its topic, remove it from currentAssignment of the consumer
+                            // if the consumer is no longer subscribed to its topic or if racks don't match for rack-aware assignment,
+                            // remove it from currentAssignment of the consumer
                             partitionIter.remove();
                             revocationRequired = true;
                         } else {
