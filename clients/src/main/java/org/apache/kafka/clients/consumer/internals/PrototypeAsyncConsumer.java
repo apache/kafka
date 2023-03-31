@@ -41,6 +41,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -68,7 +70,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -95,6 +97,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
+    private AtomicBoolean shouldWakeup = new AtomicBoolean(false);
 
     public PrototypeAsyncConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
@@ -265,7 +268,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     // Visible for testing
-    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    WakeupableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
         maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
         eventHandler.add(commitEvent);
@@ -330,16 +333,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
         eventHandler.add(event);
         try {
-            return event.complete(Duration.ofMillis(100));
+            // may throw WakeupException and TimeoutException
+            return tryGetFutureResult(this.time, event.future, timeout);
+        } catch (ExecutionException e) {
+            throw new KafkaException(e);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
-        } catch (TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException(e);
-        } catch (ExecutionException e) {
-            // Execution exception is thrown here
-            throw new KafkaException(e);
-        } catch (Exception e) {
-            throw e;
         }
     }
 
@@ -461,6 +460,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
+        this.shouldWakeup.set(true);
     }
 
     /**
@@ -481,17 +481,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        CompletableFuture<Void> commitFuture = commit(offsets);
+        final WakeupableFuture<Void> commitFuture = commit(offsets);
         try {
-            commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (final TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException(e);
-        } catch (final InterruptedException e) {
-            throw new InterruptException(e);
-        } catch (final ExecutionException e) {
+            // may throw WakeupException and TimeoutException
+            tryGetFutureResult(this.time, commitFuture, timeout);
+        } catch (ExecutionException e) {
             throw new KafkaException(e);
-        } catch (final Exception e) {
-            throw e;
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
         }
     }
 
@@ -544,6 +541,26 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     public ConsumerRecords<K, V> poll(long timeout) {
         throw new KafkaException("method not implemented");
+    }
+
+    <T> T tryGetFutureResult(
+            final Time time,
+            final WakeupableFuture<T> future,
+            final Duration timeout) throws ExecutionException, InterruptedException {
+        Timer timer = time.timer(timeout.toMillis());
+        do {
+            if (future.isDone()) {
+                return future.get();
+            }
+
+            if (this.shouldWakeup.get()) {
+                this.shouldWakeup.set(false);
+                future.cancel(true);
+                throw new WakeupException();
+            }
+            // Maybe Thread.sleep?
+        } while (!timer.isExpired());
+        throw new org.apache.kafka.common.errors.TimeoutException();
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(

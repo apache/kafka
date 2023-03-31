@@ -17,14 +17,14 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.WakeupableFuture;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 public class CommitApplicationEvent extends ApplicationEvent {
-    final private CompletableFuture<Void> future;
+    final private WakeupableFuture<Void> future;
     final private Map<TopicPartition, OffsetAndMetadata> offsets;
 
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -34,11 +34,11 @@ public class CommitApplicationEvent extends ApplicationEvent {
         if (exception.isPresent()) {
             throw new RuntimeException(exception.get());
         }
-        this.future = new CompletableFuture<>();
+        this.future = new WakeupableFuture<>();
     }
 
-    public CompletableFuture<Void> future() {
-        return future;
+    public WakeupableFuture<Void> future() {
+        return this.future;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
