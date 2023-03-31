@@ -251,9 +251,16 @@ class BrokerMetadataPublisherTest {
       TestUtils.retry(60000) {
         assertNotNull(broker.brokerMetadataPublisher)
       }
+
+      // Replace the BrokerMetadataPublisher in Broker with a mock
+      broker.sharedServer.loader.removeAndClosePublisher(broker.brokerMetadataPublisher).get(1, TimeUnit.MINUTES)
       val publisher = Mockito.spy(broker.brokerMetadataPublisher)
       doThrow(new RuntimeException("injected failure")).when(publisher).updateCoordinator(any(), any(), any(), any(), any())
-      broker.sharedServer.loader.removeAndClosePublisher(broker.brokerMetadataPublisher).get(1, TimeUnit.MINUTES)
+      broker.brokerMetadataPublisher = publisher
+      broker.metadataPublishers.clear()
+      broker.metadataPublishers.add(broker.brokerMetadataPublisher)
+
+      // Re-install it with MetadataLoader
       broker.sharedServer.loader.installPublishers(List(publisher).asJava).get(1, TimeUnit.MINUTES)
       val admin = Admin.create(cluster.clientProperties())
       try {
