@@ -17,7 +17,7 @@
 package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import java.util.{Optional}
+import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
@@ -982,11 +982,11 @@ class Partition(val topicPartition: TopicPartition,
 
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
     metadataCache match {
-      // In KRaft mode, only replicas which meets all of the following requirements are allowed to join the ISR.
-      // 1. are not fenced.
-      // 2. are not in controlled shutdown.
-      // 3. have a cached brokerEpoch that matches with the brokerEpoch from the Fetch request, OR broker epoch
-      //    verification is not supported.
+      // In KRaft mode, only a replica which meets all of the following requirements is allowed to join the ISR.
+      // 1. It is not fenced.
+      // 2. It is not in controlled shutdown.
+      // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
+      //    request broker epoch is -1 which bypass the epoch verification.
       case kRaftMetadataCache: KRaftMetadataCache =>
         val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch

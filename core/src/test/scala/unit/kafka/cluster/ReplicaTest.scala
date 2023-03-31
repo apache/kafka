@@ -60,7 +60,7 @@ class ReplicaTest {
     assertEquals(lastFetchTimeMs, replicaState.lastFetchTimeMs,
       "Unexpected Last Fetch Time")
     assertEquals(brokerEpoch, replicaState.brokerEpoch,
-      "Unexpected Last Fetch Time")
+      "Broker Epoch Mismatch")
   }
 
   def assertReplicaStateDoesNotChange(
