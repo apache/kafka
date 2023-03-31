@@ -263,13 +263,16 @@
                             <li>RocksDB settings can be fine-tuned, see
                                 <a class="reference internal" href="config-streams.html#streams-developer-guide-rocksdb-config"><span class="std std-ref">RocksDB configuration</span></a>.</li>
                             <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)">store variants</a>:
-                                versioned key-value store, time window key-value store, session window key-value store.</li>
+                                timestamped key-value store, versioned key-value store, time window key-value store, session window key-value store.</li>
                             <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)">persistentTimestampedKeyValueStore</a>
                                 when you need a persistent key-(value/timestamp) store that supports put/get/delete and range queries.</li>
                             <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)">persistentVersionedKeyValueStore</a>
                                 when you need a persistent, versioned key-(value/timestamp) store that supports put/get/delete and timestamped get operations.</li>
-                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)">persistentTimestampedWindowStore</a>
-                                when you need a persistent windowedKey-(value/timestamp) store.</li>
+                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)">persistentWindowStore</a>
+                                or <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)">persistentTimestampedWindowStore</a>
+                                when you need a persistent timeWindowedKey-value or timeWindowedKey-(value/timestamp) store, respectively.</li>
+                            <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStore(java.lang.String,java.time.Duration)">persistentSessionStore</a>
+                                when you need a persistent sessionWindowedKey-value store.</li>
                         </ul>
                             <pre class="line-numbers"><code class="language-java">// Creating a persistent key-value store:
 // here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;persistent-counts&quot;.
@@ -406,8 +409,7 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                     Rather than storing a single record version (value and timestamp) per key,
                     versioned state stores may store multiple record versions per key. This
                     allows versioned state stores to support timestamped retrieval operations
-                    to return the latest record (per key) as of a specified timestamp, which
-                    enables use cases such as temporal stream-table joins.</p>
+                    to return the latest record (per key) as of a specified timestamp.</p>
                 <p>You can create a persistent, versioned state store by passing a
                     <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)">VersionedBytesStoreSupplier</a>
                     to the
