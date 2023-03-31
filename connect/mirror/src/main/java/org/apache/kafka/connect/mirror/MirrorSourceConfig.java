@@ -95,6 +95,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         + "Metrics have the target, topic and partition tags. When this setting is enabled, it adds the source tag. "
         + "This configuration will be removed in Kafka 4.0 and the default behavior will be to always have the source tag.";
     public static final boolean ADD_SOURCE_ALIAS_TO_METRICS_DEFAULT = false;
+    public static final String OFFSET_SYNCS_SOURCE_PRODUCER_ROLE = "offset-syncs-source-producer";
+    public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = "offset-syncs-target-producer";
+    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = "offset-syncs-source-admin";
+    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = "offset-syncs-target-admin";
 
     public MirrorSourceConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
@@ -110,12 +114,13 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return getString(ConnectorConfig.NAME_CONFIG);
     }
 
-    Map<String, String> taskConfigForTopicPartitions(List<TopicPartition> topicPartitions) {
+    Map<String, String> taskConfigForTopicPartitions(List<TopicPartition> topicPartitions, int taskIndex) {
         Map<String, String> props = originalsStrings();
         String topicPartitionsString = topicPartitions.stream()
                 .map(MirrorUtils::encodeTopicPartition)
                 .collect(Collectors.joining(","));
         props.put(TASK_TOPIC_PARTITIONS, topicPartitionsString);
+        props.put(TASK_INDEX, String.valueOf(taskIndex));
         return props;
     }
 
@@ -132,14 +137,14 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     Map<String, Object> offsetSyncsTopicAdminConfig() {
         return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
-                ? sourceAdminConfig()
-                : targetAdminConfig();
+                ? sourceAdminConfig(OFFSET_SYNCS_SOURCE_ADMIN_ROLE)
+                : targetAdminConfig(OFFSET_SYNCS_TARGET_ADMIN_ROLE);
     }
 
     Map<String, Object> offsetSyncsTopicProducerConfig() {
         return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
-                ? sourceProducerConfig()
-                : targetProducerConfig();
+                ? sourceProducerConfig(OFFSET_SYNCS_SOURCE_PRODUCER_ROLE)
+                : targetProducerConfig(OFFSET_SYNCS_TARGET_PRODUCER_ROLE);
     }
 
     String checkpointsTopic() {

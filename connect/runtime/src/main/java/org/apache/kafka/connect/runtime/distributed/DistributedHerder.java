@@ -291,6 +291,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
+        // Thread factory uses String.format and '%' is handled as a placeholder
+        // need to escape if the client.id contains an actual % character
+        String escapedClientIdForThreadNameFormat = clientId.replace("%", "%%");
         LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + this.workerGroupId + "] ");
         log = logContext.logger(DistributedHerder.class);
 
@@ -303,17 +306,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 TimeUnit.MILLISECONDS,
                 new LinkedBlockingDeque<>(1),
                 ThreadUtils.createThreadFactory(
-                        this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
+                        this.getClass().getSimpleName() + "-" + escapedClientIdForThreadNameFormat + "-%d", false));
 
         this.forwardRequestExecutor = forwardRequestExecutor != null
                 ? forwardRequestExecutor
                 : Executors.newFixedThreadPool(
                         1,
-                        ThreadUtils.createThreadFactory("ForwardRequestExecutor-" + clientId + "-%d", false)
+                        ThreadUtils.createThreadFactory("ForwardRequestExecutor-" + escapedClientIdForThreadNameFormat + "-%d", false)
                 );
         this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE,
                 ThreadUtils.createThreadFactory(
-                        "StartAndStopExecutor-" + clientId + "-%d", false));
+                        "StartAndStopExecutor-" + escapedClientIdForThreadNameFormat + "-%d", false));
         this.config = config;
 
         stopping = new AtomicBoolean(false);
