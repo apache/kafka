@@ -1615,15 +1615,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static class MetadataSnapshot {
         private final int version;
-        private final Map<String, List<RackInfo>> partitionsPerTopic;
+        private final Map<String, List<PartitionRackInfo>> partitionsPerTopic;
 
         private MetadataSnapshot(Optional<String> clientRack, SubscriptionState subscription, Cluster cluster, int version) {
-            Map<String, List<RackInfo>> partitionsPerTopic = new HashMap<>();
+            Map<String, List<PartitionRackInfo>> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.metadataTopics()) {
                 List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
                 if (partitions != null) {
-                    List<RackInfo> partitionRacks = partitions.stream()
-                            .map(p -> new RackInfo(clientRack, p))
+                    List<PartitionRackInfo> partitionRacks = partitions.stream()
+                            .map(p -> new PartitionRackInfo(clientRack, p))
                             .collect(Collectors.toList());
                     partitionsPerTopic.put(topic, partitionRacks);
                 }
@@ -1641,9 +1641,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return "(version" + version + ": " + partitionsPerTopic + ")";
         }
     }
-    private static class RackInfo {
+
+    private static class PartitionRackInfo {
         private final Set<String> racks;
-        RackInfo(Optional<String> clientRack, PartitionInfo partition) {
+
+        PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
             if (clientRack.isPresent() && partition.replicas() != null) {
                 racks = Arrays.stream(partition.replicas()).map(Node::rack).collect(Collectors.toSet());
             } else {
@@ -1656,10 +1658,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof RackInfo)) {
+            if (!(o instanceof PartitionRackInfo)) {
                 return false;
             }
-            RackInfo rackInfo = (RackInfo) o;
+            PartitionRackInfo rackInfo = (PartitionRackInfo) o;
             return Objects.equals(racks, rackInfo.racks);
         }
 
