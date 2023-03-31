@@ -21,7 +21,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -97,6 +100,12 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetIsr(List<Integer> targetIsr) {
         this.targetIsr = targetIsr;
+        return this;
+    }
+
+    public PartitionChangeBuilder setTargetIsrWithBrokerStates(List<BrokerState> targetIsrWithEpoch) {
+        this.targetIsr = targetIsrWithEpoch.stream()
+            .map(brokerState -> brokerState.brokerId()).collect(Collectors.toList());
         return this;
     }
 
