@@ -19,7 +19,6 @@ package kafka.coordinator.group
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import kafka.utils.Implicits._
@@ -30,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Seq, immutable, mutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 
 private[group] sealed trait GroupState {
@@ -221,6 +220,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var subscribedTopics: Option[Set[String]] = None
 
   var newMemberAdded: Boolean = false
+  var hasAssignmentSet: Boolean = false
 
   def inLock[T](fun: => T): T = CoreUtils.inLock(lock)(fun)
 
@@ -334,6 +334,16 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
     staticMembers.put(groupInstanceId, newMemberId)
     memberMetadata
+  }
+
+  def setAssignment(assignment: Map[String, Array[Byte]]): Unit = {
+    allMemberMetadata.foreach(member => member.assignment = assignment(member.memberId))
+    hasAssignmentSet = true
+  }
+
+  def resetAssignment(): Unit = {
+    allMemberMetadata.foreach(_.assignment = Array.empty)
+    hasAssignmentSet = false
   }
 
   def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId)

@@ -597,6 +597,15 @@ private[group] class GroupCoordinator(
             group.get(memberId).awaitingSyncCallback = responseCallback
             removePendingSyncMember(group, memberId)
 
+            def maybePropagateAssignment(): Unit = {
+              // hasAssignmentSet means that the assignment is persisted and hasReceivedSyncFromAllMembers
+              // that all members are sent a sync group.
+              if (group.hasAssignmentSet && group.hasReceivedSyncFromAllMembers) {
+                propagateAssignment(group, Errors.NONE)
+                group.transitionTo(Stable)
+              }
+            }
+
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
               info(s"Assignment received from leader $memberId for group ${group.groupId} for generation ${group.generationId}. " +
@@ -620,18 +629,18 @@ private[group] class GroupCoordinator(
                       resetAndPropagateAssignmentError(group, error)
                       maybePrepareRebalance(group, s"Error $error when storing group assignment during SyncGroup (member: $memberId)")
                     } else {
-                      setAndPropagateAssignment(group, assignment)
-                      group.transitionTo(Stable)
+                      setAssignment(group, assignment)
+                      maybePropagateAssignment()
                     }
                   }
                 }
               }, requestLocal)
               groupCompletedRebalanceSensor.record()
+            } else {
+              maybePropagateAssignment()
             }
 
           case Stable =>
-            removePendingSyncMember(group, memberId)
-
             // if the group is stable, we just return the current assignment
             val memberMetadata = group.get(memberId)
             responseCallback(SyncGroupResult(group.protocolType, group.protocolName, memberMetadata.assignment, Errors.NONE))
@@ -1195,15 +1204,14 @@ private[group] class GroupCoordinator(
     groupManager.removeGroupsForPartition(offsetTopicPartitionId, coordinatorEpoch, onGroupUnloaded)
   }
 
-  private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]): Unit = {
+  private def setAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]): Unit = {
     assert(group.is(CompletingRebalance))
-    group.allMemberMetadata.foreach(member => member.assignment = assignment(member.memberId))
-    propagateAssignment(group, Errors.NONE)
+    group.setAssignment(assignment)
   }
 
   private def resetAndPropagateAssignmentError(group: GroupMetadata, error: Errors): Unit = {
     assert(group.is(CompletingRebalance))
-    group.allMemberMetadata.foreach(_.assignment = Array.empty)
+    group.resetAssignment()
     propagateAssignment(group, error)
   }
 
