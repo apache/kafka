@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.AlterPartitionRequestData
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.RequestHeader
@@ -280,10 +281,12 @@ class DefaultAlterPartitionManager(
       message.topics.add(topicData)
 
       items.foreach { item =>
+        val isrWithEpoch = new util.ArrayList[BrokerState](item.leaderAndIsr.isr.size)
+        item.leaderAndIsr.isr.foreach(brokerId => isrWithEpoch.add(new BrokerState().setBrokerId(brokerId)))
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicIdPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-          .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+          .setNewIsrWithEpochs(isrWithEpoch)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
         if (metadataVersion.isLeaderRecoverySupported) {
