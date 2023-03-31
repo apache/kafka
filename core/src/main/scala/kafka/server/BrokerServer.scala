@@ -544,7 +544,7 @@ class BrokerServer(
       if (socketServer != null) {
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       }
-      metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
+      metadataPublishers.forEach(p => CoreUtils.swallow(sharedServer.loader.removeAndClosePublisher(p).get(), this))
       metadataPublishers.clear()
       if (dataPlaneRequestHandlerPool != null)
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)

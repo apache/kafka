@@ -376,7 +376,7 @@ class ControllerServer(
       // Ensure that we're not the Raft leader prior to shutting down our socket server, for a
       // smoother transition.
       sharedServer.ensureNotRaftLeader()
-      metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
+      metadataPublishers.forEach(p => CoreUtils.swallow(sharedServer.loader.removeAndClosePublisher(p).get(), this))
       metadataPublishers.clear()
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
