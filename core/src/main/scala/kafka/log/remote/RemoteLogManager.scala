@@ -221,29 +221,6 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     }
   }
 
-  /**
-   * Returns the in memory leader epoch checkpoint by truncating with the given start[exclusive] and end[inclusive] offset
-   *
-   * @param log         The actual log from where to take the leader-epoch checkpoint
-   * @param startOffset The start offset of the checkpoint file (exclusive in the truncation).
-   *                    If start offset is 6, then it will retain an entry at offset 6.
-   * @param endOffset   The end offset of the checkpoint file (inclusive in the truncation)
-   *                    If end offset is 100, then it will remove the entries greater than or equal to 100.
-   * @return the truncated leader epoch checkpoint
-   */
-  private[remote] def getLeaderEpochCheckpoint(log: UnifiedLog, startOffset: Long, endOffset: Long): InMemoryLeaderEpochCheckpoint = {
-    val checkpoint = new InMemoryLeaderEpochCheckpoint()
-    log.leaderEpochCache
-      .map(cache => cache.writeTo(checkpoint))
-      .foreach { x =>
-        if (startOffset >= 0) {
-          x.truncateFromStart(startOffset)
-        }
-        x.truncateFromEnd(endOffset)
-      }
-    checkpoint
-  }
-
   private def maybeLeaderEpoch(leaderEpoch: Int): Optional[Integer] = {
     if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
       Optional.empty()

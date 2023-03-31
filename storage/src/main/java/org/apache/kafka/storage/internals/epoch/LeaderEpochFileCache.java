@@ -24,6 +24,8 @@ import org.slf4j.Logger;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -151,13 +153,13 @@ public class LeaderEpochFileCache {
         return removedEpochs;
     }
 
-    public LeaderEpochFileCache writeTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
-        lock.writeLock().lock();
+    public LeaderEpochFileCache cloneWithLeaderEpochCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        lock.readLock().lock();
         try {
-            leaderEpochCheckpoint.write(epochEntries());
+            flushTo(leaderEpochCheckpoint, epochEntries());
             return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
         } finally {
-            lock.writeLock().unlock();
+            lock.readLock().unlock();
         }
     }
 
@@ -404,13 +406,17 @@ public class LeaderEpochFileCache {
         }
     }
 
-    private void flush() {
+    private void flushTo(LeaderEpochCheckpoint leaderEpochCheckpoint, Collection<EpochEntry> epochEntries) {
         lock.readLock().lock();
         try {
-            checkpoint.write(epochs.values());
+            leaderEpochCheckpoint.write(epochEntries);
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    private void flush() {
+        flushTo(this.checkpoint, epochs.values());
     }
 
 }
