@@ -258,8 +258,7 @@ public class ConsumerRecord<K, V> {
     }
 
     /**
-     * The timestamp of this record, in milliseconds
-     * (values are generally unix time, similar to System.currentTimeMillis())
+     * The timestamp of this record, in milliseconds elapsed since unix epoch.
      */
     public long timestamp() {
         return timestamp;
