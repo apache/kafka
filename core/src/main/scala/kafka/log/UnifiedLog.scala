@@ -149,6 +149,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def localLogStartOffset(): Long = _localLogStartOffset
 
+  @volatile private var highestOffsetInRemoteStorage: Long = -1L
+
   locally {
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
@@ -519,6 +521,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     if (localLog.recoveryPoint < offset) {
       localLog.updateRecoveryPoint(offset)
     }
+  }
+  def updateHighestOffsetInRemoteStorage(offset: Long): Unit = {
+    if (!remoteLogEnabled())
+      warn(s"Received update for highest offset with remote index as: $offset, the existing value: $highestOffsetInRemoteStorage")
+    else if (offset > highestOffsetInRemoteStorage) highestOffsetInRemoteStorage = offset
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be

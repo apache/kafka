@@ -71,7 +71,7 @@ class RemoteLogManagerTest {
   def setUp(): Unit = {
     val props = new Properties()
     remoteLogManagerConfig = createRLMConfig(props)
-    remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir) {
+    remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, _ => Option.empty) {
       override private[remote] def createRemoteStorageManager() = remoteStorageManager
       override private[remote] def createRemoteLogMetadataManager() = remoteLogMetadataManager
     }
@@ -107,7 +107,7 @@ class RemoteLogManagerTest {
   def testGetClassLoaderAwareRemoteStorageManager(): Unit = {
     val rsmManager: ClassLoaderAwareRemoteStorageManager = mock(classOf[ClassLoaderAwareRemoteStorageManager])
     val remoteLogManager =
-      new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir) {
+      new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, _ => Option.empty) {
         override private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = rsmManager
       }
     assertEquals(rsmManager, remoteLogManager.storageManager())

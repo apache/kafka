@@ -43,13 +43,13 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Offset = offset of the first message in each epoch.
  */
 public class LeaderEpochFileCache {
+    private final TopicPartition topicPartition;
     private final LeaderEpochCheckpoint checkpoint;
     private final Logger log;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final TreeMap<Integer, EpochEntry> epochs = new TreeMap<>();
 
-    private final TopicPartition topicPartition;
 
     /**
      * @param topicPartition the associated topic partition
@@ -365,6 +365,27 @@ public class LeaderEpochFileCache {
             lock.readLock().unlock();
         }
     }
+
+    public LeaderEpochFileCache writeTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        lock.readLock().lock();
+        try {
+            leaderEpochCheckpoint.write(epochEntries());
+            return new LeaderEpochFileCache(topicPartition, leaderEpochCheckpoint);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public OptionalInt findPreviousEpoch(int epoch) {
+        lock.readLock().lock();
+        try {
+            Map.Entry<Integer, EpochEntry> lowerEntry = epochs.lowerEntry(epoch);
+            return lowerEntry != null ? OptionalInt.of(lowerEntry.getKey()) : OptionalInt.empty();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
 
     /**
      * Delete all entries.
