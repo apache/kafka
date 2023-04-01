@@ -43,6 +43,7 @@ class EnvVarConfigProviderTest {
                 put("test_var1", "value1");
                 put("secret_var2", "value2");
                 put("new_var3", "value3");
+                put("not_so_secret_var4", "value4");
             }
         };
         envVarConfigProvider = new EnvVarConfigProvider(testEnvVars);
@@ -62,6 +63,7 @@ class EnvVarConfigProviderTest {
         assertEquals("value1", properties.data().get("test_var1"));
         assertEquals("value2", properties.data().get("secret_var2"));
         assertEquals("value3", properties.data().get("new_var3"));
+        assertEquals("value4", properties.data().get("not_so_secret_var4"));
     }
 
     @Test
@@ -93,12 +95,21 @@ class EnvVarConfigProviderTest {
         assertThrows(ConfigException.class, () -> envVarConfigProvider.get("test-path", Collections.singleton("test_var1")));
     }
 
-    @Test void testRegExpEnvVars() {
+    @Test void testRegExpEnvVarsSingleEntryWhitelist() {
         Map<String, String> testConfigMap = Collections.singletonMap(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG, "secret_.*");
         envVarConfigProvider.configure(testConfigMap);
+        Set<String> whiteList = Collections.singleton("secret_var2");
+        Set<String> keys = envVarConfigProvider.get(null, Collections.singleton("secret_var2")).data().keySet();
 
-        assertEquals(1, envVarConfigProvider.get(null, Collections.singleton("secret_var2")).data().size());
-        assertEquals(1, envVarConfigProvider.get("").data().size());
+        assertEquals(whiteList, keys);
+    }
+
+    @Test void testRegExpEnvVarsNoWhitelist() {
+        Map<String, String> testConfigMap = Collections.singletonMap(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG, "secret_.*");
+        envVarConfigProvider.configure(testConfigMap);
+        Set<String> keys = envVarConfigProvider.get("").data().keySet();
+
+        assertEquals(Collections.singleton("secret_var2"), keys);
     }
 
 }
