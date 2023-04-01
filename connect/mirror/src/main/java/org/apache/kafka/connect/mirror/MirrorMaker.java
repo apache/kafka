@@ -64,6 +64,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.io.File;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+
 /**
  *  Entry point for "MirrorMaker 2.0".
  *  <p>
@@ -267,6 +269,7 @@ public class MirrorMaker {
         String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
         // Create the admin client to be shared by all backing stores for this herder
         Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
+        adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "shared-admin");
         ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase);

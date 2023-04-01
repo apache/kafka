@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class TestUtils {
 
     static Map<String, String> makeProps(String... keyValues) {
@@ -42,5 +44,13 @@ public class TestUtils {
             records.put("key-" + i, "message-" + i);
         }
         return records;
+    }
+
+    public static void assertEqualsExceptClientId(Map<String, Object> expected, Map<String, Object> actual) {
+        Map<String, Object> expectedWithoutClientId = new HashMap<>(expected);
+        expectedWithoutClientId.remove("client.id");
+        Map<String, Object> actualWithoutClientId = new HashMap<>(actual);
+        actualWithoutClientId.remove("client.id");
+        assertEquals(expectedWithoutClientId, actualWithoutClientId);
     }
 }

@@ -974,6 +974,26 @@ class KRaftClusterTest {
     }
   }
 
+  /**
+   * Test a single broker, single controller cluster at the minimum bootstrap level. This tests
+   * that we can function without having periodic NoOpRecords written.
+   */
+  @Test
+  def testSingleControllerSingleBrokerCluster(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+    } finally {
+      cluster.close()
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = Array(false, true))
   def testReconfigureControllerClientQuotas(combinedController: Boolean): Unit = {
