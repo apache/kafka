@@ -51,6 +51,7 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.storage.PrivilegedWriteException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -1480,6 +1481,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Restarted {} of {} tasks for {} as requested", assignedIdsToRestart.size(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
+    }
+
+    @Override
+    public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        log.trace("Submitting offset fetch request for connector: {}", connName);
+        // Handle this in the tick thread to avoid concurrent calls to the Worker
+        addRequest(
+                () -> {
+                    super.connectorOffsets(connName, cb);
+                    return null;
+                },
+                forwardErrorCallback(cb)
+        );
     }
 
     // Should only be called from work thread, so synchronization should not be needed

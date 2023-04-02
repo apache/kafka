@@ -41,6 +41,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
@@ -881,4 +882,18 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
     }
 
+    @Override
+    public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        ClusterConfigState configSnapshot = configBackingStore.snapshot();
+        try {
+            if (!configSnapshot.contains(connName)) {
+                cb.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                return;
+            }
+            // The worker asynchronously processes the request and completes the passed callback when done
+            worker.connectorOffsets(connName, configSnapshot.connectorConfig(connName), cb);
+        } catch (Throwable t) {
+            cb.onCompletion(t, null);
+        }
+    }
 }
