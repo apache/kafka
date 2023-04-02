@@ -1049,7 +1049,8 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testGetConnectorOffsetsConnectorNotFound() {
+    public void testConnectorOffsetsConnectorNotFound() {
+        when(configStore.snapshot()).thenReturn(SNAPSHOT);
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
@@ -1060,7 +1061,7 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testGetConnectorOffsets() throws Exception {
+    public void testConnectorOffsets() throws Exception {
         ConnectorOffsets offsets = new ConnectorOffsets(Arrays.asList(
                 new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
                 new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"))
@@ -1074,7 +1075,6 @@ public class AbstractHerderTest {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
-        when(configStore.contains(CONN1)).thenReturn(true);
         when(configStore.snapshot()).thenReturn(SNAPSHOT);
 
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
