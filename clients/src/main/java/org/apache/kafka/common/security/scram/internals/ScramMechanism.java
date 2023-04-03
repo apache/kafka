@@ -48,7 +48,13 @@ public enum ScramMechanism {
         MECHANISMS_MAP = Collections.unmodifiableMap(map);
     }
 
-    ScramMechanism(byte type, String hashAlgorithm, String macAlgorithm, int minIterations, int maxIterations) {
+    ScramMechanism(
+        byte type,
+        String hashAlgorithm,
+        String macAlgorithm,
+        int minIterations,
+        int maxIterations
+    ) {
         this.type = type;
         this.mechanismName = "SCRAM-" + hashAlgorithm;
         this.hashAlgorithm = hashAlgorithm;

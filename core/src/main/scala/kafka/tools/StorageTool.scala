@@ -153,8 +153,10 @@ object StorageTool extends Logging {
       .getOrElse(defaultValue)
   }
 
-  def getUserScramCredentialRecord(mechanism: String,
-                                   config: String) : UserScramCredentialRecord = {
+  def getUserScramCredentialRecord(
+    mechanism: String,
+    config: String
+  ) : UserScramCredentialRecord = {
     /*
      * Remove  '[' amd ']'
      * Split K->V pairs on ',' and no K or V should contain ','
@@ -198,10 +200,12 @@ object StorageTool extends Logging {
       }
     }
 
-    def getSaltedPassword(argMap: Map[String,String],
-                          scramMechanism : ScramMechanism,
-                          salt : Array[Byte],
-                          iterations: Int) : Array[Byte] = {
+    def getSaltedPassword(
+      argMap: Map[String,String],
+      scramMechanism : ScramMechanism,
+      salt : Array[Byte],
+      iterations: Int
+    ) : Array[Byte] = {
       if (argMap.contains("password")) {
         if (argMap.contains("saltedpassword")) {
             throw new TerseFailure(s"You must only supply one of 'password' or 'saltedpassword' to add-scram")
@@ -374,22 +378,25 @@ object StorageTool extends Logging {
     new MetaProperties(effectiveClusterId.toString, config.nodeId)
   }
 
-  def formatCommand(stream: PrintStream,
-                    directories: Seq[String],
-                    metaProperties: MetaProperties,
-                    metadataVersion: MetadataVersion,
-                    ignoreFormatted: Boolean): Int = {
+  def formatCommand(
+    stream: PrintStream,
+    directories: Seq[String],
+    metaProperties: MetaProperties,
+    metadataVersion: MetadataVersion,
+    ignoreFormatted: Boolean
+  ): Int = {
     val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
     formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted)
   }
 
-
-  def formatCommand(stream: PrintStream,
-                    directories: Seq[String],
-                    metaProperties: MetaProperties,
-                    bootstrapMetadata: BootstrapMetadata,
-                    metadataVersion: MetadataVersion,
-                    ignoreFormatted: Boolean): Int = {
+  def formatCommand(
+    stream: PrintStream,
+    directories: Seq[String],
+    metaProperties: MetaProperties,
+    bootstrapMetadata: BootstrapMetadata,
+    metadataVersion: MetadataVersion,
+    ignoreFormatted: Boolean
+  ): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
     }
