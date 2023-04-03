@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.examples;
+package kafka.examples;
 
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  * You can also set an output log file in `Modify Run Configuration - Modify options - Save console output to file` to
  * record all the log output together.
  */
-public class ProducerConsumerDriver {
+public class KafkaConsumerProducerDemo {
     public static final String BOOTSTRAP_SERVERS = "localhost:9092";
     public static final String TOPIC_NAME = "my-topic";
     public static final String GROUP_NAME = "my-group";

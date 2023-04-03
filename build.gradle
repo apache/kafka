@@ -1290,6 +1290,10 @@ project(':examples') {
   javadoc {
     enabled = false
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-core.xml")
+  }
 }
 
 project(':generator') {

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.examples;
+package kafka.examples;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -42,7 +42,7 @@ import static java.util.Collections.singleton;
 /**
  * This class implements a read-process-write application.
  */
-public class RecordProcessor extends Thread implements ConsumerRebalanceListener {
+public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebalanceListener {
     private final String bootstrapServers;
     private final String inputTopic;
     private final String outputTopic;
@@ -51,11 +51,11 @@ public class RecordProcessor extends Thread implements ConsumerRebalanceListener
     private final String transactionalId;
     private volatile boolean closed;
 
-    public RecordProcessor(String threadName,
-                           String bootstrapServers,
-                           String inputTopic,
-                           String outputTopic,
-                           CountDownLatch latch) {
+    public ExactlyOnceMessageProcessor(String threadName,
+                                       String bootstrapServers,
+                                       String inputTopic,
+                                       String outputTopic,
+                                       CountDownLatch latch) {
         super(threadName);
         this.bootstrapServers = bootstrapServers;
         this.inputTopic = inputTopic;
