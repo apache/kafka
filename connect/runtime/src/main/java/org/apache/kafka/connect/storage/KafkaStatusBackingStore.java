@@ -562,7 +562,11 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         synchronized (this) {
             log.trace("Received connector {} status update {}", connector, status);
             CacheEntry<ConnectorStatus> entry = getOrAdd(connector);
-            entry.put(status);
+            if (entry.canWriteSafely(status)) {
+                entry.put(status);
+            } else {
+                log.trace("Ignoring stale status update {} for connector {}", status, connector);
+            }
         }
     }
 

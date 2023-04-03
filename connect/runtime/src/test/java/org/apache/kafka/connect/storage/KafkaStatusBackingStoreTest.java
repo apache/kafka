@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -232,6 +233,42 @@ public class KafkaStatusBackingStoreTest {
         Map<String, Object> secondStatusRead = new HashMap<>();
         secondStatusRead.put("worker_id", WORKER_ID);
         secondStatusRead.put("state", "UNASSIGNED");
+        secondStatusRead.put("generation", 2L);
+
+        when(converter.toConnectData(STATUS_TOPIC, value))
+                .thenReturn(new SchemaAndValue(null, firstStatusRead))
+                .thenReturn(new SchemaAndValue(null, secondStatusRead));
+
+        when(converter.fromConnectData(eq(STATUS_TOPIC), any(Schema.class), any(Struct.class)))
+                .thenReturn(value);
+
+        doAnswer(invocation -> {
+            ((Callback) invocation.getArgument(2)).onCompletion(null, null);
+            store.read(consumerRecord(1, "status-connector-conn", value));
+            return null;
+        }).when(kafkaBasedLog).send(eq("status-connector-conn"), eq(value), any(Callback.class));
+
+        store.read(consumerRecord(0, "status-connector-conn", value));
+
+        ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 2);
+        store.put(status);
+        assertEquals(status, store.get(CONNECTOR));
+    }
+
+    @Test
+    public void putConnectorStateShouldNotOverrideStaleStatus() {
+        final byte[] value = new byte[0];
+        String otherWorkerId = "anotherhost:8083";
+
+        // the persisted came from a different host and has a newer generation
+        Map<String, Object> firstStatusRead = new HashMap<>();
+        firstStatusRead.put("worker_id", otherWorkerId);
+        firstStatusRead.put("state", "RUNNING");
+        firstStatusRead.put("generation", 1L);
+
+        Map<String, Object> secondStatusRead = new HashMap<>();
+        secondStatusRead.put("worker_id", WORKER_ID);
+        secondStatusRead.put("state", "UNASSIGNED");
         secondStatusRead.put("generation", 0L);
 
         when(converter.toConnectData(STATUS_TOPIC, value))
@@ -251,7 +288,8 @@ public class KafkaStatusBackingStoreTest {
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.UNASSIGNED, WORKER_ID, 0);
         store.put(status);
-        assertEquals(status, store.get(CONNECTOR));
+        ConnectorStatus expectedStatus = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.RUNNING, otherWorkerId, 1);
+        assertEquals(expectedStatus, store.get(CONNECTOR));
     }
 
     @Test
@@ -310,7 +348,7 @@ public class KafkaStatusBackingStoreTest {
     }
 
     @Test
-    public void readTaskStateShouldIgnoreStaleStatuses() {
+    public void readTaskStateShouldIgnoreStaleStatusesFromOtherWorkers() {
         byte[] value = new byte[0];
         String otherWorkerId = "anotherhost:8083";
 
@@ -327,17 +365,36 @@ public class KafkaStatusBackingStoreTest {
         secondStatusRead.put("state", "UNASSIGNED");
         secondStatusRead.put("generation", 9L);
 
+        Map<String, Object> thirdStatusRead = new HashMap<>();
+        thirdStatusRead.put("worker_id", otherWorkerId);
+        thirdStatusRead.put("state", "RUNNING");
+        thirdStatusRead.put("generation", 8L);
+
         when(converter.toConnectData(STATUS_TOPIC, value))
                 .thenReturn(new SchemaAndValue(null, firstStatusRead))
-                .thenReturn(new SchemaAndValue(null, secondStatusRead));
+                .thenReturn(new SchemaAndValue(null, secondStatusRead))
+                .thenReturn(new SchemaAndValue(null, thirdStatusRead));
+
+        when(converter.fromConnectData(eq(STATUS_TOPIC), any(Schema.class), any(Struct.class)))
+                .thenReturn(value);
+
+        doAnswer(invocation -> {
+            ((Callback) invocation.getArgument(2)).onCompletion(null, null);
+            store.read(consumerRecord(2, "status-task-conn-0", value));
+            return null;
+        }).when(kafkaBasedLog).send(eq("status-task-conn-0"), eq(value), any(Callback.class));
 
         store.read(consumerRecord(0, "status-task-conn-0", value));
-        store.read(consumerRecord(0, "status-task-conn-0", value));
+        store.read(consumerRecord(1, "status-task-conn-0", value));
 
-        verify(kafkaBasedLog, never()).send(anyString(), any(), any(Callback.class));
         // The latest task status should reflect RUNNING status from the newer generation
         TaskStatus status = new TaskStatus(TASK, ConnectorStatus.State.RUNNING, otherWorkerId, 10);
         assertEquals(status, store.get(TASK));
+
+        // This stale status is from the same worker. In this case, the status should get updated
+        TaskStatus staleStatus = new TaskStatus(TASK, ConnectorStatus.State.RUNNING, otherWorkerId, 8);
+        store.put(staleStatus);
+        assertEquals(staleStatus, store.get(TASK));
     }
 
     @Test
