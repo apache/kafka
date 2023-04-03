@@ -37,7 +37,6 @@
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
   <allow pkg="net.jqwik.api" />
-  <allow pkg="org.pcollections" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />
@@ -49,6 +48,8 @@
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
+  <!-- anyone can use persistent collection factories/non-library-specific wrappers -->
+  <allow pkg="org.apache.kafka.pcoll" exact-match="true" />
 
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
@@ -314,6 +315,16 @@
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
+  <subpackage name="pcoll">
+    <allow pkg="org.apache.kafka.server.util"/>
+    <!-- only the factory package can use persistent collection library-specific wrapper implementations -->
+    <!-- the library-specific wrapper implementation for PCollections -->
+    <allow pkg="org.apache.kafka.pcoll.pcollections" />
+    <subpackage name="pcollections">
+      <allow pkg="org.pcollections" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="queue">

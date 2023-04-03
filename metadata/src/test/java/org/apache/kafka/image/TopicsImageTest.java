@@ -29,11 +29,10 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.pcoll.PHashMapWrapper;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.pcollections.HashPMap;
-import org.pcollections.HashTreePMap;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -76,18 +75,18 @@ public class TopicsImageTest {
         return new TopicImage(name, id, partitionMap);
     }
 
-    private static HashPMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
-        HashPMap<Uuid, TopicImage> map = HashTreePMap.empty();
+    private static PHashMapWrapper<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
+        PHashMapWrapper<Uuid, TopicImage> map = TopicsImage.EMPTY.topicsById;
         for (TopicImage topic : topics) {
-            map = map.plus(topic.id(), topic);
+            map = map.afterAdding(topic.id(), topic);
         }
         return map;
     }
 
-    private static HashPMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        HashPMap<String, TopicImage> map = HashTreePMap.empty();
+    private static PHashMapWrapper<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
+        PHashMapWrapper<String, TopicImage> map = TopicsImage.EMPTY.topicsByName;
         for (TopicImage topic : topics) {
-            map = map.plus(topic.name(), topic);
+            map = map.afterAdding(topic.name(), topic);
         }
         return map;
     }

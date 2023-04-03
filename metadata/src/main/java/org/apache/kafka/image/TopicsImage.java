@@ -22,9 +22,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.util.TranslatedValueMapView;
-import org.pcollections.HashPMap;
-import org.pcollections.HashTreePMap;
+import org.apache.kafka.pcoll.PHashMapWrapper;
+import org.apache.kafka.pcoll.PHashMapSetWrapperFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,22 +36,23 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class TopicsImage {
-    public static final TopicsImage EMPTY =
-        new TopicsImage(HashTreePMap.empty(), HashTreePMap.empty());
+    private static final PHashMapSetWrapperFactory FACTORY = PHashMapSetWrapperFactory.PCOLLECTIONS_FACTORY;
 
-    final HashPMap<Uuid, TopicImage> topicsById;
-    final HashPMap<String, TopicImage> topicsByName;
+    public static final TopicsImage EMPTY =  new TopicsImage(FACTORY.emptyMap(), FACTORY.emptyMap());
 
-    public TopicsImage(HashPMap<Uuid, TopicImage> topicsById,
-                       HashPMap<String, TopicImage> topicsByName) {
+    final PHashMapWrapper<Uuid, TopicImage> topicsById;
+    final PHashMapWrapper<String, TopicImage> topicsByName;
+
+    public TopicsImage(PHashMapWrapper<Uuid, TopicImage> topicsById,
+                       PHashMapWrapper<String, TopicImage> topicsByName) {
         this.topicsById = topicsById;
         this.topicsByName = topicsByName;
     }
 
     public TopicsImage including(TopicImage topic) {
         return new TopicsImage(
-            this.topicsById.plus(topic.id(), topic),
-            this.topicsByName.plus(topic.name(), topic));
+            this.topicsById.afterAdding(topic.id(), topic),
+            this.topicsByName.afterAdding(topic.name(), topic));
     }
 
     public boolean isEmpty() {
@@ -60,11 +60,11 @@ public final class TopicsImage {
     }
 
     public Map<Uuid, TopicImage> topicsById() {
-        return topicsById;
+        return topicsById.asJava();
     }
 
     public Map<String, TopicImage> topicsByName() {
-        return topicsByName;
+        return topicsByName.asJava();
     }
 
     public PartitionRegistration getPartition(Uuid id, int partitionId) {
@@ -106,7 +106,7 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<String, Uuid> topicNameToIdView() {
-        return new TranslatedValueMapView<>(topicsByName, image -> image.id());
+        return topicsByName.asJava(TopicImage::id);
     }
 
     /**
@@ -115,7 +115,7 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<Uuid, String> topicIdToNameView() {
-        return new TranslatedValueMapView<>(topicsById, image -> image.name());
+        return topicsById.asJava(TopicImage::name);
     }
 
     public Map<TopicPartition, PartitionRegistration> partitions() {
