@@ -2551,7 +2551,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         final long threadId = thread.getId();
         if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
             throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
-                    "currentThread(name: " + thread.getName() + ", id: " + thread.getId() + ")" +
+                    "currentThread(name: " + thread.getName() + ", id: " + threadId + ")" +
                     " otherThread(id: " + currentThread.get() + ")"
             );
         refcount.incrementAndGet();
