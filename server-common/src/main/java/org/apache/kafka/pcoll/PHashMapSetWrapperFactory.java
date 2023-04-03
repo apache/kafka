@@ -25,11 +25,32 @@ import org.apache.kafka.pcoll.pcollections.PCollectionsHashMapSetWrapperFactory;
 public interface PHashMapSetWrapperFactory {
     PHashMapSetWrapperFactory PCOLLECTIONS_FACTORY = new PCollectionsHashMapSetWrapperFactory(); //
 
+    /**
+     * @return a wrapped hash-based persistent map that is empty
+     * @param <K> the key type
+     * @param <V> the value type
+     */
     <K, V> PHashMapWrapper<K, V> emptyMap();
 
+    /**
+     * @param key the key
+     * @param value the value
+     * @return a wrapped hash-based persistent map that has a single mapping
+     * @param <K> the key type
+     * @param <V> the value type
+     */
     <K, V> PHashMapWrapper<K, V> singletonMap(K key, V value);
 
+    /**
+     * @return a wrapped hash-based persistent set that is empty
+     * @param <E> the element type
+     */
     <E> PHashSetWrapper<E> emptySet();
 
+    /**
+     * @param e the element
+     * @return a wrapped hash-based persistent set that has a single element
+     * @param <E> the element type
+     */
     <E> PHashSetWrapper<E> singletonSet(E e);
 }
