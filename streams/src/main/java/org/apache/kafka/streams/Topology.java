@@ -741,7 +741,7 @@ public class Topology {
     /**
      * Adds a read-only {@link StateStore} to the topology.
      * <p>
-     * A read-only StateStore can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
+     * A read-only {@link StateStore} can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
      * will be set to <code>earliest</code> for this topic.
      * <p>
      * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
@@ -779,9 +779,9 @@ public class Topology {
     }
 
     /**
-     * Adds a Read Only {@link StateStore} to the topology.
-     *
-     * A Read Only StateStore can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
+     * Adds a read-only {@link StateStore} to the topology.
+     * <p>
+     * A read-only {@link StateStore} can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
      * will be set to <code>earliest</code> for this topic.
      * <p>
      * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
