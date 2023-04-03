@@ -988,8 +988,8 @@ class Partition(val topicPartition: TopicPartition,
       // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
       //    request broker epoch is -1 which bypass the epoch verification.
       case kRaftMetadataCache: KRaftMetadataCache =>
-        val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch
+        val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
           isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)

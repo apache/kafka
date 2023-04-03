@@ -18,10 +18,7 @@
 package kafka.api
 
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
-import org.apache.kafka.common.requests.AlterPartitionRequest
 import org.apache.kafka.metadata.LeaderRecoveryState
-
-import scala.jdk.CollectionConverters._
 
 object LeaderAndIsr {
   val InitialLeaderEpoch: Int = 0
@@ -44,7 +41,7 @@ object LeaderAndIsr {
       leader,
       leaderEpoch,
       leaderRecoveryState,
-      AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(isr.map(Integer.valueOf).asJava).asScala.toList,
+      isr.map(brokerId => new BrokerState().setBrokerId(brokerId)),
       partitionEpoch)
   }
 
