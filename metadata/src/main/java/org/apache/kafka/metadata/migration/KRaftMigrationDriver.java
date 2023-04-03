@@ -458,8 +458,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
                         if (log.isTraceEnabled()) {
-                            log.trace("Migrating {} records from ZK: {}", batch.size(), recordBatchToString(batch));
+                            log.info("Migrating {} records from ZK: {}", batch.size(), recordBatchToString(batch));
                         } else {
+                            log.info("Migrating {} records from ZK: {}", batch.size(), recordBatchToString(batch));
                             log.info("Migrating {} records from ZK", batch.size());
                         }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);

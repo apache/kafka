@@ -24,6 +24,7 @@ import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, ZkAdminM
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
+import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ControllerMovedException
@@ -32,6 +33,8 @@ import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.{MigrationClient, MigrationClientAuthException, MigrationClientException, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
@@ -207,10 +210,27 @@ class ZkMigrationClient(
   ): Unit = wrapZkException {
     val adminZkClient = new AdminZkClient(zkClient)
 
+    println(s"We are here: ")
     def migrateEntityType(entityType: String): Unit = {
       adminZkClient.fetchAllEntityConfigs(entityType).foreach { case (name, props) =>
+        println(s"Name: ${name}")
         val entity = new EntityData().setEntityType(entityType).setEntityName(name)
         val batch = new util.ArrayList[ApiMessageAndVersion]()
+        ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach { mechanism =>
+          val propertyValue = props.getProperty(mechanism.mechanismName)
+          if (propertyValue != null) {
+            println(s"Found ${propertyValue} for Key:${mechanism.mechanismName}")
+            val scramCredentials =  ScramCredentialUtils.credentialFromString(propertyValue)
+            batch.add(new ApiMessageAndVersion(new UserScramCredentialRecord()
+              .setName(name)
+              .setMechanism(mechanism.`type`)
+              .setSalt(scramCredentials.salt)
+              .setStoredKey(scramCredentials.storedKey)
+              .setStoredKey(scramCredentials.storedKey)
+              .setIterations(scramCredentials.iterations), 0.toShort))
+            props.remove(mechanism.mechanismName)
+          }
+        }
         ZkAdminManager.clientQuotaPropsToDoubleMap(props.asScala).foreach { case (key: String, value: Double) =>
           batch.add(new ApiMessageAndVersion(new ClientQuotaRecord()
             .setEntity(List(entity).asJava)

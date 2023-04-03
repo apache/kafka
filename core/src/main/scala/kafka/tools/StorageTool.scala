@@ -227,12 +227,20 @@ object StorageTool extends Logging {
     val iterations = getIterations(argMap, scramMechanism)
     val saltedPassword = getSaltedPassword(argMap, scramMechanism, salt, iterations)
 
-    val myrecord = new UserScramCredentialRecord()
-                         .setName(name)
-                         .setMechanism(scramMechanism.`type`)
-                         .setSalt(salt)
-                         .setIterations(iterations)
-                         .setSaltedPassword(saltedPassword)
+    val myrecord = try {
+      val formatter = new ScramFormatter(scramMechanism);
+
+      new UserScramCredentialRecord()
+           .setName(name)
+           .setMechanism(scramMechanism.`type`)
+           .setSalt(salt)
+           .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
+           .setServerKey(formatter.serverKey(saltedPassword))
+           .setIterations(iterations)
+    } catch {
+      case e: Throwable => 
+        throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
+    }
     myrecord
   }
 
