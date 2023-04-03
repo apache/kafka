@@ -395,9 +395,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 try (PrintStream out = new PrintStream(stream)) {
                     StorageTool.formatCommand(out,
                             JavaConverters.asScalaBuffer(Collections.singletonList(metadataLogDir)).toSeq(),
-                                                         properties,
-                                                         MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
-                                                         false);
+                            properties,
+                            MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
+                            false);
                 } finally {
                     for (String line : stream.toString().split(String.format("%n"))) {
                         loggingMixin.info(() -> line);
