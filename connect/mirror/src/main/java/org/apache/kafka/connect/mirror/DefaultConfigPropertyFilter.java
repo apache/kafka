@@ -36,9 +36,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     private static final String USE_DEFAULTS_FROM_DEFAULT = "target";
 
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "List of topic configuration properties and/or regexes "
-                                                                + "that should not be replicated."
-                                                                + "This setting also applies to the properties with default values"
-                                                                + "if use.defaults.from is set to 'source'.";
+                                                                + "that should not be replicated.";
     public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = "follower\\.replication\\.throttled\\.replicas, "
                                                                    + "leader\\.replication\\.throttled\\.replicas, "
                                                                    + "message\\.timestamp\\.difference\\.max\\.ms, "

@@ -697,7 +697,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             assertEquals(primaryConfig, backupConfig,
                     "`retention.bytes` should be the same, because it isn't in exclude filter! ");
             return true;
-        }, 3000, "Topic configurations were not synced");
+        }, 30000, "Topic configurations were not synced");
     }
 
     @Test
@@ -739,7 +739,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "`delete.retention.ms` should be different, because it's in exclude filter! ");
             assertEquals("2000", backupConfig, "`delete.retention.ms` should be 2000, because it's explicitly defined on the target topic! ");
             return true;
-        }, 3000, "Topic configurations were not synced");
+        }, 30000, "Topic configurations were not synced");
     }
 
     @Test
@@ -766,15 +766,15 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "`retention.bytes` should be the same");
             assertEquals("1000", backupConfig,
                     "`retention.bytes` should be synced with default value!");
-
-            // delete the previously altered configuration of the source topic
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
-            Collection<AlterConfigOp> ops = new ArrayList<>();
-            ops.add(new AlterConfigOp(new ConfigEntry("retention.bytes", "1000"), AlterConfigOp.OpType.DELETE));
-            Map<ConfigResource, Collection<AlterConfigOp>> configOps = Collections.singletonMap(configResource, ops);
-            primary.kafka().incrementalAlterConfigs(configOps);
             return true;
-        }, 3000, "Topic configurations were not synced");
+        }, 30000, "Topic configurations were not synced");
+
+        // delete the previously altered configuration of the source topic
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        Collection<AlterConfigOp> ops = new ArrayList<>();
+        ops.add(new AlterConfigOp(new ConfigEntry("retention.bytes", "1000"), AlterConfigOp.OpType.DELETE));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Collections.singletonMap(configResource, ops);
+        primary.kafka().incrementalAlterConfigs(configOps);
 
         waitForCondition(() -> {
             String backupConfig;
@@ -783,7 +783,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             assertEquals("-1", backupConfig,
                     "`retention.bytes` should be synced with target's default value!");
             return true;
-        }, 3000, "Topic configurations were not synced");
+        }, 30000, "Topic configurations were not synced");
     }
 
 

@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
-import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
 import org.apache.kafka.common.KafkaFuture;
@@ -63,6 +62,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -280,7 +280,7 @@ public class MirrorSourceConnectorTest {
         assertTrue(targetConfig.entries().stream()
                 .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
         assertTrue(targetConfig.entries().stream()
-                .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
+                .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
         assertFalse(targetConfig.entries().stream()
                 .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
     }
@@ -335,7 +335,7 @@ public class MirrorSourceConnectorTest {
         props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS);
         MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
 
-        MockAdminClient admin = spy(new MockAdminClient());
+        Admin admin = mock(Admin.class);
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
                 new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
         final String topic = "testtopic";
@@ -360,7 +360,7 @@ public class MirrorSourceConnectorTest {
         props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
         MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
 
-        MockAdminClient admin = spy(new MockAdminClient());
+        Admin admin = mock(Admin.class);
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
                 new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
         final String topic = "testtopic";
@@ -383,7 +383,7 @@ public class MirrorSourceConnectorTest {
             ops.add(new AlterConfigOp(entryWithNonDefaultValue, AlterConfigOp.OpType.SET));
             ops.add(new AlterConfigOp(entryWithDefaultValue, AlterConfigOp.OpType.DELETE));
 
-            assertEquals(configOps.get(configResource), ops);
+            assertEquals(ops, configOps.get(configResource));
 
             return alterConfigsResult(configResource);
         }).when(admin).incrementalAlterConfigs(any());
@@ -400,7 +400,7 @@ public class MirrorSourceConnectorTest {
         props.put(MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIGS, MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS);
         MirrorSourceConfig connectorConfig = new MirrorSourceConfig(props);
 
-        MockAdminClient admin = spy(new MockAdminClient());
+        Admin admin = mock(Admin.class);
         ConnectorContext connectorContext = mock(ConnectorContext.class);
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
                 new DefaultReplicationPolicy(), connectorConfig, new DefaultConfigPropertyFilter(), admin));
@@ -410,7 +410,6 @@ public class MirrorSourceConnectorTest {
         Config config = new Config(entries);
         doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
         doReturn(alterConfigsResult(new ConfigResource(ConfigResource.Type.TOPIC, topic), new UnsupportedVersionException("Unsupported API"))).when(admin).incrementalAlterConfigs(any());
-        doNothing().when(connector).deprecatedAlterConfigs(any());
 
         connector.syncTopicConfigs();
         verify(connectorContext).raiseError(isA(ConnectException.class));
@@ -434,6 +433,7 @@ public class MirrorSourceConnectorTest {
         connector.syncTopicConfigs();
         Map<String, Config> topicConfigs = Collections.singletonMap("source." + topic, config);
         verify(connector).deprecatedAlterConfigs(topicConfigs);
+        verify(connector, never()).incrementalAlterConfigs(any());
     }
 
     @Test

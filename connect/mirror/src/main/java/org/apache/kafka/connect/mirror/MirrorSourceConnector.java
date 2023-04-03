@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map.Entry;
 
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
@@ -556,18 +557,21 @@ public class MirrorSourceConnector extends SourceConnector {
             configOps.put(configResource, ops);
         }
         log.trace("Syncing configs for {} topics.", configOps.size());
+        AtomicReference<Boolean> encounteredError = new AtomicReference<>(false);
         targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
                 if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS)
-                        && e instanceof UnsupportedVersionException) {
+                        && e instanceof UnsupportedVersionException && !encounteredError.get()) {
                     //Fallback logic
                     log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. "
-                            + "Therefore using deprecated AlterConfigs API for syncing topic configurations",
-                            sourceAndTarget.target(), e);
+                            + "Therefore using deprecated AlterConfigs API for syncing configs for topic {}",
+                            sourceAndTarget.target(), k.name(), e);
+                    encounteredError.set(true);
                     useIncrementalAlterConfigs = false;
                 } else if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS)
-                        && e instanceof UnsupportedVersionException) {
+                        && e instanceof UnsupportedVersionException && !encounteredError.get()) {
                     log.error("Failed to sync configs for topic {} on cluster {} with IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
+                    encounteredError.set(true);
                     context.raiseError(new ConnectException("use.incremental.alter.configs was set to \"required\", but the target cluster '"
                             + sourceAndTarget.target() + "' is not compatible with IncrementalAlterConfigs API", e));
                 } else {
@@ -602,11 +606,11 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     Config targetConfig(Config sourceConfig, boolean incremental) {
-// If using incrementalAlterConfigs API, sync the default property with either SET or DELETE action determined by ConfigPropertyFilter::shouldReplicateSourceDefault later.
-// If not using incrementalAlterConfigs API, sync the default property if ConfigPropertyFilter::shouldReplicateSourceDefault returns true.
-// If ConfigPropertyFilter::shouldReplicateConfigProperty returns false, we do not sync the property at all.
+        // If using incrementalAlterConfigs API, sync the default property with either SET or DELETE action determined by ConfigPropertyFilter::shouldReplicateSourceDefault later.
+        // If not using incrementalAlterConfigs API, sync the default property only if ConfigPropertyFilter::shouldReplicateSourceDefault returns true.
+        // If ConfigPropertyFilter::shouldReplicateConfigProperty returns false, do not sync the property at all.
         List<ConfigEntry> entries = sourceConfig.entries().stream()
-            .filter(x -> incremental || x.isDefault() && shouldReplicateSourceDefault(x.name()) || !x.isDefault())
+            .filter(x -> incremental || (x.isDefault() && shouldReplicateSourceDefault(x.name())) || !x.isDefault())
             .filter(x -> !x.isReadOnly() && !x.isSensitive())
             .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
             .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
