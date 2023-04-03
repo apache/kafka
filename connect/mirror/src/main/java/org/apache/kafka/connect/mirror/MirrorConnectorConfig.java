@@ -107,6 +107,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+    public static final String TASK_INDEX = "task.index";
 
     private final ReplicationPolicy replicationPolicy;
 
@@ -139,17 +140,20 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         return replicationPolicy;
     }
 
-    Map<String, Object> sourceProducerConfig() {
+    Map<String, Object> sourceProducerConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_PREFIX + PRODUCER_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> sourceConsumerConfig() {
-        return sourceConsumerConfig(originals());
+    Map<String, Object> sourceConsumerConfig(String role) {
+        Map<String, Object> result = sourceConsumerConfig(originals());
+        addClientId(result, role);
+        return result;
     }
 
     static Map<String, Object> sourceConsumerConfig(Map<String, ?> props) {
@@ -163,25 +167,27 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         return result;
     }
 
-    Map<String, Object> targetAdminConfig() {
+    Map<String, Object> targetAdminConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(TARGET_PREFIX + ADMIN_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> targetProducerConfig() {
+    Map<String, Object> targetProducerConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(TARGET_PREFIX + PRODUCER_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> targetConsumerConfig() {
+    Map<String, Object> targetConsumerConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
@@ -189,15 +195,17 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(TARGET_PREFIX + CONSUMER_CLIENT_PREFIX));
         props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> sourceAdminConfig() {
+    Map<String, Object> sourceAdminConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_PREFIX + ADMIN_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
@@ -221,6 +229,16 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         } catch (ClassNotFoundException e) {
             throw new KafkaException("Can't create instance of " + get(FORWARDING_ADMIN_CLASS), e);
         }
+    }
+
+    void addClientId(Map<String, Object> props, String role) {
+        String clientId = entityLabel() + (role == null ? "" : "|" + role);
+        props.compute(CommonClientConfigs.CLIENT_ID_CONFIG,
+                (k, userClientId) -> (userClientId == null ? "" : userClientId + "|") + clientId);
+    }
+
+    String entityLabel() {
+        return sourceClusterAlias() + "->" + targetClusterAlias() + "|" + connectorName();
     }
 
     @SuppressWarnings("deprecation")

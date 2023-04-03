@@ -114,7 +114,6 @@ public class LeaderEpochFileCache {
     private void maybeTruncateNonMonotonicEntries(EpochEntry newEntry) {
         List<EpochEntry> removedEpochs = removeFromEnd(entry -> entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset);
 
-
         if (removedEpochs.size() > 1 || (!removedEpochs.isEmpty() && removedEpochs.get(0).startOffset != newEntry.startOffset)) {
 
             // Only log a warning if there were non-trivial removals. If the start offset of the new entry
@@ -383,11 +382,11 @@ public class LeaderEpochFileCache {
 
     // Visible for testing
     public List<EpochEntry> epochEntries() {
-        lock.writeLock().lock();
+        lock.readLock().lock();
         try {
             return new ArrayList<>(epochs.values());
         } finally {
-            lock.writeLock().unlock();
+            lock.readLock().unlock();
         }
     }
 

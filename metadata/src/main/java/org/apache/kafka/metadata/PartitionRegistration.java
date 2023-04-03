@@ -201,13 +201,6 @@ public class PartitionRegistration {
             setIsNew(isNew);
     }
 
-    /**
-     * Returns true if this partition is reassigning.
-     */
-    public boolean isReassigning() {
-        return removingReplicas.length > 0 || addingReplicas.length > 0;
-    }
-
     @Override
     public int hashCode() {
         return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),

@@ -66,6 +66,7 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
 
@@ -153,11 +154,11 @@ public class MirrorSourceConnector extends SourceConnector {
         configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
         replicationFactor = config.replicationFactor();
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
         useIncrementalAlterConfigs =  !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
         offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
-        scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.execute(this::computeAndCreateTopicPartitions, "creating downstream topic-partitions");
@@ -216,9 +217,9 @@ public class MirrorSourceConnector extends SourceConnector {
             roundRobinByTask.get(index).add(partition);
             count++;
         }
-
-        return roundRobinByTask.stream().map(config::taskConfigForTopicPartitions)
-            .collect(Collectors.toList());
+        return IntStream.range(0, numTasks)
+                .mapToObj(i -> config.taskConfigForTopicPartitions(roundRobinByTask.get(i), i))
+                .collect(Collectors.toList());
     }
 
     @Override
