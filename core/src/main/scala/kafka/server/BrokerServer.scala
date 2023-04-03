@@ -138,6 +138,8 @@ class BrokerServer(
 
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
+  val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
+
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -406,7 +408,6 @@ class BrokerServer(
         config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
 
-      val publishers = new util.ArrayList[MetadataPublisher]()
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
@@ -431,7 +432,7 @@ class BrokerServer(
         authorizer,
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)
-      publishers.add(brokerMetadataPublisher)
+      metadataPublishers.add(brokerMetadataPublisher)
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
       // be done before we publish the dynamic configs, so that we don't miss anything.
@@ -440,7 +441,7 @@ class BrokerServer(
       // Install all the metadata publishers.
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the broker metadata publishers to be installed",
-        sharedServer.loader.installPublishers(publishers), startupDeadline, time)
+        sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
 
       // Wait for this broker to contact the quorum, and for the active controller to acknowledge
       // us as caught up. It will do this by returning a heartbeat response with isCaughtUp set to
@@ -537,14 +538,14 @@ class BrokerServer(
             error("Got unexpected exception waiting for controlled shutdown future", e)
         }
       }
-
       lifecycleManager.beginShutdown()
-
       // Stop socket server to stop accepting any more connections and requests.
       // Socket server will be shutdown towards the end of the sequence.
       if (socketServer != null) {
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       }
+      metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
+      metadataPublishers.clear()
       if (dataPlaneRequestHandlerPool != null)
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)

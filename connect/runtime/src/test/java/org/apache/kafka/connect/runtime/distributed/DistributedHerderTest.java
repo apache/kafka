@@ -48,6 +48,8 @@ import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -3881,6 +3883,39 @@ public class DistributedHerderTest {
         // advance the time by 500ms so that the task reconfiguration request with double the initial retry backoff is processed
         time.sleep(500);
         herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorOffsets() throws Exception {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+        expectAnyTicks();
+
+        member.wakeup();
+        PowerMock.expectLastCall();
+
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT);
+        ConnectorOffsets offsets = new ConnectorOffsets(Collections.singletonList(new ConnectorOffset(
+                Collections.singletonMap("partitionKey", "partitionValue"),
+                Collections.singletonMap("offsetKey", "offsetValue"))));
+        Capture<Callback<ConnectorOffsets>> callbackCapture = newCapture();
+        worker.connectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), capture(callbackCapture));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            callbackCapture.getValue().onCompletion(null, offsets);
+            return null;
+        });
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        herder.connectorOffsets(CONN1, cb);
+        herder.tick();
+        assertEquals(offsets, cb.get(1000, TimeUnit.MILLISECONDS));
 
         PowerMock.verifyAll();
     }

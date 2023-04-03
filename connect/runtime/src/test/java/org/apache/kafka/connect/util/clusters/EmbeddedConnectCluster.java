@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -568,6 +569,27 @@ public class EmbeddedConnectCluster {
                     "Resetting active topics for connector " + connectorName + " failed. "
                     + "Error response: " + responseToString(response));
         }
+    }
+
+    /**
+     * Get the offsets for a connector via the <strong><em>GET /connectors/{connector}/offsets</em></strong> endpoint
+     * @param connectorName name of the connector
+     * @return the connector's offsets
+     */
+    public ConnectorOffsets connectorOffsets(String connectorName) {
+        String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
+        Response response = requestGet(url);
+        ObjectMapper mapper = new ObjectMapper();
+
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                return mapper.readerFor(ConnectorOffsets.class).readValue(responseToString(response));
+            }
+        } catch (IOException e) {
+            throw new ConnectException("Could not not parse connector offsets", e);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not fetch connector offsets. Error response: " + responseToString(response));
     }
 
     /**

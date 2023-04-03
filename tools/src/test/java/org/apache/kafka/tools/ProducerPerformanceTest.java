@@ -36,7 +36,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.Random;
+import java.util.SplittableRandom;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -177,7 +177,7 @@ public class ProducerPerformanceTest {
         List<byte[]> payloadByteList = new ArrayList<>();
         payloadByteList.add(byteArray);
         byte[] payload = null;
-        Random random = new Random(0);
+        SplittableRandom random = new SplittableRandom(0);
 
         payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
         assertEquals(inputString, new String(payload));
@@ -188,7 +188,7 @@ public class ProducerPerformanceTest {
         Integer recordSize = 100;
         byte[] payload = new byte[recordSize];
         List<byte[]> payloadByteList = new ArrayList<>();
-        Random random = new Random(0);
+        SplittableRandom random = new SplittableRandom(0);
 
         payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
         for (byte b : payload) {
@@ -201,7 +201,7 @@ public class ProducerPerformanceTest {
         Integer recordSize = null;
         byte[] payload = null;
         List<byte[]> payloadByteList = new ArrayList<>();
-        Random random = new Random(0);
+        SplittableRandom random = new SplittableRandom(0);
 
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random));
         assertEquals("no payload File Path or record Size provided", thrown.getMessage());

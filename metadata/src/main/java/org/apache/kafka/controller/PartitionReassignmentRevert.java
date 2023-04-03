@@ -21,8 +21,6 @@ import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
-import java.util.ArrayList;
-import java.util.Set;
 import java.util.List;
 import java.util.Objects;
 
@@ -37,20 +35,18 @@ class PartitionReassignmentRevert {
         // reassignment. In general, we want to take out any replica that the reassignment
         // was adding, but keep the ones the reassignment was removing. (But see the
         // special case below.)
-        Set<Integer> adding = Replicas.toSet(registration.addingReplicas);
-        this.replicas = new ArrayList<>(registration.replicas.length);
-        this.isr = new ArrayList<>(registration.isr.length);
-        for (int i = 0; i < registration.isr.length; i++) {
-            int replica = registration.isr[i];
-            if (!adding.contains(replica)) {
-                this.isr.add(replica);
-            }
-        }
-        for (int replica : registration.replicas) {
-            if (!adding.contains(replica)) {
-                this.replicas.add(replica);
-            }
-        }
+
+        PartitionReassignmentReplicas ongoingReassignment =
+            new PartitionReassignmentReplicas(
+                Replicas.toList(registration.removingReplicas),
+                Replicas.toList(registration.addingReplicas),
+                Replicas.toList(registration.replicas)
+            );
+
+        this.replicas = ongoingReassignment.originalReplicas();
+        this.isr = Replicas.toList(registration.isr);
+        this.isr.removeAll(ongoingReassignment.adding());
+
         if (isr.isEmpty()) {
             // In the special case that all the replicas that are in the ISR are also
             // contained in addingReplicas, we choose the first remaining replica and add
