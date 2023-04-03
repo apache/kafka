@@ -342,16 +342,17 @@ public class TaskManager {
 
         maybeThrowTaskExceptions(taskCloseExceptions);
 
+        rebalanceInProgress = true;
         final Collection<Task> newActiveTasks = createNewTasks(activeTasksToCreate, standbyTasksToCreate);
         // If there are any transactions in flight and there are newly created active tasks, commit the tasks
         // to avoid potential long restoration times.
         if (processingMode == EXACTLY_ONCE_V2 && threadProducer().transactionInFlight() && !newActiveTasks.isEmpty()) {
             log.info("New active tasks were added and there is an inflight transaction. Attempting to commit tasks.");
-            final int numCommitted = commitTasksAndMaybeUpdateCommittableOffsets(newActiveTasks, new HashMap<>());
+            final int numCommitted = commitTasksAndMaybeUpdateCommittableOffsets(tasks.allTasks(), new HashMap<>());
             if (numCommitted == -1) {
                 log.info("Couldn't commit any tasks since a rebalance is in progress");
             } else {
-                log.info("Committed {} transactions", numCommitted);
+                log.info("Committed the ongoing V2 transaction at the assignment due to newly created active tasks");
             }
         }
     }
