@@ -108,7 +108,7 @@ public class ServerSideStickyRangeAssignorTest {
         // Consumer B
         List<Uuid> subscribedTopicsB = new ArrayList<>(Collections.singletonList(topic3Uuid));
         members.put(consumerB, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, new HashMap<>()));
-        // Consumer B
+        // Consumer C
         List<Uuid> subscribedTopicsC = new ArrayList<>(Arrays.asList(topic2Uuid, topic3Uuid));
         members.put(consumerC, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsC, new HashMap<>()));
 
@@ -362,8 +362,8 @@ public class ServerSideStickyRangeAssignorTest {
 
     // We have a set of sets with the partitions that should be distributed amongst the consumers, if it exists then remove it from the set.
     private void assertAssignment(Map<Uuid, Set<Set<Integer>>> expectedAssignment, GroupAssignment computedGroupAssignment) {
-        for (Map.Entry<String, MemberAssignment> member : computedGroupAssignment.getMembers().entrySet()) {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = member.getValue().getAssignmentPerTopic();
+        for (MemberAssignment member : computedGroupAssignment.getMembers().values()) {
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = member.getAssignmentPerTopic();
             for (Map.Entry<Uuid, Set<Integer>> assignmentForTopic : computedAssignmentForMember.entrySet()) {
                 Uuid topicId = assignmentForTopic.getKey();
                 Set<Integer> assignmentPartitionsSet = assignmentForTopic.getValue();
@@ -374,11 +374,10 @@ public class ServerSideStickyRangeAssignorTest {
     }
 
     private void assertCoPartitionJoinProperty(GroupAssignment groupAssignment) {
-        for (Map.Entry<String, MemberAssignment> member : groupAssignment.getMembers().entrySet()) {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = member.getValue().getAssignmentPerTopic();
+        for (MemberAssignment member : groupAssignment.getMembers().values()) {
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = member.getAssignmentPerTopic();
             Set<Integer> compareSet = new HashSet<>();
-            for (Map.Entry<Uuid, Set<Integer>> topicAssignment : computedAssignmentForMember.entrySet()) {
-                Set<Integer> partitionsForTopicSet = topicAssignment.getValue();
+            for (Set<Integer> partitionsForTopicSet : computedAssignmentForMember.values()) {
                 if (compareSet.isEmpty()) {
                     compareSet = partitionsForTopicSet;
                 }
