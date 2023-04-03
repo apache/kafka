@@ -216,7 +216,7 @@ public class RecordCollectorImpl implements RecordCollector {
             final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
             final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
             try {
-                response = productionExceptionHandler.handleSerializationException(record, exception);
+                response = productionExceptionHandler.onSerializationException(record, exception);
             } catch (final Exception e) {
                 log.error("Fatal handling serialization exception on record {}", record, e);
                 recordSendError(topic, e, null);

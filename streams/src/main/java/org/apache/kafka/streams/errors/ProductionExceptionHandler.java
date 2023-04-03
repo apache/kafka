@@ -41,8 +41,8 @@ public interface ProductionExceptionHandler extends Configurable {
      * @param record        the record that failed to serialize
      * @param exception     the exception that occurred during serialization
      */
-    default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
-                                                                            final Exception exception) {
+    default ProductionExceptionHandlerResponse onSerializationException(final ProducerRecord record,
+                                                                        final Exception exception) {
         return ProductionExceptionHandlerResponse.FAIL;
     }
 
