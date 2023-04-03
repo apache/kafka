@@ -1598,8 +1598,7 @@ public class StreamTaskTest {
         task = createStatefulTask(createConfig("100"), true);
 
         task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> {
-        });
+        task.completeRestoration(noOpResetter -> { });
         task.prepareCommit();
         task.postCommit(true);
 
