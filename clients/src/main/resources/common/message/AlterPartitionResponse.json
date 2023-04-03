@@ -21,7 +21,9 @@
   //
   // Version 2 adds TopicId field to replace TopicName field, can return the following new errors:
   // INELIGIBLE_REPLICA, NEW_LEADER_ELECTED and UNKNOWN_TOPIC_ID (KIP-841).
-  "validVersions": "0-2",
+  //
+  // Version 3 is the same as vesion 2 (KIP-903).
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

@@ -17,7 +17,6 @@
 package kafka.log.remote
 
 import kafka.cluster.Partition
-import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.common._
@@ -26,7 +25,6 @@ import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, Utils}
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
 import org.apache.kafka.server.log.remote.storage._
-import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 
 import java.io.{Closeable, InputStream}
