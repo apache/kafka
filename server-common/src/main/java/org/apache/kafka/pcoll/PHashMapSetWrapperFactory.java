@@ -23,7 +23,7 @@ import org.apache.kafka.pcoll.pcollections.PCollectionsHashMapSetWrapperFactory;
  * A factory for instantiating persistent Hash-based Maps/Sets
  */
 public interface PHashMapSetWrapperFactory {
-    PHashMapSetWrapperFactory PCOLLECTIONS_FACTORY = new PCollectionsHashMapSetWrapperFactory(); //
+    PHashMapSetWrapperFactory PCOLLECTIONS_FACTORY = new PCollectionsHashMapSetWrapperFactory();
 
     /**
      * @return a wrapped hash-based persistent map that is empty

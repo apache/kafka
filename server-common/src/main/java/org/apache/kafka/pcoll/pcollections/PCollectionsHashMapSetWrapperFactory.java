@@ -26,21 +26,21 @@ import org.pcollections.HashTreePSet;
 public class PCollectionsHashMapSetWrapperFactory implements PHashMapSetWrapperFactory {
     @Override
     public <K, V> PHashMapWrapper<K, V> emptyMap() {
-        return new PCollectionsHashMapWrapper<K, V>(HashTreePMap.empty());
+        return new PCollectionsHashMapWrapper<>(HashTreePMap.empty());
     }
 
     @Override
     public <K, V> PHashMapWrapper<K, V> singletonMap(K key, V value) {
-        return new PCollectionsHashMapWrapper<K, V>(HashTreePMap.singleton(key, value));
+        return new PCollectionsHashMapWrapper<>(HashTreePMap.singleton(key, value));
     }
 
     @Override
     public <E> PHashSetWrapper<E> emptySet() {
-        return new PCollectionsHashSetWrapper<E>(HashTreePSet.empty()); // test
+        return new PCollectionsHashSetWrapper<>(HashTreePSet.empty());
     }
 
     @Override
     public <E> PHashSetWrapper<E> singletonSet(E e) {
-        return new PCollectionsHashSetWrapper<E>(HashTreePSet.singleton(e));
+        return new PCollectionsHashSetWrapper<>(HashTreePSet.singleton(e));
     }
 }
