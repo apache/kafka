@@ -134,6 +134,18 @@ object ControllerState {
     def value = 102
   }
 
+  case object CorruptedBrokerOffsetsReceived extends ControllerState {
+    def value = 103
+  }
+
+  case object DelayedElectionSuccess extends ControllerState {
+    def value = 104
+  }
+
+  case object RegisterCorruptedBroker extends ControllerState {
+    def value = 105
+  }
+
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
     AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange,
     LeaderAndIsrResponseReceived, LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable,

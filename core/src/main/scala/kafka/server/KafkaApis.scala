@@ -1109,7 +1109,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           buildErrorResponse(Errors.INVALID_REQUEST, partition)
         } else {
           try {
-            val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetsRequest.DEBUGGING_REPLICA_ID
+            val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetsRequest.DEBUGGING_REPLICA_ID &&
+              offsetRequest.replicaId != ListOffsetsRequest.CONTROLLER_REPLICA_ID
             val isClientRequest = offsetRequest.replicaId == ListOffsetsRequest.CONSUMER_REPLICA_ID
             val isolationLevelOpt = if (isClientRequest)
               Some(offsetRequest.isolationLevel)

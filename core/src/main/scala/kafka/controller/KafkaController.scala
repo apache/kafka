@@ -155,12 +155,16 @@ class KafkaController(val config: KafkaConfig,
   private[controller] val eventManager = new ControllerEventManager(config.brokerId, this, time,
     controllerContext.stats.rateAndTimeMetrics)
 
+  private val delayedElectionManager = DelayedElectionManager(
+    config, controllerContext, eventManager, controllerChannelManager)
+
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(config, controllerChannelManager,
     eventManager, controllerContext, stateChangeLogger)
   val replicaStateMachine: ReplicaStateMachine = new ZkReplicaStateMachine(config, stateChangeLogger, controllerContext, zkClient,
     new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
   val partitionStateMachine: PartitionStateMachine = new ZkPartitionStateMachine(config, stateChangeLogger, controllerContext, zkClient,
-    new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
+    new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger),
+    delayedElectionManager)
   val topicDeletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
     partitionStateMachine, new ControllerDeletionClient(this, zkClient))
 
@@ -638,6 +642,10 @@ class KafkaController(val config: KafkaConfig,
     // supposed to host. Based on that the broker starts the high watermark threads for the input list of partitions
     val allReplicasOnNewBrokers = controllerContext.replicasOnBrokers(newBrokersSet)
     replicaStateMachine.handleStateChanges(allReplicasOnNewBrokers.toSeq, OnlineReplica)
+
+    val newCorruptedBrokers = newBrokersSet.intersect(controllerContext.corruptedBrokers.keySet)
+    handleCorruptedBrokersStartup(newCorruptedBrokers)
+
     // when a new broker comes up, the controller needs to trigger leader election for all new and offline partitions
     // to see if these brokers can become leaders for some/all of those
     partitionStateMachine.triggerOnlinePartitionStateChange()
@@ -658,6 +666,22 @@ class KafkaController(val config: KafkaConfig,
 
     // Clean up any shutdown znodes that may be left behind from when these brokers had shut down before.
     zkClient.removeBrokerShutdown(newBrokers, controllerContext.epochZkVersion)
+  }
+
+  private def handleCorruptedBrokersStartup(corruptedBrokers: Set[Int]): Unit = {
+    corruptedBrokers.foreach(brokerId => delayedElectionManager.onCorruptedBrokerStartup(brokerId))
+  }
+
+  private def processCorruptedBrokersOffsetsReceived(brokerId: Int, listOffsetsResponse: ListOffsetsResponse): Unit = {
+    delayedElectionManager.onListOffsetsResponse(brokerId, listOffsetsResponse)
+  }
+
+  private def processDelayedElectionSuccess(partition: TopicPartition,
+    brokerIdToOffsetAndEpoch: Map[Int, OffsetAndEpoch]): Unit = {
+    if (controllerContext.partitionState(partition) == OfflinePartition) {
+      partitionStateMachine.handleStateChanges(Seq(partition), OnlinePartition,
+        Some(DelayedLeaderElectionStrategy(Map(partition -> brokerIdToOffsetAndEpoch))))
+    }
   }
 
   private def maybeResumeReassignments(shouldResume: (TopicPartition, ReplicaAssignment) => Boolean): Unit = {
@@ -3253,6 +3277,11 @@ class KafkaController(val config: KafkaConfig,
           processSkipControlledShutdownSafetyCheck(id, brokerEpoch, callback)
         case CorruptedBrokersChange =>
           processCorruptedBrokersChange()
+        case CorruptedBrokerOffsetsReceived(brokerId, response) =>
+          processCorruptedBrokersOffsetsReceived(brokerId, response)
+        case DelayedElectionSuccess(partition: TopicPartition, brokerIdToOffsetAndEpoch: Map[Int, OffsetAndEpoch]) =>
+          processDelayedElectionSuccess(partition, brokerIdToOffsetAndEpoch)
+
       }
     } catch {
       case e: ControllerMovedException =>
@@ -3569,6 +3598,18 @@ case class AlterIsrReceived(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[T
 
 case class TopicDeletionFlagChange(reset: Boolean = false) extends ControllerEvent {
   def state = ControllerState.TopicDeletionFlagChange
+  override def preempt(): Unit = {}
+}
+
+case class CorruptedBrokerOffsetsReceived(brokerId: Int, response: ListOffsetsResponse) extends ControllerEvent {
+  def state: ControllerState = ControllerState.CorruptedBrokerOffsetsReceived
+  override def preempt(): Unit = {}
+}
+
+case class DelayedElectionSuccess(
+  partition: TopicPartition,
+  brokerIdToOffsetAndEpoch: Map[Int, OffsetAndEpoch]) extends ControllerEvent {
+  def state: ControllerState = ControllerState.DelayedElectionSuccess
   override def preempt(): Unit = {}
 }
 

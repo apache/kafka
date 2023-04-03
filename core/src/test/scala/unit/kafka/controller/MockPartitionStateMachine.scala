@@ -24,7 +24,8 @@ import org.apache.kafka.common.TopicPartition
 import scala.collection.{Seq, mutable}
 
 class MockPartitionStateMachine(controllerContext: ControllerContext,
-                                uncleanLeaderElectionEnabled: Boolean)
+                                uncleanLeaderElectionEnabled: Boolean,
+                                corruptedBrokerElectionEnabled: Boolean = false)
   extends PartitionStateMachine(controllerContext) {
 
   var stateChangesByTargetState = mutable.Map.empty[PartitionState, Int].withDefaultValue(0)
@@ -101,7 +102,9 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
         val partitionsWithUncleanLeaderElectionState = validLeaderAndIsrs.map { case (partition, leaderAndIsr) =>
           (partition, Some(leaderAndIsr), isUnclean || uncleanLeaderElectionEnabled)
         }
-        leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState)
+        leaderForOffline(
+          controllerContext, partitionsWithUncleanLeaderElectionState, corruptedBrokerElectionEnabled)
+          .map(_._1)
       case ReassignPartitionLeaderElectionStrategy =>
         leaderForReassign(controllerContext, validLeaderAndIsrs)
       case PreferredReplicaPartitionLeaderElectionStrategy =>
@@ -110,6 +113,8 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
         leaderForControlledShutdown(controllerContext, validLeaderAndIsrs)
       case RecommendedLeaderElectionStrategy(recommendedLeaders) =>
         leaderForRecommendation(controllerContext, validLeaderAndIsrs, recommendedLeaders)
+      case DelayedLeaderElectionStrategy(brokerIdToOffsets) =>
+        leaderForDelayedElection(controllerContext, validLeaderAndIsrs, brokerIdToOffsets)
     }
 
     val results: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = electionResults.map { electionResult =>

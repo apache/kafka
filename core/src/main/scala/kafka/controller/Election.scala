@@ -17,40 +17,68 @@
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
+import kafka.controller.PartitionLeaderElectionAlgorithms.OfflineElectionResult
+import kafka.server.OffsetAndEpoch
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+
 import scala.collection.{Map, Seq}
 
 case class ElectionResult(topicPartition: TopicPartition, leaderAndIsr: Option[LeaderAndIsr], liveReplicas: Seq[Int])
 
 object Election extends Logging {
 
+  /**
+   * @param allowUncleanCorruptedLeaders If enabled, allow an unclean corrupted broker to be elected leader.
+   *                                     This is set to true when delayed election is turned off.
+   * @return an election result, along with a flag indicating
+   * whether a delayed election for a corrupt leader needs to be triggered.
+   */
   private def leaderForOffline(partition: TopicPartition,
                                leaderAndIsrOpt: Option[LeaderAndIsr],
                                uncleanLeaderElectionEnabled: Boolean,
-                               controllerContext: ControllerContext): ElectionResult = {
+                               allowUncleanCorruptedLeaders: Boolean,
+                               controllerContext: ControllerContext): (ElectionResult, Boolean) = {
     val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val assignment = controllerContext.partitionReplicaAssignment(partition)
     val liveReplicas = assignment.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
         val isr = leaderAndIsr.isr
-        val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
-          assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled)
-        val newLeaderAndIsrOpt = leaderOpt.map { case (leader, uncleanElection) =>
+
+        def getIsrForLeader(leader: Int, uncleanElection: Boolean): ElectionResult = {
           if (uncleanElection) {
             controllerContext.stats.uncleanLeaderElectionRate.mark()
             warn(s"Unclean leader election. Partition $partition has been assigned leader $leader from deposed " +
               s"leader ${leaderAndIsr.leader}.")
           }
-          val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
-          else List(leader)
-          leaderAndIsr.newLeaderAndIsr(leader, newIsr)
+          val newIsr =
+            if (isr.contains(leader)) {
+              isr.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
+            } else {
+              List(leader)
+            }
+          val newLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(leader, newIsr)
+          ElectionResult(partition, Some(newLeaderAndIsr), liveReplicas)
         }
-        ElectionResult(partition, newLeaderAndIsrOpt, liveReplicas)
 
+        val electionResult: OfflineElectionResult = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
+          assignment, isr, liveReplicas.toSet,
+          controllerContext.corruptedBrokers.keys.toSet, uncleanLeaderElectionEnabled)
+
+        electionResult match {
+          case OfflineElectionResult.CleanLeader(leader) =>
+            (getIsrForLeader(leader, uncleanElection = false), false)
+          case OfflineElectionResult.UncleanLeader(leader) =>
+            (getIsrForLeader(leader, uncleanElection = true), false)
+          case OfflineElectionResult.CorruptedUncleanLeader(leader) =>
+            if (allowUncleanCorruptedLeaders) (getIsrForLeader(leader, uncleanElection = true), false)
+            else (ElectionResult(partition, None, liveReplicas), true)
+          case OfflineElectionResult.NoLeader =>
+            (ElectionResult(partition, None, liveReplicas), false)
+        }
       case None =>
-        ElectionResult(partition, None, liveReplicas)
+        (ElectionResult(partition, None, liveReplicas), false)
     }
   }
 
@@ -66,11 +94,13 @@ object Election extends Logging {
    */
   def leaderForOffline(
     controllerContext: ControllerContext,
-    partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)]
-  ): Seq[ElectionResult] = {
+    partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)],
+    allowUncleanCorruptedLeaders: Boolean,
+  ): Seq[(ElectionResult, Boolean)] = {
     partitionsWithUncleanLeaderElectionState.map {
       case (partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled) =>
-        leaderForOffline(partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled, controllerContext)
+        leaderForOffline(partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled,
+          allowUncleanCorruptedLeaders, controllerContext)
     }
   }
 
@@ -130,6 +160,45 @@ object Election extends Logging {
     val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     leaderAndIsrs.map { case (partition, leaderAndIsr) =>
       leaderForRecommendation(partition, leaderAndIsr, recommendedLeaders.get(partition), controllerContext, controllerContextSnapshot)
+    }
+  }
+
+  private def leaderForDelayedElection(partition: TopicPartition,
+    leaderAndIsr: LeaderAndIsr,
+    brokerIdToOffsetAndEpochOpt: Option[Map[Int, OffsetAndEpoch]],
+    controllerContext: ControllerContext,
+    controllerContextSnapshot: ControllerContextSnapshot): ElectionResult = {
+    val assignment = controllerContext.partitionReplicaAssignment(partition)
+    val liveReplicas = assignment.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
+    val leaderOpt = brokerIdToOffsetAndEpochOpt.flatMap(brokerIdToOffsetAndEpoch =>
+      PartitionLeaderElectionAlgorithms.delayedPartitionLeaderElection(
+        brokerIdToOffsetAndEpoch, assignment, liveReplicas.toSet))
+    val isr = leaderAndIsr.isr
+    val newLeaderAndIsrOpt = leaderOpt.map(leader => {
+      val newIsr = if (isr.contains(leader)) isr.filter(replica =>
+        controllerContextSnapshot.isReplicaOnline(replica, partition))
+      else List(leader)
+      leaderAndIsr.newLeaderAndIsr(leader, newIsr)
+    })
+    ElectionResult(partition, newLeaderAndIsrOpt, liveReplicas)
+  }
+
+  /**
+   * Elect leaders for partitions that have a recommended leader.
+   *
+   * @param controllerContext Context with the current state of the cluster
+   * @param leaderAndIsrs A sequence of tuples representing the partitions that need election
+   *                                     and their respective leader/ISR states
+   * @param recommendedLeaders A map from each partition to its recommended leader
+   * @return The election results
+   */
+  def leaderForDelayedElection(controllerContext: ControllerContext,
+    leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)],
+    brokerIdToOffsetMaps: Map[TopicPartition, Map[Int, OffsetAndEpoch]]): Seq[ElectionResult] = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
+    leaderAndIsrs.map { case (partition, leaderAndIsr) =>
+      leaderForDelayedElection(
+        partition, leaderAndIsr, brokerIdToOffsetMaps.get(partition), controllerContext, controllerContextSnapshot)
     }
   }
 

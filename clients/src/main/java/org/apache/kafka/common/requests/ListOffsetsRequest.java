@@ -54,12 +54,18 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
+    public static final int CONTROLLER_REPLICA_ID = -100;
 
     private final ListOffsetsRequestData data;
     private final Set<TopicPartition> duplicatePartitions;
 
     public static class Builder extends AbstractRequest.Builder<ListOffsetsRequest> {
         private final ListOffsetsRequestData data;
+
+        public static Builder forController(short allowedVersion) {
+            return new Builder((short) 0, allowedVersion,
+                ListOffsetsRequest.CONTROLLER_REPLICA_ID, IsolationLevel.READ_UNCOMMITTED);
+        }
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);

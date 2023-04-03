@@ -19,7 +19,7 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, OffsetAndEpoch}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
+
 import scala.collection.{Map, Seq, mutable}
 
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
@@ -129,7 +130,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
                               stateChangeLogger: StateChangeLogger,
                               controllerContext: ControllerContext,
                               zkClient: KafkaZkClient,
-                              controllerBrokerRequestBatch: ControllerBrokerRequestBatch)
+                              controllerBrokerRequestBatch: ControllerBrokerRequestBatch,
+                              delayedElectionManager: DelayedElectionManager)
   extends PartitionStateMachine(controllerContext) {
 
   private val controllerId = config.brokerId
@@ -412,7 +414,20 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           validLeaderAndIsrs,
           allowUnclean
         )
-        leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState).partition(_.leaderAndIsr.isEmpty)
+        // If delayed election is turned off for corrupt brokers, allow them to be elected leader.
+        val allowUncleanCorruptLeaders = config.liLeaderElectionOnCorruptionWaitMs <= 0 || allowUnclean
+        val results = leaderForOffline(controllerContext,
+          partitionsWithUncleanLeaderElectionState, allowUncleanCorruptLeaders)
+        val partitionsWithCorruptedLeaders = results.filter {
+          case (_, corruptedLeaderElected) => corruptedLeaderElected
+        }.map {
+          case (electionResult, _) => electionResult.topicPartition
+        }
+        if (partitionsWithCorruptedLeaders.nonEmpty) {
+          delayedElectionManager.startDelayedElectionsForPartitions(partitionsWithCorruptedLeaders)
+        }
+
+        results.map(_._1).partition(_.leaderAndIsr.isEmpty)
       case ReassignPartitionLeaderElectionStrategy =>
         leaderForReassign(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
       case PreferredReplicaPartitionLeaderElectionStrategy =>
@@ -421,6 +436,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         leaderForControlledShutdown(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
       case RecommendedLeaderElectionStrategy(recommendedLeaders) =>
         leaderForRecommendation(controllerContext, validLeaderAndIsrs, recommendedLeaders).partition(_.leaderAndIsr.isEmpty)
+      case DelayedLeaderElectionStrategy(brokerIdToOffsets) =>
+        leaderForDelayedElection(controllerContext, validLeaderAndIsrs, brokerIdToOffsets).partition(_.leaderAndIsr.isEmpty)
     }
     partitionsWithoutLeaders.foreach { electionResult =>
       val partition = electionResult.topicPartition
@@ -518,22 +535,46 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 }
 
 object PartitionLeaderElectionAlgorithms {
+  sealed trait OfflineElectionResult
+
+  object OfflineElectionResult {
+    case class CleanLeader (replicaId: Int) extends OfflineElectionResult
+    case class UncleanLeader (replicaId: Int) extends OfflineElectionResult
+    case class CorruptedUncleanLeader(replicaId: Int) extends OfflineElectionResult
+    case object NoLeader extends OfflineElectionResult
+  }
 
   /**
-   * @return Optionally, a tuple (replica, flag) where flag is a boolean indicating if unclean leader election was
-   *         used to replace the replica.
+   * This method tries to elect a leader using the following algorithm -
+   * 1. If an assigned replica is live and part of the ISR, elect it as clean.
+   * 2. If not, try to find an assigned replica that is live, but not corrupted. If found, elect it as unclean leader.
+   * 3. If not, try to find a live replica (which will be corrupted). If found, elect as corrupted leader.
+   * 4. If not, no leader is elected.
+   * @return A case class indicating the type of leader indicated (clean, unclean or corrupted), or NoLeader.
    */
-  def offlinePartitionLeaderElection(assignment: Seq[Int], isr: Seq[Int], liveReplicas: Set[Int], uncleanLeaderElectionEnabled: Boolean): Option[(Int, Boolean)] = {
+  def offlinePartitionLeaderElection(assignment: Seq[Int], isr: Seq[Int],
+    liveReplicas: Set[Int], corruptedReplicas: Set[Int], uncleanLeaderElectionEnabled: Boolean): OfflineElectionResult = {
     assignment.find(id => liveReplicas.contains(id) && isr.contains(id)) match {
-      case Some(replicaId) => Some(replicaId, false)
+      // Found a clean replica, elect as leader
+      case Some(replicaId) => OfflineElectionResult.CleanLeader(replicaId)
       case None =>
         if (uncleanLeaderElectionEnabled) {
-          assignment.find(liveReplicas.contains) match {
-            case Some(uncleanReplicaId) => Some(uncleanReplicaId, true)
-            case None => None
+          // Looking for unclean leader now
+          assignment.find(replicaId =>
+            liveReplicas.contains(replicaId) && !corruptedReplicas.contains(replicaId)) match {
+            // non-corrupted live replica found, elect as unclean leader
+            case Some(uncleanReplicaId) => return OfflineElectionResult.UncleanLeader(uncleanReplicaId)
+            case None =>
+          }
+          assignment.find(replicaId =>
+            liveReplicas.contains(replicaId)) match {
+            // found corrupted live replica, elect as corrupted leader
+            case Some(corruptedReplicaId) => OfflineElectionResult.CorruptedUncleanLeader(corruptedReplicaId)
+            // No live replicas found, so no leader elected
+            case None => OfflineElectionResult.NoLeader
           }
         } else {
-          None
+          OfflineElectionResult.NoLeader
         }
     }
   }
@@ -544,6 +585,23 @@ object PartitionLeaderElectionAlgorithms {
 
   def recommendedPartitionLeaderElection(recommendedLeader: Option[Int], isr: Seq[Int], liveReplicas: Set[Int]): Option[Int] = {
     recommendedLeader.find(id => liveReplicas.contains(id) && isr.contains(id))
+  }
+
+  def delayedPartitionLeaderElection(
+    brokerIdToOffsetAndEpoch: Map[Int, OffsetAndEpoch], assignment: Seq[Int], liveReplicas: Set[Int]): Option[Int] = {
+    val liveBrokerIdToOffsetAndEpoch = brokerIdToOffsetAndEpoch
+      .filterKeys(brokerId => liveReplicas.contains(brokerId) && assignment.contains(brokerId))
+    // If no broker has responded to ListOffsets request within timeout, perform unclean election
+    if (liveBrokerIdToOffsetAndEpoch.isEmpty) {
+      return assignment.find(liveReplicas.contains)
+    }
+
+    // If one or more brokers have responded to ListOffsets and are live, choose the best one
+    val ordering: Ordering[OffsetAndEpoch] =
+      Ordering.by(offsetAndEpoch => (offsetAndEpoch.leaderEpoch, offsetAndEpoch.offset))
+
+    val (brokerId, _) = liveBrokerIdToOffsetAndEpoch.maxBy (_._2) (ordering)
+    Some(brokerId)
   }
 
   def preferredReplicaPartitionLeaderElection(assignment: Seq[Int], isr: Seq[Int], liveReplicas: Set[Int]): Option[Int] = {
@@ -561,6 +619,7 @@ final case object ReassignPartitionLeaderElectionStrategy extends PartitionLeade
 final case object PreferredReplicaPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 final case object ControlledShutdownPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 final case class RecommendedLeaderElectionStrategy(recommendedLeaders: Map[TopicPartition, Int]) extends PartitionLeaderElectionStrategy
+final case class DelayedLeaderElectionStrategy(brokerIdToOffsets: Map[TopicPartition, Map[Int, OffsetAndEpoch]]) extends PartitionLeaderElectionStrategy
 
 sealed trait PartitionState {
   def state: Byte
