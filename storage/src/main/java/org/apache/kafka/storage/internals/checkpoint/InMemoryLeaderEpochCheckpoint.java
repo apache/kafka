@@ -31,6 +31,12 @@ import java.util.List;
 
 /**
  * This class stores a list of EpochEntry(LeaderEpoch + Offsets) to memory
+ *
+ * The motivation for this class is to allow remote log manager to create the RemoteLogSegmentMetadata(RLSM)
+ * with the correct leader epoch info for a specific segment. To do that, we need to rely on the LeaderEpochCheckpointCache
+ * to truncate from start and end, to get the epoch info. However, we don't really want to truncate the epochs in cache
+ * (and write to checkpoint file in the end). So, we introduce this InMemoryLeaderEpochCheckpoint to feed into LeaderEpochCheckpointCache,
+ * and when we truncate the epoch for RLSM, we can do them in memory without affecting the checkpoint file, and without interacting with file system.
  */
 public class InMemoryLeaderEpochCheckpoint implements LeaderEpochCheckpoint {
     private List<EpochEntry> epochs = new ArrayList<>();

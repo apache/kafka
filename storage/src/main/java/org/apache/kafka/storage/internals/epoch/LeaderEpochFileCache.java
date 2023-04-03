@@ -406,15 +406,15 @@ public class LeaderEpochFileCache {
     }
 
     private void flushTo(LeaderEpochCheckpoint leaderEpochCheckpoint, Collection<EpochEntry> epochEntries) {
-        lock.readLock().lock();
-        try {
-            leaderEpochCheckpoint.write(epochEntries);
-        } finally {
-            lock.readLock().unlock();
-        }
+        leaderEpochCheckpoint.write(epochEntries);
     }
 
     private void flush() {
-        flushTo(this.checkpoint, epochs.values());
+        lock.readLock().lock();
+        try {
+            flushTo(this.checkpoint, epochs.values());
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 }
