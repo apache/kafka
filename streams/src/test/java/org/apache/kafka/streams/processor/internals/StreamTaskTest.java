@@ -94,6 +94,7 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -123,6 +124,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @RunWith(EasyMockRunner.class)
 public class StreamTaskTest {
@@ -1551,9 +1558,9 @@ public class StreamTaskTest {
         stateManager.checkpoint();
         EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogOffsets())
-                .andReturn(singletonMap(changelogPartition, 10L)) // restoration checkpoint
-                .andReturn(singletonMap(changelogPartition, 10L))
-                .andReturn(singletonMap(changelogPartition, 20L));
+            .andReturn(singletonMap(changelogPartition, 10L)) // restoration checkpoint
+            .andReturn(singletonMap(changelogPartition, 10L))
+            .andReturn(singletonMap(changelogPartition, 20L));
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager, recordCollector);
 
@@ -1591,7 +1598,8 @@ public class StreamTaskTest {
         task = createStatefulTask(createConfig("100"), true);
 
         task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { });
+        task.completeRestoration(noOpResetter -> {
+        });
         task.prepareCommit();
         task.postCommit(true);
 
@@ -1699,9 +1707,9 @@ public class StreamTaskTest {
         final TopicPartition repartition = new TopicPartition("repartition", 1);
 
         final ProcessorTopology topology = withRepartitionTopics(
-                asList(source1, source2),
-                mkMap(mkEntry(topic1, source1), mkEntry(repartition.topic(), source2)),
-                singleton(repartition.topic())
+            asList(source1, source2),
+            mkMap(mkEntry(topic1, source1), mkEntry(repartition.topic(), source2)),
+            singleton(repartition.topic())
         );
         consumer.assign(asList(partition1, repartition));
         consumer.updateBeginningOffsets(mkMap(mkEntry(repartition, 0L)));
@@ -1713,31 +1721,30 @@ public class StreamTaskTest {
 
         final StreamsConfig config = createConfig();
         final InternalProcessorContext context = new ProcessorContextImpl(
-                taskId,
-                config,
-                stateManager,
-                streamsMetrics,
-                null
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
         );
 
         task = new StreamTask(
-                taskId,
-                mkSet(partition1, repartition),
-                topology,
-                consumer,
-                new TopologyConfig(null, config, new Properties()).getTaskConfig(),
-                streamsMetrics,
-                stateDirectory,
-                cache,
-                time,
-                stateManager,
-                recordCollector,
-                context,
-                logContext);
+            taskId,
+            mkSet(partition1, repartition),
+            topology,
+            consumer,
+            new TopologyConfig(null, config, new Properties()).getTaskConfig(),
+            streamsMetrics,
+            stateDirectory,
+            cache,
+            time,
+            stateManager,
+            recordCollector,
+            context,
+            logContext);
 
         task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> {
-        });
+        task.completeRestoration(noOpResetter -> { });
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 5L)));
         task.addRecords(repartition, singletonList(getConsumerRecordWithOffsetAsTimestamp(repartition, 10L)));
@@ -2506,31 +2513,45 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void testRestoration_CheckpointWrittenWhenEOSDisabled() {
-        EasyMock.expect(stateManager.changelogOffsets())
-                .andReturn(singletonMap(partition1, 0L)); // restoration checkpoint
-        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap());
-        stateManager.checkpoint();
-        EasyMock.expectLastCall().once(); // checkpoint should only be called once
-        EasyMock.replay(stateManager, recordCollector);
+    public void shouldCheckpointAfterRestorationWhenAtLeastOnceEnabled() {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+        doReturn(singletonMap(partition1, 1L)).when(recordCollector).offsets();
 
-        task = createStatefulTask(createConfig(AT_LEAST_ONCE, "100"), true);
+        task = createStatefulTask(createConfig(AT_LEAST_ONCE, "100"), true, processorStateManager);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        EasyMock.verify(stateManager);
+        verify(processorStateManager, times(1)).checkpoint();
+        verify(recordCollector, times(1)).offsets();
     }
 
     @Test
-    public void testRestoration_CheckpointNotWrittenWhenEOSEnabled() {
-        stateManager.checkpoint();
-        EasyMock.expectLastCall().andStubThrow(new AssertionError("should not checkpoint on EOS"));
-        stateManager.changelogOffsets();
-        EasyMock.expectLastCall().andStubThrow(new AssertionError("should not checkpoint on EOS"));
-        EasyMock.replay(stateManager, recordCollector);
+    public void shouldNotCheckpointAfterRestorationWhenExactlyOnceEnabled() {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
 
-        task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true);
+        task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true, processorStateManager);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
+        verify(processorStateManager, never()).checkpoint();
+        verify(processorStateManager, never()).changelogOffsets();
+        verify(recordCollector, never()).offsets();
+    }
+
+    private ProcessorStateManager mockStateManager() {
+        final ProcessorStateManager manager = spy(new ProcessorStateManager(
+            taskId,
+            Task.TaskType.STANDBY,
+            false,
+            logContext,
+            stateDirectory,
+            new MockChangelogReader(),
+            emptyMap(),
+            emptySet(),
+            false));
+        doReturn(TaskType.ACTIVE).when(manager).taskType();
+        doReturn(taskId).when(manager).taskId();
+        return manager;
     }
 
     private List<MetricName> getTaskMetrics() {

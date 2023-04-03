@@ -256,7 +256,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 initializeTopology();
                 processorContext.initialize();
                 if (!eosEnabled) {
-                    maybeCheckpoint(true); // enforce checkpoint upon completing restoration
+                    maybeCheckpoint(true);
                 }
 
                 transitionTo(State.RUNNING);
