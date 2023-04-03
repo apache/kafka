@@ -23,7 +23,7 @@ import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
-import kafka.network.{DataPlaneAcceptor, NetworkUtils, SocketServer}
+import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
@@ -251,9 +251,9 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
-      val interBrokerSendLogContext = new LogContext(s"[InterBrokerSender broker=${config.brokerId}]")
-      val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSendLogContext)
-      interBrokerSender = new InterBrokerSender("InterBrokerSender", networkClient, config.requestTimeoutMs, time)
+      val interBrokerSenderLogContext = new LogContext(s"[InterBrokerSender broker=${config.brokerId}]")
+      val interBrokerNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSenderLogContext)
+      interBrokerSender = new InterBrokerSender("InterBrokerSender", interBrokerNetworkClient, config.requestTimeoutMs, time)
       interBrokerSender.start()
 
       this._replicaManager = new ReplicaManager(

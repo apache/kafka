@@ -163,7 +163,7 @@ class InterBrokerSender(
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-abstract class InterBrokerRequestManager() {
+abstract class InterBrokerRequestManager {
   
   var interBrokerSender: InterBrokerSender = _
 

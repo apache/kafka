@@ -67,7 +67,7 @@ class TransactionMarkerChannelManager(
   metadataCache: MetadataCache,
   txnStateManager: TransactionStateManager,
   time: Time
-) extends InterBrokerRequestManager()
+) extends InterBrokerRequestManager
   with Logging {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)

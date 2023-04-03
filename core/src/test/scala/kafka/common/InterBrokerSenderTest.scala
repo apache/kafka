@@ -50,7 +50,7 @@ class InterBrokerSenderTest {
       queue += request
     }
 
-    class TestInterBrokerRequestManager extends InterBrokerRequestManager() {
+    class TestInterBrokerRequestManager extends InterBrokerRequestManager {
       override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
         if (queue.isEmpty) {
           None

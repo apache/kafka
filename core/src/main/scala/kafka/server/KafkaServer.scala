@@ -29,7 +29,7 @@ import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsReporter
 import kafka.log.remote.RemoteLogManager
-import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, NetworkUtils, RequestChannel, SocketServer}
+import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
@@ -358,9 +358,9 @@ class KafkaServer(
         }
         alterPartitionManager.start()
 
-        val interBrokerSendLogContext = new LogContext(s"[InterBrokerSender broker=${config.brokerId}]")
-        val networkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSendLogContext)
-        interBrokerSender = new InterBrokerSender("InterBrokerSender", networkClient, config.requestTimeoutMs, time)
+        val interBrokerSenderLogContext = new LogContext(s"[InterBrokerSender broker=${config.brokerId}]")
+        val interBrokerNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("InterBrokerSendClient", config, metrics, time, interBrokerSenderLogContext)
+        interBrokerSender = new InterBrokerSender("InterBrokerSender", interBrokerNetworkClient, config.requestTimeoutMs, time)
         interBrokerSender.start()
 
         // Start replica manager

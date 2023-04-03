@@ -69,7 +69,7 @@ private[raft] class RaftSendThread(
   
   addRequestManager(new RaftRequestManager)
 
-  class RaftRequestManager extends InterBrokerRequestManager() {
+  class RaftRequestManager extends InterBrokerRequestManager {
     def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       val buffer = mutable.Buffer[RequestAndCompletionHandler]()
       while (true) {
