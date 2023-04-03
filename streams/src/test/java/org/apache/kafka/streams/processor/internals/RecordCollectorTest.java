@@ -1394,12 +1394,12 @@ public class RecordCollectorTest {
     public void testCollectorFlush_ThrowsStreamsExceptionUsingDefaultExceptionHandler() {
         final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
         final RecordCollector collector = new RecordCollectorImpl(
-                logContext,
-                taskId,
-                streamsProducer,
-                new DefaultProductionExceptionHandler(),
-                streamsMetrics,
-                topology
+            logContext,
+            taskId,
+            streamsProducer,
+            new DefaultProductionExceptionHandler(),
+            streamsMetrics,
+            topology
         );
         collector.initialize();
         collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context);
@@ -1410,12 +1410,12 @@ public class RecordCollectorTest {
     public void testCollectorFlush_DoesNotThrowStreamsExceptionUsingAlwaysContinueExceptionHandler() {
         final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
         final RecordCollector collector = new RecordCollectorImpl(
-                logContext,
-                taskId,
-                streamsProducer,
-                new AlwaysContinueProductionExceptionHandler(),
-                streamsMetrics,
-                topology
+            logContext,
+            taskId,
+            streamsProducer,
+            new AlwaysContinueProductionExceptionHandler(),
+            streamsMetrics,
+            topology
         );
         collector.initialize();
         collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);

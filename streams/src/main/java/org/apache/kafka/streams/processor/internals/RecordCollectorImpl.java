@@ -229,13 +229,13 @@ public class RecordCollectorImpl implements RecordCollector {
             }
 
             log.info("Unable to serialize {}. Continue processing. " +
-                            "ProducerRecord(key=[{}], value=[{}], topic=[{}], partition=[{}], timestamp=[{}])",
-                    keyBytes == null ? "key" : "value",
-                    key,
-                    value,
-                    topic,
-                    partition,
-                    timestamp);
+                    "ProducerRecord(key=[{}], value=[{}], topic=[{}], partition=[{}], timestamp=[{}])",
+                keyBytes == null ? "key" : "value",
+                key,
+                value,
+                topic,
+                partition,
+                timestamp);
         } catch (final RuntimeException exception) {
             final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
             throw new StreamsException(errorMessage, exception);
