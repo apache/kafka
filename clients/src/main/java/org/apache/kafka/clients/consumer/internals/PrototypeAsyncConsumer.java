@@ -41,7 +41,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -556,7 +555,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (this.shouldWakeup.get()) {
                 this.shouldWakeup.set(false);
                 future.wakeup();
-                throw new WakeupException();
             }
             // Maybe Thread.sleep?
         } while (!timer.isExpired());
