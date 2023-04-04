@@ -21,12 +21,11 @@ import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.common._
-import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
 import org.apache.kafka.server.common.CheckpointFile.CheckpointWriteBuffer
-import org.apache.kafka.server.log.remote.metadata.storage.{ClassLoaderAwareRemoteLogMetadataManager, TopicBasedRemoteLogMetadataManagerConfig}
+import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
@@ -201,6 +200,61 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
 
   def storageManager(): RemoteStorageManager = {
     remoteLogStorageManager
+  }
+
+  /**
+   * Callback to receive any leadership changes for the topic partitions assigned to this broker. If there are no
+   * existing tasks for a given topic partition then it will assign new leader or follower task else it will convert the
+   * task to respective target state(leader or follower).
+   *
+   * @param partitionsBecomeLeader   partitions that have become leaders on this broker.
+   * @param partitionsBecomeFollower partitions that have become followers on this broker.
+   * @param topicIds                 topic name to topic id mappings.
+   */
+  def onLeadershipChange(partitionsBecomeLeader: Set[Partition],
+                         partitionsBecomeFollower: Set[Partition],
+                         topicIds: util.Map[String, Uuid]): Unit = {
+    debug(s"Received leadership changes for leaders: $partitionsBecomeLeader and followers: $partitionsBecomeFollower")
+
+    def filterPartitions(partitions: Set[Partition]): Set[Partition] = {
+      // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
+      partitions.filter(partition => partition.log.exists(log => log.remoteLogEnabled()))
+    }
+
+    val leaderPartitionsWithLeaderEpoch = filterPartitions(partitionsBecomeLeader)
+      .map(p => new TopicIdPartition(topicIds.get(p.topic), p.topicPartition) -> p.getLeaderEpoch).toMap
+    val leaderPartitions = leaderPartitionsWithLeaderEpoch.keySet
+
+    val followerPartitions = filterPartitions(partitionsBecomeFollower)
+      .map(p => new TopicIdPartition(topicIds.get(p.topic), p.topicPartition))
+
+    def cacheTopicPartitionIds(topicIdPartition: TopicIdPartition): Unit = {
+      val previousTopicId = topicPartitionIds.put(topicIdPartition.topicPartition(), topicIdPartition.topicId())
+      if (previousTopicId != null && previousTopicId != topicIdPartition.topicId()) {
+        warn(s"Previous cached topic id $previousTopicId for ${topicIdPartition.topicPartition()} does " +
+          s"not match update topic id ${topicIdPartition.topicId()}")
+      }
+    }
+
+    if (leaderPartitions.nonEmpty || followerPartitions.nonEmpty) {
+      debug(s"Effective topic partitions after filtering compact and internal topics, " +
+        s"leaders: ${leaderPartitions} and followers: $followerPartitions")
+
+      leaderPartitions.foreach(cacheTopicPartitionIds)
+      followerPartitions.foreach(cacheTopicPartitionIds)
+
+      remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions.asJava, followerPartitions.asJava)
+      followerPartitions.foreach {
+        topicIdPartition => {
+          doHandleLeaderOrFollowerPartitions(topicIdPartition, _.convertToFollower())
+        }
+      }
+
+      leaderPartitionsWithLeaderEpoch.foreach {
+        case (topicIdPartition, leaderEpoch) =>
+          doHandleLeaderOrFollowerPartitions(topicIdPartition, _.convertToLeader(leaderEpoch))
+      }
+    }
   }
 
   /**
@@ -528,62 +582,6 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
       RLMTaskWithFuture(task, future)
     })
     convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
-  }
-
-  /**
-   * Callback to receive any leadership changes for the topic partitions assigned to this broker. If there are no
-   * existing tasks for a given topic partition then it will assign new leader or follower task else it will convert the
-   * task to respective target state(leader or follower).
-   *
-   * @param partitionsBecomeLeader   partitions that have become leaders on this broker.
-   * @param partitionsBecomeFollower partitions that have become followers on this broker.
-   * @param topicIds                 topic name to topic id mappings.
-   */
-  def onLeadershipChange(partitionsBecomeLeader: Set[Partition],
-                         partitionsBecomeFollower: Set[Partition],
-                         topicIds: util.Map[String, Uuid]): Unit = {
-    trace(s"Received leadership changes for partitionsBecomeLeader: $partitionsBecomeLeader " +
-      s"and partitionsBecomeLeader: $partitionsBecomeLeader")
-
-    // Partitions logs are available when this callback is invoked.
-    // Compact topics and internal topics are filtered here as they are not supported with tiered storage.
-    def nonSupported(partition: Partition): Boolean = {
-      Topic.isInternal(partition.topic) ||
-        partition.log.exists(log => log.config.compact || !log.config.remoteLogConfig.remoteStorageEnable) ||
-        partition.topicPartition.topic().equals(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME)
-    }
-
-    val leaderPartitions = partitionsBecomeLeader.filterNot(nonSupported)
-      .map(p => new TopicIdPartition(topicIds.get(p.topic), p.topicPartition) -> p).toMap
-    val followerPartitions = partitionsBecomeFollower.filterNot(nonSupported)
-      .map(p => new TopicIdPartition(topicIds.get(p.topic), p.topicPartition))
-
-    def cacheTopicPartitionIds(topicIdPartition: TopicIdPartition): Unit = {
-      val previousTopicId = topicPartitionIds.put(topicIdPartition.topicPartition(), topicIdPartition.topicId())
-      if (previousTopicId != null && previousTopicId != topicIdPartition.topicId()) {
-        warn(s"Previous cached topic id $previousTopicId for ${topicIdPartition.topicPartition()} does " +
-          s"not match update topic id ${topicIdPartition.topicId()}")
-      }
-    }
-
-    if (leaderPartitions.nonEmpty || followerPartitions.nonEmpty) {
-      debug(s"Effective topic partitions after filtering compact and internal topics, " +
-        s"leaders: ${leaderPartitions.keySet} and followers: $followerPartitions")
-
-      leaderPartitions.keySet.foreach(cacheTopicPartitionIds)
-      followerPartitions.foreach(cacheTopicPartitionIds)
-
-      remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions.keySet.asJava, followerPartitions.asJava)
-      followerPartitions.foreach {
-        topicIdPartition => {
-          doHandleLeaderOrFollowerPartitions(topicIdPartition, _.convertToFollower())
-        }
-      }
-      leaderPartitions.foreach {
-        case (topicIdPartition, partition) =>
-          doHandleLeaderOrFollowerPartitions(topicIdPartition, _.convertToLeader(partition.getLeaderEpoch))
-      }
-    }
   }
 
   case class RLMTaskWithFuture(rlmTask: RLMTask, future: Future[_]) {
