@@ -131,11 +131,11 @@ public class OffsetSyncStoreTest {
 
             // We can translate offsets between the latest startup offset and the latest offset with variable precision
             // Older offsets are less precise and translation ends up farther apart
-            assertSparseSync(store, 1030, 1000);
-            assertSparseSync(store, 1540, 1030);
-            assertSparseSync(store, 1800, 1540);
+            assertSparseSync(store, 1640, 1000);
+            assertSparseSync(store, 1800, 1640);
             assertSparseSync(store, 1920, 1800);
-            assertSparseSync(store, 1990, 1920);
+            assertSparseSync(store, 1960, 1920);
+            assertSparseSync(store, 1990, 1960);
             assertSparseSync(store, 2000, 1990);
 
             // Rewind upstream offsets should clear all historical syncs
@@ -158,17 +158,24 @@ public class OffsetSyncStoreTest {
             for (int i = 0; i <= j; i++) {
                 long jUpstream = store.syncFor(topicPartition, j).upstreamOffset();
                 long iUpstream = store.syncFor(topicPartition, i).upstreamOffset();
+                if (jUpstream == iUpstream) {
+                    continue;
+                }
+                long iUpstreamLowerBound = jUpstream + (1L << (i - 1));
+                if (iUpstreamLowerBound < 0) {
+                    continue;
+                }
                 assertTrue(
-                        jUpstream <= iUpstream,
-                        "Upstream offset " + iUpstream + " at position " + i
-                                + " should be at least as recent as offset " + jUpstream + " at position " + j
+                        iUpstreamLowerBound <= iUpstream,
+                        "Invariant C(" + i + "," + j + "): Upstream offset " + iUpstream + " at position " + i
+                                + " should be at least " + iUpstreamLowerBound + " (" + jUpstream + " + 2^" + (i - 1) + ")"
                 );
-                long iUpstreamBound = jUpstream + (1L << j);
+                long iUpstreamBound = jUpstream + (1L << j) - (1L << i);
                 if (iUpstreamBound < 0)
                     continue;
                 assertTrue(
                         iUpstream < iUpstreamBound,
-                        "Upstream offset " + iUpstream + " at position " + i
+                        "Invariant B(" + i + "," + j + "): Upstream offset " + iUpstream + " at position " + i
                                 + " should be no greater than " + iUpstreamBound + " (" + jUpstream + " + 2^" + j + ")"
                 );
             }

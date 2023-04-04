@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;

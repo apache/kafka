@@ -42,8 +42,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * This maintains the following invariants for each topic-partition in the in-memory sync storage:
  * <ul>
  *     <li>Invariant A: syncs[0] is the latest offset sync from the syncs topic</li>
- *     <li>Invariant B: For each i,j, i <= j: syncs[j].upstream <= syncs[i].upstream < syncs[j].upstream + 2^j</li>
+ *     <li>Invariant B: For each i,j, i < j, syncs[i] != syncs[j]: syncs[i].upstream < syncs[j].upstream + 2^j - 2^i</li>
+ *     <li>Invariant C: For each i,j, i < j, syncs[i] != syncs[j]: syncs[j].upstream + 2^(i-1) <= syncs[i].upstream</li>
  * </ul>
+ * <p>The above invariants ensure that the store is kept updated upon receipt of each sync, and that distinct
+ * offset syncs are separated by approximately exponential space. They can be checked locally (by comparing all adjacent
+ * indexes) but hold globally (for all pairs of any distance). This allows updates to the store in linear time.
  * <p>Offset translation uses the syncs[i] which most closely precedes the upstream consumer group's current offset.
  * For a fixed in-memory state, translation of variable upstream offsets will be monotonic.
  * For variable in-memory state, translation of a fixed upstream offset will not be monotonic.
@@ -214,6 +218,7 @@ class OffsetSyncStore implements AutoCloseable {
     }
 
     private void clearSyncArray(OffsetSync[] syncs, OffsetSync offsetSync) {
+        // If every element of the store is the same, then it satisfies invariants B and C trivially.
         for (int i = 0; i < SYNCS_PER_PARTITION; i++) {
             syncs[i] = offsetSync;
         }
@@ -226,35 +231,57 @@ class OffsetSyncStore implements AutoCloseable {
             clearSyncArray(syncs, offsetSync);
             return;
         }
-        // Invariant A: the latest sync must always be updated
-        syncs[0] = offsetSync;
-        for (int i = 1; i < SYNCS_PER_PARTITION; i++) {
-            OffsetSync oldValue = syncs[i];
-            long mask = Long.MAX_VALUE << i;
-            // This produces buckets quantized at boundaries of powers of 2
-            // Syncs:     a                  b             c       d   e
-            // Bucket 0  |a|                |b|           |c|     |d| |e|                   (size    1)
-            // Bucket 1 | a|               | b|           |c |    |d | e|                   (size    2)
-            // Bucket 2 | a  |           |   b|         |  c |  |  d |   |                  (size    4)
-            // Bucket 3 | a      |       |   b   |      |  c    |  d     |                  (size    8)
-            // Bucket 4 | a              |   b          |  c             |                  (size   16)
-            // Bucket 5 | a                             |  c                             |  (size   32)
-            // Bucket 6 | a                                                              |  (size   64)
-            // ...        a                                                                 ...
-            // Bucket63   a                                                                 (size 2^63)
-            // State after a: [a,,,,,,, ... ,a] (all buckets written)
-            // State after b: [b,,,,,a,, ... ,a] (buckets 0-4 written)
-            // State after c: [c,,,,,,a, ... ,a] (buckets 0-5 written, b expired completely)
-            // State after d: [d,,,,c,,a, ... ,a] (buckets 0-3 written)
-            // State after e: [e,,d,,c,,a, ... ,a] (buckets 0-1 written)
-            // Invariant B: If the old value is too stale, replace it with the most recent sync.
-            // Test if the invariant fails by bitwise XOR, and then testing if any of the 64-i high bits have changed
-            if (((oldValue.upstreamOffset() ^ upstreamOffset) & mask) != 0) {
-                syncs[i] = offsetSync;
-            } else {
+        OffsetSync replacement = offsetSync;
+        OffsetSync oldValue = syncs[0];
+        // Invariant A is always violated once a new sync appears.
+        // Repair Invariant A: the latest sync must always be updated
+        syncs[0] = replacement;
+        for (int current = 1; current < SYNCS_PER_PARTITION; current++) {
+            int previous = current - 1;
+
+            // Consider using oldValue instead of replacement, which allows us to keep more distinct values stored
+            // If oldValue is not recent, it should be expired from the store
+            boolean isRecent = invariantB(syncs[previous], oldValue, previous, current);
+            // Ensure that this value is sufficiently separated from the previous value
+            // We prefer to keep more recent syncs of similar precision (i.e. the value in replacement)
+            boolean separatedFromPrevious = invariantC(syncs[previous], oldValue, previous, current);
+            // Ensure that this value is sufficiently separated from the next value
+            // We prefer to keep existing syncs of lower precision (i.e. the value in syncs[next])
+            int next = current + 1;
+            boolean separatedFromNext = next >= SYNCS_PER_PARTITION || invariantC(oldValue, syncs[next], current, next);
+            // If this condition is false, oldValue will be expired from the store and lost forever.
+            if (isRecent && separatedFromPrevious && separatedFromNext) {
+                replacement = oldValue;
+            }
+
+            // The replacement variable always contains a value which satisfies the invariants for this index.
+            assert invariantB(syncs[previous], replacement, previous, current);
+            assert invariantC(syncs[previous], replacement, previous, current);
+
+            // Test if changes to the previous index affected the invariant for this index
+            if (invariantB(syncs[previous], syncs[current], previous, current)) {
+                // Invariant B holds for syncs[current]: it must also hold for all later values
                 break;
+            } else {
+                // Invariant B violated for syncs[current]: sync is now too old and must be updated
+                // Repair Invariant B: swap in replacement, and save the old value for the next iteration
+                oldValue = syncs[current];
+                syncs[current] = replacement;
+
+                assert invariantB(syncs[previous], syncs[current], previous, current);
+                assert invariantC(syncs[previous], syncs[current], previous, current);
             }
         }
+    }
+
+    private boolean invariantB(OffsetSync iSync, OffsetSync jSync, int i, int j) {
+        long bound = jSync.upstreamOffset() + (1L << j) - (1L << i);
+        return iSync == jSync || bound < 0 || iSync.upstreamOffset() < bound;
+    }
+
+    private boolean invariantC(OffsetSync iSync, OffsetSync jSync, int i, int j) {
+        long bound = jSync.upstreamOffset() + (1L << (i - 1));
+        return iSync == jSync || bound < 0 || bound <= iSync.upstreamOffset();
     }
 
     private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition, long upstreamOffset) {
