@@ -1536,7 +1536,7 @@ public class KafkaStreams implements AutoCloseable {
                     removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
                         .get(remainingTimeMs, TimeUnit.MILLISECONDS);
                 } catch (final Exception e) {
-                    log.error("Could not remove static member {} from consumer group {} due to a: {}",
+                    log.error("Could not remove static member {} from consumer group {} due to:",
                         groupInstanceId.get(),
                         applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
                 }
