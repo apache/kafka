@@ -555,7 +555,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
             if (this.shouldWakeup.get()) {
                 this.shouldWakeup.set(false);
-                future.cancel(true);
+                future.wakeup();
                 throw new WakeupException();
             }
             // Maybe Thread.sleep?
