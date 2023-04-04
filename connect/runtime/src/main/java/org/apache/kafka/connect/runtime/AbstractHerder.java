@@ -842,7 +842,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigDef pluginConfigDefs;
             switch (pluginType) {
                 case SINK:
-                    baseConfigDefs = SourceConnectorConfig.configDef();
+                    baseConfigDefs = SinkConnectorConfig.configDef();
                     pluginConfigDefs = ((SinkConnector) plugin).config();
                     break;
                 case SOURCE:
