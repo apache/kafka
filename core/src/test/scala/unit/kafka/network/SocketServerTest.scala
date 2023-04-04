@@ -1122,7 +1122,8 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      def getTotalTimeBucketHistCount(): Map[Int, Long] = requestMetrics.totalTimeBucketHist.boundaryCounterMap
+      assertTrue(requestMetrics.totalTimeBucketHist.isDefined)
+      def getTotalTimeBucketHistCount(): Map[Int, Long] = requestMetrics.totalTimeBucketHist.get.boundaryCounterMap
         .map({case (boundary, (name, counter)) => (boundary, counter.count())}).toMap
       val originalTotalTimeBucketHistCount = getTotalTimeBucketHistCount()
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))

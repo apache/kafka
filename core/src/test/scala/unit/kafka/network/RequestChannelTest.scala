@@ -363,7 +363,11 @@ class RequestChannelTest {
     props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     props.put(KafkaConfig.RequestMetricsTotalTimeBucketsProp, "0, 10, 30, 300")
     val config = KafkaConfig.fromProps(props)
-    val requestMetrics = new RequestMetrics("RequestMetrics", config)
+    // totalTimeBucketHist is only enabled for Produce/Fetch related requests.
+    val requestMetricsNoTotalTimeBucketHist = new RequestMetrics("RequestMetrics", config)
+    assertTrue(requestMetricsNoTotalTimeBucketHist.totalTimeBucketHist.isEmpty)
+    val requestMetrics = new RequestMetrics("FetchConsumer", config)
+    assertTrue(requestMetrics.totalTimeBucketHist.isDefined)
     val boundaries = Array(0, 10, 30, 300)
     val histogram = new requestMetrics.Histogram("TotalTime", "Ms", boundaries)
     val counterMap = histogram.boundaryCounterMap
@@ -411,9 +415,9 @@ class RequestChannelTest {
     histogram.update(-1)
     testHistogramCounts(counterMap, Array(3, 3, 2, 2), boundaries)
 
-    assertEquals(4, requestMetrics.totalTimeBucketHist.boundaryCounterMap.size())
-    assertTrue(requestMetrics.totalTimeBucketHist.boundaryCounterMap.containsKey(300))
-    assertEquals("TotalTime_Bin4_300MsGreater", requestMetrics.totalTimeBucketHist.boundaryCounterMap.get(300)._1)
+    assertEquals(4, requestMetrics.totalTimeBucketHist.get.boundaryCounterMap.size())
+    assertTrue(requestMetrics.totalTimeBucketHist.get.boundaryCounterMap.containsKey(300))
+    assertEquals("TotalTime_Bin4_300MsGreater", requestMetrics.totalTimeBucketHist.get.boundaryCounterMap.get(300)._1)
   }
 
   private def testHistogramCounts(counterMap: util.TreeMap[Int, (String, Counter)], counts: Array[Int],

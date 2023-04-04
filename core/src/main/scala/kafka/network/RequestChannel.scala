@@ -337,7 +337,7 @@ object RequestChannel extends Logging {
         m.responseQueueTimeHist.update(Math.round(responseQueueTimeMs))
         m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
         m.totalTimeHist.update(Math.round(totalTimeMs))
-        m.totalTimeBucketHist.update(totalTimeMs)
+        m.totalTimeBucketHist.foreach(_.update(totalTimeMs))
         m.requestBytesHist.update(sizeOfBodyInBytes)
         m.responseBytesHist.update(responseBytes)
         m.messageConversionsTimeHist.foreach(_.update(Math.round(messageConversionsTimeMs)))
@@ -749,8 +749,13 @@ class RequestMetrics(name: String, config: KafkaConfig) extends KafkaMetricsGrou
     else
       None
 
-  // metrics to count the number of requests in different total time buckets.
-  val totalTimeBucketHist = new Histogram("TotalTime", "Ms", config.requestMetricsTotalTimeBuckets)
+  // metrics to count the number of requests in different total time buckets. Only populated for fetch and produce
+  // requests (including sub-categories, e.g., FetchConsumer, Produce0To1MbAck1)
+  val totalTimeBucketHist =
+    if (name.startsWith(ApiKeys.FETCH.name) || name.startsWith(ApiKeys.PRODUCE.name))
+      Some(new Histogram("TotalTime", "Ms", config.requestMetricsTotalTimeBuckets))
+    else
+      None
 
   private val errorMeters = mutable.Map[Errors, ErrorMeter]()
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
@@ -844,6 +849,6 @@ class RequestMetrics(name: String, config: KafkaConfig) extends KafkaMetricsGrou
     }
     errorMeters.values.foreach(_.removeMeter())
     errorMeters.clear()
-    totalTimeBucketHist.removeHistogram()
+    totalTimeBucketHist.foreach(_.removeHistogram())
   }
 }
