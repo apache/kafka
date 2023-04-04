@@ -36,21 +36,17 @@ class InterBrokerSenderTest {
   private val networkClient: NetworkClient = mock(classOf[NetworkClient])
   private val completionHandler = new StubCompletionHandler
   private val requestTimeoutMs = 1000
-  private var requestManager: InterBrokerRequestManager = _
 
   class TestInterBrokerSender(networkClient: NetworkClient = networkClient,
                               exceptionCallback: Throwable => Unit = t => throw t)
     extends InterBrokerSender("name", networkClient, requestTimeoutMs, time) {
     private val queue = mutable.Queue[RequestAndCompletionHandler]()
-    requestManager = new TestInterBrokerRequestManager
-
-    addRequestManager(requestManager)
 
     def enqueue(request: RequestAndCompletionHandler): Unit = {
       queue += request
     }
 
-    class TestInterBrokerRequestManager extends InterBrokerRequestManager {
+    class TestInterBrokerRequestManager(interBrokerSender: InterBrokerSender) extends InterBrokerRequestManager(interBrokerSender) {
       override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
         if (queue.isEmpty) {
           None

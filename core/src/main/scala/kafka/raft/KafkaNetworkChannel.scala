@@ -66,10 +66,9 @@ private[raft] class RaftSendThread(
   isInterruptible
 ) {
   private val queue = new ConcurrentLinkedQueue[RequestAndCompletionHandler]()
-  
-  addRequestManager(new RaftRequestManager)
+  new RaftRequestManager
 
-  class RaftRequestManager extends InterBrokerRequestManager {
+  class RaftRequestManager extends InterBrokerRequestManager(this) {
     def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       val buffer = mutable.Buffer[RequestAndCompletionHandler]()
       while (true) {

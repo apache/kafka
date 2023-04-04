@@ -51,7 +51,6 @@ class InterBrokerSender(
 
   def addRequestManager(requestManager: InterBrokerRequestManager): Unit = {
     requestManagers.add(requestManager)
-    requestManager.interBrokerSender = this
   }
 
   override def shutdown(): Unit = {
@@ -163,9 +162,9 @@ class InterBrokerSender(
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-abstract class InterBrokerRequestManager {
+abstract class InterBrokerRequestManager(val interBrokerSender: InterBrokerSender) {
   
-  var interBrokerSender: InterBrokerSender = _
+  interBrokerSender.addRequestManager(this)
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
 

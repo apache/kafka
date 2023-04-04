@@ -308,8 +308,7 @@ class BrokerToControllerRequestThread(
   time,
   isInterruptible = false
 ) {
-  
-  addRequestManager(new ControllerRequestManager)
+  new ControllerRequestManager
 
   private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
     if (isNetworkClientForZkController != controllerInformation.isZkController) {
@@ -356,7 +355,7 @@ class BrokerToControllerRequestThread(
     requestQueue.size
   }
   
-  class ControllerRequestManager extends InterBrokerRequestManager() {
+  class ControllerRequestManager extends InterBrokerRequestManager(this) {
     override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       val currentTimeMs = time.milliseconds()
       val requestIter = requestQueue.iterator()

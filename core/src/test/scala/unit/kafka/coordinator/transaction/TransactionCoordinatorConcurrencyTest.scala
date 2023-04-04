@@ -99,6 +99,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       KafkaConfig.fromProps(serverProps),
       metadataCache,
       txnStateManager,
+      interBrokerSender,
       time)
 
     transactionCoordinator = new TransactionCoordinator(

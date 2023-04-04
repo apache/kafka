@@ -18,8 +18,7 @@ package kafka.coordinator.transaction
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-
-import kafka.common.{InterBrokerRequestManager, RequestAndCompletionHandler}
+import kafka.common.{InterBrokerRequestManager, InterBrokerSender, RequestAndCompletionHandler}
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
@@ -66,8 +65,9 @@ class TransactionMarkerChannelManager(
   config: KafkaConfig,
   metadataCache: MetadataCache,
   txnStateManager: TransactionStateManager,
+  interBrokerSender: InterBrokerSender,
   time: Time
-) extends InterBrokerRequestManager
+) extends InterBrokerRequestManager(interBrokerSender)
   with Logging {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)

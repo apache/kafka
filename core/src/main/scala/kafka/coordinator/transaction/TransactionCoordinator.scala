@@ -61,9 +61,8 @@ object TransactionCoordinator {
       time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
-    val txnMarkerChannelManager = new TransactionMarkerChannelManager(config, metadataCache, txnStateManager,
+    val txnMarkerChannelManager = new TransactionMarkerChannelManager(config, metadataCache, txnStateManager, interBrokerSender,
       time)
-    interBrokerSender.addRequestManager(txnMarkerChannelManager)
 
     new TransactionCoordinator(txnConfig, scheduler, createProducerIdGenerator, txnStateManager, txnMarkerChannelManager,
       time, logContext)
