@@ -51,6 +51,7 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.storage.PrivilegedWriteException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -291,6 +292,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
+        // Thread factory uses String.format and '%' is handled as a placeholder
+        // need to escape if the client.id contains an actual % character
+        String escapedClientIdForThreadNameFormat = clientId.replace("%", "%%");
         LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + this.workerGroupId + "] ");
         log = logContext.logger(DistributedHerder.class);
 
@@ -303,17 +307,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 TimeUnit.MILLISECONDS,
                 new LinkedBlockingDeque<>(1),
                 ThreadUtils.createThreadFactory(
-                        this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
+                        this.getClass().getSimpleName() + "-" + escapedClientIdForThreadNameFormat + "-%d", false));
 
         this.forwardRequestExecutor = forwardRequestExecutor != null
                 ? forwardRequestExecutor
                 : Executors.newFixedThreadPool(
                         1,
-                        ThreadUtils.createThreadFactory("ForwardRequestExecutor-" + clientId + "-%d", false)
+                        ThreadUtils.createThreadFactory("ForwardRequestExecutor-" + escapedClientIdForThreadNameFormat + "-%d", false)
                 );
         this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE,
                 ThreadUtils.createThreadFactory(
-                        "StartAndStopExecutor-" + clientId + "-%d", false));
+                        "StartAndStopExecutor-" + escapedClientIdForThreadNameFormat + "-%d", false));
         this.config = config;
 
         stopping = new AtomicBoolean(false);
@@ -1477,6 +1481,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Restarted {} of {} tasks for {} as requested", assignedIdsToRestart.size(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
+    }
+
+    @Override
+    public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        log.trace("Submitting offset fetch request for connector: {}", connName);
+        // Handle this in the tick thread to avoid concurrent calls to the Worker
+        addRequest(
+                () -> {
+                    super.connectorOffsets(connName, cb);
+                    return null;
+                },
+                forwardErrorCallback(cb)
+        );
     }
 
     // Should only be called from work thread, so synchronization should not be needed

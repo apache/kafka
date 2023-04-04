@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -84,7 +85,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     private final long gracePeriod;
     private final RocksDBMetricsRecorder metricsRecorder;
 
-    private final RocksDBStore latestValueStore;
+    private final LogicalKeyValueSegment latestValueStore; // implemented as a "reserved segment" of the segments store
     private final LogicalKeyValueSegments segmentStores;
     private final RocksDBVersionedStoreClient versionedStoreClient;
     private final RocksDBVersionedStoreRestoreWriteBuffer restoreWriteBuffer;
@@ -106,8 +107,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // history retention >= grace period, for sound semantics.
         this.gracePeriod = historyRetention;
         this.metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
-        this.latestValueStore = new RocksDBStore(latestValueStoreName(name), name, metricsRecorder);
-        this.segmentStores = new LogicalKeyValueSegments(segmentsStoreName(name), name, historyRetention, segmentInterval, metricsRecorder);
+        // pass store name as segments name so state dir subdirectory uses the store name
+        this.segmentStores = new LogicalKeyValueSegments(name, DB_FILE_DIR, historyRetention, segmentInterval, metricsRecorder);
+        this.latestValueStore = this.segmentStores.createReservedSegment(-1L, latestValueStoreName(name));
         this.versionedStoreClient = new RocksDBVersionedStoreClient();
         this.restoreWriteBuffer = new RocksDBVersionedStoreRestoreWriteBuffer(versionedStoreClient);
     }
@@ -246,19 +248,18 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public void flush() {
-        // order shouldn't matter since failure to flush is a fatal exception
         segmentStores.flush();
-        latestValueStore.flush();
+        // flushing segments store includes flushing latest value store, since they share the
+        // same physical RocksDB instance
     }
 
     @Override
     public void close() {
         open = false;
 
-        // close latest value store first so that calls to get() immediately begin to fail with
-        // store not open, as all calls to get() first get() from latest value store
-        latestValueStore.close();
         segmentStores.close();
+        // closing segments store includes closing latest value store, since they share the
+        // same physical RocksDB instance
     }
 
     @Override
@@ -293,7 +294,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
 
-        latestValueStore.openDB(context.appConfigs(), context.stateDir());
         segmentStores.openExisting(context, observedStreamTime);
 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
@@ -927,9 +927,5 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private static String latestValueStoreName(final String storeName) {
         return storeName + ".latestValues";
-    }
-
-    private static String segmentsStoreName(final String storeName) {
-        return storeName + ".segments";
     }
 }

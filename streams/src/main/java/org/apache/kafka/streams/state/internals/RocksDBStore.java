@@ -90,7 +90,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
     private static final long BLOCK_SIZE = 4096L;
     private static final int MAX_WRITE_BUFFERS = 3;
-    private static final String DB_FILE_DIR = "rocksdb";
+    static final String DB_FILE_DIR = "rocksdb";
 
     final String name;
     private final String parentDir;
@@ -124,7 +124,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     protected Position position;
     private OffsetCheckpoint positionCheckpoint;
 
-    // VisibleForTesting
     public RocksDBStore(final String name,
                         final String metricsScope) {
         this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
@@ -424,7 +423,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         validateStoreOpen();
 
-        // End of key is exclusive, so we increment it by 1 byte to make keyTo inclusive
+        // End of key is exclusive, so we increment it by 1 byte to make keyTo inclusive.
+        // RocksDB's deleteRange() does not support a null upper bound so in the event
+        // of overflow from increment(), the operation cannot be performed and an
+        // IndexOutOfBoundsException will be thrown.
         dbAccessor.deleteRange(keyFrom.get(), Bytes.increment(keyTo).get());
     }
 
@@ -756,7 +758,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-            final Bytes to = Bytes.increment(prefix);
+            final Bytes to = incrementWithoutOverflow(prefix);
             return new RocksDBRangeIterator(
                     name,
                     db.newIterator(columnFamily),
@@ -820,5 +822,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public Position getPosition() {
         return position;
+    }
+
+    /**
+     * Same as {@link Bytes#increment(Bytes)} but {@code null} is returned instead of throwing
+     * {@code IndexOutOfBoundsException} in the event of overflow.
+     *
+     * @param input bytes to increment
+     * @return A new copy of the incremented byte array, or {@code null} if incrementing would
+     *         result in overflow.
+     */
+    static Bytes incrementWithoutOverflow(final Bytes input) {
+        try {
+            return Bytes.increment(input);
+        } catch (final IndexOutOfBoundsException e) {
+            return null;
+        }
     }
 }

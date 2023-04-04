@@ -18,12 +18,17 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class AlterPartitionRequest extends AbstractRequest {
 
@@ -77,6 +82,18 @@ public class AlterPartitionRequest extends AbstractRequest {
 
         @Override
         public AlterPartitionRequest build(short version) {
+            if (version < 3) {
+                data.topics().forEach(topicData -> {
+                    topicData.partitions().forEach(partitionData -> {
+                        List<Integer> newIsr = new ArrayList<>(partitionData.newIsrWithEpochs().size());
+                        partitionData.newIsrWithEpochs().forEach(brokerState -> {
+                            newIsr.add(brokerState.brokerId());
+                        });
+                        partitionData.setNewIsr(newIsr);
+                        partitionData.setNewIsrWithEpochs(Collections.emptyList());
+                    });
+                });
+            }
             return new AlterPartitionRequest(data, version);
         }
 
@@ -84,5 +101,9 @@ public class AlterPartitionRequest extends AbstractRequest {
         public String toString() {
             return data.toString();
         }
+    }
+
+    public static List<BrokerState> newIsrToSimpleNewIsrWithBrokerEpochs(List<Integer> newIsr) {
+        return newIsr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).collect(Collectors.toList());
     }
 }

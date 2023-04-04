@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
@@ -74,6 +75,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
@@ -956,6 +958,12 @@ public class ReplicationControlManager {
 
             TopicControlInfo topic = topics.get(topicId);
             for (AlterPartitionRequestData.PartitionData partitionData : topicData.partitions()) {
+                if (requestVersion < 3) {
+                    partitionData.setNewIsrWithEpochs(
+                        AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(partitionData.newIsr())
+                    );
+                }
+
                 int partitionId = partitionData.partitionIndex();
                 PartitionRegistration partition = topic.parts.get(partitionId);
 
@@ -986,7 +994,7 @@ public class ReplicationControlManager {
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
-                builder.setTargetIsr(partitionData.newIsr());
+                builder.setTargetIsrWithBrokerStates(partitionData.newIsrWithEpochs());
                 builder.setTargetLeaderRecoveryState(
                     LeaderRecoveryState.of(partitionData.leaderRecoveryState()));
                 Optional<ApiMessageAndVersion> record = builder.build();
@@ -1110,11 +1118,14 @@ public class ReplicationControlManager {
 
             return INVALID_UPDATE_VERSION;
         }
-        int[] newIsr = Replicas.toArray(partitionData.newIsr());
+
+        int[] newIsr = partitionData.newIsrWithEpochs().stream()
+            .mapToInt(brokerState -> brokerState.brokerId()).toArray();
+
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR {}.", brokerId,
-                    topic.name, partitionId, partitionData.newIsr());
+                    topic.name, partitionId, partitionData.newIsrWithEpochs());
 
             return INVALID_REQUEST;
         }
@@ -1122,7 +1133,7 @@ public class ReplicationControlManager {
             // The ISR must always include the current leader.
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR {} that doesn't include itself.",
-                    brokerId, topic.name, partitionId, partitionData.newIsr());
+                    brokerId, topic.name, partitionId, partitionData.newIsrWithEpochs());
 
             return INVALID_REQUEST;
         }
@@ -1131,7 +1142,7 @@ public class ReplicationControlManager {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the ISR {} had more than one replica while the leader was still " +
                     "recovering from an unclean leader election {}.",
-                    brokerId, topic.name, partitionId, partitionData.newIsr(),
+                    brokerId, topic.name, partitionId, partitionData.newIsrWithEpochs(),
                     leaderRecoveryState);
 
             return INVALID_REQUEST;
@@ -1145,11 +1156,11 @@ public class ReplicationControlManager {
             return INVALID_REQUEST;
         }
 
-        List<IneligibleReplica> ineligibleReplicas = ineligibleReplicasForIsr(newIsr);
+        List<IneligibleReplica> ineligibleReplicas = ineligibleReplicasForIsr(partitionData.newIsrWithEpochs());
         if (!ineligibleReplicas.isEmpty()) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified ineligible replicas {} in the new ISR {}.",
-                    brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsr());
+                    brokerId, topic.name, partitionId, ineligibleReplicas, partitionData.newIsrWithEpochs());
 
             if (requestApiVersion > 1) {
                 return INELIGIBLE_REPLICA;
@@ -1161,16 +1172,23 @@ public class ReplicationControlManager {
         return Errors.NONE;
     }
 
-    private List<IneligibleReplica> ineligibleReplicasForIsr(int[] replicas) {
+    private List<IneligibleReplica> ineligibleReplicasForIsr(List<BrokerState> brokerStates) {
         List<IneligibleReplica> ineligibleReplicas = new ArrayList<>(0);
-        for (Integer replicaId : replicas) {
-            BrokerRegistration registration = clusterControl.registration(replicaId);
+        for (BrokerState brokerState : brokerStates) {
+            int brokerId = brokerState.brokerId();
+            BrokerRegistration registration = clusterControl.registration(brokerId);
             if (registration == null) {
-                ineligibleReplicas.add(new IneligibleReplica(replicaId, "not registered"));
+                ineligibleReplicas.add(new IneligibleReplica(brokerId, "not registered"));
             } else if (registration.inControlledShutdown()) {
-                ineligibleReplicas.add(new IneligibleReplica(replicaId, "shutting down"));
+                ineligibleReplicas.add(new IneligibleReplica(brokerId, "shutting down"));
             } else if (registration.fenced()) {
-                ineligibleReplicas.add(new IneligibleReplica(replicaId, "fenced"));
+                ineligibleReplicas.add(new IneligibleReplica(brokerId, "fenced"));
+            } else if (brokerState.brokerEpoch() != -1 && registration.epoch() != brokerState.brokerEpoch()) {
+                // The given broker epoch should match with the broker epoch in the broker registration, except the
+                // given broker epoch is -1 which means skipping the broker epoch verification.
+                ineligibleReplicas.add(new IneligibleReplica(brokerId,
+                    "broker epoch mismatch: requested=" + brokerState.brokerEpoch()
+                        + " VS expected=" + registration.epoch()));
             }
         }
         return ineligibleReplicas;
