@@ -75,6 +75,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.IOException;
@@ -94,7 +97,6 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -127,8 +129,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @RunWith(EasyMockRunner.class)
@@ -199,6 +199,7 @@ public class StreamTaskTest {
             punctuatedAt = timestamp;
         }
     };
+    private MockitoSession mockito;
 
     private static ProcessorTopology withRepartitionTopics(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
                                                            final Map<String, SourceNode<?, ?>> sourcesByTopic,
@@ -261,6 +262,10 @@ public class StreamTaskTest {
     public void setup() {
         EasyMock.expect(stateManager.taskId()).andStubReturn(taskId);
         EasyMock.expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
+        mockito = Mockito.mockitoSession()
+            .initMocks(this)
+            .strictness(Strictness.STRICT_STUBS)
+            .startMocking();
 
         consumer.assign(asList(partition1, partition2));
         consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
@@ -282,6 +287,7 @@ public class StreamTaskTest {
             task.closeDirty();
             task = null;
         }
+        mockito.finishMocking();
         Utils.delete(BASE_DIR);
     }
 
@@ -2515,13 +2521,11 @@ public class StreamTaskTest {
     public void shouldCheckpointAfterRestorationWhenAtLeastOnceEnabled() {
         final ProcessorStateManager processorStateManager = mockStateManager();
         recordCollector = mock(RecordCollectorImpl.class);
-        doReturn(singletonMap(partition1, 1L)).when(recordCollector).offsets();
 
         task = createStatefulTask(createConfig(AT_LEAST_ONCE, "100"), true, processorStateManager);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        verify(processorStateManager, times(1)).checkpoint();
-        verify(recordCollector, times(1)).offsets();
+        verify(processorStateManager).checkpoint();
     }
 
     @Test
@@ -2538,16 +2542,7 @@ public class StreamTaskTest {
     }
 
     private ProcessorStateManager mockStateManager() {
-        final ProcessorStateManager manager = spy(new ProcessorStateManager(
-            taskId,
-            Task.TaskType.STANDBY,
-            false,
-            logContext,
-            stateDirectory,
-            new MockChangelogReader(),
-            emptyMap(),
-            emptySet(),
-            false));
+        final ProcessorStateManager manager = mock(ProcessorStateManager.class);
         doReturn(TaskType.ACTIVE).when(manager).taskType();
         doReturn(taskId).when(manager).taskId();
         return manager;
