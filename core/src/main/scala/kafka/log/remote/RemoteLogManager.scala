@@ -86,18 +86,6 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
   }
 }
 
-trait CancellableRunnable extends Runnable {
-  @volatile private var cancelled = false
-
-  def cancel(): Unit = {
-    cancelled = true
-  }
-
-  def isCancelled(): Boolean = {
-    cancelled
-  }
-}
-
 /**
  * This class is responsible for
  *  - initializing `RemoteStorageManager` and `RemoteLogMetadataManager` instances
@@ -563,7 +551,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
         var epoch = cache.latestEpoch
         while (!offset.isPresent && epoch.isPresent) {
           offset = remoteLogMetadataManager.highestOffsetForEpoch(topicIdPartition, epoch.getAsInt)
-          epoch = cache.findPreviousEpoch(epoch.getAsInt)
+          epoch = cache.previousEpoch(epoch.getAsInt)
         }
       })
     }

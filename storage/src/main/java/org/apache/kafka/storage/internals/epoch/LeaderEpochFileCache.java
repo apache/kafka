@@ -376,17 +376,6 @@ public class LeaderEpochFileCache {
         }
     }
 
-    public OptionalInt findPreviousEpoch(int epoch) {
-        lock.readLock().lock();
-        try {
-            Map.Entry<Integer, EpochEntry> lowerEntry = epochs.lowerEntry(epoch);
-            return lowerEntry != null ? OptionalInt.of(lowerEntry.getKey()) : OptionalInt.empty();
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-
     /**
      * Delete all entries.
      */
