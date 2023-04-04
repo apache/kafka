@@ -990,8 +990,11 @@ public class StoreChangelogReader implements ChangelogReader {
 
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                 final StreamTask task = (StreamTask) tasks.get(taskId);
+                // if the log is truncated between when we get the log end offset and when we get the
+                // consumer position, then it's possible that the difference become negative and there's actually
+                // no records to restore; in this case we just initialize the sensor to zero
                 final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
-                task.recordRestoreRemaining(time, recordsToRestore);
+                task.initRemainingRecordsToRestore(time, recordsToRestore);
             }
         }
     }

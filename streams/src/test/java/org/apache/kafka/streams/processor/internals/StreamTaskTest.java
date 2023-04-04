@@ -781,7 +781,7 @@ public class StreamTaskTest {
         assertThat(rateMetric.metricValue(), equalTo(0.0));
         assertThat(remainMetric.metricValue(), equalTo(0.0));
 
-        task.recordRestoreRemaining(time, 100L);
+        task.initRemainingRecordsToRestore(time, 100L);
 
         assertThat(remainMetric.metricValue(), equalTo(100.0));
 
