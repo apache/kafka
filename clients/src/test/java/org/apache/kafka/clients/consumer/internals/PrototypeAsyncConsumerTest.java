@@ -49,6 +49,7 @@ import java.util.Set;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -197,6 +198,7 @@ public class PrototypeAsyncConsumerTest {
     private void injectConsumerConfigs() {
         consumerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         consumerProps.put(DEFAULT_API_TIMEOUT_MS_CONFIG, "60000");
+        consumerProps.put(RETRY_BACKOFF_MS_CONFIG, "100");
         consumerProps.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProps.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
@@ -208,16 +210,17 @@ public class PrototypeAsyncConsumerTest {
         consumerProps.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
 
         return new PrototypeAsyncConsumer<>(
-                time,
-                logContext,
-                config,
-                subscriptions,
-                eventHandler,
-                metrics,
-                clusterResourceListeners,
-                Optional.ofNullable(this.groupId),
-                clientId,
-                config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG));
+            time,
+            logContext,
+            config,
+            subscriptions,
+            eventHandler,
+            metrics,
+            clusterResourceListeners,
+            Optional.ofNullable(this.groupId),
+            clientId,
+            config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG),
+            config.getLong(RETRY_BACKOFF_MS_CONFIG));
     }
 }
 

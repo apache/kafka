@@ -96,6 +96,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
+    private final long retryBackoffMs;
     private AtomicBoolean shouldWakeup = new AtomicBoolean(false);
 
     public PrototypeAsyncConsumer(Properties properties,
@@ -116,14 +117,15 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   final Deserializer<V> valueDeserializer) {
         this.time = Time.SYSTEM;
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                GroupRebalanceConfig.ProtocolType.CONSUMER);
+            GroupRebalanceConfig.ProtocolType.CONSUMER);
         this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
         this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        this.retryBackoffMs = config.getInt(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         // If group.instance.id is set, we will append it to the log context.
         if (groupRebalanceConfig.groupInstanceId.isPresent()) {
             logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
-                    ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
+                ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         } else {
             logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         }
@@ -132,20 +134,20 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
         this.metrics = buildMetrics(config, time, clientId);
         List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
-                ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                ConsumerInterceptor.class,
-                Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
+            ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+            ConsumerInterceptor.class,
+            Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
         ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
-                valueDeserializer, metrics.reporters(), interceptorList);
+            valueDeserializer, metrics.reporters(), interceptorList);
         this.eventHandler = new DefaultEventHandler(
-                config,
-                groupRebalanceConfig,
-                logContext,
-                subscriptions,
-                new ApiVersions(),
-                this.metrics,
-                clusterResourceListeners,
-                null // this is coming from the fetcher, but we don't have one
+            config,
+            groupRebalanceConfig,
+            logContext,
+            subscriptions,
+            new ApiVersions(),
+            this.metrics,
+            clusterResourceListeners,
+            null // this is coming from the fetcher, but we don't have one
         );
     }
 
@@ -160,7 +162,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             ClusterResourceListeners clusterResourceListeners,
             Optional<String> groupId,
             String clientId,
-            int defaultApiTimeoutMs) {
+            int defaultApiTimeoutMs,
+            long retryBackoffMs) {
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
@@ -168,6 +171,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.metrics = metrics;
         this.groupId = groupId;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
+        this.retryBackoffMs = retryBackoffMs;
         this.clientId = clientId;
         this.eventHandler = eventHandler;
     }
@@ -557,6 +561,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 future.wakeup();
             }
             // Maybe Thread.sleep?
+            Thread.sleep(retryBackoffMs);
         } while (!timer.isExpired());
         throw new org.apache.kafka.common.errors.TimeoutException();
     }
