@@ -134,10 +134,6 @@ public class DefaultStateUpdater implements StateUpdater {
             log.info("State updater thread started");
             try {
                 while (isRunning.get()) {
-                    // in state updater we never interrupt the thread
-                    // or wakeup the consumer, hence any of
-                    // InterruptException / WakeupException
-                    // should never happen
                     runOnce();
                 }
             } catch (final RuntimeException anyOtherException) {
