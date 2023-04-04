@@ -75,7 +75,7 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(underlying());
+        return underlying().hashCode();
     }
 
     @Override

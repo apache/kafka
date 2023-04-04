@@ -28,6 +28,8 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -93,5 +95,30 @@ public class PCollectionsHashSetWrapperTest {
         Set<Object> c = Collections.emptySet();
         DelegationChecker<Boolean> delegationChecker = new DelegationChecker<>(expectedResult).answers(when(mock.containsAll(c)));
         delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).containsAll(c));
+    }
+
+    @Test
+    public void testHashCode() {
+        final MapPSet<Object> mock = mock(MapPSet.class);
+        assertEquals(mock.hashCode(), new PCollectionsHashSetWrapper<>(mock).hashCode());
+        final MapPSet<Object> someOtherMock = mock(MapPSet.class);
+        assertNotEquals(mock.hashCode(), new PCollectionsHashSetWrapper<>(someOtherMock).hashCode());
+    }
+
+    @Test
+    public void testEquals() {
+        final MapPSet<Object> mock = mock(MapPSet.class);
+        assertEquals(new PCollectionsHashSetWrapper<>(mock), new PCollectionsHashSetWrapper<>(mock));
+        final MapPSet<Object> someOtherMock = mock(MapPSet.class);
+        assertNotEquals(new PCollectionsHashSetWrapper<>(mock), new PCollectionsHashSetWrapper<>(someOtherMock));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a", "b"})
+    public void testToString(String underlyingToStringResult) {
+        final MapPSet<Object> mock = mock(MapPSet.class);
+        when(mock.toString()).thenReturn(underlyingToStringResult);
+        assertEquals("PCollectionsHashSetWrapper{underlying=" + underlyingToStringResult + "}",
+            new PCollectionsHashSetWrapper<>(mock).toString());
     }
 }
