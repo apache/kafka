@@ -83,6 +83,11 @@ public class PCollectionsHashMapWrapper<K, V> implements PHashMapWrapper<K, V> {
     }
 
     @Override
+    public V getOrElse(K key, V value) {
+        return underlying().getOrDefault(key, value);
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;

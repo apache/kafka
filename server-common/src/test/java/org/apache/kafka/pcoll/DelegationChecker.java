@@ -17,7 +17,9 @@
 
 package org.apache.kafka.pcoll;
 
+import org.mockito.Mockito;
 import org.mockito.stubbing.OngoingStubbing;
+import org.mockito.stubbing.Stubber;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,14 +27,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 // class to facilitate testing of wrapper class delegation to underlying persistent collection
 @SuppressWarnings("rawtypes")
 public class DelegationChecker<T> {
-    private final T answerFromMockPersistentCollection;
+    private T answerFromMockPersistentCollection;
     private boolean persistentCollectionMethodInvokedCorrectly = false;
 
+    /**
+     * Constructor to use when testing delegation of a void method
+     */
+    public DelegationChecker() {
+    }
+
     public DelegationChecker(T answerFromMockPersistentCollection) {
+        this();
         this.answerFromMockPersistentCollection = answerFromMockPersistentCollection;
     }
 
-    public <R> DelegationChecker<T> answers(OngoingStubbing<R> whenMockedMethodInvoked) {
+    public DelegationChecker setAnswerFromMockPersistentCollection(T answerFromMockPersistentCollection) {
+        this.answerFromMockPersistentCollection = answerFromMockPersistentCollection;
+        return this;
+    }
+
+    public <R> DelegationChecker<T> recordsInvocationAndAnswers(OngoingStubbing<R> whenMockedMethodInvoked) {
         whenMockedMethodInvoked.thenAnswer(invocation -> {
             persistentCollectionMethodInvokedCorrectly = true;
             return answerFromMockPersistentCollection;
@@ -40,8 +54,19 @@ public class DelegationChecker<T> {
         return this;
     }
 
-    public void assertDelegatesAndAnswersCorrectly(Object receivedAnswer) {
+    public void assertDelegatedCorrectly() {
         assertTrue(persistentCollectionMethodInvokedCorrectly);
+    }
+
+    public void assertDelegatesAndAnswersCorrectly(Object receivedAnswer) {
+        assertDelegatedCorrectly();
         assertEquals(answerFromMockPersistentCollection, receivedAnswer);
+    }
+
+    public Stubber recordVoidMethodInvocation() {
+        return Mockito.doAnswer(invocation -> {
+            persistentCollectionMethodInvokedCorrectly = true;
+            return null;
+        });
     }
 }

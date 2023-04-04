@@ -26,6 +26,7 @@ import org.pcollections.MapPSet;
 
 import java.util.Collections;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,8 +45,10 @@ public class PCollectionsHashSetWrapperTest {
     @ValueSource(booleans = {true, false})
     public void testIsEmpty(boolean expectedResult) {
         final MapPSet<Object> mock = mock(MapPSet.class);
-        DelegationChecker<Boolean> delegationChecker = new DelegationChecker<>(expectedResult).answers(when(mock.isEmpty()));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).isEmpty());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(expectedResult)
+            .recordsInvocationAndAnswers(when(mock.isEmpty()))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).isEmpty());
     }
 
     @Test
@@ -61,31 +64,47 @@ public class PCollectionsHashSetWrapperTest {
     @Test
     public void testAfterAdding() {
         final MapPSet<Object> mock = mock(MapPSet.class);
-        DelegationChecker<MapPSet<Object>> delegationChecker = new DelegationChecker<>(SINGLETON_SET).answers(when(mock.plus(eq(this))));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).afterAdding(this).underlying());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(SINGLETON_SET)
+            .recordsInvocationAndAnswers(when(mock.plus(eq(this))))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).afterAdding(this).underlying());
     }
 
     @Test
     public void testAfterRemoving() {
         final MapPSet<Object> mock = mock(MapPSet.class);
-        DelegationChecker<MapPSet<Object>> delegationChecker = new DelegationChecker<>(SINGLETON_SET).answers(when(mock.minus(eq(this))));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).afterRemoving(this).underlying());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(SINGLETON_SET)
+            .recordsInvocationAndAnswers(when(mock.minus(eq(this))))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).afterRemoving(this).underlying());
     }
 
     @Test
     public void testStream() {
         final MapPSet<Object> mock = mock(MapPSet.class);
-        final Stream<Object> stream = mock(Stream.class);
-        DelegationChecker<Stream<Object>> delegationChecker = new DelegationChecker<>(stream).answers(when(mock.stream()));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).stream());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(mock(Stream.class))
+            .recordsInvocationAndAnswers(when(mock.stream()))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).stream());
     }
 
     @Test
     public void testParallelStream() {
         final MapPSet<Object> mock = mock(MapPSet.class);
-        final Stream<Object> stream = mock(Stream.class);
-        DelegationChecker<Stream<Object>> delegationChecker = new DelegationChecker<>(stream).answers(when(mock.parallelStream()));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).parallelStream());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(mock(Stream.class))
+            .recordsInvocationAndAnswers(when(mock.parallelStream()))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).parallelStream());
+    }
+
+    @Test
+    public void testForEach() {
+        final MapPSet<Object> mock = mock(MapPSet.class);
+        final Consumer<Object> mockConsumer = mock(Consumer.class);
+        DelegationChecker<?> delegationChecker = new DelegationChecker<>();
+        delegationChecker.recordVoidMethodInvocation().when(mock).forEach(eq(mockConsumer));
+        new PCollectionsHashSetWrapper<>(mock).forEach(mockConsumer);
+        delegationChecker.assertDelegatedCorrectly();
     }
 
     @ParameterizedTest
@@ -93,8 +112,10 @@ public class PCollectionsHashSetWrapperTest {
     public void testContainsAll(boolean expectedResult) {
         final MapPSet<Object> mock = mock(MapPSet.class);
         Set<Object> c = Collections.emptySet();
-        DelegationChecker<Boolean> delegationChecker = new DelegationChecker<>(expectedResult).answers(when(mock.containsAll(c)));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).containsAll(c));
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(expectedResult)
+            .recordsInvocationAndAnswers(when(mock.containsAll(c)))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashSetWrapper<>(mock).containsAll(c));
     }
 
     @Test

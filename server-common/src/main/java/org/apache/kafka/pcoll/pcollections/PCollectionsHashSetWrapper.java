@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.Spliterator;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
@@ -103,6 +104,11 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
     @Override
     public Iterator<E> iterator() {
         return underlying().iterator();
+    }
+
+    @Override
+    public void forEach(Consumer<? super E> action) {
+        underlying().forEach(action);
     }
 
     @Override

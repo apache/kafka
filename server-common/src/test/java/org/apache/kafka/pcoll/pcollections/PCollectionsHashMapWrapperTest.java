@@ -27,7 +27,6 @@ import org.pcollections.HashTreePMap;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -45,8 +44,10 @@ public class PCollectionsHashMapWrapperTest {
     @ValueSource(booleans = {true, false})
     public void testIsEmpty(boolean expectedResult) {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<Boolean> delegationChecker = new DelegationChecker<>(expectedResult).answers(when(mock.isEmpty()));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).isEmpty());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(expectedResult)
+            .recordsInvocationAndAnswers(when(mock.isEmpty()))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).isEmpty());
     }
 
 
@@ -71,68 +72,75 @@ public class PCollectionsHashMapWrapperTest {
     @Test
     public void testAfterAdding() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<HashPMap<Object, Object>> delegationChecker = new DelegationChecker<>(SINGLETON_MAP).answers(when(mock.plus(eq(this), eq(this))));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).afterAdding(this, this).underlying());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(SINGLETON_MAP)
+            .recordsInvocationAndAnswers(when(mock.plus(eq(this), eq(this))))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).afterAdding(this, this).underlying());
     }
 
     @Test
     public void testAfterRemoving() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<HashPMap<Object, Object>> delegationChecker = new DelegationChecker<>(SINGLETON_MAP).answers(when(mock.minus(eq(this))));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).afterRemoving(this).underlying());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(SINGLETON_MAP)
+            .recordsInvocationAndAnswers(when(mock.minus(eq(this))))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).afterRemoving(this).underlying());
     }
 
     @Test
     public void testGet() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<Object> delegationChecker = new DelegationChecker<>(new Object()).answers(when(mock.get(eq(this))));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).get(this));
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(new Object())
+            .recordsInvocationAndAnswers(when(mock.get(eq(this))))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).get(this));
     }
 
     @Test
     public void testEntrySet() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<Set<Object>> delegationChecker = new DelegationChecker<>(Collections.emptySet()).answers(when(mock.entrySet()));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).entrySet());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(Collections.emptySet())
+            .recordsInvocationAndAnswers(when(mock.entrySet()))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).entrySet());
     }
 
     @Test
     public void testKeySet() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<Set<Object>> delegationChecker = new DelegationChecker<>(Collections.emptySet()).answers(when(mock.keySet()));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).keySet());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(Collections.emptySet())
+            .recordsInvocationAndAnswers(when(mock.keySet()))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).keySet());
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testContainsKey(boolean expectedResult) {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<Boolean> delegationChecker = new DelegationChecker<>(expectedResult).answers(when(mock.containsKey(eq(this))));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).containsKey(this));
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(expectedResult)
+            .recordsInvocationAndAnswers(when(mock.containsKey(eq(this))))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).containsKey(this));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testGetOrElse(boolean containsKey) {
+    @Test
+    public void testGetOrElse() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        Object orElseValue = new Object();
-        Object mappedValue = new Object();
-        when(mock.containsKey(eq(this))).thenReturn(containsKey);
-        when(mock.get(eq(this))).thenReturn(mappedValue);
-        PCollectionsHashMapWrapper<Object, Object> wrapper = new PCollectionsHashMapWrapper<>(mock);
-        if (containsKey) {
-            assertSame(mappedValue, wrapper.getOrElse(this, orElseValue));
-        } else {
-            assertSame(orElseValue, wrapper.getOrElse(this, orElseValue));
-        }
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(new Object())
+            .recordsInvocationAndAnswers(when(mock.getOrDefault(eq(this), eq(this))))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).getOrElse(this, this));
     }
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2})
     public void testContainsKey(int expectedResult) {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        DelegationChecker<Integer> delegationChecker = new DelegationChecker<>(expectedResult).answers(when(mock.size()));
-        delegationChecker.assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).size());
+        new DelegationChecker<>()
+            .setAnswerFromMockPersistentCollection(expectedResult)
+            .recordsInvocationAndAnswers(when(mock.size()))
+            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).size());
     }
 
     @Test
