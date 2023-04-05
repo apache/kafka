@@ -28,26 +28,35 @@ import org.pcollections.HashTreePMap;
 import java.util.Collections;
 import java.util.Map;
 
+import static java.util.function.Function.identity;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 public class PCollectionsHashMapWrapperTest {
     private static final HashPMap<Object, Object> SINGLETON_MAP = HashTreePMap.singleton(new Object(), new Object());
 
+    private static final class PCollectionsHashMapWrapperDelegationChecker<R> extends DelegationChecker<HashPMap<Object, Object>, PCollectionsHashMapWrapper<Object, Object>, R> {
+        public PCollectionsHashMapWrapperDelegationChecker() {
+            super(mock(HashPMap.class), PCollectionsHashMapWrapper::new);
+        }
+
+        public HashPMap<Object, Object> unwrap(PCollectionsHashMapWrapper<Object, Object> wrapper) {
+            return wrapper.underlying();
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testIsEmpty(boolean expectedResult) {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(expectedResult)
-            .recordsInvocationAndAnswers(when(mock.isEmpty()))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).isEmpty());
+    public void testDelegationOfIsEmpty(boolean mockFunctionReturnValue) {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(HashPMap::isEmpty, mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::isEmpty, identity())
+            .doFunctionDelegationCheck();
     }
 
 
@@ -70,77 +79,71 @@ public class PCollectionsHashMapWrapperTest {
     }
 
     @Test
-    public void testAfterAdding() {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(SINGLETON_MAP)
-            .recordsInvocationAndAnswers(when(mock.plus(eq(this), eq(this))))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).afterAdding(this, this).underlying());
+    public void testDelegationOfAfterAdding() {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.plus(eq(this), eq(this)), SINGLETON_MAP)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.afterAdding(this, this), identity())
+            .expectWrapperToWrapMockFunctionReturnValue()
+            .doFunctionDelegationCheck();
     }
 
     @Test
-    public void testAfterRemoving() {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(SINGLETON_MAP)
-            .recordsInvocationAndAnswers(when(mock.minus(eq(this))))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).afterRemoving(this).underlying());
+    public void testDelegationOfAfterRemoving() {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.minus(eq(this)), SINGLETON_MAP)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.afterRemoving(this), identity())
+            .expectWrapperToWrapMockFunctionReturnValue()
+            .doFunctionDelegationCheck();
     }
 
     @Test
-    public void testGet() {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(new Object())
-            .recordsInvocationAndAnswers(when(mock.get(eq(this))))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).get(this));
+    public void testDelegationOfGet() {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.get(eq(this)), new Object())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.get(this), identity())
+            .doFunctionDelegationCheck();
     }
 
     @Test
-    public void testEntrySet() {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(Collections.emptySet())
-            .recordsInvocationAndAnswers(when(mock.entrySet()))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).entrySet());
+    public void testDelegationOfEntrySet() {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(HashPMap::entrySet, Collections.emptySet())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::entrySet, identity())
+            .doFunctionDelegationCheck();
     }
 
     @Test
-    public void testKeySet() {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(Collections.emptySet())
-            .recordsInvocationAndAnswers(when(mock.keySet()))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).keySet());
+    public void testDelegationOfKeySet() {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(HashPMap::keySet, Collections.emptySet())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::keySet, identity())
+            .doFunctionDelegationCheck();
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testContainsKey(boolean expectedResult) {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(expectedResult)
-            .recordsInvocationAndAnswers(when(mock.containsKey(eq(this))))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).containsKey(this));
+    public void testDelegationOfContainsKey(boolean mockFunctionReturnValue) {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.containsKey(eq(this)), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.containsKey(this), identity())
+            .doFunctionDelegationCheck();
     }
 
     @Test
-    public void testGetOrElse() {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(new Object())
-            .recordsInvocationAndAnswers(when(mock.getOrDefault(eq(this), eq(this))))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).getOrElse(this, this));
+    public void testDelegationOfGetOrElse() {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.getOrDefault(eq(this), eq(this)), this)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.getOrElse(this, this), identity())
+            .doFunctionDelegationCheck();
     }
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2})
-    public void testContainsKey(int expectedResult) {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        new DelegationChecker<>()
-            .setAnswerFromMockPersistentCollection(expectedResult)
-            .recordsInvocationAndAnswers(when(mock.size()))
-            .assertDelegatesAndAnswersCorrectly(new PCollectionsHashMapWrapper<>(mock).size());
+    public void testDelegationOfSize(int mockFunctionReturnValue) {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(HashPMap::size, mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::size, identity())
+            .doFunctionDelegationCheck();
     }
 
     @Test
@@ -161,10 +164,11 @@ public class PCollectionsHashMapWrapperTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"a", "b"})
-    public void testToString(String underlyingToStringResult) {
-        final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        when(mock.toString()).thenReturn(underlyingToStringResult);
-        assertEquals("PCollectionsHashMapWrapper{underlying=" + underlyingToStringResult + "}",
-            new PCollectionsHashMapWrapper<>(mock).toString());
+    public void testDelegationOfToString(String mockFunctionReturnValue) {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(HashPMap::toString, mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::toString,
+                text -> "PCollectionsHashMapWrapper{underlying=" + text + "}")
+            .doFunctionDelegationCheck();
     }
 }
