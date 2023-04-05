@@ -20,13 +20,11 @@ package org.apache.kafka.image;
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.security.scram.ScramCredential;
-// import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 
-// import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Objects;
 
-// XXX Can I replace this with just ScramCredential --proven 2023/03/31
+// XXX Can I replace org.apache.kafka.common.security.scram.ScramCredential with this --proven 2023/03/31
 
 /**
  * Represents the ACLs in the metadata image.
@@ -91,18 +89,8 @@ public final class ScramCredentialData {
     }
 
     public ScramCredential toCredential(ScramMechanism mechanism) {
-//    ) throws GeneralSecurityException {
         return new ScramCredential(salt, storedKey, serverKey, iterations);
     }
-//        org.apache.kafka.common.security.scram.internals.ScramMechanism internalMechanism =
-//                org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(mechanism.mechanismName());
-//        ScramFormatter formatter = new ScramFormatter(internalMechanism);
-//
-//        return new ScramCredential(salt,
-//                formatter.storedKey(formatter.clientKey(saltedPassword)),
-//                formatter.serverKey(saltedPassword),
-//                iterations);
-//    }
 
     @Override
     public int hashCode() {
