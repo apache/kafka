@@ -152,8 +152,7 @@ class WorkerSinkTask extends WorkerTask {
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
         Map<String, Object> adminProps = new HashMap<>(workerConfig.originals());
-        String clientIdBase = "admin";
-        adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "sink-task-admin");
+        adminProps.put(CLIENT_ID_CONFIG, id + "-admin");
         this.topicAdmin = new TopicAdmin(adminProps);
     }
 

@@ -169,6 +169,34 @@ public class ConnectorTopicsIntegrationTest {
     }
 
     @Test
+    public void testSubscribedTopicDeletionDoesNotLeadToSinkTaskFailure() throws InterruptedException {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // create test topic
+        connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
+        connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
+
+        // start a sink connector
+        connect.configureConnector(SINK_CONNECTOR, defaultSinkConnectorProps(FOO_TOPIC, BAR_TOPIC));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(SINK_CONNECTOR, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Arrays.asList(FOO_TOPIC, BAR_TOPIC),
+                "Active topic set is not: " + Arrays.asList(FOO_TOPIC, BAR_TOPIC) + " for connector: " + SINK_CONNECTOR);
+
+        // Delete one of the topics
+        connect.kafka().deleteTopic(FOO_TOPIC);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(SINK_CONNECTOR, 1,
+                "Connector task failed because one of the subscribed topics " + FOO_TOPIC + " was deleted.");
+    }
+
+    @Test
     public void testTopicTrackingResetIsDisabled() throws InterruptedException {
         workerProps.put(TOPIC_TRACKING_ALLOW_RESET_CONFIG, "false");
         connect = connectBuilder.build();
