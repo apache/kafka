@@ -66,7 +66,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -363,7 +362,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             return event.complete(timeout);
         } catch (ExecutionException e) {
             throw new KafkaException(e);
-        } catch (InterruptedException | CancellationException e) {
+        } catch (InterruptedException e) {
             throw new InterruptException(e.getMessage());
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
@@ -550,7 +549,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw new KafkaException(e);
-        } catch (InterruptedException | CancellationException e) {
+        } catch (InterruptedException e) {
             throw new InterruptException(e.getMessage());
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);

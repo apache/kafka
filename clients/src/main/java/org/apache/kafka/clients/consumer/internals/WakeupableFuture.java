@@ -25,7 +25,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public class WakeupableFuture<T> extends CompletableFuture<T> {
     public void wakeup() {
-        cancel(true);
-        throw new WakeupException();
+        if (isDone()) {
+            return;
+        }
+        this.completeExceptionally(new WakeupException());
     }
 }
