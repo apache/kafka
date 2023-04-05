@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -24,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -52,6 +54,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +68,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
@@ -98,6 +102,8 @@ class WorkerSinkTask extends WorkerTask {
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+
+    private final TopicAdmin topicAdmin;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -145,6 +151,10 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        Map<String, Object> adminProps = new HashMap<>(workerConfig.originals());
+        String clientIdBase = "admin";
+        adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "sink-task-admin");
+        this.topicAdmin = new TopicAdmin(adminProps);
     }
 
     @Override
@@ -179,6 +189,7 @@ class WorkerSinkTask extends WorkerTask {
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(headerConverter, "header converter");
+        Utils.closeQuietly(() -> topicAdmin.close(Duration.ofSeconds(30)), "sink task admin");
     }
 
     @Override
@@ -695,9 +706,30 @@ class WorkerSinkTask extends WorkerTask {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             log.debug("{} Partitions assigned {}", WorkerSinkTask.this, partitions);
-
+            Map<String, TopicDescription> topics = topicAdmin.describeTopics(partitions
+                    .stream()
+                    .map(TopicPartition::topic)
+                    .toArray(String[]::new));
             for (TopicPartition tp : partitions) {
-                long pos = consumer.position(tp);
+                if (!topics.containsKey(tp.topic())) {
+                    log.info("Not committing offsets for Topic Partition {}. This could be because the topic is deleted", tp);
+                    continue;
+                }
+                long pos;
+                try {
+                    pos = consumer.position(tp);
+                } catch (TimeoutException e) {
+                    // There could be a race condition where describeTopics reports a topic to be present
+                    // but when the call comes to position(), the topic might not exist. This could happen when
+                    // users issue a mass delete of topics for example. We need to do this because there's no atomic
+                    // way of fetching topic and the position. For such cases, we will not commit offsets
+                    // and also remove the topic from existing topics map so that future partitions for that topic
+                    // can simply exit out.
+                    log.error("TimeoutException occurred when fetching position for topic partition {}. " +
+                            "The offsets for this topic partition will not be committed", tp);
+                    topics.remove(tp.topic());
+                    continue;
+                }
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
                 log.debug("{} Assigned topic partition {} with offset {}", WorkerSinkTask.this, tp, pos);
