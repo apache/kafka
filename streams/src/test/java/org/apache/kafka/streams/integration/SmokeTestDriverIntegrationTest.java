@@ -96,8 +96,7 @@ public class SmokeTestDriverIntegrationTest {
 
     private static Stream<Boolean> parameters() {
         return Stream.of(
-            // TODO KAFKA-14533: debug and re-enable both parameters
-            //Boolean.TRUE
+            Boolean.TRUE,
             Boolean.FALSE
           );
     }
