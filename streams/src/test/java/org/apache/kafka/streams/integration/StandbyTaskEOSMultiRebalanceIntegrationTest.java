@@ -59,12 +59,6 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-/**
- * An integration test to verify EOS properties when using Caching and Standby replicas
- * while tasks are being redistributed after re-balancing event.
- * The intent is not that this test should be merged into the repo but only provided for evidence on how to reproduce.
- * One test fail and two test pass reliably on an i7-8750H CPU @ 2.20GHz × 12 with 32 GiB Memory
- */
 @Category(IntegrationTest.class)
 @SuppressWarnings("deprecation")
 public class StandbyTaskEOSMultiRebalanceIntegrationTest {
