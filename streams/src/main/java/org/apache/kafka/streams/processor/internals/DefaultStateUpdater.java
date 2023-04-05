@@ -168,7 +168,6 @@ public class DefaultStateUpdater implements StateUpdater {
             maybeCheckpointTasks(checkpointStartTimeMs);
 
             final long waitStartTimeMs = time.milliseconds();
-
             waitIfAllChangelogsCompletelyRead();
 
             final long endTimeMs = time.milliseconds();
