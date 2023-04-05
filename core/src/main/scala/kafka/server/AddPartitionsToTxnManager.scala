@@ -52,22 +52,22 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
 
       val currentTransactionData = currentNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
-      // Check if we already have txn ID -- this should only happen in epoch bump case. If so, we should return error for old entry and remove from queue.
+      // Check if we already have txn ID -- if the epoch is bumped, return invalid producer epoch, otherwise, the client likely disconnected and 
+      // reconnected so return the retriable network exception.
       if (currentTransactionData != null) {
-        if (currentTransactionData.producerEpoch() < transactionData.producerEpoch()) {
-          val topicPartitionsToError = mutable.Map[TopicPartition, Errors]()
-          currentTransactionData.topics().forEach { topic =>
-            topic.partitions().forEach { partition =>
-              topicPartitionsToError.put(new TopicPartition(topic.name(), partition), Errors.INVALID_PRODUCER_EPOCH)
-            }
+        val error = if (currentTransactionData.producerEpoch() < transactionData.producerEpoch())
+          Errors.INVALID_PRODUCER_EPOCH
+        else 
+          Errors.NETWORK_EXCEPTION
+        val topicPartitionsToError = mutable.Map[TopicPartition, Errors]()
+        currentTransactionData.topics().forEach { topic =>
+          topic.partitions().forEach { partition =>
+            topicPartitionsToError.put(new TopicPartition(topic.name(), partition), error)
           }
-          val oldCallback = currentNodeAndTransactionData.callbacks(transactionData.transactionalId())
-          currentNodeAndTransactionData.transactionData.remove(transactionData)
-          oldCallback(topicPartitionsToError.toMap)
-        } else {
-          // If we receive another request for the same transactional ID and epoch, the previous one must have expired. Remove the old data.
-          currentNodeAndTransactionData.transactionData.remove(transactionData)
         }
+        val oldCallback = currentNodeAndTransactionData.callbacks(transactionData.transactionalId())
+        currentNodeAndTransactionData.transactionData.remove(transactionData)
+        oldCallback(topicPartitionsToError.toMap)
       }
       currentNodeAndTransactionData.transactionData.add(transactionData)
       currentNodeAndTransactionData.callbacks.put(transactionData.transactionalId(), callback)

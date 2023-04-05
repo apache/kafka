@@ -92,7 +92,8 @@ class AddPartitionsToTxnManagerTest {
     val transaction1AgainErrorsNewEpoch = mutable.Map[TopicPartition, Errors]()
     // Trying to add more transactional data for the same transactional ID, producer ID, and epoch should simply replace the old data. The error map should remain empty.
     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transaction1AgainErrorsOldEpoch))
-    assertEquals(mutable.Map[TopicPartition, Errors](), transaction1Errors)
+    val expectedNetworkErrors = topicPartitions.map(_ -> Errors.NETWORK_EXCEPTION).toMap
+    assertEquals(expectedNetworkErrors, transaction1Errors)
 
     // Trying to add more transactional data for the same transactional ID and producer ID, but new epoch should replace the old data and send an error response for it.
      addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 1), setErrors(transaction1AgainErrorsNewEpoch))

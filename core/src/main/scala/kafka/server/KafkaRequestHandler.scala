@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.network._
 import kafka.utils._
-import kafka.server.KafkaRequestHandler.threadRequestChannel
+import kafka.server.KafkaRequestHandler.{currentRequest, threadRequestChannel}
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -40,11 +40,16 @@ object KafkaRequestHandler {
   // Support for scheduling callbacks on a request thread.
   // TODO: we may want to pass more request context, e.g. processor id (see RequestChannel.Request)
   private val threadRequestChannel = new ThreadLocal[RequestChannel]
+  private val currentRequest = new ThreadLocal[RequestChannel.Request]
 
   // For testing
   private var bypassThreadCheck = false
   def setBypassThreadCheck(bypassCheck: Boolean): Unit = {
     bypassThreadCheck = bypassCheck
+  }
+  
+  def currentRequestOnThread(): RequestChannel.Request = {
+    currentRequest.get()
   }
 
   /**
@@ -53,7 +58,7 @@ object KafkaRequestHandler {
    * @param fun Callback function to execute
    * @return Wrapped callback that would execute `fun` on a request thread
    */
-  def wrap[T](fun: T => Unit): T => Unit = {
+  def wrap[T](fun: T => Unit)(request: RequestChannel.Request): T => Unit = {
     val requestChannel = threadRequestChannel.get()
     if (requestChannel == null) {
       if (!bypassThreadCheck)
@@ -64,7 +69,7 @@ object KafkaRequestHandler {
         // The requestChannel is captured in this lambda, so when it's executed on the callback thread
         // we can re-schedule the original callback on a request thread.
         // TODO: we may want to pass more request context, e.g. time we put request in queue
-        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T)))
+        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), request))
       }
     }
   }
@@ -86,7 +91,6 @@ class KafkaRequestHandler(id: Int,
   @volatile private var stopped = false
 
   def run(): Unit = {
-    // TODO: if we need to set context of each request, we'd need to set it in poll.
     threadRequestChannel.set(requestChannel)
     while (!stopped) {
       // We use a single meter for aggregate idle percentage for the thread pool.
@@ -108,8 +112,9 @@ class KafkaRequestHandler(id: Int,
 
         case request: RequestChannel.CallbackRequest =>
           try {
-            // TODO: maybe keep track of queue time or set some context from original request
+            request.originalRequest.callbackRequestDequeTimeNanos = Some(time.nanoseconds())
             request.fun() 
+            request.originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
           } catch {
             case e: FatalExitError =>
               completeShutdown()
@@ -121,6 +126,7 @@ class KafkaRequestHandler(id: Int,
           try {
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
+            currentRequest.set(request)
             apis.handle(request, requestLocal)
           } catch {
             case e: FatalExitError =>

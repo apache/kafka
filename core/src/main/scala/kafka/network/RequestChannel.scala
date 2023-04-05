@@ -80,7 +80,8 @@ object RequestChannel extends Logging {
     }
   }
 
-  case class CallbackRequest(fun: () => Unit) extends BaseRequest
+  case class CallbackRequest(fun: () => Unit,
+                             originalRequest: Request) extends BaseRequest
 
   class Request(val processor: Int,
                 val context: RequestContext,
@@ -99,6 +100,8 @@ object RequestChannel extends Logging {
     @volatile var apiThrottleTimeMs = 0L
     @volatile var temporaryMemoryBytes = 0L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
+    @volatile var callbackRequestDequeTimeNanos: Option[Long] = None
+    @volatile var callbackRequestCompleteTimeNanos: Option[Long] = None
 
     val session = Session(context.principal, context.clientAddress)
 
@@ -230,8 +233,9 @@ object RequestChannel extends Logging {
       }
 
       val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-      val apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos)
+      val callbackRequestTimeNanos = callbackRequestDequeTimeNanos.getOrElse(0L) - callbackRequestCompleteTimeNanos.getOrElse(0L)
+      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos + callbackRequestTimeNanos)
+      val apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos - callbackRequestTimeNanos)
       val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
       val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)

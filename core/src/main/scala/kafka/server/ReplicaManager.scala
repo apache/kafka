@@ -720,7 +720,7 @@ class ReplicaManager(val config: KafkaConfig,
         val (error, node) = getTransactionCoordinator(transactionStatePartition.get)
 
         if (error != Errors.NONE) {
-          throw error.exception() // TODO: handle these exceptions -- can throw coordinator not available -- which is retriable
+          throw error.exception() // Can throw coordinator not available -- which is retriable
         }
 
         val topicGrouping = notYetVerifiedEntriesPerPartition.keySet.groupBy(tp => tp.topic())
@@ -740,7 +740,7 @@ class ReplicaManager(val config: KafkaConfig,
           .setVerifyOnly(true)
           .setTopics(topicCollection)
 
-        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
+        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))(KafkaRequestHandler.currentRequestOnThread())))
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
