@@ -19,8 +19,8 @@ package kafka.coordinator.transaction
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-
 import kafka.internals.generated.{TransactionLogKey, TransactionLogValue}
+import kafka.utils.Logging
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{CompressionType, Record, RecordBatch}
@@ -37,7 +37,7 @@ import scala.jdk.CollectionConverters._
  * key version 0:               [transactionalId]
  *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
  */
-object TransactionLog {
+object TransactionLog extends Logging {
 
   // log-level config default values and enforced values
   val DefaultNumPartitions: Int = 50
@@ -98,15 +98,19 @@ object TransactionLog {
     *
     * @return the key
     */
-  def readTxnRecordKey(buffer: ByteBuffer): TxnKey = {
+  def readTxnRecordKey(buffer: ByteBuffer): Option[TxnKey] = {
     val version = buffer.getShort
     if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
       val value = new TransactionLogKey(new ByteBufferAccessor(buffer), version)
-      TxnKey(
+      Some(TxnKey(
         version = version,
         transactionalId = value.transactionalId
-      )
-    } else throw new IllegalStateException(s"Unknown version $version from the transaction log message")
+      ))
+    } else {
+      warn(s"Unknown version $version from the transaction log message." +
+        s" The downgraded coordinator will ignore this key and corresponding value.")
+      None
+    }
   }
 
   /**
@@ -148,17 +152,20 @@ object TransactionLog {
   // Formatter for use with tools to read transaction log messages
   class TransactionLogMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
-      Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach { txnKey =>
-        val transactionalId = txnKey.transactionalId
-        val value = consumerRecord.value
-        val producerIdMetadata = if (value == null)
-          None
-        else
-          readTxnRecordValue(transactionalId, ByteBuffer.wrap(value))
-        output.write(transactionalId.getBytes(StandardCharsets.UTF_8))
-        output.write("::".getBytes(StandardCharsets.UTF_8))
-        output.write(producerIdMetadata.getOrElse("NULL").toString.getBytes(StandardCharsets.UTF_8))
-        output.write("\n".getBytes(StandardCharsets.UTF_8))
+      Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach {
+        case Some(txnKey) =>
+          val transactionalId = txnKey.transactionalId
+          val value = consumerRecord.value
+          val producerIdMetadata = if (value == null)
+            None
+          else
+            readTxnRecordValue(transactionalId, ByteBuffer.wrap(value))
+          output.write(transactionalId.getBytes(StandardCharsets.UTF_8))
+          output.write("::".getBytes(StandardCharsets.UTF_8))
+          output.write(producerIdMetadata.getOrElse("NULL").toString.getBytes(StandardCharsets.UTF_8))
+          output.write("\n".getBytes(StandardCharsets.UTF_8))
+
+        case None => // Only print if this message is a transaction record
       }
     }
   }
@@ -167,21 +174,26 @@ object TransactionLog {
    * Exposed for printing records using [[kafka.tools.DumpLogSegments]]
    */
   def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
-    val txnKey = TransactionLog.readTxnRecordKey(record.key)
-    val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
+    TransactionLog.readTxnRecordKey(record.key) match {
+      case Some(txnKey) =>
+        val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
 
-    val valueString = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value) match {
-      case None => "<DELETE>"
+        val valueString = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value) match {
+          case None => "<DELETE>"
 
-      case Some(txnMetadata) => s"producerId:${txnMetadata.producerId}," +
-        s"producerEpoch:${txnMetadata.producerEpoch}," +
-        s"state=${txnMetadata.state}," +
-        s"partitions=${txnMetadata.topicPartitions.mkString("[", ",", "]")}," +
-        s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
-        s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
+          case Some(txnMetadata) => s"producerId:${txnMetadata.producerId}," +
+            s"producerEpoch:${txnMetadata.producerEpoch}," +
+            s"state=${txnMetadata.state}," +
+            s"partitions=${txnMetadata.topicPartitions.mkString("[", ",", "]")}," +
+            s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
+            s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
+        }
+
+        (Some(keyString), Some(valueString))
+
+      case None =>
+        (Some("<UNKNOWN>"), Some("<UNKNOWN>"))
     }
-
-    (Some(keyString), Some(valueString))
   }
 
 }

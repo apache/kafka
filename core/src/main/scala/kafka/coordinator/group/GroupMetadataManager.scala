@@ -576,7 +576,10 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  private def doLoadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit): Unit = {
+  // Visible for testing
+  private[group] def doLoadGroupsAndOffsets(topicPartition: TopicPartition,
+                                            onGroupLoaded: GroupMetadata => Unit): Unit = {
+
     def logEndOffset: Long = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     replicaManager.getLog(topicPartition) match {
@@ -651,40 +654,42 @@ class GroupMetadataManager(brokerId: Int,
                 if (batchBaseOffset.isEmpty)
                   batchBaseOffset = Some(record.offset)
                 GroupMetadataManager.readMessageKey(record.key) match {
+                  case Some(key) => key match {
+                    case offsetKey: OffsetKey =>
+                      if (isTxnOffsetCommit && !pendingOffsets.contains(batch.producerId))
+                        pendingOffsets.put(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
 
-                  case offsetKey: OffsetKey =>
-                    if (isTxnOffsetCommit && !pendingOffsets.contains(batch.producerId))
-                      pendingOffsets.put(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
+                      // load offset
+                      val groupTopicPartition = offsetKey.key
+                      if (!record.hasValue) {
+                        if (isTxnOffsetCommit)
+                          pendingOffsets(batch.producerId).remove(groupTopicPartition)
+                        else
+                          loadedOffsets.remove(groupTopicPartition)
+                      } else {
+                        val offsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(record.value)
+                        if (isTxnOffsetCommit)
+                          pendingOffsets(batch.producerId).put(groupTopicPartition, CommitRecordMetadataAndOffset(batchBaseOffset, offsetAndMetadata))
+                        else
+                          loadedOffsets.put(groupTopicPartition, CommitRecordMetadataAndOffset(batchBaseOffset, offsetAndMetadata))
+                      }
 
-                    // load offset
-                    val groupTopicPartition = offsetKey.key
-                    if (!record.hasValue) {
-                      if (isTxnOffsetCommit)
-                        pendingOffsets(batch.producerId).remove(groupTopicPartition)
-                      else
-                        loadedOffsets.remove(groupTopicPartition)
-                    } else {
-                      val offsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(record.value)
-                      if (isTxnOffsetCommit)
-                        pendingOffsets(batch.producerId).put(groupTopicPartition, CommitRecordMetadataAndOffset(batchBaseOffset, offsetAndMetadata))
-                      else
-                        loadedOffsets.put(groupTopicPartition, CommitRecordMetadataAndOffset(batchBaseOffset, offsetAndMetadata))
-                    }
+                    case groupMetadataKey: GroupMetadataKey =>
+                      // load group metadata
+                      val groupId = groupMetadataKey.key
+                      val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value, time)
+                      if (groupMetadata != null) {
+                        removedGroups.remove(groupId)
+                        loadedGroups.put(groupId, groupMetadata)
+                      } else {
+                        loadedGroups.remove(groupId)
+                        removedGroups.add(groupId)
+                      }
 
-                  case groupMetadataKey: GroupMetadataKey =>
-                    // load group metadata
-                    val groupId = groupMetadataKey.key
-                    val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value, time)
-                    if (groupMetadata != null) {
-                      removedGroups.remove(groupId)
-                      loadedGroups.put(groupId, groupMetadata)
-                    } else {
-                      loadedGroups.remove(groupId)
-                      removedGroups.add(groupId)
-                    }
+                    case _ => // do nothing
+                  }
 
-                  case unknownKey =>
-                    throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
+                  case None => // ignore unknown keys
                 }
               }
             }
@@ -1041,7 +1046,7 @@ class GroupMetadataManager(brokerId: Int,
  * key version 2:       group metadata
  *    -> value version 0:       [protocol_type, generation, protocol, leader, members]
  */
-object GroupMetadataManager {
+object GroupMetadataManager extends Logging {
   // Metrics names
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
@@ -1145,17 +1150,22 @@ object GroupMetadataManager {
    * @param buffer input byte-buffer
    * @return an OffsetKey or GroupMetadataKey object from the message
    */
-  def readMessageKey(buffer: ByteBuffer): BaseKey = {
+  def readMessageKey(buffer: ByteBuffer): Option[BaseKey] = {
     val version = buffer.getShort
     if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
       // version 0 and 1 refer to offset
       val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), version)
-      OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
+      Some(OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition))))
     } else if (version >= GroupMetadataKeyData.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION) {
       // version 2 refers to group metadata
       val key = new GroupMetadataKeyData(new ByteBufferAccessor(buffer), version)
-      GroupMetadataKey(version, key.group)
-    } else throw new IllegalStateException(s"Unknown group metadata message version: $version")
+      Some(GroupMetadataKey(version, key.group))
+    } else {
+      // Unknown versions may exist when a downgraded coordinator is reading records from the log.
+      warn(s"Found unknown message key version: $version." +
+        s" The downgraded coordinator will ignore this key and corresponding value.")
+      None
+    }
   }
 
   /**
@@ -1229,17 +1239,21 @@ object GroupMetadataManager {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
         // Only print if the message is an offset record.
         // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
-        case offsetKey: OffsetKey =>
-          val groupTopicPartition = offsetKey.key
-          val value = consumerRecord.value
-          val formattedValue =
-            if (value == null) "NULL"
-            else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
-          output.write(groupTopicPartition.toString.getBytes(StandardCharsets.UTF_8))
-          output.write("::".getBytes(StandardCharsets.UTF_8))
-          output.write(formattedValue.getBytes(StandardCharsets.UTF_8))
-          output.write("\n".getBytes(StandardCharsets.UTF_8))
-        case _ => // no-op
+        case Some(key) => key match {
+          case offsetKey: OffsetKey =>
+            val groupTopicPartition = offsetKey.key
+            val value = consumerRecord.value
+            val formattedValue =
+              if (value == null) "NULL"
+              else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
+            output.write(groupTopicPartition.toString.getBytes(StandardCharsets.UTF_8))
+            output.write("::".getBytes(StandardCharsets.UTF_8))
+            output.write(formattedValue.getBytes(StandardCharsets.UTF_8))
+            output.write("\n".getBytes(StandardCharsets.UTF_8))
+          case _ => // no-op
+        }
+
+        case None => // no-op
       }
     }
   }
@@ -1250,17 +1264,20 @@ object GroupMetadataManager {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
         // Only print if the message is a group metadata record.
         // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
-        case groupMetadataKey: GroupMetadataKey =>
-          val groupId = groupMetadataKey.key
-          val value = consumerRecord.value
-          val formattedValue =
-            if (value == null) "NULL"
-            else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value), Time.SYSTEM).toString
-          output.write(groupId.getBytes(StandardCharsets.UTF_8))
-          output.write("::".getBytes(StandardCharsets.UTF_8))
-          output.write(formattedValue.getBytes(StandardCharsets.UTF_8))
-          output.write("\n".getBytes(StandardCharsets.UTF_8))
-        case _ => // no-op
+        case Some(key) => key match {
+          case groupMetadataKey: GroupMetadataKey =>
+            val groupId = groupMetadataKey.key
+            val value = consumerRecord.value
+            val formattedValue =
+              if (value == null) "NULL"
+              else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value), Time.SYSTEM).toString
+            output.write(groupId.getBytes(StandardCharsets.UTF_8))
+            output.write("::".getBytes(StandardCharsets.UTF_8))
+            output.write(formattedValue.getBytes(StandardCharsets.UTF_8))
+            output.write("\n".getBytes(StandardCharsets.UTF_8))
+          case _ => // no-op
+        }
+        case None => // no-op
       }
     }
   }
@@ -1273,9 +1290,13 @@ object GroupMetadataManager {
       throw new KafkaException("Failed to decode message using offset topic decoder (message had a missing key)")
     } else {
       GroupMetadataManager.readMessageKey(record.key) match {
-        case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
-        case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
-        case _ => throw new KafkaException("Failed to decode message using offset topic decoder (message had an invalid key)")
+        case Some(key) => key match {
+          case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
+          case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
+          case _ => throw new KafkaException("Failed to decode message using offset topic decoder (message had an invalid key)")
+        }
+        case None =>
+          (Some("<UNKNOWN>"), Some("<UNKNOWN>"))
       }
     }
   }

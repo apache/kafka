@@ -35,7 +35,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics => kMetrics}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{Errors, MessageUtil}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -640,8 +640,13 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
+
+    // Should ignore unknown record
+    val unknownMessage = MessageUtil.messageWithUnknownVersion()
+    val unknownRecord = new SimpleRecord(unknownMessage, unknownMessage)
+
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
-      (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
+      (offsetCommitRecords ++ Seq(unknownRecord) ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
@@ -1727,7 +1732,7 @@ class GroupMetadataManagerTest {
     assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
-    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
+    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).get.asInstanceOf[GroupMetadataKey]
     assertEquals(groupId, groupKey.key)
 
     // the full group should be gone since all offsets were removed
@@ -1771,7 +1776,7 @@ class GroupMetadataManagerTest {
     assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
-    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
+    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).get.asInstanceOf[GroupMetadataKey]
     assertEquals(groupId, groupKey.key)
 
     // the full group should be gone since all offsets were removed
@@ -1832,7 +1837,7 @@ class GroupMetadataManagerTest {
     records.foreach { message =>
       assertTrue(message.hasKey)
       assertFalse(message.hasValue)
-      val offsetKey = GroupMetadataManager.readMessageKey(message.key).asInstanceOf[OffsetKey]
+      val offsetKey = GroupMetadataManager.readMessageKey(message.key).get.asInstanceOf[OffsetKey]
       assertEquals(groupId, offsetKey.key.group)
       assertEquals("foo", offsetKey.key.topicPartition.topic)
     }
@@ -2762,4 +2767,10 @@ class GroupMetadataManagerTest {
     assertTrue(partitionLoadTime("partition-load-time-max") >= diff)
     assertTrue(partitionLoadTime("partition-load-time-avg") >= diff)
   }
+
+  @Test
+  def testIgnoreUnknownMessageKeyVersion(): Unit = {
+    GroupMetadataManager.readMessageKey(ByteBuffer.wrap(MessageUtil.messageWithUnknownVersion()))
+  }
+
 }

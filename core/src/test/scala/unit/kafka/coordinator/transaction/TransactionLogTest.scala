@@ -19,10 +19,12 @@ package kafka.coordinator.transaction
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.MessageUtil
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
+import java.nio.ByteBuffer
 import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
@@ -81,7 +83,7 @@ class TransactionLogTest {
 
     var count = 0
     for (record <- records.records.asScala) {
-      val txnKey = TransactionLog.readTxnRecordKey(record.key)
+      val txnKey = TransactionLog.readTxnRecordKey(record.key).get
       val transactionalId = txnKey.transactionalId
       val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value).get
 
@@ -133,6 +135,11 @@ class TransactionLogTest {
     val (keyStringOpt, valueStringOpt) = TransactionLog.formatRecordKeyAndValue(transactionMetadataRecord)
     assertEquals(Some(s"transaction_metadata::transactionalId=$transactionalId"), keyStringOpt)
     assertEquals(Some("<DELETE>"), valueStringOpt)
+  }
+
+  @Test
+  def testReadUnknownMessageKeyVersion(): Unit = {
+    TransactionLog.readTxnRecordKey(ByteBuffer.wrap(MessageUtil.messageWithUnknownVersion()))
   }
 
 }
