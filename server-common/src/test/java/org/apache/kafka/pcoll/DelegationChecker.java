@@ -44,7 +44,6 @@ import static org.mockito.Mockito.when;
  */
 public abstract class DelegationChecker<D, W, T> {
     private final D mock;
-    private final Function<D, W> wrapperCreator;
     private final W wrapper;
     private Consumer<D> mockConsumer;
     private Function<D, T> mockConfigurationFunction;
@@ -52,16 +51,16 @@ public abstract class DelegationChecker<D, W, T> {
     private Consumer<W> wrapperConsumer;
     private Function<W, T> wrapperFunctionApplier;
     private Function<T, ?> mockFunctionReturnValueTransformation;
-    private boolean expectMockFunctionReturnValueToBeWrapped;
+    private boolean expectWrapperToWrapMockFunctionReturnValue;
     private boolean persistentCollectionMethodInvokedCorrectly = false;
 
     /**
-     * Constructor to use when testing delegation of a void method
+     * @param mock mock for the underlying delegate
+     * @param wrapperCreator how to create a wrapper for the mock
      */
     protected DelegationChecker(D mock, Function<D, W> wrapperCreator) {
         this.mock = Objects.requireNonNull(mock);
-        this.wrapperCreator = Objects.requireNonNull(wrapperCreator);
-        this.wrapper = wrapperCreator.apply(mock);
+        this.wrapper = Objects.requireNonNull(wrapperCreator).apply(mock);
     }
 
     /**
@@ -81,9 +80,22 @@ public abstract class DelegationChecker<D, W, T> {
         return this;
     }
 
-    private static void throwExceptionForIllegalTestSetup() {
-        throw new IllegalStateException(
-            "test setup error: must define both mock and wrapper consumers or both mock and wrapper functions");
+    public DelegationChecker<D, W, T> defineWrapperVoidMethodInvocation(Consumer<W> wrapperConsumer) {
+        this.wrapperConsumer = Objects.requireNonNull(wrapperConsumer);
+        return this;
+    }
+
+    public <R> DelegationChecker<D, W, T> defineWrapperFunctionInvocationAndMockReturnValueTransformation(
+        Function<W, T> wrapperFunctionApplier,
+        Function<T, R> expectedFunctionReturnValueTransformation) {
+        this.wrapperFunctionApplier = Objects.requireNonNull(wrapperFunctionApplier);
+        this.mockFunctionReturnValueTransformation = Objects.requireNonNull(expectedFunctionReturnValueTransformation);
+        return this;
+    }
+
+    public DelegationChecker<D, W, T> expectWrapperToWrapMockFunctionReturnValue() {
+        this.expectWrapperToWrapMockFunctionReturnValue = true;
+        return this;
     }
 
     public void doVoidMethodDelegationCheck() {
@@ -120,28 +132,15 @@ public abstract class DelegationChecker<D, W, T> {
         // assert that the expected delegation to the mock actually occurred, including any return value transformation
         assertTrue(persistentCollectionMethodInvokedCorrectly);
         Object transformedMockFunctionReturnValue = mockFunctionReturnValueTransformation.apply(mockFunctionReturnValue);
-        if (this.expectMockFunctionReturnValueToBeWrapped) {
+        if (this.expectWrapperToWrapMockFunctionReturnValue) {
             assertEquals(transformedMockFunctionReturnValue, unwrap((W) wrapperReturnValue));
         } else {
             assertEquals(transformedMockFunctionReturnValue, wrapperReturnValue);
         }
     }
 
-    public DelegationChecker<D, W, T> defineWrapperVoidMethodInvocation(Consumer<W> wrapperConsumer) {
-        this.wrapperConsumer = Objects.requireNonNull(wrapperConsumer);
-        return this;
-    }
-
-    public <R> DelegationChecker<D, W, T> defineWrapperFunctionInvocationAndMockReturnValueTransformation(
-        Function<W, T> wrapperFunctionApplier,
-        Function<T, R> expectedFunctionReturnValueTransformation) {
-        this.wrapperFunctionApplier = Objects.requireNonNull(wrapperFunctionApplier);
-        this.mockFunctionReturnValueTransformation = Objects.requireNonNull(expectedFunctionReturnValueTransformation);
-        return this;
-    }
-
-    public DelegationChecker<D, W, T> expectWrapperToWrapMockFunctionReturnValue() {
-        this.expectMockFunctionReturnValueToBeWrapped = true;
-        return this;
+    private static void throwExceptionForIllegalTestSetup() {
+        throw new IllegalStateException(
+            "test setup error: must define both mock and wrapper consumers or both mock and wrapper functions");
     }
 }
