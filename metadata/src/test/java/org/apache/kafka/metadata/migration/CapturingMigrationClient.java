@@ -58,6 +58,11 @@ class CapturingMigrationClient implements MigrationClient {
     }
 
     @Override
+    public AclMigrationClient aclClient() {
+        return null;
+    }
+
+    @Override
     public ZkMigrationLeadershipState writeProducerId(
             long nextProducerId,
             ZkMigrationLeadershipState state
@@ -75,11 +80,6 @@ class CapturingMigrationClient implements MigrationClient {
 
     @Override
     public Set<Integer> readBrokerIds() {
-        return brokerIds;
-    }
-
-    @Override
-    public Set<Integer> readBrokerIdsFromTopicAssignments() {
         return brokerIds;
     }
 }

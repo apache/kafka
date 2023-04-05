@@ -80,8 +80,8 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     super.tearDown()
   }
 
-  override def configureSecurityBeforeServersStart(): Unit = {
-    super.configureSecurityBeforeServersStart()
+  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
+    super.configureSecurityBeforeServersStart(testInfo)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
   }

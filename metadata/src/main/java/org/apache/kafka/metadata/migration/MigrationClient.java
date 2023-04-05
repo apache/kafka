@@ -16,10 +16,16 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -71,6 +77,8 @@ public interface MigrationClient {
     TopicMigrationClient topicClient();
 
     ConfigMigrationClient configClient();
+
+    AclMigrationClient aclClient();
 
     ZkMigrationLeadershipState writeProducerId(
         long nextProducerId,

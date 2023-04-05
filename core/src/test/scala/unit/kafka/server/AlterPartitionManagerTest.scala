@@ -139,7 +139,11 @@ class AlterPartitionManagerTest {
     // Make sure we sent the right request ISR={1}
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
-    assertEquals(request.data().topics().get(0).partitions().get(0).newIsr().size(), 1)
+    if (request.version() < 3) {
+      assertEquals(request.data.topics.get(0).partitions.get(0).newIsr.size, 1)
+    } else {
+      assertEquals(request.data.topics.get(0).partitions.get(0).newIsrWithEpochs.size, 1)
+    }
   }
 
   @ParameterizedTest

@@ -18,11 +18,13 @@ package kafka.zk
 
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.wrapZkException
-import kafka.zk.migration.{ZkConfigMigrationClient, ZkTopicMigrationClient}
+import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata._
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
@@ -38,13 +40,17 @@ import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationClient {
+
+  val MaxBatchSize = 100
+
   def apply(
     zkClient: KafkaZkClient,
     zkConfigEncoder: PasswordEncoder
   ): ZkMigrationClient = {
     val topicClient = new ZkTopicMigrationClient(zkClient)
     val configClient = new ZkConfigMigrationClient(zkClient, zkConfigEncoder)
-    new ZkMigrationClient(zkClient, topicClient, configClient)
+    val aclClient = new ZkAclMigrationClient(zkClient)
+    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient)
   }
 
   /**
@@ -76,6 +82,7 @@ class ZkMigrationClient(
   zkClient: KafkaZkClient,
   topicClient: TopicMigrationClient,
   configClient: ConfigMigrationClient,
+  aclClient: AclMigrationClient
 ) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(
@@ -218,6 +225,32 @@ class ZkMigrationClient(
     }
   }
 
+  def migrateAcls(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+    aclClient.iterateAcls(new util.function.BiConsumer[ResourcePattern, util.Set[AccessControlEntry]]() {
+      override def accept(resourcePattern: ResourcePattern, acls: util.Set[AccessControlEntry]): Unit = {
+        val batch = new util.ArrayList[ApiMessageAndVersion]()
+        acls.asScala.foreach { entry =>
+          batch.add(new ApiMessageAndVersion(new AccessControlEntryRecord()
+            .setId(Uuid.randomUuid())
+            .setResourceType(resourcePattern.resourceType().code())
+            .setResourceName(resourcePattern.name())
+            .setPatternType(resourcePattern.patternType().code())
+            .setPrincipal(entry.principal())
+            .setHost(entry.host())
+            .setOperation(entry.operation().code())
+            .setPermissionType(entry.permissionType().code()), AccessControlEntryRecord.HIGHEST_SUPPORTED_VERSION))
+          if (batch.size() == ZkMigrationClient.MaxBatchSize) {
+            recordConsumer.accept(batch)
+            batch.clear()
+          }
+        }
+        if (!batch.isEmpty) {
+          recordConsumer.accept(batch)
+        }
+      }
+    })
+  }
+
   override def readAllMetadata(
     batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
     brokerIdConsumer: Consumer[Integer]
@@ -226,6 +259,7 @@ class ZkMigrationClient(
     migrateBrokerConfigs(batchConsumer)
     migrateClientQuotas(batchConsumer)
     migrateProducerId(batchConsumer)
+    migrateAcls(batchConsumer)
   }
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
@@ -247,4 +281,6 @@ class ZkMigrationClient(
   override def topicClient(): TopicMigrationClient = topicClient
 
   override def configClient(): ConfigMigrationClient = configClient
+
+  override def aclClient(): AclMigrationClient = aclClient
 }
