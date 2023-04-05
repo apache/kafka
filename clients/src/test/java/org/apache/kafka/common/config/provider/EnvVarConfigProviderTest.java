@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class EnvVarConfigProviderTest {
 
     private EnvVarConfigProvider envVarConfigProvider = null;
+
     @BeforeEach
     public void setup() {
         Map<String, String> testEnvVars = new HashMap<String, String>() {
@@ -90,6 +91,7 @@ class EnvVarConfigProviderTest {
         Set<String> keys = envVarConfigProvider.get(null, keyList).data().keySet();
         assertEquals(keyList, keys);
     }
+
     @Test
     void testNotNullPathNonEmptyThrowsException() {
         assertThrows(ConfigException.class, () -> envVarConfigProvider.get("test-path", Collections.singleton("test_var1")));
