@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class OffsetFetchApplicationEvent extends ApplicationEvent {
-    final public WakeupableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+    final private WakeupableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
     public final Set<TopicPartition> partitions;
 
     public OffsetFetchApplicationEvent(final Set<TopicPartition> partitions) {
@@ -39,5 +39,9 @@ public class OffsetFetchApplicationEvent extends ApplicationEvent {
 
     public Map<TopicPartition, OffsetAndMetadata> complete(final Duration duration) throws ExecutionException, InterruptedException, TimeoutException {
         return future.get(duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    public WakeupableFuture<Map<TopicPartition, OffsetAndMetadata>> future() {
+        return future;
     }
 }

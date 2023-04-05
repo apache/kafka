@@ -54,12 +54,13 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class PrototypeAsyncConsumerTest {
 
@@ -81,9 +82,9 @@ public class PrototypeAsyncConsumerTest {
     public void setup() {
         injectConsumerConfigs();
         this.config = new ConsumerConfig(consumerProps);
-        this.logContext = new LogContext();
-        this.subscriptions = mock(SubscriptionState.class);
         this.eventHandler = mock(DefaultEventHandler.class);
+        this.subscriptions = mock(SubscriptionState.class);
+        this.logContext = new LogContext();
         this.metrics = new Metrics(time);
         this.clusterResourceListeners = new ClusterResourceListeners();
     }
@@ -128,15 +129,14 @@ public class PrototypeAsyncConsumerTest {
 
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testCommitAsync_UserSuppliedCallback() {
         WakeupableFuture<Void> future = new WakeupableFuture<>();
-
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
-
-        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-        PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(consumer);
+        PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(),
+            new StringDeserializer()));
         doReturn(future).when(mockedConsumer).commit(offsets);
         OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
         mockedConsumer.commitAsync(offsets, customCallback);
@@ -147,14 +147,13 @@ public class PrototypeAsyncConsumerTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testCommitted() {
-        PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
+            when(mock.future()).thenReturn(new WakeupableFuture<>());
+            when(mock.complete(any())).thenReturn(new HashMap<>());
+        });
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
-        try {
-            doReturn(new HashMap<>()).when(mockedConsumer).tryGetFutureResult(any(), any(), any());
-        } catch (Exception e) {
-            fail("Should not throw exception on tryGetFutureResult");
-        }
-        assertDoesNotThrow(() -> mockedConsumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
+        assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
         verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
     }
 
@@ -167,6 +166,7 @@ public class PrototypeAsyncConsumerTest {
     @Test
     public void testWakeup_commitSync() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        doReturn(mockTopicPartitionOffset()).when(subscriptions).allConsumed();
         consumer.wakeup();
         assertThrows(WakeupException.class, () -> consumer.commitSync());
     }
@@ -219,8 +219,7 @@ public class PrototypeAsyncConsumerTest {
             clusterResourceListeners,
             Optional.ofNullable(this.groupId),
             clientId,
-            config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG),
-            config.getLong(RETRY_BACKOFF_MS_CONFIG));
+            config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 }
 

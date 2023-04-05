@@ -39,8 +39,10 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.ConcurrentTransactionsException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -51,7 +53,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -69,6 +70,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -96,7 +98,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
-    private final long retryBackoffMs;
+    private AtomicReference<Optional<WakeupableFuture>> activeFuture = new AtomicReference<>(Optional.empty());
     private AtomicBoolean shouldWakeup = new AtomicBoolean(false);
 
     public PrototypeAsyncConsumer(Properties properties,
@@ -121,7 +123,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
         this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-        this.retryBackoffMs = config.getInt(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         // If group.instance.id is set, we will append it to the log context.
         if (groupRebalanceConfig.groupInstanceId.isPresent()) {
             logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
@@ -162,8 +163,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             ClusterResourceListeners clusterResourceListeners,
             Optional<String> groupId,
             String clientId,
-            int defaultApiTimeoutMs,
-            long retryBackoffMs) {
+            int defaultApiTimeoutMs) {
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
@@ -171,7 +171,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.metrics = metrics;
         this.groupId = groupId;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.retryBackoffMs = retryBackoffMs;
         this.clientId = clientId;
         this.eventHandler = eventHandler;
     }
@@ -218,10 +217,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         return ConsumerRecords.empty();
     }
 
-    /**
-     * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and
-     * partitions.
-     */
     @Override
     public void commitSync() {
         commitSync(Duration.ofMillis(defaultApiTimeoutMs));
@@ -274,6 +269,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     WakeupableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
         maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
+        ensureNoInflightBlockingFutures(commitEvent.future());
         eventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -325,23 +321,53 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         return committed(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
+    /**
+     * Retrieve the last committed offset for the given partition (whether the commit happened by this process or
+     * another). This offset will be used as the position for the consumer in the event of a failure.
+     * <p>
+     * If any of the partitions requested do not exist, an exception would be thrown.
+     * <p>
+     * This call blocks until the result returns or the timeout expires. If an unrecoverable error is encountered, or
+     * the timeout specified by {@code default.api.timeout.ms} expires
+     * {@link org.apache.kafka.common.errors.TimeoutException} is thrown.
+     *
+     * @param partitions The partition to check
+     * @param timeout The maximum time to block.
+     * @return The last committed offset and metadata or null if there was no prior commit
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
+     *             the timeout specified by {@code default.api.timeout.ms} expires.
+     */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions,
                                                             final Duration timeout) {
+        maybeWakeup();
         maybeThrowInvalidGroupIdException();
+
         if (partitions.isEmpty()) {
             return new HashMap<>();
         }
 
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
+        ensureNoInflightBlockingFutures(event.future());
         eventHandler.add(event);
         try {
-            // may throw WakeupException and TimeoutException
-            return tryGetFutureResult(this.time, event.future, timeout);
+            return event.complete(timeout);
         } catch (ExecutionException e) {
             throw new KafkaException(e);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
+        } catch (TimeoutException e) {
+            throw new org.apache.kafka.common.errors.TimeoutException(e);
+        } finally {
+            this.activeFuture.set(Optional.empty());
         }
     }
 
@@ -464,6 +490,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         this.shouldWakeup.set(true);
+        this.activeFuture.get().ifPresent(WakeupableFuture::wakeup);
     }
 
     /**
@@ -482,16 +509,40 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         commitSync(offsets, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
+    /**
+     * Commit the user provided offsets, blocking until the commit completes or the timeout expires. If the future is
+     * interrupted by wakeup, the future will be completed with an
+     * {@link org.apache.kafka.common.errors.WakeupException}.
+     *
+     * @param offsets offsets to commit.
+     * @param timeout amount of time to block for the commit to complete.
+     *
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the topic does not exist).
+     * @throws org.apache.kafka.common.errors.TimeoutException if the timeout specified by {@code default.api.timeout.ms} expires
+     *            before successful completion of the offset commit
+     */
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
+        maybeWakeup();
         final WakeupableFuture<Void> commitFuture = commit(offsets);
         try {
-            // may throw WakeupException and TimeoutException
-            tryGetFutureResult(this.time, commitFuture, timeout);
+            commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw new KafkaException(e);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
+        } catch (TimeoutException e) {
+            throw new org.apache.kafka.common.errors.TimeoutException(e);
+        } finally {
+            this.activeFuture.set(Optional.empty());
         }
     }
 
@@ -546,24 +597,16 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         throw new KafkaException("method not implemented");
     }
 
-    <T> T tryGetFutureResult(
-            final Time time,
-            final WakeupableFuture<T> future,
-            final Duration timeout) throws ExecutionException, InterruptedException {
-        Timer timer = time.timer(timeout.toMillis());
-        do {
-            if (future.isDone()) {
-                return future.get();
-            }
+    private void ensureNoInflightBlockingFutures(final WakeupableFuture future) {
+        if (!this.activeFuture.compareAndSet(Optional.empty(), Optional.of(future))) {
+            throw new ConcurrentTransactionsException("Only one inflight blocking future can be active at a time");
+        }
+    }
 
-            if (this.shouldWakeup.get()) {
-                this.shouldWakeup.set(false);
-                future.wakeup();
-            }
-            // Maybe Thread.sleep?
-            Thread.sleep(retryBackoffMs);
-        } while (!timer.isExpired());
-        throw new org.apache.kafka.common.errors.TimeoutException();
+    private void maybeWakeup() {
+        if (this.shouldWakeup.getAndSet(false)) {
+            throw new WakeupException();
+        }
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
