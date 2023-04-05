@@ -52,8 +52,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * For a fixed in-memory state, translation of variable upstream offsets will be monotonic.
  * For variable in-memory state, translation of a fixed upstream offset will not be monotonic.
  * <p>Translation will be unavailable for all topic-partitions before an initial read-to-end of the offset syncs topic
- * is complete. Translation will be unavailable after that if no syncs are present for a topic-partition, or if relevant
- * offset syncs for the topic were eligible for compaction at the time of the initial read-to-end.
+ * is complete. Translation will be unavailable after that if no syncs are present for a topic-partition, if replication
+ * started after the position of the consumer group, or if relevant offset syncs for the topic were eligible for
+ * compaction at the time of the initial read-to-end.
  */
 class OffsetSyncStore implements AutoCloseable {
 

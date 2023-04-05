@@ -121,7 +121,7 @@ public class OffsetSyncStoreTest {
             // After starting but before seeing new offsets, only the latest startup offset can be translated
             assertSparseSync(store, 1000, -1);
 
-            for (; offset <= 2000; offset += maxOffsetLag) {
+            for (; offset <= 10000; offset += maxOffsetLag) {
                 store.sync(tp, offset, offset);
                 assertSparseSyncInvariant(store, tp);
             }
@@ -131,18 +131,21 @@ public class OffsetSyncStoreTest {
 
             // We can translate offsets between the latest startup offset and the latest offset with variable precision
             // Older offsets are less precise and translation ends up farther apart
-            assertSparseSync(store, 1640, 1000);
-            assertSparseSync(store, 1800, 1640);
-            assertSparseSync(store, 1920, 1800);
-            assertSparseSync(store, 1960, 1920);
-            assertSparseSync(store, 1990, 1960);
-            assertSparseSync(store, 2000, 1990);
+            assertSparseSync(store, 6120, 1000);
+            assertSparseSync(store, 8680, 6120);
+            assertSparseSync(store, 9320, 8680);
+            assertSparseSync(store, 9640, 9320);
+            assertSparseSync(store, 9800, 9640);
+            assertSparseSync(store, 9920, 9800);
+            assertSparseSync(store, 9960, 9920);
+            assertSparseSync(store, 9990, 9960);
+            assertSparseSync(store, 10000, 9990);
 
             // Rewind upstream offsets should clear all historical syncs
-            store.sync(tp, 1500, 2500);
+            store.sync(tp, 1500, 11000);
             assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 1499));
-            assertEquals(OptionalLong.of(2500), store.translateDownstream(null, tp, 1500));
-            assertEquals(OptionalLong.of(2501), store.translateDownstream(null, tp, 2000));
+            assertEquals(OptionalLong.of(11000), store.translateDownstream(null, tp, 1500));
+            assertEquals(OptionalLong.of(11001), store.translateDownstream(null, tp, 2000));
         }
     }
 
