@@ -613,6 +613,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (this.closed)
             throw new IllegalStateException("This consumer has already been closed.");
 
+        log.debug("Raising WakeupException in response to user wakeup");
         if (this.shouldWakeup.getAndSet(false)) {
             throw new WakeupException();
         }
