@@ -34,7 +34,6 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
-import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.{MigrationClient, MigrationClientAuthException, MigrationClientException, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
