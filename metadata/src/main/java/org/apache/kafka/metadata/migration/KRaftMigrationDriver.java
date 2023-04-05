@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.utils.LogContext;
@@ -29,7 +27,6 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LoaderManifestType;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -41,9 +38,6 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -540,7 +534,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
-            MetadataImage prevImage = KRaftMigrationDriver.this.image;
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
@@ -559,7 +552,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 completionHandler.accept(null);
             }
 
-            if(isSnapshot) {
+            if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image);
             } else {
                 zkMetadataWriter.handleDelta(image, delta);

@@ -18,14 +18,11 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClusterImage;
@@ -36,8 +33,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.ProducerIdsImage;
 import org.apache.kafka.image.ScramImage;
-import org.apache.kafka.image.TopicDelta;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
@@ -53,9 +48,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -65,7 +58,6 @@ import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -308,14 +300,14 @@ public class KRaftMigrationDriverTest {
             public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
                 IMAGE1.topicsByName().forEach((topicName, topicImage) -> {
                     Map<Integer, List<Integer>> assignment = new HashMap<>();
-                    topicImage.partitions().forEach(((partitionId, partitionRegistration) ->
+                    topicImage.partitions().forEach((partitionId, partitionRegistration) ->
                         assignment.put(partitionId, IntStream.of(partitionRegistration.replicas).boxed().collect(Collectors.toList()))
-                    ));
+                    );
                     visitor.visitTopic(topicName, topicImage.id(), assignment);
 
-                    topicImage.partitions().forEach(((partitionId, partitionRegistration) ->
+                    topicImage.partitions().forEach((partitionId, partitionRegistration) ->
                         visitor.visitPartition(new TopicIdPartition(topicImage.id(), new TopicPartition(topicName, partitionId)), partitionRegistration)
-                    ));
+                    );
                 });
             }
         };
@@ -326,7 +318,7 @@ public class KRaftMigrationDriverTest {
                 new NoOpRecordConsumer(),
                 migrationClient,
                 metadataPropagator,
-                metadataPublisher -> {},
+                metadataPublisher -> { },
                 new MockFaultHandler("test")
         )) {
 
