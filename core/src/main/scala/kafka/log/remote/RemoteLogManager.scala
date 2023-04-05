@@ -50,6 +50,7 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
     val threadPool = new ScheduledThreadPoolExecutor(poolSize)
     threadPool.setRemoveOnCancelPolicy(true)
     threadPool.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
+    threadPool.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
     threadPool.setThreadFactory(new ThreadFactory {
       private val sequence = new AtomicInteger()
 
@@ -96,6 +97,8 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
  * @param rlmConfig Configuration required for remote logging subsystem(tiered storage) at the broker level.
  * @param brokerId  id of the current broker.
  * @param logDir    directory of Kafka log segments.
+ * @param time      Time instance.
+ * @param fetchLog  function to get UnifiedLog instance for a given topic.
  */
 class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
                        brokerId: Int,
@@ -219,7 +222,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     def cacheTopicPartitionIds(topicIdPartition: TopicIdPartition): Unit = {
       val previousTopicId = topicPartitionIds.put(topicIdPartition.topicPartition(), topicIdPartition.topicId())
       if (previousTopicId != null && previousTopicId != topicIdPartition.topicId()) {
-        warn(s"Previous cached topic id $previousTopicId for ${topicIdPartition.topicPartition()} does " +
+        info(s"Previous cached topic id $previousTopicId for ${topicIdPartition.topicPartition()} does " +
           s"not match update topic id ${topicIdPartition.topicId()}")
       }
     }
@@ -436,8 +439,8 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
           if (lso < 0) {
             warn(s"lastStableOffset for partition $tpId is $lso, which should not be negative.")
           } else if (lso > 0 && copiedOffset < lso) {
-            // Copy segments only till the min of high-watermark or stable-offset as remote storage should contain
-            // only committed/acked messages
+            // Copy segments only till the last-stable-offset as remote storage should contain only committed/acked
+            // messages
             val toOffset = lso
             debug(s"Checking for segments to copy, copiedOffset: $copiedOffset and toOffset: $toOffset")
             val activeSegBaseOffset = log.activeSegment.baseOffset
@@ -478,26 +481,26 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
                   segmentLeaderEpochs.put(Integer.valueOf(entry.epoch), lang.Long.valueOf(entry.startOffset))
                 )
 
-                val remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset,
+                val copySegmentStartedRlsm = new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset,
                   segment.largestTimestamp, brokerId, time.milliseconds(), segment.log.sizeInBytes(),
                   segmentLeaderEpochs)
 
-                remoteLogMetadataManager.addRemoteLogSegmentMetadata(remoteLogSegmentMetadata).get()
+                remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get()
 
                 val leaderEpochsIndex = getLeaderEpochCheckpoint(log, startOffset = -1, nextOffset).readAsByteBuffer()
                 val segmentData = new LogSegmentData(logFile.toPath, toPathIfExists(segment.lazyOffsetIndex.get.file),
                   toPathIfExists(segment.lazyTimeIndex.get.file), Optional.ofNullable(toPathIfExists(segment.txnIndex.file)),
                   producerIdSnapshotFile.toPath, leaderEpochsIndex)
-                remoteLogStorageManager.copyLogSegmentData(remoteLogSegmentMetadata, segmentData)
+                remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData)
 
-                val rlsmAfterSegmentCopy = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
+                val copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
                   RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId)
 
-                remoteLogMetadataManager.updateRemoteLogSegmentMetadata(rlsmAfterSegmentCopy).get()
+                remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get()
 
                 copiedOffsetOption = Some(endOffset)
                 log.updateHighestOffsetInRemoteStorage(endOffset)
-                info(s"Copied $logFileName to remote storage with segment-id: ${rlsmAfterSegmentCopy.remoteLogSegmentId()}")
+                info(s"Copied $logFileName to remote storage with segment-id: ${copySegmentFinishedRlsm.remoteLogSegmentId()}")
               }
             }
           } else {
