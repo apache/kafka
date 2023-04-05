@@ -89,6 +89,14 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
+    public void clearCache() {
+        if (wrapped instanceof CachedStateStore) {
+            ((CachedStateStore) wrapped).clearCache();
+        }
+    }
+
+
+    @Override
     public String name() {
         return wrapped.name();
     }
