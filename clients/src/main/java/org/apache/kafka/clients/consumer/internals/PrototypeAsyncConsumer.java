@@ -39,7 +39,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.ConcurrentTransactionsException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -67,6 +66,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -99,9 +99,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    // Wakeup atomic reference to ensure no two blocking calls are active at the same time. Also ensure wakeup call
-    // can interrupt upon the next blocking call.
-    private AtomicReference<Optional<WakeupableFuture>> activeFuture = new AtomicReference<>(Optional.empty());
     private AtomicBoolean shouldWakeup = new AtomicBoolean(false);
     private volatile boolean closed = false;
 
@@ -278,7 +275,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     WakeupableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
         maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
-        ensureNoInflightBlockingFutures(commitEvent.future());
         eventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -362,18 +358,17 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
 
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
-        ensureNoInflightBlockingFutures(event.future());
         eventHandler.add(event);
         try {
             return event.complete(timeout);
         } catch (ExecutionException e) {
             throw new KafkaException(e);
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
+        } catch (InterruptedException | CancellationException e) {
+            throw new InterruptException(e.getMessage());
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } finally {
-            resetWakeupState();
+            this.shouldWakeup.set(false);
         }
     }
 
@@ -483,14 +478,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public void close(Duration timeout) {
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
-        ensureNoInflightBlockingFutures(new WakeupableFuture<>());
         try {
             if (!closed) {
                 close(timeout, false);
             }
         } finally {
             closed = true;
-            resetWakeupState();
+            this.shouldWakeup.set(false);
         }
     }
 
@@ -510,7 +504,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         this.shouldWakeup.set(true);
-        this.activeFuture.get().ifPresent(WakeupableFuture::wakeup);
     }
 
     /**
@@ -557,12 +550,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw new KafkaException(e);
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
+        } catch (InterruptedException | CancellationException e) {
+            throw new InterruptException(e.getMessage());
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } finally {
-            resetWakeupState();
+            this.shouldWakeup.set(false);
         }
     }
 
@@ -617,12 +610,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         throw new KafkaException("method not implemented");
     }
 
-    private void ensureNoInflightBlockingFutures(final WakeupableFuture<?> future) {
-        if (!this.activeFuture.compareAndSet(Optional.empty(), Optional.of(future))) {
-            throw new ConcurrentTransactionsException("Only one inflight blocking future can be active at a time");
-        }
-    }
-
     private void maybeWakeup() {
         if (this.closed)
             throw new IllegalStateException("This consumer has already been closed.");
@@ -632,14 +619,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    private void resetWakeupState() {
-        this.shouldWakeup.set(false);
-        this.activeFuture.set(Optional.empty());
-    }
-
     // Visible for testing
     boolean wakeupStateResetted() {
-        return !this.shouldWakeup.get() && !this.activeFuture.get().isPresent();
+        return !this.shouldWakeup.get();
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
