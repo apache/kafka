@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
-import org.apache.kafka.common.{InvalidRecordException, Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
@@ -65,8 +65,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
           currentNodeAndTransactionData.transactionData.remove(transactionData)
           oldCallback(topicPartitionsToError.toMap)
         } else {
-          // We should never see a request on the same epoch since we haven't finished handling the one in queue
-          throw new InvalidRecordException("Received a second request from the same connection without finishing the first.")
+          // If we receive another request for the same transactional ID and epoch, the previous one must have expired. Remove the old data.
+          currentNodeAndTransactionData.transactionData.remove(transactionData)
         }
       }
       currentNodeAndTransactionData.transactionData.add(transactionData)
@@ -77,6 +77,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
 
   private class AddPartitionsToTxnHandler(node: Node, transactionDataAndCallbacks: TransactionDataAndCallbacks) extends RequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
+      // Note: Synchronization is not needed on inflightNodes since it is always accessed from this thread.
       inflightNodes.remove(node)
       if (response.authenticationException() != null) {
         error(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with an " +
@@ -94,11 +95,15 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
         val addPartitionsToTxnResponseData = response.responseBody.asInstanceOf[AddPartitionsToTxnResponse].data
         if (addPartitionsToTxnResponseData.errorCode != 0) {
           error(s"AddPartitionsToTxnRequest for broker ${config.brokerId}  returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
-          // TODO: send error back correctly -- we need to verify all possible errors can be handled by the client.
-          // errors -- versionmismatch --> handled above
-          //        -- clusterauth --> should handle differently
+          // The client should not be exposed to CLUSTER_AUTHORIZATION_FAILED so modify the error to invalid record -- to signify the verification did not complete.
+          // Older clients return with INVALID_RECORD
+          val finalError = if (addPartitionsToTxnResponseData.errorCode() == Errors.CLUSTER_AUTHORIZATION_FAILED.code)
+            Errors.INVALID_RECORD.code
+          else 
+            addPartitionsToTxnResponseData.errorCode()
+          
           transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-            callback(buildErrorMap(txnId, transactionDataAndCallbacks.transactionData, addPartitionsToTxnResponseData.errorCode()))
+            callback(buildErrorMap(txnId, transactionDataAndCallbacks.transactionData, finalError))
           }
         } else {
           addPartitionsToTxnResponseData.resultsByTransaction().forEach { transactionResult =>
@@ -109,8 +114,11 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
                 if (partitionResult.partitionErrorCode() != Errors.NONE.code()) {
                   // Producers expect to handle INVALID_PRODUCER_EPOCH in this scenario.
                   val code = 
-                    if (partitionResult.partitionErrorCode() == Errors.PRODUCER_FENCED.code())
-                      Errors.INVALID_PRODUCER_EPOCH.code() 
+                    if (partitionResult.partitionErrorCode() == Errors.PRODUCER_FENCED.code)
+                      Errors.INVALID_PRODUCER_EPOCH.code
+                    // Older clients return INVALID_RECORD  
+                    else if (partitionResult.partitionErrorCode() == Errors.INVALID_TXN_STATE.code)
+                      Errors.INVALID_RECORD.code  
                     else 
                       partitionResult.partitionErrorCode()
                   unverified.put(tp, Errors.forCode(code))
@@ -148,21 +156,23 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     val buffer = mutable.Buffer[RequestAndCompletionHandler]()
     val currentTimeMs = time.milliseconds()
     val removedNodes = mutable.Set[Node]()
-    nodesToTransactions.foreach { case (node, transactionDataAndCallbacks) =>
-      if (!inflightNodes.contains(node)) {
-        buffer += RequestAndCompletionHandler(
-          currentTimeMs,
-          node,
-          AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData),
-          new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
-        )
+    nodesToTransactions.synchronized {
+      nodesToTransactions.foreach { case (node, transactionDataAndCallbacks) =>
+        if (!inflightNodes.contains(node)) {
+          buffer += RequestAndCompletionHandler(
+            currentTimeMs,
+            node,
+            AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData),
+            new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
+          )
 
-        removedNodes.add(node)
+          removedNodes.add(node)
+        }
       }
-    }
-    removedNodes.foreach { node =>
-      inflightNodes.add(node)
-      nodesToTransactions.remove(node)
+      removedNodes.foreach { node =>
+        inflightNodes.add(node)
+        nodesToTransactions.remove(node)
+      }
     }
     buffer
   }

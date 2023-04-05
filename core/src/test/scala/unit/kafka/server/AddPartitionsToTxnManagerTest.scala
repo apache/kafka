@@ -25,11 +25,11 @@ import org.apache.kafka.common.errors.{AuthenticationException, SaslAuthenticati
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection
-import org.apache.kafka.common.{InvalidRecordException, Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractResponse, AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.mock
 
@@ -88,15 +88,17 @@ class AddPartitionsToTxnManagerTest {
     addPartitionsToTxnManager.addTxnData(node1, transactionData(transactionalId2, producerId2), setErrors(transaction2Errors))
     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId3, producerId3), setErrors(transaction3Errors))
 
-    val transaction1AgainErrors = mutable.Map[TopicPartition, Errors]()
-    // Trying to add more transactional data for the same transactional ID, producer ID, and epoch should throw an error.
-    assertThrows(classOf[InvalidRecordException], () => addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transaction1AgainErrors)))
+    val transaction1AgainErrorsOldEpoch = mutable.Map[TopicPartition, Errors]()
+    val transaction1AgainErrorsNewEpoch = mutable.Map[TopicPartition, Errors]()
+    // Trying to add more transactional data for the same transactional ID, producer ID, and epoch should simply replace the old data. The error map should remain empty.
+    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transaction1AgainErrorsOldEpoch))
+    assertEquals(mutable.Map[TopicPartition, Errors](), transaction1Errors)
 
     // Trying to add more transactional data for the same transactional ID and producer ID, but new epoch should replace the old data and send an error response for it.
-     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 1), setErrors(transaction1AgainErrors))
-
+     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 1), setErrors(transaction1AgainErrorsNewEpoch))
+    
     val expectedEpochErrors = topicPartitions.map(_ -> Errors.INVALID_PRODUCER_EPOCH).toMap
-    assertEquals(expectedEpochErrors, transaction1Errors)
+    assertEquals(expectedEpochErrors, transaction1AgainErrorsOldEpoch)
 
     val requestsAndHandlers = addPartitionsToTxnManager.generateRequests()
     requestsAndHandlers.foreach { requestAndHandler =>
@@ -177,7 +179,7 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(expectedVersionMismatchErrors, transaction1Errors)
     assertEquals(expectedVersionMismatchErrors, transaction2Errors)
 
-    val expectedTopLevelErrors = topicPartitions.map(_ -> Errors.CLUSTER_AUTHORIZATION_FAILED).toMap
+    val expectedTopLevelErrors = topicPartitions.map(_ -> Errors.INVALID_RECORD).toMap
     val topLevelErrorAddPartitionsResponse = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()))
     val topLevelErrorResponse = clientResponse(topLevelErrorAddPartitionsResponse)
     addTransactionsToVerify()
