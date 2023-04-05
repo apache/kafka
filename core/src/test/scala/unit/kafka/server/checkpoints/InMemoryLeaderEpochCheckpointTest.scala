@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test
 
 import java.io.{BufferedReader, ByteArrayInputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
-import java.util
 
 class InMemoryLeaderEpochCheckpointTest {
 
@@ -37,10 +36,7 @@ class InMemoryLeaderEpochCheckpointTest {
     val epochs2 = java.util.Arrays.asList(new EpochEntry(3, 4L), new EpochEntry(4, 5L))
     checkpoint.write(epochs2)
 
-    val expectedEpochs = new util.ArrayList[EpochEntry]()
-    expectedEpochs.addAll(epochs)
-    expectedEpochs.addAll(epochs2)
-    assertEquals(expectedEpochs, checkpoint.read())
+    assertEquals(epochs2, checkpoint.read())
   }
 
   @Test

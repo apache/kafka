@@ -24,8 +24,6 @@ import org.slf4j.Logger;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -153,13 +151,8 @@ public class LeaderEpochFileCache {
     }
 
     public LeaderEpochFileCache cloneWithLeaderEpochCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
-        lock.readLock().lock();
-        try {
-            flushTo(leaderEpochCheckpoint, epochEntries());
-            return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
-        } finally {
-            lock.readLock().unlock();
-        }
+        flushTo(leaderEpochCheckpoint);
+        return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
     }
 
     public boolean nonEmpty() {
@@ -405,16 +398,16 @@ public class LeaderEpochFileCache {
         }
     }
 
-    private void flushTo(LeaderEpochCheckpoint leaderEpochCheckpoint, Collection<EpochEntry> epochEntries) {
-        leaderEpochCheckpoint.write(epochEntries);
-    }
-
-    private void flush() {
+    private void flushTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
         lock.readLock().lock();
         try {
-            flushTo(this.checkpoint, epochs.values());
+            leaderEpochCheckpoint.write(epochs.values());
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    private void flush() {
+        flushTo(this.checkpoint);
     }
 }

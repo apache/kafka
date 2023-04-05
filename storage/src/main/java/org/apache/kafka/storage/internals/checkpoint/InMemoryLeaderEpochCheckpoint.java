@@ -27,6 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -39,14 +40,14 @@ import java.util.List;
  * and when we truncate the epoch for RLSM, we can do them in memory without affecting the checkpoint file, and without interacting with file system.
  */
 public class InMemoryLeaderEpochCheckpoint implements LeaderEpochCheckpoint {
-    private List<EpochEntry> epochs = new ArrayList<>();
+    private List<EpochEntry> epochs = Collections.emptyList();
 
     public void write(Collection<EpochEntry> epochs) {
-        this.epochs.addAll(epochs);
+        this.epochs = new ArrayList<>(epochs);
     }
 
     public List<EpochEntry> read() {
-        return epochs;
+        return Collections.unmodifiableList(epochs);
     }
 
     public ByteBuffer readAsByteBuffer() throws IOException {
