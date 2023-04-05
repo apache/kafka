@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -24,7 +25,6 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -80,7 +80,7 @@ import static java.util.Map.Entry.comparingByKey;
 import static java.util.UUID.randomUUID;
 import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsFuture;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsResult;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
@@ -685,14 +685,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         Map<TaskId, Long> allTaskEndOffsetSums;
         try {
             // Make the listOffsets request first so it can  fetch the offsets for non-source changelogs
-            // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets
-            final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture =
-                fetchEndOffsetsFuture(changelogTopics.preExistingNonSourceTopicBasedPartitions(), adminClient);
+            // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets;
+            // note that we would need to wrap all exceptions as Streams exception with partition-level fine-grained
+            // error messages
+            final ListOffsetsResult endOffsetsResult =
+                fetchEndOffsetsResult(changelogTopics.preExistingNonSourceTopicBasedPartitions(), adminClient);
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
                 fetchCommittedOffsets(changelogTopics.preExistingSourceTopicBasedPartitions(), mainConsumerSupplier.get());
 
-            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
+            final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(
+                endOffsetsResult, changelogTopics.preExistingNonSourceTopicBasedPartitions());
 
             allTaskEndOffsetSums = computeEndOffsetSumsByTask(
                 endOffsets,
@@ -701,6 +704,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException | TimeoutException e) {
+            log.info("Failed to retrieve all end offsets for changelogs, and hence could not calculate the per-task lag; " +
+                "this is not a fatal error but would cause the assignor to fallback to a naive algorithm", e);
             allTaskEndOffsetSums = changelogTopics.statefulTaskIds().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
             fetchEndOffsetsSuccessful = false;
         }

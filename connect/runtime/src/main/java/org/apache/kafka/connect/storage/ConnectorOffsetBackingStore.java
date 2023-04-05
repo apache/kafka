@@ -29,9 +29,11 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -303,6 +305,14 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 callback.onCompletion(primaryWriteError, ignored);
             }
         });
+    }
+
+    @Override
+    public Set<Map<String, Object>> connectorPartitions(String connectorName) {
+        Set<Map<String, Object>> partitions = new HashSet<>();
+        workerStore.ifPresent(offsetBackingStore -> partitions.addAll(offsetBackingStore.connectorPartitions(connectorName)));
+        connectorStore.ifPresent(offsetBackingStore -> partitions.addAll(offsetBackingStore.connectorPartitions(connectorName)));
+        return partitions;
     }
 
     /**

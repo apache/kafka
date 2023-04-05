@@ -1319,6 +1319,8 @@ public class TaskManager {
         if (fatalException != null) {
             throw fatalException;
         }
+
+        log.info("Shutdown complete");
     }
 
     private void shutdownStateUpdater() {
