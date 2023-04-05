@@ -28,6 +28,12 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+/**
+ * An implementation of {@link ConfigProvider} based on environment variables.
+ * Keys correspond to the names of the environment variables, paths are currently not being used.
+ * Using an allowlist pattern {@link EnvVarConfigProvider#ALLOWLIST_PATTERN_CONFIG} that supports regular expressions,
+ * it is possible to limit access to specific environment variables. Default allowlist pattern is ".*".
+ */
 public class EnvVarConfigProvider implements ConfigProvider {
 
     public static final String ALLOWLIST_PATTERN_CONFIG = "allowlist.pattern";
@@ -35,7 +41,6 @@ public class EnvVarConfigProvider implements ConfigProvider {
             " to be used by this config provider.";
     private final Map<String, String> envVarMap;
     private Map<String, String> filteredEnvVarMap;
-    private Pattern envVarPattern;
 
     public EnvVarConfigProvider() {
         envVarMap = getEnvVars();
@@ -49,6 +54,8 @@ public class EnvVarConfigProvider implements ConfigProvider {
 
     @Override
     public void configure(Map<String, ?> configs) {
+        Pattern envVarPattern;
+
         if (configs.containsKey(ALLOWLIST_PATTERN_CONFIG)) {
             envVarPattern = Pattern.compile(
                     String.valueOf(configs.get(ALLOWLIST_PATTERN_CONFIG))
@@ -88,10 +95,6 @@ public class EnvVarConfigProvider implements ConfigProvider {
         if (path != null && !path.isEmpty()) {
             log.error("Path is not supported for EnvVarConfigProvider, invalid value '{}'", path);
             throw new ConfigException("Path is not supported for EnvVarConfigProvider, invalid value '" + path + "'");
-        }
-
-        if (envVarMap == null) {
-            return new ConfigData(new HashMap<>());
         }
 
         if (keys == null) {
