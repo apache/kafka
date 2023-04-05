@@ -24,17 +24,16 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
@@ -63,15 +62,16 @@ public final class ClientQuotasImage {
         return entities.isEmpty();
     }
 
-    Map<ClientQuotaEntity, ClientQuotaImage> entities() {
+    // Visible for testing
+    public Map<ClientQuotaEntity, ClientQuotaImage> entities() {
         return entities;
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) {
+    public void write(ImageWriter writer, ImageWriterOptions options) {
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             ClientQuotaImage clientQuotaImage = entry.getValue();
-            clientQuotaImage.write(entity, out);
+            clientQuotaImage.write(entity, writer, options);
         }
     }
 

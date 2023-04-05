@@ -66,7 +66,7 @@ public final class RecordsIteratorTest {
         testIterator(Collections.emptyList(), records, true);
     }
 
-    @Property
+    @Property(tries = 50)
     public void testMemoryRecords(
         @ForAll CompressionType compressionType,
         @ForAll long seed
@@ -77,7 +77,7 @@ public final class RecordsIteratorTest {
         testIterator(batches, memRecords, true);
     }
 
-    @Property
+    @Property(tries = 50)
     public void testFileRecords(
         @ForAll CompressionType compressionType,
         @ForAll long seed
@@ -92,10 +92,10 @@ public final class RecordsIteratorTest {
         fileRecords.close();
     }
 
-    @Property
+    @Property(tries = 50)
     public void testCrcValidation(
-            @ForAll CompressionType compressionType,
-            @ForAll long seed
+        @ForAll CompressionType compressionType,
+        @ForAll long seed
     ) throws IOException {
         List<TestBatch<String>> batches = createBatches(seed);
         MemoryRecords memRecords = buildRecords(compressionType, batches);

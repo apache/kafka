@@ -25,16 +25,16 @@ import org.apache.kafka.streams.kstream.{
   Aggregator,
   Initializer,
   JoinWindows,
-  KeyValueMapper,
-  Reducer,
-  Transformer,
-  ValueJoiner,
-  ValueMapper,
   KGroupedStream => KGroupedStreamJ,
   KStream => KStreamJ,
   KTable => KTableJ,
+  KeyValueMapper,
   Materialized => MaterializedJ,
-  StreamJoined => StreamJoinedJ
+  Reducer,
+  StreamJoined => StreamJoinedJ,
+  Transformer,
+  ValueJoiner,
+  ValueMapper
 }
 import org.apache.kafka.streams.processor.{api, ProcessorContext}
 import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
@@ -42,7 +42,7 @@ import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.kstream._
-import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, StreamsBuilder => StreamsBuilderJ}
+import org.apache.kafka.streams.{KeyValue, StreamsBuilder => StreamsBuilderJ, StreamsConfig, TopologyDescription}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 

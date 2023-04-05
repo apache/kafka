@@ -463,7 +463,7 @@ KStream&lt;String, Integer&gt; transformed = stream.flatMap(
 // Java 7 example: cf. `map` for how to create `KeyValueMapper` instances</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>FlatMap (values only)</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>FlatMapValues</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -2567,7 +2567,7 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
 Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
 
 // Java 8+ example, using lambda expressions
-                KTable&lt;String, String&gt; joined = left.join(right, foreignKeyExtractor,
+                KTable&lt;String, String&gt; joined = left.leftJoin(right, foreignKeyExtractor,
                     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
                   );</code></pre>
                               <p>Detailed behavior:</p>

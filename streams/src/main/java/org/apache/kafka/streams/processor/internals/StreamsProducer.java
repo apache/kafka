@@ -146,6 +146,10 @@ public class StreamsProducer {
         return StreamsConfigUtils.eosEnabled(processingMode);
     }
 
+    boolean transactionInFlight() {
+        return transactionInFlight;
+    }
+
     /**
      * @throws IllegalStateException if EOS is disabled
      */

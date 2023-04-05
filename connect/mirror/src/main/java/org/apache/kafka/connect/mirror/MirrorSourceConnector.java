@@ -16,8 +16,16 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.Locale;
 import java.util.Map.Entry;
+
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
@@ -35,7 +43,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -46,21 +53,27 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
+
 /** Replicate data, configuration, and ACLs between clusters.
  *
- *  @see MirrorConnectorConfig for supported config properties.
+ *  @see MirrorSourceConfig for supported config properties.
  */
 public class MirrorSourceConnector extends SourceConnector {
 
@@ -68,9 +81,11 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final ResourcePatternFilter ANY_TOPIC = new ResourcePatternFilter(ResourceType.TOPIC,
         null, PatternType.ANY);
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
+    private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT);
+    private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
 
     private Scheduler scheduler;
-    private MirrorConnectorConfig config;
+    private MirrorSourceConfig config;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
     private TopicFilter topicFilter;
@@ -79,15 +94,17 @@ public class MirrorSourceConnector extends SourceConnector {
     private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
-    private AdminClient sourceAdminClient;
-    private AdminClient targetAdminClient;
+    private Admin sourceAdminClient;
+    private Admin targetAdminClient;
+    private Admin offsetSyncsAdminClient;
+    private AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
 
     public MirrorSourceConnector() {
         // nop
     }
 
     // visible for testing
-    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorConnectorConfig config) {
+    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorSourceConfig config) {
         this.knownSourceTopicPartitions = knownSourceTopicPartitions;
         this.config = config;
     }
@@ -101,10 +118,16 @@ public class MirrorSourceConnector extends SourceConnector {
         this.configPropertyFilter = configPropertyFilter;
     }
 
+    // visible for testing
+    MirrorSourceConnector(Admin sourceAdminClient, Admin targetAdminClient) {
+        this.sourceAdminClient = sourceAdminClient;
+        this.targetAdminClient = targetAdminClient;
+    }
+
     @Override
     public void start(Map<String, String> props) {
         long start = System.currentTimeMillis();
-        config = new MirrorConnectorConfig(props);
+        config = new MirrorSourceConfig(props);
         if (!config.enabled()) {
             return;
         }
@@ -114,9 +137,10 @@ public class MirrorSourceConnector extends SourceConnector {
         configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
         replicationFactor = config.replicationFactor();
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        targetAdminClient = AdminClient.create(config.targetAdminConfig());
-        scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
+        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.execute(this::computeAndCreateTopicPartitions, "creating downstream topic-partitions");
@@ -141,6 +165,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Utils.closeQuietly(configPropertyFilter, "config property filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
+        Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
@@ -174,19 +199,60 @@ public class MirrorSourceConnector extends SourceConnector {
             roundRobinByTask.get(index).add(partition);
             count++;
         }
-
-        return roundRobinByTask.stream().map(config::taskConfigForTopicPartitions)
-            .collect(Collectors.toList());
+        return IntStream.range(0, numTasks)
+                .mapToObj(i -> config.taskConfigForTopicPartitions(roundRobinByTask.get(i), i))
+                .collect(Collectors.toList());
     }
 
     @Override
     public ConfigDef config() {
-        return MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        return MirrorSourceConfig.CONNECTOR_CONFIG_DEF;
+    }
+
+    @Override
+    public org.apache.kafka.common.config.Config validate(Map<String, String> props) {
+        List<ConfigValue> configValues = super.validate(props).configValues();
+        if ("required".equals(props.get(EXACTLY_ONCE_SUPPORT_CONFIG))) {
+            if (!consumerUsesReadCommitted(props)) {
+                ConfigValue exactlyOnceSupport = configValues.stream()
+                        .filter(cv -> EXACTLY_ONCE_SUPPORT_CONFIG.equals(cv.name()))
+                        .findAny()
+                        .orElseGet(() -> {
+                            ConfigValue result = new ConfigValue(EXACTLY_ONCE_SUPPORT_CONFIG);
+                            configValues.add(result);
+                            return result;
+                        });
+                // The Connect framework will already generate an error for this property if we return ExactlyOnceSupport.UNSUPPORTED
+                // from our exactlyOnceSupport method, but it will be fairly generic
+                // We add a second error message here to give users more insight into why this specific connector can't support exactly-once
+                // guarantees with the given configuration
+                exactlyOnceSupport.addErrorMessage(
+                        "MirrorSourceConnector can only provide exactly-once guarantees when its source consumer is configured with "
+                                + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to '" + READ_COMMITTED + "'; "
+                                + "otherwise, records from aborted and uncommitted transactions will be replicated from the "
+                                + "source cluster to the target cluster."
+                );
+            }
+        }
+        return new org.apache.kafka.common.config.Config(configValues);
     }
 
     @Override
     public String version() {
         return AppInfoParser.getVersion();
+    }
+
+    @Override
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+        return consumerUsesReadCommitted(props)
+                ? ExactlyOnceSupport.SUPPORTED
+                : ExactlyOnceSupport.UNSUPPORTED;
+    }
+
+    private boolean consumerUsesReadCommitted(Map<String, String> props) {
+        Object consumerIsolationLevel = MirrorSourceConfig.sourceConsumerConfig(props)
+                .get(ConsumerConfig.ISOLATION_LEVEL_CONFIG);
+        return Objects.equals(READ_COMMITTED, consumerIsolationLevel);
     }
 
     // visible for testing
@@ -284,16 +350,20 @@ public class MirrorSourceConnector extends SourceConnector {
                 .collect(Collectors.toSet());
     }
 
-    private void syncTopicAcls()
+    // Visible for testing
+    void syncTopicAcls()
             throws InterruptedException, ExecutionException {
-        List<AclBinding> bindings = listTopicAclBindings().stream()
+        Optional<Collection<AclBinding>> rawBindings = listTopicAclBindings();
+        if (!rawBindings.isPresent())
+            return;
+        List<AclBinding> filteredBindings = rawBindings.get().stream()
             .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)
             .filter(x -> x.pattern().patternType() == PatternType.LITERAL)
             .filter(this::shouldReplicateAcl)
             .filter(x -> shouldReplicateTopic(x.pattern().name()))
             .map(this::targetAclBinding)
             .collect(Collectors.toList());
-        updateTopicAcls(bindings);
+        updateTopicAcls(filteredBindings);
     }
 
     private void syncTopicConfigs()
@@ -305,7 +375,11 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.offsetSyncsTopicAdminConfig());
+        MirrorUtils.createSinglePartitionCompactedTopic(
+                config.offsetSyncsTopic(),
+                config.offsetSyncsTopicReplicationFactor(),
+                offsetSyncsAdminClient
+        );
     }
 
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
@@ -389,17 +463,35 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private Set<String> listTopics(AdminClient adminClient)
+    private Set<String> listTopics(Admin adminClient)
             throws InterruptedException, ExecutionException {
         return adminClient.listTopics().names().get();
     }
 
-    private Collection<AclBinding> listTopicAclBindings()
+    private Optional<Collection<AclBinding>> listTopicAclBindings()
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
+        Collection<AclBinding> bindings;
+        try {
+            bindings = sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof SecurityDisabledException) {
+                if (noAclAuthorizer.compareAndSet(false, true)) {
+                    log.info(
+                            "No ACL authorizer is configured on the source Kafka cluster, so no topic ACL syncing will take place. "
+                                    + "Consider disabling topic ACL syncing by setting " + SYNC_TOPIC_ACLS_ENABLED + " to 'false'."
+                    );
+                } else {
+                    log.debug("Source-side ACL authorizer still not found; skipping topic ACL sync");
+                }
+                return Optional.empty();
+            } else {
+                throw e;
+            }
+        }
+        return Optional.of(bindings);
     }
 
-    private static Collection<TopicDescription> describeTopics(AdminClient adminClient, Collection<String> topics)
+    private static Collection<TopicDescription> describeTopics(Admin adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
         return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
@@ -495,7 +587,7 @@ public class MirrorSourceConnector extends SourceConnector {
             return true;
         } else {
             String upstreamTopic = replicationPolicy.upstreamTopic(topic);
-            if (upstreamTopic.equals(topic)) {
+            if (upstreamTopic == null || upstreamTopic.equals(topic)) {
                 // Extra check for IdentityReplicationPolicy and similar impls that don't prevent cycles.
                 return false;
             }

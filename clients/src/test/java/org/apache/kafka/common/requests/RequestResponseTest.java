@@ -35,8 +35,13 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
@@ -62,6 +67,8 @@ import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationResponseData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
@@ -210,6 +217,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
@@ -231,6 +239,7 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.BufferUnderflowException;
@@ -269,6 +278,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.apache.kafka.common.protocol.ApiKeys.METADATA;
 import static org.apache.kafka.common.protocol.ApiKeys.OFFSET_FETCH;
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
+import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.protocol.ApiKeys.UPDATE_METADATA;
@@ -403,6 +413,7 @@ public class RequestResponseTest {
         header.write(buffer, serializationCache);
         buffer.flip();
         ResponseHeader deserialized = ResponseHeader.parse(buffer, header.headerVersion());
+        assertEquals(header.size(), deserialized.size());
         assertEquals(header.correlationId(), deserialized.correlationId());
     }
 
@@ -603,7 +614,7 @@ public class RequestResponseTest {
         assertEquals(fetchResponse.serialize(version), buf);
         FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), version);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        assertEquals(size, responseHeader.size(serializationCache) + deserialized.size(serializationCache, version));
+        assertEquals(size, responseHeader.size() + deserialized.size(serializationCache, version));
     }
 
     @Test
@@ -705,6 +716,7 @@ public class RequestResponseTest {
         ByteBuffer serializedRequest = createTopicsRequest.serializeWithHeader(requestHeader);
 
         RequestHeader parsedHeader = RequestHeader.parse(serializedRequest);
+        assertEquals(requestHeader.size(), parsedHeader.size());
         assertEquals(requestHeader, parsedHeader);
 
         RequestAndSize parsedRequest = AbstractRequest.parseRequest(
@@ -919,7 +931,8 @@ public class RequestResponseTest {
     @Test
     public void testErrorCountsIncludesNone() {
         assertEquals(1, createAddOffsetsToTxnResponse().errorCounts().get(Errors.NONE));
-        assertEquals(1, createAddPartitionsToTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(1, createAddPartitionsToTxnResponse((short) 3).errorCounts().get(Errors.NONE));
+        assertEquals(2, createAddPartitionsToTxnResponse((short) 4).errorCounts().get(Errors.NONE));
         assertEquals(1, createAlterClientQuotasResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createAlterConfigsResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
@@ -1042,6 +1055,7 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsRequest(version);
             case LIST_TRANSACTIONS: return createListTransactionsRequest(version);
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsRequest(version);
+            case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1072,7 +1086,7 @@ public class RequestResponseTest {
             case DELETE_RECORDS: return createDeleteRecordsResponse();
             case INIT_PRODUCER_ID: return createInitPidResponse();
             case OFFSET_FOR_LEADER_EPOCH: return createLeaderEpochResponse();
-            case ADD_PARTITIONS_TO_TXN: return createAddPartitionsToTxnResponse();
+            case ADD_PARTITIONS_TO_TXN: return createAddPartitionsToTxnResponse(version);
             case ADD_OFFSETS_TO_TXN: return createAddOffsetsToTxnResponse();
             case END_TXN: return createEndTxnResponse();
             case WRITE_TXN_MARKERS: return createWriteTxnMarkersResponse();
@@ -1116,8 +1130,49 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsResponse();
             case LIST_TRANSACTIONS: return createListTransactionsResponse();
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsResponse();
+            case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
+    }
+
+    private ConsumerGroupHeartbeatRequest createConsumerGroupHeartbeatRequest(short version) {
+        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
+            .setGroupId("group")
+            .setMemberId("memberid")
+            .setMemberEpoch(10)
+            .setRebalanceTimeoutMs(60000)
+            .setServerAssignor("range")
+            .setRackId("rackid")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setTopicPartitions(Arrays.asList(
+                new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(Uuid.randomUuid())
+                    .setPartitions(Arrays.asList(0, 1, 2)),
+                new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(Uuid.randomUuid())
+                    .setPartitions(Arrays.asList(3, 4, 5))
+            ));
+        return new ConsumerGroupHeartbeatRequest.Builder(data).build(version);
+    }
+
+    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse() {
+        ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(1000)
+            .setMemberId("memberid")
+            .setMemberEpoch(11)
+            .setShouldComputeAssignment(false)
+            .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setAssignedTopicPartitions(Arrays.asList(
+                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(Arrays.asList(0, 1, 2)),
+                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(Arrays.asList(3, 4, 5))
+                ))
+            );
+        return new ConsumerGroupHeartbeatResponse(data);
     }
 
     private FetchSnapshotRequest createFetchSnapshotRequest(short version) {
@@ -1311,7 +1366,7 @@ public class RequestResponseTest {
             .setPartitionIndex(1)
             .setPartitionEpoch(2)
             .setLeaderEpoch(3)
-            .setNewIsr(asList(1, 2));
+            .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(asList(1, 2)));
 
         if (version >= 1) {
             // Use the none default value; 1 - RECOVERING
@@ -1562,7 +1617,7 @@ public class RequestResponseTest {
             serializedBytes.rewind();
             assertEquals(serializedBytes, serializedBytes2, "Response " + response + "failed equality test");
         } catch (Exception e) {
-            throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
+            throw new RuntimeException("Failed to deserialize version " + version + " response " + response + " with type " + response.getClass(), e);
         }
     }
 
@@ -1753,10 +1808,8 @@ public class RequestResponseTest {
         for (int i = 0; i < 2; i++) {
             JoinGroupResponseMember member = new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("consumer" + i)
-                .setMetadata(new byte[0]);
-
-            if (version >= 5)
-                member.setGroupInstanceId("instance" + i);
+                .setMetadata(new byte[0])
+                .setGroupInstanceId("instance" + i);
 
             members.add(member);
         }
@@ -1774,7 +1827,7 @@ public class RequestResponseTest {
         if (version >= 1)
             data.setThrottleTimeMs(1000);
 
-        return new JoinGroupResponse(data);
+        return new JoinGroupResponse(data, version);
     }
 
     private SyncGroupRequest createSyncGroupRequest(short version) {
@@ -2551,12 +2604,37 @@ public class RequestResponseTest {
     }
 
     private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest(short version) {
-        return new AddPartitionsToTxnRequest.Builder("tid", 21L, (short) 42,
-            singletonList(new TopicPartition("topic", 73))).build(version);
+        if (version < 4) {
+            return AddPartitionsToTxnRequest.Builder.forClient("tid", 21L, (short) 42,
+                    singletonList(new TopicPartition("topic", 73))).build(version);
+        } else {
+            AddPartitionsToTxnTransactionCollection transactions = new AddPartitionsToTxnTransactionCollection(
+                singletonList(new AddPartitionsToTxnTransaction()
+                    .setTransactionalId("tid")
+                    .setProducerId(21L)
+                    .setProducerEpoch((short) 42)
+                    .setVerifyOnly(false)
+                    .setTopics(new AddPartitionsToTxnTopicCollection(
+                        singletonList(new AddPartitionsToTxnTopic()
+                            .setName("topic")
+                            .setPartitions(Collections.singletonList(73))).iterator())))
+                    .iterator());
+            return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);  
+        }
     }
 
-    private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {
-        return new AddPartitionsToTxnResponse(0, Collections.singletonMap(new TopicPartition("t", 0), Errors.NONE));
+    private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse(short version) {
+        String txnId = version < 4 ? AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID : "tid";
+        AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
+                txnId, Collections.singletonMap(new TopicPartition("t", 0), Errors.NONE));
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setThrottleTimeMs(0);
+        
+        if (version < 4) {
+            data.setResultsByTopicV3AndBelow(result.topicResults());
+        } else {
+            data.setResultsByTransaction(new AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection(singletonList(result).iterator()));
+        }
+        return new AddPartitionsToTxnResponse(data);
     }
 
     private AddOffsetsToTxnRequest createAddOffsetsToTxnRequest(short version) {
@@ -3360,4 +3438,92 @@ public class RequestResponseTest {
         return new ListTransactionsResponse(response);
     }
 
+    @Test
+    public void testInvalidSaslHandShakeRequest() {
+        AbstractRequest request = new SaslHandshakeRequest.Builder(
+                new SaslHandshakeRequestData().setMechanism("PLAIN")).build();
+        ByteBuffer serializedBytes = request.serialize();
+        // corrupt the length of the sasl mechanism string
+        serializedBytes.putShort(0, Short.MAX_VALUE);
+
+        String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
+            parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
+        assertEquals("Error reading byte array of 32767 byte(s): only 5 byte(s) available", msg);
+    }
+
+    @Test
+    public void testInvalidSaslAuthenticateRequest() {
+        short version = (short) 1; // choose a version with fixed length encoding, for simplicity
+        byte[] b = new byte[] {
+            0x11, 0x1f, 0x15, 0x2c,
+            0x5e, 0x2a, 0x20, 0x26,
+            0x6c, 0x39, 0x45, 0x1f,
+            0x25, 0x1c, 0x2d, 0x25,
+            0x43, 0x2a, 0x11, 0x76
+        };
+        SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(b);
+        AbstractRequest request = new SaslAuthenticateRequest(data, version);
+        ByteBuffer serializedBytes = request.serialize();
+
+        // corrupt the length of the bytes array
+        serializedBytes.putInt(0, Integer.MAX_VALUE);
+
+        String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
+                parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
+        assertEquals("Error reading byte array of 2147483647 byte(s): only 20 byte(s) available", msg);
+    }
+
+    @Test
+    public void testValidTaggedFieldsWithSaslAuthenticateRequest() {
+        byte[] byteArray = new byte[11];
+        ByteBufferAccessor accessor = new ByteBufferAccessor(ByteBuffer.wrap(byteArray));
+
+        //construct a SASL_AUTHENTICATE request
+        byte[] authBytes = "test".getBytes(StandardCharsets.UTF_8);
+        accessor.writeUnsignedVarint(authBytes.length + 1);
+        accessor.writeByteArray(authBytes);
+
+        //write total numbers of tags
+        accessor.writeUnsignedVarint(1);
+
+        //write first tag
+        RawTaggedField taggedField = new RawTaggedField(1, new byte[] {0x1, 0x2, 0x3});
+        accessor.writeUnsignedVarint(taggedField.tag());
+        accessor.writeUnsignedVarint(taggedField.size());
+        accessor.writeByteArray(taggedField.data());
+
+        accessor.flip();
+
+        SaslAuthenticateRequest saslAuthenticateRequest = (SaslAuthenticateRequest) AbstractRequest.
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer()).request;
+        Assertions.assertArrayEquals(authBytes, saslAuthenticateRequest.data().authBytes());
+        assertEquals(1, saslAuthenticateRequest.data().unknownTaggedFields().size());
+        assertEquals(taggedField, saslAuthenticateRequest.data().unknownTaggedFields().get(0));
+    }
+
+    @Test
+    public void testInvalidTaggedFieldsWithSaslAuthenticateRequest() {
+        byte[] byteArray = new byte[13];
+        ByteBufferAccessor accessor = new ByteBufferAccessor(ByteBuffer.wrap(byteArray));
+
+        //construct a SASL_AUTHENTICATE request
+        byte[] authBytes = "test".getBytes(StandardCharsets.UTF_8);
+        accessor.writeUnsignedVarint(authBytes.length + 1);
+        accessor.writeByteArray(authBytes);
+
+        //write total numbers of tags
+        accessor.writeUnsignedVarint(1);
+
+        //write first tag
+        RawTaggedField taggedField = new RawTaggedField(1, new byte[] {0x1, 0x2, 0x3});
+        accessor.writeUnsignedVarint(taggedField.tag());
+        accessor.writeUnsignedVarint(Short.MAX_VALUE); // set wrong size for tagged field
+        accessor.writeByteArray(taggedField.data());
+
+        accessor.flip();
+
+        String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer())).getMessage();
+        assertEquals("Error reading byte array of 32767 byte(s): only 3 byte(s) available", msg);
+    }
 }

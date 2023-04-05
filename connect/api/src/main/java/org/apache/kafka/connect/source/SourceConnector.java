@@ -32,7 +32,7 @@ public abstract class SourceConnector extends Connector {
     }
 
     /**
-     * Signals whether the connector supports exactly-once delivery guarantees with a proposed configuration.
+     * Signals whether the connector supports exactly-once semantics with a proposed configuration.
      * Connector authors can assume that worker-level exactly-once support is enabled when this method is invoked.
      *
      * <p>For backwards compatibility, the default implementation will return {@code null}, but connector authors are
@@ -46,7 +46,7 @@ public abstract class SourceConnector extends Connector {
      * @return {@link ExactlyOnceSupport#SUPPORTED} if the connector can provide exactly-once support with the given
      * configuration, and {@link ExactlyOnceSupport#UNSUPPORTED} if it cannot. If this method is overridden by a
      * connector, should not be {@code null}, but if {@code null}, it will be assumed that the connector cannot provide
-     * exactly-once guarantees.
+     * exactly-once semantics.
      * @since 3.3
      */
     public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> connectorConfig) {

@@ -26,13 +26,13 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * In this example, we implement a simple LineSplit program using the high-level Streams DSL
+ * In this example, we implement a simple Pipe program using the high-level Streams DSL
  * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text,
  * and writes the messages as-is into a sink topic "streams-pipe-output".
  */
 public class Pipe {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pipe");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");

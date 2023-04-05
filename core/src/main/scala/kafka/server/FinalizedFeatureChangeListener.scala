@@ -20,10 +20,11 @@ package kafka.server
 import kafka.server.metadata.ZkMetadataCache
 
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
-import kafka.utils.{Logging, ShutdownableThread}
+import kafka.utils.Logging
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, KafkaZkClient, ZkVersion}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler}
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.concurrent.TimeoutException
 
@@ -144,7 +145,10 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: ZkMetada
    *
    * @param name   name of the thread
    */
-  private class ChangeNotificationProcessorThread(name: String) extends ShutdownableThread(name = name) {
+  private class ChangeNotificationProcessorThread(name: String) extends ShutdownableThread(name) with Logging {
+
+    this.logIdent = logPrefix
+
     override def doWork(): Unit = {
       try {
         queue.take.updateLatestOrThrow()

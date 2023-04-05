@@ -138,26 +138,32 @@ public class MetadataNodeManagerTest {
 
     @Test
     public void testValidConfigRecord() {
-        checkValidConfigRecord(ConfigResource.Type.BROKER.id(), "broker");
-        checkValidConfigRecord(ConfigResource.Type.TOPIC.id(), "topic");
+        checkValidConfigRecord(ConfigResource.Type.BROKER.id(), "broker", "0", "0");
+        checkValidConfigRecord(ConfigResource.Type.TOPIC.id(), "topic", "0", "0");
     }
 
-    private void checkValidConfigRecord(byte resourceType, String typeString) {
+    @Test
+    public void testDefaultBrokerRecord() {
+        checkValidConfigRecord(ConfigResource.Type.BROKER.id(), "broker", "", "<default>");
+        // Default topic resources are not allowed, so we don't test it.
+    }
+
+    private void checkValidConfigRecord(byte resourceType, String typeString, String resourceName, String resourceNameKey) {
         ConfigRecord configRecord = new ConfigRecord()
             .setResourceType(resourceType)
-            .setResourceName("0")
+            .setResourceName(resourceName)
             .setName("name")
             .setValue("kraft");
 
         metadataNodeManager.handleMessage(configRecord);
         assertEquals("kraft",
-            metadataNodeManager.getData().root().directory("configs", typeString, "0").file("name").contents());
+            metadataNodeManager.getData().root().directory("configs", typeString, resourceNameKey).file("name").contents());
 
         // null value indicates delete
         configRecord.setValue(null);
         metadataNodeManager.handleMessage(configRecord);
         assertFalse(
-            metadataNodeManager.getData().root().directory("configs", typeString, "0").children().containsKey("name"));
+            metadataNodeManager.getData().root().directory("configs", typeString, resourceNameKey).children().containsKey("name"));
     }
 
     @Test

@@ -14,9 +14,8 @@
 
 package kafka.api
 
-import java.io.File
-
 import kafka.server._
+import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Sanitizer
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
@@ -24,7 +23,7 @@ import org.junit.jupiter.api.{BeforeEach, TestInfo}
 class UserClientIdQuotaTest extends BaseQuotaTest {
 
   override protected def securityProtocol = SecurityProtocol.SSL
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
   override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"

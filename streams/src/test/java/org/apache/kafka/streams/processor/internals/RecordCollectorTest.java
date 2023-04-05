@@ -41,6 +41,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -52,7 +53,6 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
 
@@ -67,6 +67,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -239,12 +244,12 @@ public class RecordCollectorTest {
     public void shouldSendToSpecificPartition() {
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", headers, 2, null, stringSerializer, stringSerializer, null, null);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", headers, 2, null, stringSerializer, stringSerializer, null, context);
 
         Map<TopicPartition, Long> offsets = collector.offsets();
 
@@ -253,9 +258,9 @@ public class RecordCollectorTest {
         assertEquals(0L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(6, mockProducer.history().size());
 
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", headers, 2, null, stringSerializer, stringSerializer, null, null);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", headers, 2, null, stringSerializer, stringSerializer, null, context);
 
         offsets = collector.offsets();
 
@@ -269,15 +274,15 @@ public class RecordCollectorTest {
     public void shouldSendWithPartitioner() {
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
@@ -292,18 +297,403 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldSendOnlyToEvenPartitions() {
+        class EvenPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                final Set<Integer> partitions = new HashSet<>();
+                for (int i = 0; i < numPartitions; i += 2) {
+                    partitions.add(i);
+                }
+                return Optional.of(partitions);
+            }
+        }
+
+        final EvenPartitioner evenPartitioner = new EvenPartitioner();
+
+        final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                sinkNodeName,
+                new StaticTopicNameExtractor<>(topic),
+                stringSerializer,
+                byteArraySerializer,
+                evenPartitioner);
+        topology = new ProcessorTopology(
+                emptyList(),
+                emptyMap(),
+                singletonMap(topic, sinkNode),
+                emptyList(),
+                emptyList(),
+                emptyMap(),
+                emptySet()
+        );
+        collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+        );
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertFalse(offsets.containsKey(new TopicPartition(topic, 1)));
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(18, mockProducer.history().size());
+
+        // returned offsets should not be modified
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+    }
+
+    @Test
+    public void shouldBroadcastToAllPartitions() {
+
+        class BroadcastingPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
+            }
+        }
+
+        final BroadcastingPartitioner broadcastingPartitioner = new BroadcastingPartitioner();
+
+        final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                sinkNodeName,
+                new StaticTopicNameExtractor<>(topic),
+                stringSerializer,
+                byteArraySerializer,
+                broadcastingPartitioner);
+        topology = new ProcessorTopology(
+                emptyList(),
+                emptyMap(),
+                singletonMap(topic, sinkNode),
+                emptyList(),
+                emptyList(),
+                emptyMap(),
+                emptySet()
+        );
+        collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+        );
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(27, mockProducer.history().size());
+
+        // returned offsets should not be modified
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+    }
+
+    @Test
+    public void shouldDropAllRecords() {
+
+        class DroppingPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.of(Collections.emptySet());
+            }
+        }
+
+        final DroppingPartitioner droppingPartitioner = new DroppingPartitioner();
+
+        final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                sinkNodeName,
+                new StaticTopicNameExtractor<>(topic),
+                stringSerializer,
+                byteArraySerializer,
+                droppingPartitioner);
+        topology = new ProcessorTopology(
+                emptyList(),
+                emptyMap(),
+                singletonMap(topic, sinkNode),
+                emptyList(),
+                emptyList(),
+                emptyMap(),
+                emptySet()
+        );
+        collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+        );
+
+        final String topic = "topic";
+
+        final Metric recordsDropped = streamsMetrics.metrics().get(new MetricName(
+                "dropped-records-total",
+                "stream-task-metrics",
+                "The total number of dropped records",
+                mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", taskId.toString())
+                )
+        ));
+
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+        assertTrue(offsets.isEmpty());
+
+        assertEquals(0, mockProducer.history().size());
+        assertThat(recordsDropped.metricValue(), equalTo(9.0));
+
+        // returned offsets should not be modified
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+    }
+
+    @Test
+    public void shouldUseDefaultPartitionerViaPartitions() {
+
+        class DefaultPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.empty();
+            }
+        }
+
+        final DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
+
+        final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                sinkNodeName,
+                new StaticTopicNameExtractor<>(topic),
+                stringSerializer,
+                byteArraySerializer,
+                defaultPartitioner);
+        topology = new ProcessorTopology(
+                emptyList(),
+                emptyMap(),
+                singletonMap(topic, sinkNode),
+                emptyList(),
+                emptyList(),
+                emptyMap(),
+                emptySet()
+        );
+        collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+        );
+
+        final String topic = "topic";
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
+        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(9, mockProducer.history().size());
+    }
+
+    @Test
+    public void shouldUseDefaultPartitionerAsPartitionReturnsNull() {
+
+        final StreamPartitioner<String, Object> streamPartitioner =
+                (topic, key, value, numPartitions) -> null;
+
+        final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                sinkNodeName,
+                new StaticTopicNameExtractor<>(topic),
+                stringSerializer,
+                byteArraySerializer,
+                streamPartitioner);
+        topology = new ProcessorTopology(
+                emptyList(),
+                emptyMap(),
+                singletonMap(topic, sinkNode),
+                emptyList(),
+                emptyList(),
+                emptyMap(),
+                emptySet()
+        );
+        collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+        );
+
+        final String topic = "topic";
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
+        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(9, mockProducer.history().size());
+    }
+
+    @Test
+    public void shouldUseDefaultPartitionerAsStreamPartitionerIsNull() {
+
+        final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                sinkNodeName,
+                new StaticTopicNameExtractor<>(topic),
+                stringSerializer,
+                byteArraySerializer,
+                streamPartitioner);
+        topology = new ProcessorTopology(
+                emptyList(),
+                emptyMap(),
+                singletonMap(topic, sinkNode),
+                emptyList(),
+                emptyList(),
+                emptyMap(),
+                emptySet()
+        );
+        collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+        );
+
+        final String topic = "topic";
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
+        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(9, mockProducer.history().size());
+    }
+
+    @Test
     public void shouldSendWithNoPartition() {
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "3", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "9", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "27", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "81", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "243", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "28", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "82", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "244", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "245", "0", headers, null, null, stringSerializer, stringSerializer, null, null);
+        collector.send(topic, "3", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "9", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "27", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "81", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "243", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "28", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "82", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "244", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "245", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
@@ -318,9 +708,9 @@ public class RecordCollectorTest {
     public void shouldUpdateOffsetsUponCompletion() {
         Map<TopicPartition, Long> offsets = collector.offsets();
 
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer, null, null);
-        collector.send(topic, "999", "0", null, 2, null, stringSerializer, stringSerializer, null, null);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer, null, context);
+        collector.send(topic, "999", "0", null, 2, null, stringSerializer, stringSerializer, null, context);
 
         assertEquals(Collections.<TopicPartition, Long>emptyMap(), offsets);
 
@@ -338,7 +728,7 @@ public class RecordCollectorTest {
         final CustomStringSerializer valueSerializer = new CustomStringSerializer();
         keySerializer.configure(Collections.emptyMap(), true);
 
-        collector.send(topic, "3", "0", new RecordHeaders(), null, keySerializer, valueSerializer, null, null, streamPartitioner);
+        collector.send(topic, "3", "0", new RecordHeaders(), null, keySerializer, valueSerializer, null, context, streamPartitioner);
 
         final List<ProducerRecord<byte[], byte[]>> recordHistory = mockProducer.history();
         for (final ProducerRecord<byte[], byte[]> sentRecord : recordHistory) {
@@ -571,7 +961,7 @@ public class RecordCollectorTest {
 
         final StreamsException exception = assertThrows(
             StreamsException.class,
-            () -> collector.send(topic, "0", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner)
+            () -> collector.send(topic, "0", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner)
         );
         assertThat(
             exception.getMessage(),

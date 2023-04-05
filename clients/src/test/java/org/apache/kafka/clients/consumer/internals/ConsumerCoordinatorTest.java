@@ -32,6 +32,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -68,6 +69,7 @@ import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -108,6 +110,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
@@ -117,6 +120,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -1447,12 +1451,106 @@ public abstract class ConsumerCoordinatorTest {
      */
     @Test
     public void testRebalanceWithMetadataChange() {
+        MetadataResponse metadataResponse1 = RequestTestUtils.metadataUpdateWith(1,
+                Utils.mkMap(Utils.mkEntry(topic1, 1), Utils.mkEntry(topic2, 1)));
+        MetadataResponse metadataResponse2 = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1));
+        verifyRebalanceWithMetadataChange(Optional.empty(), partitionAssignor, metadataResponse1, metadataResponse2, true);
+    }
+
+    @Test
+    public void testRackAwareConsumerRebalanceWithDifferentRacks() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(0, 2), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                true, true);
+    }
+
+    @Test
+    public void testNonRackAwareConsumerRebalanceWithDifferentRacks() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(0, 2), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                false, false);
+    }
+
+    @Test
+    public void testRackAwareConsumerRebalanceWithAdditionalRacks() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(0, 1, 2), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                true, true);
+    }
+
+    @Test
+    public void testRackAwareConsumerRebalanceWithLessRacks() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Collections.singletonList(2)),
+                true, true);
+    }
+
+    @Test
+    public void testRackAwareConsumerRebalanceWithNewPartitions() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0), Arrays.asList(0, 1)),
+                true, true);
+    }
+
+    @Test
+    public void testRackAwareConsumerRebalanceWithNoMetadataChange() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                true, false);
+    }
+
+    @Test
+    public void testRackAwareConsumerRebalanceWithNoRackChange() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(3, 4), Arrays.asList(4, 5), Arrays.asList(5, 3)),
+                true, false);
+    }
+
+    @Test
+    public void testRackAwareConsumerRebalanceWithNewReplicasOnSameRacks() {
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(0, 1, 3), Arrays.asList(1, 2, 5), Arrays.asList(2, 0, 3)),
+                true, false);
+    }
+
+    private void verifyRackAwareConsumerRebalance(List<List<Integer>> partitionReplicas1,
+                                                  List<List<Integer>> partitionReplicas2,
+                                                  boolean rackAwareConsumer,
+                                                  boolean expectRebalance) {
+        List<String> racks = Arrays.asList("rack-a", "rack-b", "rack-c");
+        MockPartitionAssignor assignor = partitionAssignor;
+        String consumerRackId = null;
+        if (rackAwareConsumer) {
+            consumerRackId = racks.get(0);
+            assignor = new RackAwareAssignor(protocol);
+            createRackAwareCoordinator(consumerRackId, assignor);
+        }
+
+        MetadataResponse metadataResponse1 = rackAwareMetadata(6, racks, Collections.singletonMap(topic1, partitionReplicas1));
+        MetadataResponse metadataResponse2 = rackAwareMetadata(6, racks, Collections.singletonMap(topic1, partitionReplicas2));
+        verifyRebalanceWithMetadataChange(Optional.ofNullable(consumerRackId), assignor, metadataResponse1, metadataResponse2, expectRebalance);
+    }
+
+    private void verifyRebalanceWithMetadataChange(Optional<String> rackId,
+                                                   MockPartitionAssignor partitionAssignor,
+                                                   MetadataResponse metadataResponse1,
+                                                   MetadataResponse metadataResponse2,
+                                                   boolean expectRebalance) {
         final String consumerId = "leader";
         final List<String> topics = Arrays.asList(topic1, topic2);
-        final List<TopicPartition> partitions = Arrays.asList(t1p, t2p);
+        final List<TopicPartition> partitions = metadataResponse1.topicMetadata().stream()
+                .flatMap(t -> t.partitionMetadata().stream().map(p -> new TopicPartition(t.topic(), p.partition())))
+                .collect(Collectors.toList());
         subscriptions.subscribe(toSet(topics), rebalanceListener);
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1,
-                Utils.mkMap(Utils.mkEntry(topic1, 1), Utils.mkEntry(topic2, 1))));
+        client.updateMetadata(metadataResponse1);
         coordinator.maybeUpdateSubscriptionMetadata();
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -1461,7 +1559,7 @@ public abstract class ConsumerCoordinatorTest {
         Map<String, List<String>> initialSubscription = singletonMap(consumerId, topics);
         partitionAssignor.prepare(singletonMap(consumerId, partitions));
 
-        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, initialSubscription, Errors.NONE));
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, initialSubscription, false, Errors.NONE, rackId));
         client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -1474,16 +1572,22 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(1, rebalanceListener.assignedCount);
 
         // Change metadata to trigger rebalance.
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1)));
+        client.updateMetadata(metadataResponse2);
         coordinator.poll(time.timer(0));
+
+        if (!expectRebalance) {
+            assertEquals(0, client.requests().size());
+            return;
+        }
+        assertEquals(1, client.requests().size());
 
         // Revert metadata to original value. Fail pending JoinGroup. Another
         // JoinGroup should be sent, which will be completed successfully.
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1,
-                Utils.mkMap(Utils.mkEntry(topic1, 1), Utils.mkEntry(topic2, 1))));
+        client.updateMetadata(metadataResponse1);
         client.respond(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NOT_COORDINATOR));
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.poll(time.timer(0));
+        assertFalse(client.hasInFlightRequests());
+        coordinator.poll(time.timer(1));
         assertTrue(coordinator.rejoinNeededOrPending());
 
         client.respond(request -> {
@@ -1493,7 +1597,7 @@ public abstract class ConsumerCoordinatorTest {
                 JoinGroupRequest joinRequest = (JoinGroupRequest) request;
                 return consumerId.equals(joinRequest.data().memberId());
             }
-        }, joinGroupLeaderResponse(2, consumerId, initialSubscription, Errors.NONE));
+        }, joinGroupLeaderResponse(2, consumerId, initialSubscription, false, Errors.NONE, rackId));
         client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -1847,7 +1951,7 @@ public abstract class ConsumerCoordinatorTest {
         // note that `MockPartitionAssignor.prepare` is not called therefore calling `MockPartitionAssignor.assign`
         // will throw a IllegalStateException. this indirectly verifies that `assign` is correctly skipped.
         Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
-        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE));
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE, Optional.empty()));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -1879,7 +1983,7 @@ public abstract class ConsumerCoordinatorTest {
             mkEntry(consumerId, singletonList(topic1)),
             mkEntry(consumerId2, singletonList(topic2))
         );
-        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE));
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE, Optional.empty()));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -2821,6 +2925,32 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testCommitOffsetShouldNotSetInstanceIdIfMemberIdIsUnknown() {
+        rebalanceConfig = buildRebalanceConfig(groupInstanceId);
+        ConsumerCoordinator coordinator = buildCoordinator(
+            rebalanceConfig,
+            new Metrics(),
+            assignors,
+            false,
+            subscriptions
+        );
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(5000));
+
+        client.prepareResponse(body -> {
+            OffsetCommitRequestData data = ((OffsetCommitRequest) body).data();
+            return data.groupInstanceId() == null && data.memberId().isEmpty();
+        }, offsetCommitResponse(Collections.emptyMap()));
+
+        RequestFuture<Void> future = coordinator.sendOffsetCommitRequest(singletonMap(t1p,
+            new OffsetAndMetadata(100L, "metadata")));
+
+        assertTrue(consumerClient.poll(future, time.timer(5000)));
+        assertFalse(future.failed());
+    }
+
+    @Test
     public void testCommitOffsetRebalanceInProgress() {
         // we cannot retry if a rebalance occurs before the commit completed
         final String consumerId = "leader";
@@ -3465,6 +3595,30 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testSubscriptionRackId() {
+
+        String rackId = "rack-a";
+        RackAwareAssignor assignor = new RackAwareAssignor(protocol);
+        createRackAwareCoordinator(rackId, assignor);
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.updateMetadata(metadataResponse);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
+        assignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, false, Errors.NONE, Optional.of(rackId)));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+        assertEquals(singleton(t1p), coordinator.subscriptionState().assignedPartitions());
+        assertEquals(singleton(rackId), assignor.rackIds);
+    }
+
+    @Test
     public void testThrowOnUnsupportedStableFlag() {
         supportStableFlag((short) 6, true);
     }
@@ -3488,7 +3642,8 @@ public abstract class ConsumerCoordinatorTest {
             false,
             autoCommitIntervalMs,
             null,
-            true);
+            true,
+            null);
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.OFFSET_FETCH.id, (short) 0, upperVersion));
@@ -3649,7 +3804,8 @@ public abstract class ConsumerCoordinatorTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 null,
-                false);
+                false,
+                null);
     }
 
     private Collection<TopicPartition> getRevoked(final List<TopicPartition> owned,
@@ -3705,7 +3861,7 @@ public abstract class ConsumerCoordinatorTest {
         Map<String, List<String>> subscriptions,
         Errors error
     ) {
-        return joinGroupLeaderResponse(generationId, memberId, subscriptions, false, error);
+        return joinGroupLeaderResponse(generationId, memberId, subscriptions, false, error, Optional.empty());
     }
 
     private JoinGroupResponse joinGroupLeaderResponse(
@@ -3713,11 +3869,13 @@ public abstract class ConsumerCoordinatorTest {
         String memberId,
         Map<String, List<String>> subscriptions,
         boolean skipAssignment,
-        Errors error
+        Errors error,
+        Optional<String> rackId
     ) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : subscriptions.entrySet()) {
-            ConsumerPartitionAssignor.Subscription subscription = new ConsumerPartitionAssignor.Subscription(subscriptionEntry.getValue());
+            ConsumerPartitionAssignor.Subscription subscription = new ConsumerPartitionAssignor.Subscription(subscriptionEntry.getValue(),
+                    null, Collections.emptyList(), DEFAULT_GENERATION, rackId);
             ByteBuffer buf = ConsumerProtocol.serializeSubscription(subscription);
             metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
                     .setMemberId(subscriptionEntry.getKey())
@@ -3732,7 +3890,8 @@ public abstract class ConsumerCoordinatorTest {
                         .setLeader(memberId)
                         .setSkipAssignment(skipAssignment)
                         .setMemberId(memberId)
-                        .setMembers(metadata)
+                        .setMembers(metadata),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
@@ -3744,7 +3903,8 @@ public abstract class ConsumerCoordinatorTest {
                         .setProtocolName(partitionAssignor.name())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
-                        .setMembers(Collections.emptyList())
+                        .setMembers(Collections.emptyList()),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
@@ -3863,6 +4023,45 @@ public abstract class ConsumerCoordinatorTest {
         };
     }
 
+    private void createRackAwareCoordinator(String rackId, MockPartitionAssignor assignor) {
+        metrics.close();
+        coordinator.close(time.timer(0));
+
+        metrics = new Metrics(time);
+
+        coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
+                Collections.singletonList(assignor), metadata, subscriptions,
+                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId);
+    }
+
+    private static MetadataResponse rackAwareMetadata(int numNodes,
+                                                      List<String> racks,
+                                                      Map<String, List<List<Integer>>> partitionReplicas) {
+        final List<Node> nodes = new ArrayList<>(numNodes);
+        for (int i = 0; i < numNodes; i++)
+            nodes.add(new Node(i, "localhost", 1969 + i, racks.get(i % racks.size())));
+
+        List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
+        for (Map.Entry<String, List<List<Integer>>> topicPartitionCountEntry : partitionReplicas.entrySet()) {
+            String topic = topicPartitionCountEntry.getKey();
+            int numPartitions = topicPartitionCountEntry.getValue().size();
+
+            List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>(numPartitions);
+            for (int i = 0; i < numPartitions; i++) {
+                TopicPartition tp = new TopicPartition(topic, i);
+                List<Integer> replicaIds = topicPartitionCountEntry.getValue().get(i);
+                partitionMetadata.add(new PartitionMetadata(
+                        Errors.NONE, tp, Optional.of(replicaIds.get(0)), Optional.empty(),
+                        replicaIds, replicaIds, Collections.emptyList()));
+            }
+
+            topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic, Uuid.ZERO_UUID,
+                    Topic.isInternal(topic), partitionMetadata, MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED));
+        }
+
+        return RequestTestUtils.metadataResponse(nodes, "kafka-cluster", 0, topicMetadata, ApiKeys.METADATA.latestVersion());
+    }
+
     private static class MockCommitCallback implements OffsetCommitCallback {
         public int invoked = 0;
         public Exception exception = null;
@@ -3871,6 +4070,24 @@ public abstract class ConsumerCoordinatorTest {
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             invoked++;
             this.exception = exception;
+        }
+    }
+
+    private static class RackAwareAssignor extends MockPartitionAssignor {
+        private final Set<String> rackIds = new HashSet<>();
+
+        RackAwareAssignor(RebalanceProtocol rebalanceProtocol) {
+            super(Collections.singletonList(rebalanceProtocol));
+        }
+
+        @Override
+        public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic, Map<String, Subscription> subscriptions) {
+            subscriptions.forEach((consumer, subscription) -> {
+                if (!subscription.rackId().isPresent())
+                    throw new IllegalStateException("Rack id not provided in subscription for " + consumer);
+                rackIds.add(subscription.rackId().get());
+            });
+            return super.assign(partitionsPerTopic, subscriptions);
         }
     }
 }

@@ -119,7 +119,7 @@ public class JoinGroupRequest extends AbstractRequest {
         else
             data.setProtocolName(UNKNOWN_PROTOCOL_NAME);
 
-        return new JoinGroupResponse(data);
+        return new JoinGroupResponse(data, version());
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, short version) {

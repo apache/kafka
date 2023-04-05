@@ -94,7 +94,7 @@ public class StoreUpgradeIntegrationTest {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
@@ -976,8 +976,6 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), newCount);
         }
 
-        @Override
-        public void close() {}
     }
 
     private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
@@ -1006,8 +1004,6 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp));
         }
 
-        @Override
-        public void close() {}
     }
 
     private static class WindowedProcessor implements Processor<Integer, Integer, Void, Void> {
@@ -1032,8 +1028,6 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), newCount, record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 
     private static class TimestampedWindowedProcessor implements Processor<Integer, Integer, Void, Void> {
@@ -1062,7 +1056,5 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp), record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 }

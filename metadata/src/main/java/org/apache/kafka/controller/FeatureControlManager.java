@@ -20,11 +20,9 @@ package org.apache.kafka.controller;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Consumer;
@@ -212,11 +210,9 @@ public class FeatureControlManager {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
         } else {
-            records.add(new ApiMessageAndVersion(
-                new FeatureLevelRecord()
-                    .setName(featureName)
-                    .setFeatureLevel(newVersion),
-                FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+            records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(featureName).
+                setFeatureLevel(newVersion), (short) 0));
             return ApiError.NONE;
         }
     }
@@ -255,7 +251,8 @@ public class FeatureControlManager {
             if (!metadataChanged) {
                 log.info("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
             } else if (allowUnsafeDowngrade) {
-                log.info("Downgrading metadata.version unsafely from {} to {}.", currentVersion, newVersion);
+                return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported " +
+                        "in this version.");
             } else {
                 return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
                         "downgrade because it might delete metadata information. Retry using " +
@@ -307,42 +304,7 @@ public class FeatureControlManager {
         }
     }
 
-    class FeatureControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final Iterator<Entry<String, Short>> iterator;
-        private final MetadataVersion metadataVersion;
-        private boolean wroteVersion = false;
-
-        FeatureControlIterator(long epoch) {
-            this.iterator = finalizedVersions.entrySet(epoch).iterator();
-            this.metadataVersion = FeatureControlManager.this.metadataVersion.get(epoch);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return !wroteVersion || iterator.hasNext();
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            // Write the metadata.version first
-            if (!wroteVersion) {
-                if (metadataVersion.isAtLeast(minimumBootstrapVersion)) {
-                    wroteVersion = true;
-                    return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
-                            .setName(MetadataVersion.FEATURE_NAME)
-                            .setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
-                }
-            }
-            // Then write the rest of the features
-            if (!hasNext()) throw new NoSuchElementException();
-            Entry<String, Short> entry = iterator.next();
-            return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
-                .setName(entry.getKey())
-                .setFeatureLevel(entry.getValue()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
-        }
-    }
-
-    FeatureControlIterator iterator(long epoch) {
-        return new FeatureControlIterator(epoch);
+    boolean isControllerId(int nodeId) {
+        return quorumFeatures.isControllerId(nodeId);
     }
 }

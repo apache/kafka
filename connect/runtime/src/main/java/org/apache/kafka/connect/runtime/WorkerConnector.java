@@ -21,7 +21,6 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnectorContext;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -49,7 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * failures, whether in initialization or after startup, are treated as fatal, which means that we will not attempt
  * to restart this connector instance after failure. What this means from a user perspective is that you must
  * use the /restart REST API to restart a failed task. This behavior is consistent with task failures.
- *
+ * <p>
  * Note that this class is NOT thread-safe.
  */
 public class WorkerConnector implements Runnable {
@@ -116,14 +115,12 @@ public class WorkerConnector implements Runnable {
         LoggingContext.clear();
 
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + connName);
                 doRun();
             } finally {
                 Thread.currentThread().setName(savedName);
-                Plugins.compareAndSwapLoaders(savedLoader);
             }
         } finally {
             // In the rare case of an exception being thrown outside the doRun() method, or an

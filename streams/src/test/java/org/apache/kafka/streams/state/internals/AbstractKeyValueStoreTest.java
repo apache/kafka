@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -23,7 +24,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -55,7 +56,6 @@ import static org.junit.Assert.fail;
 public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
-
     protected InternalMockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
@@ -648,4 +648,25 @@ public abstract class AbstractKeyValueStoreTest {
             );
         }
     }
+
+    @Test
+    public void prefixScanShouldNotThrowConcurrentModificationException() {
+
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(222, "two-hundred-twenty-two");
+        store.put(2, "two");
+        store.put(22, "twenty-two");
+        store.put(3, "three");
+
+        try (final KeyValueIterator<Integer, String> iter = store.prefixScan(2, new IntegerSerializer())) {
+
+            store.delete(22);
+
+            while (iter.hasNext()) {
+                iter.next();
+            }
+        }
+    }                  
 }
+

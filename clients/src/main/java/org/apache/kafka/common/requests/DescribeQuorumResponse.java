@@ -70,6 +70,11 @@ public class DescribeQuorumResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static DescribeQuorumResponseData singletonErrorResponse(
         TopicPartition topicPartition,
         Errors error

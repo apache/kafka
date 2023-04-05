@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -59,7 +60,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -192,6 +192,10 @@ public class StreamThread extends Thread {
         stateListener = listener;
     }
 
+    public StreamThread.StateListener getStateListener() {
+        return stateListener;
+    }
+
     /**
      * @return The state this instance is in
      */
@@ -320,6 +324,7 @@ public class StreamThread extends Thread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
     private final boolean eosEnabled;
+    private final boolean stateUpdaterEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -363,6 +368,8 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        final boolean stateUpdaterEnabled =
+            InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -374,8 +381,8 @@ public class StreamThread extends Thread {
             clientSupplier,
             threadId,
             processId,
-            log
-        );
+            log,
+            stateUpdaterEnabled);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             topologyMetadata,
             config,
@@ -383,8 +390,8 @@ public class StreamThread extends Thread {
             stateDirectory,
             changelogReader,
             threadId,
-            log
-        );
+            log,
+            stateUpdaterEnabled);
 
         final TaskManager taskManager = new TaskManager(
             time,
@@ -397,7 +404,7 @@ public class StreamThread extends Thread {
             topologyMetadata,
             adminClient,
             stateDirectory,
-            maybeCreateAndStartStateUpdater(config, changelogReader, time)
+            maybeCreateAndStartStateUpdater(stateUpdaterEnabled, streamsMetrics, config, changelogReader, topologyMetadata, time, clientId, threadIdx)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -440,13 +447,17 @@ public class StreamThread extends Thread {
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
-    private static StateUpdater maybeCreateAndStartStateUpdater(final StreamsConfig streamsConfig,
+    private static StateUpdater maybeCreateAndStartStateUpdater(final boolean stateUpdaterEnabled,
+                                                                final StreamsMetricsImpl streamsMetrics,
+                                                                final StreamsConfig streamsConfig,
                                                                 final ChangelogReader changelogReader,
-                                                                final Time time) {
-        final boolean stateUpdaterEnabled =
-            InternalConfig.getBoolean(streamsConfig.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+                                                                final TopologyMetadata topologyMetadata,
+                                                                final Time time,
+                                                                final String clientId,
+                                                                final int threadIdx) {
         if (stateUpdaterEnabled) {
-            final StateUpdater stateUpdater = new DefaultStateUpdater(streamsConfig, changelogReader, time);
+            final String name = clientId + "-StateUpdater-" + threadIdx;
+            final StateUpdater stateUpdater = new DefaultStateUpdater(name, streamsMetrics.metricsRegistry(), streamsConfig, changelogReader, topologyMetadata, time);
             stateUpdater.start();
             return stateUpdater;
         } else {
@@ -540,6 +551,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
+        this.stateUpdaterEnabled = InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -587,7 +599,7 @@ public class StreamThread extends Thread {
 
         // if the thread is still in the middle of a rebalance, we should keep polling
         // until the rebalance is completed before we close and commit the tasks
-        while (isRunning() || taskManager.isRebalanceInProgress()) {
+        while (isRunning() || taskManager.rebalanceInProgress()) {
             try {
                 checkForTopologyUpdates();
                 // If we received the shutdown signal while waiting for a topology to be added, we can
@@ -603,9 +615,11 @@ public class StreamThread extends Thread {
                     cacheResizer.accept(size);
                 }
                 runOnce();
-                if (nextProbingRebalanceMs.get() < time.milliseconds()) {
-                    log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
-                    mainConsumer.enforceRebalance("Scheduled probing rebalance");
+
+                // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
+                if (!taskManager.rebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
+                    log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
+                    mainConsumer.enforceRebalance("triggered followup rebalance scheduled for " + nextProbingRebalanceMs.get());
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
@@ -760,7 +774,9 @@ public class StreamThread extends Thread {
             return;
         }
 
-        initializeAndRestorePhase();
+        if (!stateUpdaterEnabled) {
+            initializeAndRestorePhase();
+        }
 
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
@@ -770,7 +786,8 @@ public class StreamThread extends Thread {
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
-        if (state == State.RUNNING) {
+        if (state == State.RUNNING
+            || (stateUpdaterEnabled && isRunning())) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;
@@ -781,6 +798,11 @@ public class StreamThread extends Thread {
              *  6. Otherwise, increment N.
              */
             do {
+
+                if (stateUpdaterEnabled) {
+                    checkStateUpdater();
+                }
+
                 log.debug("Processing tasks with {} iterations.", numIterations);
                 final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
@@ -867,19 +889,16 @@ public class StreamThread extends Thread {
     }
 
     private void initializeAndRestorePhase() {
+        final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = partitions -> resetOffsets(partitions, null);
+        final State stateSnapshot = state;
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
-        final State stateSnapshot = state;
         if (stateSnapshot == State.PARTITIONS_ASSIGNED
             || stateSnapshot == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
 
             log.debug("State is {}; initializing tasks if necessary", stateSnapshot);
 
-            // transit to restore active is idempotent so we can call it multiple times
-            changelogReader.enforceRestoreActive();
-
-            if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
-                changelogReader.transitToUpdateStandby();
+            if (taskManager.tryToCompleteRestoration(now, offsetResetter)) {
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
                     taskManager.allTasks().keySet());
                 setState(State.RUNNING);
@@ -898,6 +917,15 @@ public class StreamThread extends Thread {
         // After KAFKA-13873, we only restore the not paused tasks.
         changelogReader.restore(taskManager.notPausedTasks());
         log.debug("Idempotent restore call done. Thread state has not changed.");
+    }
+
+    private void checkStateUpdater() {
+        final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = partitions -> resetOffsets(partitions, null);
+        final State stateSnapshot = state;
+        final boolean allRunning = taskManager.checkStateUpdater(now, offsetResetter);
+        if (allRunning && stateSnapshot == State.PARTITIONS_ASSIGNED) {
+            setState(State.RUNNING);
+        }
     }
 
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
@@ -920,7 +948,7 @@ public class StreamThread extends Thread {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
-        if (state == State.PARTITIONS_ASSIGNED) {
+        if (state == State.PARTITIONS_ASSIGNED && !stateUpdaterEnabled) {
             // try to fetch some records with zero poll millis
             // to unblock the restoration as soon as possible
             records = pollRequests(Duration.ZERO);
@@ -928,7 +956,7 @@ public class StreamThread extends Thread {
             // try to fetch some records with zero poll millis to unblock
             // other useful work while waiting for the join response
             records = pollRequests(Duration.ZERO);
-        } else if (state == State.RUNNING || state == State.STARTING) {
+        } else if (state == State.RUNNING || state == State.STARTING || (state == State.PARTITIONS_ASSIGNED && stateUpdaterEnabled)) {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);
@@ -1064,6 +1092,16 @@ public class StreamThread extends Thread {
         partitions.add(partition);
     }
 
+    // This method is added for usage in tests where mocking the underlying native call is not possible.
+    public boolean isThreadAlive() {
+        return isAlive();
+    }
+
+    // Call method when a topology is resumed
+    public void signalResume() {
+        taskManager.signalResume();
+    }
+
     /**
      * Try to commit all active tasks owned by this thread.
      *
@@ -1081,7 +1119,7 @@ public class StreamThread extends Thread {
             }
 
             committed = taskManager.commit(
-                taskManager.allTasks()
+                taskManager.allOwnedTasks()
                     .values()
                     .stream()
                     .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
@@ -1240,16 +1278,23 @@ public class StreamThread extends Thread {
         );
     }
 
-    public Map<TaskId, Task> activeTaskMap() {
-        return taskManager.activeTaskMap();
+    /**
+     * Getting the list of current active tasks of the thread;
+     * Note that the returned list may be used by other thread than the StreamThread itself,
+     * and hence need to be read-only
+     */
+    public Set<Task> readOnlyActiveTasks() {
+        return readyOnlyAllTasks().stream()
+            .filter(Task::isActive).collect(Collectors.toSet());
     }
 
-    public List<Task> activeTasks() {
-        return taskManager.activeTaskIterable();
-    }
-
-    public Map<TaskId, Task> allTasks() {
-        return taskManager.allTasks();
+    /**
+     * Getting the list of all owned tasks of the thread, including both active and standby;
+     * Note that the returned list may be used by other thread than the StreamThread itself,
+     * and hence need to be read-only
+     */
+    public Set<Task> readyOnlyAllTasks() {
+        return taskManager.readOnlyAllTasks();
     }
 
     /**

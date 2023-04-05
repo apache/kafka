@@ -38,6 +38,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -49,8 +50,11 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
+import org.apache.kafka.common.errors.InvalidPrincipalTypeException;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,6 +64,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -77,6 +84,9 @@ public class MockAdminClient extends AdminClient {
     private final Map<TopicPartition, Long> endOffsets;
     private final Map<TopicPartition, Long> committedOffsets;
     private final boolean usingRaftController;
+    private final Map<String, Short> featureLevels;
+    private final Map<String, Short> minSupportedFeatureLevels;
+    private final Map<String, Short> maxSupportedFeatureLevels;
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
@@ -90,6 +100,8 @@ public class MockAdminClient extends AdminClient {
 
     private Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
+    private final List<DelegationToken> allTokens = new ArrayList<>();
+
     public static Builder create() {
         return new Builder();
     }
@@ -102,6 +114,9 @@ public class MockAdminClient extends AdminClient {
         private Short defaultPartitions;
         private boolean usingRaftController = false;
         private Integer defaultReplicationFactor;
+        private Map<String, Short> featureLevels = Collections.emptyMap();
+        private Map<String, Short> minSupportedFeatureLevels = Collections.emptyMap();
+        private Map<String, Short> maxSupportedFeatureLevels = Collections.emptyMap();
 
         public Builder() {
             numBrokers(1);
@@ -156,14 +171,32 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
+        public Builder featureLevels(Map<String, Short> featureLevels) {
+            this.featureLevels = featureLevels;
+            return this;
+        }
+
+        public Builder minSupportedFeatureLevels(Map<String, Short> minSupportedFeatureLevels) {
+            this.minSupportedFeatureLevels = minSupportedFeatureLevels;
+            return this;
+        }
+
+        public Builder maxSupportedFeatureLevels(Map<String, Short> maxSupportedFeatureLevels) {
+            this.maxSupportedFeatureLevels = maxSupportedFeatureLevels;
+            return this;
+        }
+
         public MockAdminClient build() {
             return new MockAdminClient(brokers,
                 controller == null ? brokers.get(0) : controller,
                 clusterId,
-                defaultPartitions != null ? defaultPartitions.shortValue() : 1,
+                defaultPartitions != null ? defaultPartitions : 1,
                 defaultReplicationFactor != null ? defaultReplicationFactor.shortValue() : Math.min(brokers.size(), 3),
                 brokerLogDirs,
-                usingRaftController);
+                usingRaftController,
+                featureLevels,
+                minSupportedFeatureLevels,
+                maxSupportedFeatureLevels);
         }
     }
 
@@ -172,17 +205,30 @@ public class MockAdminClient extends AdminClient {
     }
 
     public MockAdminClient(List<Node> brokers, Node controller) {
-        this(brokers, controller, DEFAULT_CLUSTER_ID, 1, brokers.size(),
-            Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS), false);
+        this(brokers,
+            controller,
+            DEFAULT_CLUSTER_ID,
+            1,
+            brokers.size(),
+            Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS),
+            false,
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap());
     }
 
-    private MockAdminClient(List<Node> brokers,
-                            Node controller,
-                            String clusterId,
-                            int defaultPartitions,
-                            int defaultReplicationFactor,
-                            List<List<String>> brokerLogDirs,
-                            boolean usingRaftController) {
+    private MockAdminClient(
+        List<Node> brokers,
+        Node controller,
+        String clusterId,
+        int defaultPartitions,
+        int defaultReplicationFactor,
+        List<List<String>> brokerLogDirs,
+        boolean usingRaftController,
+        Map<String, Short> featureLevels,
+        Map<String, Short> minSupportedFeatureLevels,
+        Map<String, Short> maxSupportedFeatureLevels
+    ) {
         this.brokers = brokers;
         controller(controller);
         this.clusterId = clusterId;
@@ -199,6 +245,9 @@ public class MockAdminClient extends AdminClient {
         this.endOffsets = new HashMap<>();
         this.committedOffsets = new HashMap<>();
         this.usingRaftController = usingRaftController;
+        this.featureLevels = new HashMap<>(featureLevels);
+        this.minSupportedFeatureLevels = new HashMap<>(minSupportedFeatureLevels);
+        this.maxSupportedFeatureLevels = new HashMap<>(maxSupportedFeatureLevels);
     }
 
     synchronized public void controller(Node controller) {
@@ -555,22 +604,89 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<DelegationToken> future = new KafkaFutureImpl<>();
+
+        for (KafkaPrincipal renewer : options.renewers()) {
+            if (!renewer.getPrincipalType().equals(KafkaPrincipal.USER_TYPE)) {
+                future.completeExceptionally(new InvalidPrincipalTypeException(""));
+                return new CreateDelegationTokenResult(future);
+            }
+        }
+
+        String tokenId = Uuid.randomUuid().toString();
+        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxlifeTimeMs(), -1);
+        DelegationToken token = new DelegationToken(tokenInfo, tokenId.getBytes());
+        allTokens.add(token);
+        future.complete(token);
+
+        return new CreateDelegationTokenResult(future);
     }
 
     @Override
     synchronized public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
+
+        Boolean tokenFound = false;
+        Long expiryTimestamp = options.renewTimePeriodMs();
+        for (DelegationToken token : allTokens) {
+            if (Arrays.equals(token.hmac(), hmac)) {
+                token.tokenInfo().setExpiryTimestamp(expiryTimestamp);
+                tokenFound = true;
+            }
+        }
+
+        if (tokenFound) {
+            future.complete(expiryTimestamp);
+        } else {
+            future.completeExceptionally(new DelegationTokenNotFoundException(""));
+        }
+
+        return new RenewDelegationTokenResult(future);
     }
 
     @Override
     synchronized public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
+
+        Long expiryTimestamp = options.expiryTimePeriodMs();
+        List<DelegationToken> tokensToRemove = new ArrayList<>();
+        Boolean tokenFound = false;
+        for (DelegationToken token : allTokens) {
+            if (Arrays.equals(token.hmac(), hmac)) {
+                if (expiryTimestamp == -1 || expiryTimestamp < System.currentTimeMillis()) {
+                    tokensToRemove.add(token);
+                }
+                tokenFound = true;
+            }
+        }
+
+        if (tokenFound) {
+            allTokens.removeAll(tokensToRemove);
+            future.complete(expiryTimestamp);
+        }   else {
+            future.completeExceptionally(new DelegationTokenNotFoundException(""));
+        }
+
+        return new ExpireDelegationTokenResult(future);
     }
 
     @Override
     synchronized public DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<List<DelegationToken>> future = new KafkaFutureImpl<>();
+
+        if (options.owners().isEmpty()) {
+            future.complete(allTokens);
+        } else {
+            List<DelegationToken> tokensResult = new ArrayList<>();
+            for (DelegationToken token : allTokens) {
+                if (options.owners().contains(token.tokenInfo().owner())) {
+                    tokensResult.add(token);
+                }
+            }
+            future.complete(tokensResult);
+        }
+
+        return new DescribeDelegationTokenResult(future);
     }
 
     @Override
@@ -741,7 +857,7 @@ public class MockAdminClient extends AdminClient {
             case BROKER: {
                 int brokerId;
                 try {
-                    brokerId = Integer.valueOf(resource.name());
+                    brokerId = Integer.parseInt(resource.name());
                 } catch (NumberFormatException e) {
                     return e;
                 }
@@ -880,7 +996,7 @@ public class MockAdminClient extends AdminClient {
                 newReassignments.entrySet()) {
             TopicPartition partition = entry.getKey();
             Optional<NewPartitionReassignment> newReassignment = entry.getValue();
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             futures.put(partition, future);
             TopicMetadata topicMetadata = allTopics.get(partition.topic());
             if (partition.partition() < 0 ||
@@ -995,12 +1111,79 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
+        Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
+        for (Map.Entry<String, Short> entry : featureLevels.entrySet()) {
+            finalizedFeatures.put(entry.getKey(), new FinalizedVersionRange(
+                    entry.getValue(), entry.getValue()));
+            supportedFeatures.put(entry.getKey(), new SupportedVersionRange(
+                    minSupportedFeatureLevels.get(entry.getKey()),
+                    maxSupportedFeatureLevels.get(entry.getKey())));
+        }
+        return new DescribeFeaturesResult(KafkaFuture.completedFuture(
+                new FeatureMetadata(finalizedFeatures,
+                    Optional.of(123L),
+                    supportedFeatures)));
     }
 
     @Override
-    public UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    public UpdateFeaturesResult updateFeatures(
+        Map<String, FeatureUpdate> featureUpdates,
+        UpdateFeaturesOptions options
+    ) {
+        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            String feature = entry.getKey();
+            try {
+                short cur = featureLevels.getOrDefault(feature, (short) 0);
+                short next = entry.getValue().maxVersionLevel();
+                short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
+                short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
+                switch (entry.getValue().upgradeType()) {
+                    case UNKNOWN:
+                        throw new InvalidRequestException("Invalid upgrade type.");
+                    case UPGRADE:
+                        if (cur > next) {
+                            throw new InvalidUpdateVersionException("Can't upgrade to lower version.");
+                        }
+                        break;
+                    case SAFE_DOWNGRADE:
+                        if (cur < next) {
+                            throw new InvalidUpdateVersionException("Can't downgrade to newer version.");
+                        }
+                        break;
+                    case UNSAFE_DOWNGRADE:
+                        if (cur < next) {
+                            throw new InvalidUpdateVersionException("Can't downgrade to newer version.");
+                        }
+                        while (next != cur) {
+                            // Simulate a scenario where all the even feature levels unsafe to downgrade from.
+                            if (cur % 2 == 0) {
+                                if (entry.getValue().upgradeType() == FeatureUpdate.UpgradeType.SAFE_DOWNGRADE) {
+                                    throw new InvalidUpdateVersionException("Unable to perform a safe downgrade.");
+                                }
+                            }
+                            cur--;
+                        }
+                        break;
+                }
+                if (next < min) {
+                    throw new InvalidUpdateVersionException("Can't downgrade below " + min);
+                }
+                if (next > max) {
+                    throw new InvalidUpdateVersionException("Can't upgrade above " + max);
+                }
+                if (!options.validateOnly()) {
+                    featureLevels.put(feature, next);
+                }
+                future.complete(null);
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            }
+            results.put(feature, future);
+        }
+        return new UpdateFeaturesResult(results);
     }
 
     @Override

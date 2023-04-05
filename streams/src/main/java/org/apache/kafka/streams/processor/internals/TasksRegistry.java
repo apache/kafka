@@ -55,9 +55,15 @@ public interface TasksRegistry {
 
     void addPendingTaskToInit(final Collection<Task> tasks);
 
-    void addNewActiveTasks(final Collection<Task> newTasks);
+    boolean removePendingActiveTaskToSuspend(final TaskId taskId);
 
-    void addNewStandbyTasks(final Collection<Task> newTasks);
+    void addPendingActiveTaskToSuspend(final TaskId taskId);
+
+    void addActiveTasks(final Collection<Task> tasks);
+
+    void addStandbyTasks(final Collection<Task> tasks);
+
+    void addTask(final Task task);
 
     void removeTask(final Task taskToRemove);
 
@@ -84,6 +90,4 @@ public interface TasksRegistry {
     Set<TaskId> allTaskIds();
 
     boolean contains(final TaskId taskId);
-
-    void addTask(final Task task);
 }

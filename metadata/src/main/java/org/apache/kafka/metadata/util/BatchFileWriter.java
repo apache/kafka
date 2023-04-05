@@ -17,7 +17,10 @@
 
 package org.apache.kafka.metadata.util;
 
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -36,16 +39,25 @@ import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 
 
 /**
- * Write an arbitrary set of metadata records into a Kafka metadata log batch format. This is similar to the binary
- * format used for metadata snapshot files, but the log epoch and initial offset are set to zero.
+ * Write an arbitrary set of metadata records into a Kafka metadata log batch format.
+ *
+ * This is similar to the binary format used for metadata snapshot files, but the log epoch
+ * and initial offset are set to zero. This type includes a SnapshotHeaderRecord record in the
+ * first batch and a SnapshotFooterRecord record in the last batch.
  */
 public class BatchFileWriter implements AutoCloseable {
     private final FileChannel channel;
     private final BatchAccumulator<ApiMessageAndVersion> batchAccumulator;
+    private final Time time;
 
-    BatchFileWriter(FileChannel channel, BatchAccumulator<ApiMessageAndVersion> batchAccumulator) {
+    private BatchFileWriter(
+        FileChannel channel,
+        BatchAccumulator<ApiMessageAndVersion> batchAccumulator,
+        Time time
+    ) {
         this.channel = channel;
         this.batchAccumulator = batchAccumulator;
+        this.time = time;
     }
 
     public void append(ApiMessageAndVersion apiMessageAndVersion) {
@@ -57,25 +69,52 @@ public class BatchFileWriter implements AutoCloseable {
     }
 
     public void close() throws IOException {
-        for (BatchAccumulator.CompletedBatch<ApiMessageAndVersion> batch : batchAccumulator.drain()) {
-            Utils.writeFully(channel, batch.data.buffer());
+        // Append the footer before draining the batch accumulator and force it to create a batch
+        batchAccumulator.appendSnapshotFooterRecord(
+            new SnapshotFooterRecord()
+                .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION),
+            time.milliseconds()
+        );
+        batchAccumulator.forceDrain();
+
+        try {
+            for (BatchAccumulator.CompletedBatch<ApiMessageAndVersion> batch : batchAccumulator.drain()) {
+                Utils.writeFully(channel, batch.data.buffer());
+            }
+        } finally {
+            batchAccumulator.close();
+            channel.close();
         }
-        channel.close();
     }
 
     public static BatchFileWriter open(Path snapshotPath) throws IOException {
+        Time time = Time.SYSTEM;
         BatchAccumulator<ApiMessageAndVersion> batchAccumulator = new BatchAccumulator<>(
             0,
             0,
             Integer.MAX_VALUE,
             MAX_BATCH_SIZE_BYTES,
             new BatchMemoryPool(5, MAX_BATCH_SIZE_BYTES),
-            Time.SYSTEM,
+            time,
             CompressionType.NONE,
-            new MetadataRecordSerde());
+            new MetadataRecordSerde()
+        );
 
-        FileChannel channel = FileChannel.open(snapshotPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        // Append the snapshot header control record and force it to create a batch
+        batchAccumulator.appendSnapshotHeaderRecord(
+            new SnapshotHeaderRecord()
+                .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION)
+                .setLastContainedLogTimestamp(0),
+            time.milliseconds()
+        );
+        batchAccumulator.forceDrain();
 
-        return new BatchFileWriter(channel, batchAccumulator);
+        FileChannel channel = FileChannel.open(
+            snapshotPath,
+            StandardOpenOption.CREATE_NEW,
+            StandardOpenOption.WRITE
+        );
+
+        return new BatchFileWriter(channel, batchAccumulator, time);
     }
 }

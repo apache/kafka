@@ -121,7 +121,7 @@ public class QuorumState {
             // For exceptions during state file loading (missing or not readable),
             // we could assume the file is corrupted already and should be cleaned up.
             log.warn("Clearing local quorum state store after error loading state {}",
-                store.toString(), e);
+                store, e);
             store.clear();
             election = ElectionState.withUnknownLeader(0, voters);
         }
@@ -139,13 +139,13 @@ public class QuorumState {
             throw new IllegalStateException("Initialized quorum state " + election
                 + " with a voted candidate, which indicates this node was previously "
                 + " a voter, but the local id " + localIdDescription);
-        } else if (election.epoch < logEndOffsetAndEpoch.epoch) {
+        } else if (election.epoch < logEndOffsetAndEpoch.epoch()) {
             log.warn("Epoch from quorum-state file is {}, which is " +
                 "smaller than last written epoch {} in the log",
-                election.epoch, logEndOffsetAndEpoch.epoch);
+                election.epoch, logEndOffsetAndEpoch.epoch());
             initialState = new UnattachedState(
                 time,
-                logEndOffsetAndEpoch.epoch,
+                logEndOffsetAndEpoch.epoch(),
                 voters,
                 Optional.empty(),
                 randomElectionTimeoutMs(),
@@ -475,8 +475,9 @@ public class QuorumState {
         }
 
         this.store.writeElectionState(state.election());
+        EpochState from = this.state;
         this.state = state;
-        log.info("Completed transition to {}", state);
+        log.info("Completed transition to {} from {}", state, from);
     }
 
     private int randomElectionTimeoutMs() {

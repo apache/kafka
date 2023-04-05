@@ -39,7 +39,6 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private volatile int numUnknownVoterConnections;
     private volatile OptionalLong electionStartMs;
     private volatile OptionalLong pollStartMs;
-    private volatile OptionalLong pollEndMs;
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
@@ -53,14 +52,13 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private final Sensor electionTimeSensor;
     private final Sensor fetchRecordsSensor;
     private final Sensor appendRecordsSensor;
-    private final Sensor pollIdleSensor;
+    private final Sensor pollDurationSensor;
 
     public KafkaRaftMetrics(Metrics metrics, String metricGrpPrefix, QuorumState state) {
         this.metrics = metrics;
         String metricGroupName = metricGrpPrefix + "-metrics";
 
         this.pollStartMs = OptionalLong.empty();
-        this.pollEndMs = OptionalLong.empty();
         this.electionStartMs = OptionalLong.empty();
         this.numUnknownVoterConnections = 0;
         this.logEndOffset = new OffsetAndEpoch(0L, 0);
@@ -102,12 +100,13 @@ public class KafkaRaftMetrics implements AutoCloseable {
         metrics.addMetric(this.highWatermarkMetricName, (mConfig, currentTimeMs) -> state.highWatermark().map(hw -> hw.offset).orElse(-1L));
 
         this.logEndOffsetMetricName = metrics.metricName("log-end-offset", metricGroupName, "The current raft log end offset.");
-        metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset);
+        metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset());
 
         this.logEndEpochMetricName = metrics.metricName("log-end-epoch", metricGroupName, "The current raft log end epoch.");
-        metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch);
+        metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch());
 
-        this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName, "The number of voter connections recognized at this member.");
+        this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName,
+                "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
 
         this.commitTimeSensor = metrics.sensor("commit-latency");
@@ -118,9 +117,9 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         this.electionTimeSensor = metrics.sensor("election-latency");
         this.electionTimeSensor.add(metrics.metricName("election-latency-avg", metricGroupName,
-                "The average time in milliseconds to elect a new leader."), new Avg());
+                "The average time in milliseconds spent on electing a new leader."), new Avg());
         this.electionTimeSensor.add(metrics.metricName("election-latency-max", metricGroupName,
-                "The maximum time in milliseconds to elect a new leader."), new Max());
+                "The maximum time in milliseconds spent on electing a new leader."), new Max());
 
         this.fetchRecordsSensor = metrics.sensor("fetch-records");
         this.fetchRecordsSensor.add(metrics.metricName("fetch-records-rate", metricGroupName,
@@ -132,26 +131,28 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 "The average number of records appended per sec as the leader of the raft quorum."),
                 new Rate(TimeUnit.SECONDS, new WindowedSum()));
 
-        this.pollIdleSensor = metrics.sensor("poll-idle-ratio");
-        this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio-avg",
+        this.pollDurationSensor = metrics.sensor("poll-idle-ratio");
+        this.pollDurationSensor.add(
+            metrics.metricName(
+                "poll-idle-ratio-avg",
                 metricGroupName,
-                "The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records."),
-                new Avg());
+                "The ratio of time the Raft IO thread is idle as opposed to " +
+                    "doing work (e.g. handling requests or replicating from the leader)"
+            ),
+            new TimeRatio(1.0)
+        );
     }
 
     public void updatePollStart(long currentTimeMs) {
-        if (pollEndMs.isPresent() && pollStartMs.isPresent()) {
-            long pollTimeMs = Math.max(pollEndMs.getAsLong() - pollStartMs.getAsLong(), 0L);
-            long totalTimeMs = Math.max(currentTimeMs - pollStartMs.getAsLong(), 1L);
-            this.pollIdleSensor.record(pollTimeMs / (double) totalTimeMs, currentTimeMs);
-        }
-
         this.pollStartMs = OptionalLong.of(currentTimeMs);
-        this.pollEndMs = OptionalLong.empty();
     }
 
     public void updatePollEnd(long currentTimeMs) {
-        this.pollEndMs = OptionalLong.of(currentTimeMs);
+        if (pollStartMs.isPresent()) {
+            long pollDurationMs = Math.max(currentTimeMs - pollStartMs.getAsLong(), 0L);
+            this.pollDurationSensor.record(pollDurationMs);
+            this.pollStartMs = OptionalLong.empty();
+        }
     }
 
     public void updateLogEnd(OffsetAndEpoch logEndOffset) {
@@ -203,7 +204,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             electionTimeSensor.name(),
             fetchRecordsSensor.name(),
             appendRecordsSensor.name(),
-            pollIdleSensor.name()
+            pollDurationSensor.name()
         ).forEach(metrics::removeSensor);
     }
 }

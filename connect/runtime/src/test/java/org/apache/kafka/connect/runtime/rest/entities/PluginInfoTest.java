@@ -27,6 +27,8 @@ public class PluginInfoTest {
     @Test
     public void testNoVersionFilter() {
         PluginInfo.NoVersionFilter filter = new PluginInfo.NoVersionFilter();
+        // We intentionally refrain from using assertEquals and assertNotEquals
+        // here to ensure that the filter's equals() method is used
         assertFalse(filter.equals("1.0"));
         assertFalse(filter.equals(new Object()));
         assertFalse(filter.equals(null));

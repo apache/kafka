@@ -43,5 +43,13 @@ object TestInfoUtils {
       false
     }
   }
+
+  def isZkMigrationTest(testInfo: TestInfo): Boolean = {
+    if (!isKRaft(testInfo)) {
+      false
+    } else {
+      testInfo.getDisplayName().contains("quorum=zkMigration")
+    }
+  }
   final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
 }

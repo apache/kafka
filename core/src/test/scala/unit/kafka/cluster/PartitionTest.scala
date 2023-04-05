@@ -19,10 +19,9 @@ package kafka.cluster
 import java.net.InetAddress
 import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.log.{Defaults => _, _}
+import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.epoch.EpochEntry
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
@@ -45,7 +44,6 @@ import org.mockito.invocation.InvocationOnMock
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.network.ListenerName
@@ -55,6 +53,9 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -62,20 +63,65 @@ import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object PartitionTest {
+  class MockPartitionListener extends PartitionListener {
+    private var highWatermark: Long = -1L
+    private var failed: Boolean = false
+    private var deleted: Boolean = false
+
+    override def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {
+      highWatermark = offset
+    }
+
+    override def onFailed(partition: TopicPartition): Unit = {
+      failed = true
+    }
+
+    override def onDeleted(partition: TopicPartition): Unit = {
+      deleted = true
+    }
+
+    private def clear(): Unit = {
+      highWatermark = -1L
+      failed = false
+      deleted = false
+    }
+
+    /**
+     * Verifies the callbacks that have been triggered since the last
+     * verification. Values different than `-1` are the ones that have
+     * been updated.
+     */
+    def verify(
+      expectedHighWatermark: Long = -1L,
+      expectedFailed: Boolean = false,
+      expectedDeleted: Boolean = false
+    ): Unit = {
+      assertEquals(expectedHighWatermark, highWatermark,
+        "Unexpected high watermark")
+      assertEquals(expectedFailed, failed,
+        "Unexpected failed")
+      assertEquals(expectedDeleted, deleted,
+        "Unexpected deleted")
+      clear()
+    }
+  }
+
   def followerFetchParams(
     replicaId: Int,
+    replicaEpoch: Long = 1L,
     maxWaitMs: Long = 0L,
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue
   ): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = replicaId,
-      maxWaitMs = maxWaitMs,
-      minBytes = minBytes,
-      maxBytes = maxBytes,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+    new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      replicaId,
+      replicaEpoch,
+      maxWaitMs,
+      minBytes,
+      maxBytes,
+      FetchIsolation.LOG_END,
+      Optional.empty()
     )
   }
 
@@ -84,16 +130,17 @@ object PartitionTest {
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue,
     clientMetadata: Option[ClientMetadata] = None,
-    isolation: FetchIsolation = FetchHighWatermark
+    isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-      maxWaitMs = maxWaitMs,
-      minBytes = minBytes,
-      maxBytes = maxBytes,
-      isolation = isolation,
-      clientMetadata = clientMetadata
+    new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      FetchRequest.CONSUMER_REPLICA_ID,
+      -1,
+      maxWaitMs,
+      minBytes,
+      maxBytes,
+      isolation,
+      clientMetadata.asJava
     )
   }
 }
@@ -146,12 +193,12 @@ class PartitionTest extends AbstractPartitionTest {
       divergingEpoch: FetchResponseData.EpochEndOffset,
       readInfo: LogReadInfo
     ): Unit = {
-      assertEquals(Some(divergingEpoch), readInfo.divergingEpoch)
+      assertEquals(Optional.of(divergingEpoch), readInfo.divergingEpoch)
       assertEquals(0, readInfo.fetchedData.records.sizeInBytes)
     }
 
     def assertNoDivergence(readInfo: LogReadInfo): Unit = {
-      assertEquals(None, readInfo.divergingEpoch)
+      assertEquals(Optional.empty(), readInfo.divergingEpoch)
     }
 
     assertDivergence(epochEndOffset(epoch = 0, endOffset = 2), read(lastFetchedEpoch = 2, fetchOffset = 5))
@@ -169,7 +216,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Move log start offset to the middle of epoch 3
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(newLogStartOffset = 5L, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(newLogStartOffset = 5L, LogStartOffsetIncrementReason.ClientRecordDeletion)
 
     assertDivergence(epochEndOffset(epoch = 2, endOffset = 5), read(lastFetchedEpoch = 2, fetchOffset = 8))
     assertNoDivergence(read(lastFetchedEpoch = 0, fetchOffset = 5))
@@ -178,7 +225,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 0, fetchOffset = 0))
 
     // Fetch offset lower than start offset should throw OffsetOutOfRangeException
-    log.maybeIncrementLogStartOffset(newLogStartOffset = 10, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(newLogStartOffset = 10, LogStartOffsetIncrementReason.ClientRecordDeletion)
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 5, fetchOffset = 6)) // diverging
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 3, fetchOffset = 6)) // not diverging
   }
@@ -383,12 +430,12 @@ class PartitionTest extends AbstractPartitionTest {
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeoutMs = 5 * 60 * 1000
-        val maxProducerIdExpirationMs = 60 * 60 * 1000
+        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
           maxTransactionTimeoutMs,
-          maxProducerIdExpirationMs,
+          producerStateManagerConfig,
           mockTime
         )
         val offsets = new LogLoader(
@@ -740,8 +787,8 @@ class PartitionTest extends AbstractPartitionTest {
     val requestLocal = RequestLocal.withThreadConfinedCaching
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.localLogOrException.highWatermark,
       "Expected leader's HW not move")
 
@@ -829,6 +876,13 @@ class PartitionTest extends AbstractPartitionTest {
 
     // If we request the earliest timestamp, we skip the check
     fetchOffsetsForTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(0, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e: ApiException) => fail(s"Got ApiException $e")
+    }
+
+    // If we request the earliest local timestamp, we skip the check
+    fetchOffsetsForTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
       case Right(Some(offsetAndTimestamp)) => assertEquals(0, offsetAndTimestamp.offset)
       case Right(None) => fail("Should have seen some offsets")
       case Left(e: ApiException) => fail(s"Got ApiException $e")
@@ -942,10 +996,10 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
 
-    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
+    def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
+      val res = partition.fetchOffsetForTimestamp(timestamp,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
@@ -953,13 +1007,16 @@ class PartitionTest extends AbstractPartitionTest {
       res.get
     }
 
+    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      fetchOffset(isolationLevel, ListOffsetsRequest.LATEST_TIMESTAMP)
+    }
+
     def fetchEarliestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP,
-        isolationLevel = isolationLevel,
-        currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
-      assertTrue(res.isDefined)
-      res.get
+      fetchOffset(isolationLevel, ListOffsetsRequest.EARLIEST_TIMESTAMP)
+    }
+
+    def fetchEarliestLocalOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      fetchOffset(isolationLevel, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)
     }
 
     assertEquals(3L, fetchLatestOffset(isolationLevel = None).offset)
@@ -975,6 +1032,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, fetchEarliestOffset(isolationLevel = None).offset)
     assertEquals(0L, fetchEarliestOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
     assertEquals(0L, fetchEarliestOffset(isolationLevel = Some(IsolationLevel.READ_COMMITTED)).offset)
+
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = None).offset)
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = Some(IsolationLevel.READ_COMMITTED)).offset)
   }
 
   @Test
@@ -1061,9 +1122,9 @@ class PartitionTest extends AbstractPartitionTest {
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client,
+    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT,
       requiredAcks = 0, requestLocal).lastOffset
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.log.get.highWatermark, "Expected leader's HW not move")
 
     // let the follower in ISR move leader's HW to move further but below LEO
@@ -1095,7 +1156,7 @@ class PartitionTest extends AbstractPartitionTest {
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
-    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     fetchFollower(partition, replicaId = follower1, fetchOffset = 0)
@@ -2142,7 +2203,7 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testZkIsrManagerAsyncCallback(): Unit = {
     // We need a real scheduler here so that the ISR write lock works properly
-    val scheduler = new KafkaScheduler(1, "zk-isr-test")
+    val scheduler = new KafkaScheduler(1, true, "zk-isr-test")
     scheduler.startup()
     val kafkaZkClient = mock(classOf[KafkaZkClient])
 
@@ -2334,9 +2395,9 @@ class PartitionTest extends AbstractPartitionTest {
       "AtMinIsr")
 
     def getMetric(metric: String): Option[Metric] = {
-      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.filter { case (metricName, _) =>
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find { case (metricName, _) =>
         metricName.getName == metric && metricName.getType == "Partition"
-      }.headOption.map(_._2)
+      }.map(_._2)
     }
 
     assertTrue(metricsToCheck.forall(getMetric(_).isDefined))
@@ -2443,7 +2504,7 @@ class PartitionTest extends AbstractPartitionTest {
     val spyConfigRepository = spy(configRepository)
     logManager = TestUtils.createLogManager(
       logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
-      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
+      cleanerConfig = new CleanerConfig(false), time = time)
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
@@ -2476,7 +2537,7 @@ class PartitionTest extends AbstractPartitionTest {
     val spyConfigRepository = spy(configRepository)
     logManager = TestUtils.createLogManager(
       logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
-      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
+      cleanerConfig = new CleanerConfig(false), time = time)
     val spyLogManager = spy(logManager)
     doAnswer((_: InvocationOnMock) => {
       logManager.initializingLog(topicPartition)
@@ -2515,7 +2576,7 @@ class PartitionTest extends AbstractPartitionTest {
     val spyConfigRepository = spy(configRepository)
     logManager = TestUtils.createLogManager(
       logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
-      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
+      cleanerConfig = new CleanerConfig(false), time = time)
     logManager.startup(Set.empty)
 
     val spyLogManager = spy(logManager)
@@ -2635,7 +2696,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
 
     val leaderLog = partition.localLogOrException
-    assertEquals(Some(EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.asJava.flatMap(_.latestEntry))
 
     // Write to the log to increment the log end offset.
     leaderLog.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
@@ -2659,7 +2720,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
     assertEquals(Set(leaderId), partition.partitionState.isr)
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
-    assertEquals(Some(EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.asJava.flatMap(_.latestEntry))
   }
 
   @Test
@@ -2783,6 +2844,254 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(replicas, partition.assignmentState.replicas)
   }
 
+  @Test
+  def testAddAndRemoveListeners(): Unit = {
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = None)
+
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+
+    val listener1 = new MockPartitionListener()
+    val listener2 = new MockPartitionListener()
+
+    assertTrue(partition.maybeAddListener(listener1))
+    listener1.verify()
+
+    partition.appendRecordsToLeader(
+      records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
+      origin = AppendOrigin.CLIENT,
+      requiredAcks = 0,
+      requestLocal = RequestLocal.NoCaching
+    )
+
+    listener1.verify()
+    listener2.verify()
+
+    assertTrue(partition.maybeAddListener(listener2))
+    listener2.verify()
+
+    partition.appendRecordsToLeader(
+      records = TestUtils.records(List(new SimpleRecord("k2".getBytes, "v2".getBytes))),
+      origin = AppendOrigin.CLIENT,
+      requiredAcks = 0,
+      requestLocal = RequestLocal.NoCaching
+    )
+
+    fetchFollower(
+      partition = partition,
+      replicaId = brokerId + 1,
+      fetchOffset = partition.localLogOrException.logEndOffset
+    )
+
+    listener1.verify(expectedHighWatermark = partition.localLogOrException.logEndOffset)
+    listener2.verify(expectedHighWatermark = partition.localLogOrException.logEndOffset)
+
+    partition.removeListener(listener1)
+
+    partition.appendRecordsToLeader(
+      records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
+      origin = AppendOrigin.CLIENT,
+      requiredAcks = 0,
+      requestLocal = RequestLocal.NoCaching
+    )
+
+    fetchFollower(
+      partition = partition,
+      replicaId = brokerId + 1,
+      fetchOffset = partition.localLogOrException.logEndOffset
+    )
+
+    listener1.verify()
+    listener2.verify(expectedHighWatermark = partition.localLogOrException.logEndOffset)
+  }
+
+  @Test
+  def testAddListenerFailsWhenPartitionIsDeleted(): Unit = {
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = None)
+
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+
+    partition.delete()
+
+    assertFalse(partition.maybeAddListener(new MockPartitionListener()))
+  }
+
+  @Test
+  def testPartitionListenerWhenLogOffsetsChanged(): Unit = {
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = None)
+
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+
+    val listener = new MockPartitionListener()
+    assertTrue(partition.maybeAddListener(listener))
+    listener.verify()
+
+    partition.appendRecordsToLeader(
+      records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
+      origin = AppendOrigin.CLIENT,
+      requiredAcks = 0,
+      requestLocal = RequestLocal.NoCaching
+    )
+
+    listener.verify()
+
+    fetchFollower(
+      partition = partition,
+      replicaId = brokerId + 1,
+      fetchOffset = partition.localLogOrException.logEndOffset
+    )
+
+    listener.verify(expectedHighWatermark = partition.localLogOrException.logEndOffset)
+
+    partition.truncateFullyAndStartAt(0L, false)
+
+    listener.verify(expectedHighWatermark = 0L)
+  }
+
+  @Test
+  def testPartitionListenerWhenPartitionFailed(): Unit = {
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = None)
+
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+
+    val listener = new MockPartitionListener()
+    assertTrue(partition.maybeAddListener(listener))
+    listener.verify()
+
+    partition.markOffline()
+    listener.verify(expectedFailed = true)
+  }
+
+  @Test
+  def testPartitionListenerWhenPartitionIsDeleted(): Unit = {
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = None)
+
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+
+    val listener = new MockPartitionListener()
+    assertTrue(partition.maybeAddListener(listener))
+    listener.verify()
+
+    partition.delete()
+    listener.verify(expectedDeleted = true)
+  }
+
+  @Test
+  def testPartitionListenerWhenCurrentIsReplacedWithFutureLog(): Unit = {
+    logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
+    partition.createLogIfNotExists(isNew = true, isFutureReplica = false, offsetCheckpoints, topicId = None)
+    assertTrue(partition.log.isDefined)
+
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+
+    val listener = new MockPartitionListener()
+    assertTrue(partition.maybeAddListener(listener))
+    listener.verify()
+
+    val records = TestUtils.records(List(
+      new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes)
+    ))
+
+    partition.appendRecordsToLeader(
+      records = records,
+      origin = AppendOrigin.CLIENT,
+      requiredAcks = 0,
+      requestLocal = RequestLocal.NoCaching
+    )
+
+    listener.verify()
+
+    logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
+    partition.maybeCreateFutureReplica(logDir2.getAbsolutePath, offsetCheckpoints)
+    assertTrue(partition.futureLog.isDefined)
+    val futureLog = partition.futureLog.get
+
+    partition.appendRecordsToFollowerOrFutureReplica(
+      records = records,
+      isFuture = true
+    )
+
+    listener.verify()
+
+    assertTrue(partition.maybeReplaceCurrentWithFutureReplica())
+    assertEquals(futureLog, partition.log.get)
+
+    partition.appendRecordsToLeader(
+      records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
+      origin = AppendOrigin.CLIENT,
+      requiredAcks = 0,
+      requestLocal = RequestLocal.NoCaching
+    )
+
+    fetchFollower(
+      partition = partition,
+      replicaId = brokerId + 1,
+      fetchOffset = partition.localLogOrException.logEndOffset
+    )
+
+    listener.verify(expectedHighWatermark = partition.localLogOrException.logEndOffset)
+  }
+
   private def makeLeader(
     topicId: Option[Uuid],
     controllerEpoch: Int,
@@ -2884,7 +3193,7 @@ class PartitionTest extends AbstractPartitionTest {
     lastFetchedEpoch: Option[Int] = None,
     fetchTimeMs: Long = time.milliseconds(),
     topicId: Uuid = Uuid.ZERO_UUID,
-    isolation: FetchIsolation = FetchHighWatermark
+    isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): LogReadInfo = {
     val fetchParams = consumerFetchParams(
       maxBytes = maxBytes,

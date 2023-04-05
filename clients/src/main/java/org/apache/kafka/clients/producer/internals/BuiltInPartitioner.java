@@ -56,6 +56,9 @@ public class BuiltInPartitioner {
     public BuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
         this.log = logContext.logger(BuiltInPartitioner.class);
         this.topic = topic;
+        if (stickyBatchSize < 1) {
+            throw new IllegalArgumentException("stickyBatchSize must be >= 1 but got " + stickyBatchSize);
+        }
         this.stickyBatchSize = stickyBatchSize;
     }
 
@@ -170,13 +173,52 @@ public class BuiltInPartitioner {
      * @param cluster The cluster information
      */
     void updatePartitionInfo(StickyPartitionInfo partitionInfo, int appendedBytes, Cluster cluster) {
+        updatePartitionInfo(partitionInfo, appendedBytes, cluster, true);
+    }
+
+    /**
+     * Update partition info with the number of bytes appended and maybe switch partition.
+     * NOTE this function needs to be called under the partition's batch queue lock.
+     *
+     * @param partitionInfo The sticky partition info object returned by peekCurrentPartitionInfo
+     * @param appendedBytes The number of bytes appended to this partition
+     * @param cluster The cluster information
+     * @param enableSwitch If true, switch partition once produced enough bytes
+     */
+    void updatePartitionInfo(StickyPartitionInfo partitionInfo, int appendedBytes, Cluster cluster, boolean enableSwitch) {
         // partitionInfo may be null if the caller didn't use built-in partitioner.
         if (partitionInfo == null)
             return;
 
         assert partitionInfo == stickyPartitionInfo.get();
         int producedBytes = partitionInfo.producedBytes.addAndGet(appendedBytes);
-        if (producedBytes >= stickyBatchSize) {
+
+        // We're trying to switch partition once we produce stickyBatchSize bytes to a partition
+        // but doing so may hinder batching because partition switch may happen while batch isn't
+        // ready to send.  This situation is especially likely with high linger.ms setting.
+        // Consider the following example:
+        //   linger.ms=500, producer produces 12KB in 500ms, batch.size=16KB
+        //     - first batch collects 12KB in 500ms, gets sent
+        //     - second batch collects 4KB, then we switch partition, so 4KB gets eventually sent
+        //     - ... and so on - we'd get 12KB and 4KB batches
+        // To get more optimal batching and avoid 4KB fractional batches, the caller may disallow
+        // partition switch if batch is not ready to send, so with the example above we'd avoid
+        // fractional 4KB batches: in that case the scenario would look like this:
+        //     - first batch collects 12KB in 500ms, gets sent
+        //     - second batch collects 4KB, but partition switch doesn't happen because batch in not ready
+        //     - second batch collects 12KB in 500ms, gets sent and now we switch partition.
+        //     - ... and so on - we'd just send 12KB batches
+        // We cap the produced bytes to not exceed 2x of the batch size to avoid pathological cases
+        // (e.g. if we have a mix of keyed and unkeyed messages, key messages may create an
+        // unready batch after the batch that disabled partition switch becomes ready).
+        // As a result, with high latency.ms setting we end up switching partitions after producing
+        // between stickyBatchSize and stickyBatchSize * 2 bytes, to better align with batch boundary.
+        if (producedBytes >= stickyBatchSize * 2) {
+            log.trace("Produced {} bytes, exceeding twice the batch size of {} bytes, with switching set to {}",
+                producedBytes, stickyBatchSize, enableSwitch);
+        }
+
+        if (producedBytes >= stickyBatchSize && enableSwitch || producedBytes >= stickyBatchSize * 2) {
             // We've produced enough to this partition, switch to next.
             StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(nextPartition(cluster));
             stickyPartitionInfo.set(newPartitionInfo);

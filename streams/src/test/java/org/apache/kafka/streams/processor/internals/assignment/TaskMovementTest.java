@@ -244,15 +244,10 @@ public class TaskMovementTest {
         assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_2)));
         assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, mkSet(TASK_0_1)));
 
-        // we should only assign one warmup, but it could be either one that needs to be migrated.
+        // we should only assign one warmup, and the task movement should have the highest priority
         assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
-        try {
-            assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_1)));
-            assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
-        } catch (final AssertionError ignored) {
-            assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
-            assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_2)));
-        }
+        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet(TASK_0_1)));
+        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, mkSet()));
     }
 
     @Test

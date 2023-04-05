@@ -25,7 +25,9 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 
 /**
- * Samples data about its initialization environment for later analysis
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>Samples data about its initialization environment for later analysis.
  */
 public class SamplingConverter extends SamplingTestPlugin implements Converter {
 

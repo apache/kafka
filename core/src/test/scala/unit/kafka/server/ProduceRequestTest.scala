@@ -19,16 +19,15 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
-
-import kafka.log.LogConfig
-import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -84,7 +83,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val topic = "topic"
     val partition = 0
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
+    topicConfig.setProperty(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
 
@@ -208,7 +207,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
     // Create a single-partition topic compressed with ZSTD
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.CompressionTypeProp, ZStdCompressionCodec.name)
+    topicConfig.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.ZSTD.name)
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
     val memoryRecords = MemoryRecords.withRecords(CompressionType.ZSTD,

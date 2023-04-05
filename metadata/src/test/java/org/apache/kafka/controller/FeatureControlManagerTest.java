@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,6 +38,7 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -201,7 +203,7 @@ public class FeatureControlManagerTest {
     }
 
     @Test
-    public void testFeatureControlIterator() throws Exception {
+    public void testReplayRecords() throws Exception {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         FeatureControlManager manager = new FeatureControlManager.Builder().
@@ -214,17 +216,12 @@ public class FeatureControlManagerTest {
             updateFeatures(updateMap("foo", 5, "bar", 1),
                 Collections.emptyMap(), Collections.emptyMap(), false);
         RecordTestUtils.replayAll(manager, result.records());
-        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
-            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                    setName("metadata.version").
-                    setFeatureLevel((short) 4), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName("foo").
-                setFeatureLevel((short) 5), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName("bar").
-                setFeatureLevel((short) 1), (short) 0))),
-            manager.iterator(Long.MAX_VALUE));
+        assertEquals(MetadataVersion.IBP_3_3_IV0, manager.metadataVersion());
+        assertEquals(Optional.of((short) 5), manager.finalizedFeatures(Long.MAX_VALUE).get("foo"));
+        assertEquals(Optional.of((short) 1), manager.finalizedFeatures(Long.MAX_VALUE).get("bar"));
+        assertEquals(new HashSet<>(Arrays.asList(
+            MetadataVersion.FEATURE_NAME, "foo", "bar")),
+                manager.finalizedFeatures(Long.MAX_VALUE).featureNames());
     }
 
     private static final FeatureControlManager.Builder TEST_MANAGER_BUILDER1 =
@@ -326,6 +323,20 @@ public class FeatureControlManagerTest {
                 true));
     }
 
+    @Test
+    public void testUnsafeDowngradeIsTemporarilyDisabled() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+                        singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                                "Invalid metadata.version 4. Unsafe metadata downgrade is not supported in this version."))),
+                manager.updateFeatures(
+                        singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
+                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
+                        emptyMap(),
+                        true));
+    }
+
+    @Disabled
     @Test
     public void testCanUseUnsafeDowngradeIfMetadataChanged() {
         FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();

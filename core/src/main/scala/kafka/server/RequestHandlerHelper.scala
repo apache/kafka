@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
@@ -27,6 +26,9 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.GroupCoordinator
+
+import java.util.OptionalInt
 
 object RequestHandlerHelper {
 
@@ -46,7 +48,7 @@ object RequestHandlerHelper {
 
     updatedFollowers.foreach { partition =>
       if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
-        groupCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
+        groupCoordinator.onResignation(partition.partitionId, OptionalInt.of(partition.getLeaderEpoch))
       else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
         txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
     }
@@ -95,15 +97,30 @@ class RequestHandlerHelper(
 
   def sendForwardedResponse(request: RequestChannel.Request,
                             response: AbstractResponse): Unit = {
-    // For forwarded requests, we take the throttle time from the broker that
-    // the request was forwarded to
-    val throttleTimeMs = response.throttleTimeMs()
-    throttle(quotas.request, request, throttleTimeMs)
+    // For requests forwarded to the controller, we take the maximum of the local
+    // request throttle and the throttle sent by the controller in the response.
+    val controllerThrottleTimeMs = response.throttleTimeMs()
+    val requestThrottleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
+    val appliedThrottleTimeMs = math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
+    throttle(quotas.request, request, appliedThrottleTimeMs)
+    response.maybeSetThrottleTimeMs(appliedThrottleTimeMs)
     requestChannel.sendResponse(request, response, None)
   }
 
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
+  def sendMaybeThrottle(
+    request: RequestChannel.Request,
+    response: AbstractResponse
+  ): Unit = {
+    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
+    // Only throttle non-forwarded requests
+    if (!request.isForwarded)
+      throttle(quotas.request, request, throttleTimeMs)
+    response.maybeSetThrottleTimeMs(throttleTimeMs)
+    requestChannel.sendResponse(request, response, None)
+  }
+
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                 createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)

@@ -51,7 +51,14 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
                        Map<String, Uuid> topicIds) {
-            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
+            this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates,
+                liveBrokers, topicIds, false);
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
+                       Map<String, Uuid> topicIds, boolean kraftController) {
+            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
             this.topicIds = topicIds;
@@ -81,10 +88,14 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             }
 
             UpdateMetadataRequestData data = new UpdateMetadataRequestData()
-                    .setControllerId(controllerId)
-                    .setControllerEpoch(controllerEpoch)
-                    .setBrokerEpoch(brokerEpoch)
-                    .setLiveBrokers(liveBrokers);
+                .setControllerId(controllerId)
+                .setControllerEpoch(controllerEpoch)
+                .setBrokerEpoch(brokerEpoch)
+                .setLiveBrokers(liveBrokers);
+
+            if (version >= 8) {
+                data.setIsKRaftController(kraftController);
+            }
 
             if (version >= 5) {
                 Map<String, UpdateMetadataTopicState> topicStatesMap = groupByTopic(topicIds, partitionStates);
@@ -178,6 +189,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     @Override
     public int controllerId() {
         return data.controllerId();
+    }
+
+    @Override
+    public boolean isKRaftController() {
+        return data.isKRaftController();
     }
 
     @Override

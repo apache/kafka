@@ -124,6 +124,33 @@ object AclAuthorizer {
     if (aclBinding.pattern().name().contains("/"))
       throw new IllegalArgumentException(s"ACL binding contains invalid resource name: ${aclBinding.pattern().name()}")
   }
+
+  def loadAllAcls(
+    zkClient: KafkaZkClient,
+    logger: Logging,
+    aclConsumer: (ResourcePattern, VersionedAcls) => Unit
+  ): Unit = {
+    ZkAclStore.stores.foreach { store =>
+      val resourceTypes = zkClient.getResourceTypes(store.patternType)
+      for (rType <- resourceTypes) {
+        val resourceType = Try(SecurityUtils.resourceType(rType))
+        resourceType match {
+          case Success(resourceTypeObj) =>
+            val resourceNames = zkClient.getResourceNames(store.patternType, resourceTypeObj)
+            for (resourceName <- resourceNames) {
+              val resource = new ResourcePattern(resourceTypeObj, resourceName, store.patternType)
+              val versionedAcls = getAclsFromZk(zkClient, resource)
+              aclConsumer.apply(resource, versionedAcls)
+            }
+          case Failure(_) => logger.warn(s"Ignoring unknown ResourceType: $rType")
+        }
+      }
+    }
+  }
+
+  def getAclsFromZk(zkClient: KafkaZkClient, resource: ResourcePattern): VersionedAcls = {
+    zkClient.getVersionedAclsForResource(resource)
+  }
 }
 
 class AclAuthorizer extends Authorizer with Logging {
@@ -549,22 +576,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   private def loadCache(): Unit = {
     lock synchronized  {
-      ZkAclStore.stores.foreach { store =>
-        val resourceTypes = zkClient.getResourceTypes(store.patternType)
-        for (rType <- resourceTypes) {
-          val resourceType = Try(SecurityUtils.resourceType(rType))
-          resourceType match {
-            case Success(resourceTypeObj) =>
-              val resourceNames = zkClient.getResourceNames(store.patternType, resourceTypeObj)
-              for (resourceName <- resourceNames) {
-                val resource = new ResourcePattern(resourceTypeObj, resourceName, store.patternType)
-                val versionedAcls = getAclsFromZk(resource)
-                updateCache(resource, versionedAcls)
-              }
-            case Failure(_) => warn(s"Ignoring unknown ResourceType: $rType")
-          }
-        }
-      }
+      loadAllAcls(zkClient, this, updateCache)
     }
   }
 
@@ -634,7 +646,7 @@ class AclAuthorizer extends Authorizer with Logging {
       if (aclCache.contains(resource))
         getAclsFromCache(resource)
       else
-        getAclsFromZk(resource)
+        getAclsFromZk(zkClient, resource)
     var newVersionedAcls: VersionedAcls = null
     var writeComplete = false
     var retries = 0
@@ -654,7 +666,7 @@ class AclAuthorizer extends Authorizer with Logging {
       if (!updateSucceeded) {
         trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
         Thread.sleep(backoffTime)
-        currentVersionedAcls = getAclsFromZk(resource)
+        currentVersionedAcls = getAclsFromZk(zkClient, resource)
         retries += 1
       } else {
         newVersionedAcls = VersionedAcls(newAcls, updateVersion)
@@ -682,9 +694,6 @@ class AclAuthorizer extends Authorizer with Logging {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }
 
-  private def getAclsFromZk(resource: ResourcePattern): VersionedAcls = {
-    zkClient.getVersionedAclsForResource(resource)
-  }
 
   // Visible for benchmark
   def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
@@ -738,7 +747,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   private[authorizer] def processAclChangeNotification(resource: ResourcePattern): Unit = {
     lock synchronized {
-      val versionedAcls = getAclsFromZk(resource)
+      val versionedAcls = getAclsFromZk(zkClient, resource)
       info(s"Processing Acl change notification for $resource, versionedAcls : ${versionedAcls.acls}, zkVersion : ${versionedAcls.zkVersion}")
       updateCache(resource, versionedAcls)
     }

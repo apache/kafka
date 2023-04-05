@@ -27,10 +27,9 @@ import java.nio.ByteBuffer;
  * Utility class for easy interaction with control records.
  */
 public class ControlRecordUtils {
-
-    public static final short LEADER_CHANGE_SCHEMA_HIGHEST_VERSION = LeaderChangeMessage.HIGHEST_SUPPORTED_VERSION;
-    public static final short SNAPSHOT_HEADER_HIGHEST_VERSION = SnapshotHeaderRecord.HIGHEST_SUPPORTED_VERSION;
-    public static final short SNAPSHOT_FOOTER_HIGHEST_VERSION = SnapshotFooterRecord.HIGHEST_SUPPORTED_VERSION;
+    public static final short LEADER_CHANGE_CURRENT_VERSION = 0;
+    public static final short SNAPSHOT_HEADER_CURRENT_VERSION = 0;
+    public static final short SNAPSHOT_FOOTER_CURRENT_VERSION = 0;
 
     public static LeaderChangeMessage deserializeLeaderChangeMessage(Record record) {
         ControlRecordType recordType = ControlRecordType.parse(record.key());
@@ -43,7 +42,7 @@ public class ControlRecordUtils {
 
     public static LeaderChangeMessage deserializeLeaderChangeMessage(ByteBuffer data) {
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.duplicate());
-        return new LeaderChangeMessage(byteBufferAccessor, LEADER_CHANGE_SCHEMA_HIGHEST_VERSION);
+        return new LeaderChangeMessage(byteBufferAccessor, LEADER_CHANGE_CURRENT_VERSION);
     }
 
     public static SnapshotHeaderRecord deserializedSnapshotHeaderRecord(Record record) {
@@ -57,7 +56,7 @@ public class ControlRecordUtils {
 
     public static SnapshotHeaderRecord deserializedSnapshotHeaderRecord(ByteBuffer data) {
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.duplicate());
-        return new SnapshotHeaderRecord(byteBufferAccessor, SNAPSHOT_HEADER_HIGHEST_VERSION);
+        return new SnapshotHeaderRecord(byteBufferAccessor, SNAPSHOT_HEADER_CURRENT_VERSION);
     }
 
     public static SnapshotFooterRecord deserializedSnapshotFooterRecord(Record record) {
@@ -71,6 +70,6 @@ public class ControlRecordUtils {
 
     public static SnapshotFooterRecord deserializedSnapshotFooterRecord(ByteBuffer data) {
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(data.duplicate());
-        return new SnapshotFooterRecord(byteBufferAccessor, SNAPSHOT_FOOTER_HIGHEST_VERSION);
+        return new SnapshotFooterRecord(byteBufferAccessor, SNAPSHOT_FOOTER_CURRENT_VERSION);
     }
 }

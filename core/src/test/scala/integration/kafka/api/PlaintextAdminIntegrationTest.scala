@@ -26,31 +26,32 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.{Defaults, DynamicConfig, KafkaConfig}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
-import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
-import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
+import java.util.AbstractMap.SimpleImmutableEntry
 import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -159,22 +160,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForTopics(client, List(), topics)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk")) // KRaft mode will be supported in KAFKA-13910
-  def testMetadataRefresh(quorum: String): Unit = {
-    client = Admin.create(createConfig)
-    val topics = Seq("mytopic")
-    val newTopics = Seq(new NewTopic("mytopic", 3, 3.toShort))
-    client.createTopics(newTopics.asJava).all.get()
-    waitForTopics(client, expectedPresent = topics, expectedMissing = List())
-
-    val controller = brokers.find(_.config.brokerId == brokers.flatMap(_.metadataCache.getControllerId).head).get
-    controller.shutdown()
-    controller.awaitShutdown()
-    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
-    assertEquals(topics.toSet, topicDesc.keySet.asScala)
-  }
-
   /**
     * describe should not auto create topics
     */
@@ -230,7 +215,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val brokerIds = brokers.map(_.config.brokerId).toSet
       assertTrue(brokerIds.contains(controller.id))
     } else {
-      assertEquals(brokers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
+      assertEquals(brokers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.map(_.id).
         getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id)
     }
 
@@ -392,8 +377,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
     val topicConfig1 = new Properties
-    topicConfig1.setProperty(LogConfig.MaxMessageBytesProp, "500000")
-    topicConfig1.setProperty(LogConfig.RetentionMsProp, "60000000")
+    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "500000")
+    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, "60000000")
     createTopic(topic1, numPartitions = 1, replicationFactor = 1, topicConfig1)
 
     val topic2 = "describe-alter-configs-topic-2"
@@ -409,24 +394,34 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals(4, configs.size)
 
-    val maxMessageBytes1 = configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp)
-    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes1.name)
-    assertEquals(topicConfig1.get(LogConfig.MaxMessageBytesProp), maxMessageBytes1.value)
+    val maxMessageBytes1 = configs.get(topicResource1).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG)
+    assertEquals(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes1.name)
+    assertEquals(topicConfig1.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG), maxMessageBytes1.value)
     assertFalse(maxMessageBytes1.isDefault)
     assertFalse(maxMessageBytes1.isSensitive)
     assertFalse(maxMessageBytes1.isReadOnly)
 
-    assertEquals(topicConfig1.get(LogConfig.RetentionMsProp),
-      configs.get(topicResource1).get(LogConfig.RetentionMsProp).value)
+    assertEquals(topicConfig1.get(TopicConfig.RETENTION_MS_CONFIG),
+      configs.get(topicResource1).get(TopicConfig.RETENTION_MS_CONFIG).value)
 
-    val maxMessageBytes2 = configs.get(topicResource2).get(LogConfig.MaxMessageBytesProp)
-    assertEquals(Defaults.MessageMaxBytes.toString, maxMessageBytes2.value)
-    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes2.name)
+    val maxMessageBytes2 = configs.get(topicResource2).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG)
+    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES.toString, maxMessageBytes2.value)
+    assertEquals(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes2.name)
     assertTrue(maxMessageBytes2.isDefault)
     assertFalse(maxMessageBytes2.isSensitive)
     assertFalse(maxMessageBytes2.isReadOnly)
 
-    assertEquals(brokers(1).config.nonInternalValues.size, configs.get(brokerResource1).entries.size)
+    // Find the number of internal configs that we have explicitly set in the broker config.
+    // These will appear when we describe the broker configuration. Other internal configs,
+    // that we have not set, will not appear there.
+    val numInternalConfigsSet = brokers.head.config.originals.keySet().asScala.count(k => {
+      Option(KafkaConfig.configDef.configKeys().get(k)) match {
+        case None => false
+        case Some(configDef) => configDef.internalConfig
+      }
+    })
+    assertEquals(brokers(1).config.nonInternalValues.size + numInternalConfigsSet,
+      configs.get(brokerResource1).entries.size)
     assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
     val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
     assertEquals(brokers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
@@ -447,7 +442,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(compressionType.isSensitive)
     assertFalse(compressionType.isReadOnly)
 
-    assertEquals(brokers(2).config.nonInternalValues.size, configs.get(brokerResource2).entries.size)
+    assertEquals(brokers(2).config.nonInternalValues.size + numInternalConfigsSet,
+      configs.get(brokerResource2).entries.size)
     assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
     assertEquals(brokers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
@@ -821,10 +817,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(quorum: String): Unit = {
     val leaders = createTopic(topic, replicationFactor = brokerCount)
-    val followerIndex = if (leaders(0) != brokers(0).config.brokerId) 0 else 1
+    val followerIndex = if (leaders(0) != brokers.head.config.brokerId) 0 else 1
 
     def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
-      TestUtils.waitUntilTrue(() => brokers(followerIndex).replicaManager.localLog(topicPartition) != None,
+      TestUtils.waitUntilTrue(() => brokers(followerIndex).replicaManager.localLog(topicPartition).isDefined,
                               "Expected follower to create replica for partition")
 
       // wait until the follower discovers that log start offset moved beyond its HW
@@ -862,6 +858,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val result1 = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(117L)).asJava)
     result1.all().get()
     restartDeadBrokers()
+    TestUtils.waitForBrokersInIsr(client, topicPartition, Set(followerIndex))
     waitForFollowerLog(expectedStartOffset=117L, expectedEndOffset=200L)
   }
 
@@ -1522,7 +1519,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Now change the preferred leader to 1
     changePreferredLeader(prefer1)
     // but shut it down...
-    brokers(1).shutdown()
+    killBroker(1)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
@@ -1576,9 +1573,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     TestUtils.assertLeader(client, partition1, broker1)
 
-    brokers(broker2).shutdown()
+    killBroker(broker2)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    brokers(broker1).shutdown()
+    killBroker(broker1)
     TestUtils.assertNoLeader(client, partition1)
     brokers(broker2).startup()
 
@@ -1610,9 +1607,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition1, broker1)
     TestUtils.assertLeader(client, partition2, broker1)
 
-    brokers(broker2).shutdown()
+    killBroker(broker2)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(broker2))
-    brokers(broker1).shutdown()
+    killBroker(broker1)
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertNoLeader(client, partition2)
     brokers(broker2).startup()
@@ -1648,9 +1645,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition1, broker1)
     TestUtils.assertLeader(client, partition2, broker1)
 
-    brokers(broker2).shutdown()
+    killBroker(broker2)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    brokers(broker1).shutdown()
+    killBroker(broker1)
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertLeader(client, partition2, broker3)
     brokers(broker2).startup()
@@ -1708,9 +1705,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     TestUtils.assertLeader(client, partition1, broker1)
 
-    brokers(broker2).shutdown()
+    killBroker(broker2)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    brokers(broker1).shutdown()
+    killBroker(broker1)
     TestUtils.assertNoLeader(client, partition1)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
@@ -1737,7 +1734,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     TestUtils.assertLeader(client, partition1, broker1)
 
-    brokers(broker1).shutdown()
+    killBroker(broker1)
     TestUtils.assertLeader(client, partition1, broker2)
     brokers(broker1).startup()
 
@@ -1769,9 +1766,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition1, broker1)
     TestUtils.assertLeader(client, partition2, broker1)
 
-    brokers(broker2).shutdown()
+    killBroker(broker2)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
-    brokers(broker1).shutdown()
+    killBroker(broker1)
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertLeader(client, partition2, broker3)
     brokers(broker2).startup()
@@ -1824,8 +1821,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val topic1 = "incremental-alter-configs-topic-1"
     val topic1Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
     val topic1CreateConfigs = new Properties
-    topic1CreateConfigs.setProperty(LogConfig.RetentionMsProp, "60000000")
-    topic1CreateConfigs.setProperty(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    topic1CreateConfigs.setProperty(TopicConfig.RETENTION_MS_CONFIG, "60000000")
+    topic1CreateConfigs.setProperty(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     createTopic(topic1, numPartitions = 1, replicationFactor = 1, topic1CreateConfigs)
 
     val topic2 = "incremental-alter-configs-topic-2"
@@ -1834,16 +1831,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Alter topic configs
     var topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.FlushMsProp, "1000"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
-      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MS_CONFIG, "1000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_MS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
 
     // Test SET and APPEND on previously unset properties
     var topic2AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), AlterConfigOp.OpType.APPEND)
     ).asJavaCollection
 
     var alterResult = client.incrementalAlterConfigs(Map(
@@ -1862,23 +1859,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals(2, configs.size)
 
-    assertEquals("1000", configs.get(topic1Resource).get(LogConfig.FlushMsProp).value)
-    assertEquals("compact,delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
-    assertEquals((Defaults.LogRetentionHours * 60 * 60 * 1000).toString, configs.get(topic1Resource).get(LogConfig.RetentionMsProp).value)
+    assertEquals("1000", configs.get(topic1Resource).get(TopicConfig.FLUSH_MS_CONFIG).value)
+    assertEquals("compact,delete", configs.get(topic1Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
+    assertEquals(LogConfig.DEFAULT_RETENTION_MS.toString, configs.get(topic1Resource).get(TopicConfig.RETENTION_MS_CONFIG).value)
 
-    assertEquals("0.9", configs.get(topic2Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals("lz4", configs.get(topic2Resource).get(LogConfig.CompressionTypeProp).value)
-    assertEquals("delete,compact", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value)
+    assertEquals("0.9", configs.get(topic2Resource).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
+    assertEquals("lz4", configs.get(topic2Resource).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
+    assertEquals("delete,compact", configs.get(topic2Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
 
     // verify subtract operation, including from an empty property
     topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT),
-      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, "0"), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), AlterConfigOp.OpType.SUBTRACT),
+      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0"), AlterConfigOp.OpType.SUBTRACT)
     ).asJava
 
     // subtract all from this list property
     topic2AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE), AlterConfigOp.OpType.SUBTRACT)
     ).asJavaCollection
 
     alterResult = client.incrementalAlterConfigs(Map(
@@ -1896,14 +1893,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals(2, configs.size)
 
-    assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
-    assertEquals("1000", configs.get(topic1Resource).get(LogConfig.FlushMsProp).value) // verify previous change is still intact
-    assertEquals("", configs.get(topic1Resource).get(LogConfig.LeaderReplicationThrottledReplicasProp).value)
-    assertEquals("", configs.get(topic2Resource).get(LogConfig.CleanupPolicyProp).value )
+    assertEquals("delete", configs.get(topic1Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
+    assertEquals("1000", configs.get(topic1Resource).get(TopicConfig.FLUSH_MS_CONFIG).value) // verify previous change is still intact
+    assertEquals("", configs.get(topic1Resource).get(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value)
+    assertEquals("", configs.get(topic2Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value )
 
     // Alter topics with validateOnly=true
     topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), AlterConfigOp.OpType.APPEND)
     ).asJava
 
     alterResult = client.incrementalAlterConfigs(Map(
@@ -1915,11 +1912,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     describeResult = client.describeConfigs(Seq(topic1Resource).asJava)
     configs = describeResult.all.get
 
-    assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
+    assertEquals("delete", configs.get(topic1Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
 
     // Alter topics with validateOnly=true with invalid configs
     topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "zip"), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "zip"), AlterConfigOp.OpType.SET)
     ).asJava
 
     alterResult = client.incrementalAlterConfigs(Map(
@@ -1949,12 +1946,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertNotEquals("", subtractValues)
 
     val topicCreateConfigs = new Properties
-    topicCreateConfigs.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, appendValues)
+    topicCreateConfigs.setProperty(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues)
     createTopic(topic, numPartitions = 1, replicationFactor = 1, topicCreateConfigs)
 
     // Append value that is already present
     val topicAppendConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, appendValues), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues), AlterConfigOp.OpType.APPEND),
     ).asJavaCollection
 
     val appendResult = client.incrementalAlterConfigs(Map(topicResource -> topicAppendConfigs).asJava)
@@ -1962,7 +1959,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Subtract values that are not present
     val topicSubtractConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, subtractValues), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, subtractValues), AlterConfigOp.OpType.SUBTRACT)
     ).asJavaCollection
     val subtractResult = client.incrementalAlterConfigs(Map(topicResource -> topicSubtractConfigs).asJava)
     subtractResult.all.get
@@ -1973,7 +1970,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val describeResult = client.describeConfigs(Seq(topicResource).asJava)
     val configs = describeResult.all.get
 
-    assertEquals(appendValues, configs.get(topicResource).get(LogConfig.LeaderReplicationThrottledReplicasProp).value)
+    assertEquals(appendValues, configs.get(topicResource).get(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -2063,14 +2060,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Add duplicate Keys for topic1
     var topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.75"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.65"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.SET) // valid entry
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.75"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.65"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip"), AlterConfigOp.OpType.SET) // valid entry
     ).asJavaCollection
 
     // Add valid config for topic2
     var topic2AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), AlterConfigOp.OpType.SET)
     ).asJavaCollection
 
     var alterResult = client.incrementalAlterConfigs(Map(
@@ -2092,17 +2089,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val configs = describeResult.all.get
     assertEquals(2, configs.size)
 
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topic1Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.CompressionType, configs.get(topic1Resource).get(LogConfig.CompressionTypeProp).value)
-    assertEquals("0.9", configs.get(topic2Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString, configs.get(topic1Resource).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(topic1Resource).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
+    assertEquals("0.9", configs.get(topic2Resource).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
     // Check invalid use of append/subtract operation types
     topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.APPEND)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip"), AlterConfigOp.OpType.APPEND)
     ).asJavaCollection
 
     topic2AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy"), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy"), AlterConfigOp.OpType.SUBTRACT)
     ).asJavaCollection
 
     alterResult = client.incrementalAlterConfigs(Map(
@@ -2127,7 +2124,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Try to add invalid config
     topic1AlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "1.1"), AlterConfigOp.OpType.SET)
     ).asJavaCollection
 
     alterResult = client.incrementalAlterConfigs(Map(
@@ -2216,15 +2213,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
       }
 
-      assertEquals(compressionType, logConfig.originals.get(LogConfig.CompressionTypeProp))
-      assertNull(logConfig.originals.get(LogConfig.RetentionBytesProp))
-      assertEquals(Defaults.LogRetentionBytes, logConfig.retentionSize)
+      assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))
+      assertNull(logConfig.originals.get(TopicConfig.RETENTION_BYTES_CONFIG))
+      assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.retentionSize)
     }
 
     client = Admin.create(createConfig)
     val invalidConfigs = Map[String, String](
-      LogConfig.RetentionBytesProp -> null,
-      LogConfig.CompressionTypeProp -> "producer"
+      TopicConfig.RETENTION_BYTES_CONFIG -> null,
+      TopicConfig.COMPRESSION_TYPE_CONFIG -> "producer"
     ).asJava
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
     assertFutureExceptionTypeEquals(
@@ -2233,15 +2230,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Some("Null value not supported for topic configs: retention.bytes")
     )
 
-    val validConfigs = Map[String, String](LogConfig.CompressionTypeProp -> "producer").asJava
+    val validConfigs = Map[String, String](TopicConfig.COMPRESSION_TYPE_CONFIG -> "producer").asJava
     client.createTopics(Collections.singletonList(newTopic.configs(validConfigs))).all.get()
     waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
     validateLogConfig(compressionType = "producer")
 
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val alterOps = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionBytesProp, null), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_BYTES_CONFIG, null), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"), AlterConfigOp.OpType.SET)
     )
     assertFutureExceptionTypeEquals(
       client.incrementalAlterConfigs(Map(topicResource -> alterOps.asJavaCollection).asJava).all,
@@ -2490,7 +2487,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testAppendConfigToExistentValue(ignored: String): Unit = {
     val props = new Properties();
-    props.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, "1:1")
+    props.setProperty(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
     testAppendConfig(props, "0:0", "1:1,0:0")
   }
 
@@ -2499,16 +2496,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     createTopic(topic, topicConfig = props)
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val topicAlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, append), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, append), AlterConfigOp.OpType.APPEND),
     ).asJavaCollection
 
     val alterResult = client.incrementalAlterConfigs(Map(
       topicResource -> topicAlterConfigs
     ).asJava)
-    alterResult.all().get()
+    alterResult.all().get(15, TimeUnit.SECONDS)
 
     ensureConsistentKRaftMetadata()
-    val config = client.describeConfigs(List(topicResource).asJava).all().get().get(topicResource).get(LogConfig.LeaderReplicationThrottledReplicasProp)
+    val config = client.describeConfigs(List(topicResource).asJava).all().get().get(topicResource).get(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     assertEquals(expected, config.value())
   }
 
@@ -2516,30 +2513,48 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
    * Note: this test requires some custom static broker and controller configurations, which are set up in
-   * BaseAdminIntegrationTest.modifyConfigs and BaseAdminIntegrationTest.kraftControllerConfigs.
+   * BaseAdminIntegrationTest.modifyConfigs.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateTopicsReturnsConfigs(quorum: String): Unit = {
     client = Admin.create(super.createConfig)
 
-    val alterMap = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]
-    alterMap.put(new ConfigResource(ConfigResource.Type.BROKER, ""), util.Arrays.asList(
-      new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "10800000"), OpType.SET)))
-    (brokers.map(_.config) ++ controllerServers.map(_.config)).foreach { case config =>
-      alterMap.put(new ConfigResource(ConfigResource.Type.BROKER, config.nodeId.toString()),
-        util.Arrays.asList(new AlterConfigOp(new ConfigEntry(
-          KafkaConfig.LogCleanerDeleteRetentionMsProp, "34"), OpType.SET)))
+    val newLogRetentionProperties = new Properties
+    newLogRetentionProperties.put(KafkaConfig.LogRetentionTimeMillisProp, "10800000")
+    TestUtils.incrementalAlterConfigs(null, client, newLogRetentionProperties, perBrokerConfig = false)
+      .all().get(15, TimeUnit.SECONDS)
+
+    val newLogCleanerDeleteRetention = new Properties
+    newLogCleanerDeleteRetention.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, "34")
+    TestUtils.incrementalAlterConfigs(brokers, client, newLogCleanerDeleteRetention, perBrokerConfig = true)
+      .all().get(15, TimeUnit.SECONDS)
+
+    if (isKRaftTest()) {
+      // In KRaft mode, we don't yet support altering configs on controller nodes, except by setting
+      // default node configs. Therefore, we have to set the dynamic config directly to test this.
+      val controllerNodeResource = new ConfigResource(ConfigResource.Type.BROKER,
+        controllerServer.config.nodeId.toString)
+      controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
+        Collections.singletonMap(controllerNodeResource,
+          Collections.singletonMap(KafkaConfig.LogCleanerDeleteRetentionMsProp,
+            new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
+      ensureConsistentKRaftMetadata()
     }
-    client.incrementalAlterConfigs(alterMap).all().get()
+
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
       KafkaConfig.LogCleanerDeleteRetentionMsProp, "").toString.equals("34")),
       s"Timed out waiting for change to ${KafkaConfig.LogCleanerDeleteRetentionMsProp}",
       waitTimeMs = 60000L)
 
+    waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
+      KafkaConfig.LogRetentionTimeMillisProp, "").toString.equals("10800000")),
+      s"Timed out waiting for change to ${KafkaConfig.LogRetentionTimeMillisProp}",
+      waitTimeMs = 60000L)
+
     val newTopics = Seq(new NewTopic("foo", Map((0: Integer) -> Seq[Integer](1, 2).asJava,
       (1: Integer) -> Seq[Integer](2, 0).asJava).asJava).
-      configs(Collections.singletonMap(LogConfig.IndexIntervalBytesProp, "9999999")),
+      configs(Collections.singletonMap(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "9999999")),
       new NewTopic("bar", 3, 3.toShort),
       new NewTopic("baz", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
     )
@@ -2557,24 +2572,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val topicConfigs = result.config("foo").get()
 
     // From the topic configuration defaults.
-    assertEquals(new ConfigEntry(LogConfig.CleanupPolicyProp, "delete",
+    assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, "delete",
       ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), null, null),
-      topicConfigs.get(LogConfig.CleanupPolicyProp))
+      topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG))
 
     // From dynamic cluster config via the synonym LogRetentionTimeHoursProp.
-    assertEquals(new ConfigEntry(LogConfig.RetentionMsProp, "10800000",
+    assertEquals(new ConfigEntry(TopicConfig.RETENTION_MS_CONFIG, "10800000",
       ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, false, false, Collections.emptyList(), null, null),
-      topicConfigs.get(LogConfig.RetentionMsProp))
+      topicConfigs.get(TopicConfig.RETENTION_MS_CONFIG))
 
     // From dynamic broker config via LogCleanerDeleteRetentionMsProp.
-    assertEquals(new ConfigEntry(LogConfig.DeleteRetentionMsProp, "34",
+    assertEquals(new ConfigEntry(TopicConfig.DELETE_RETENTION_MS_CONFIG, "34",
       ConfigSource.DYNAMIC_BROKER_CONFIG, false, false, Collections.emptyList(), null, null),
-      topicConfigs.get(LogConfig.DeleteRetentionMsProp))
+      topicConfigs.get(TopicConfig.DELETE_RETENTION_MS_CONFIG))
 
     // From static broker config by SegmentJitterMsProp.
-    assertEquals(new ConfigEntry(LogConfig.SegmentJitterMsProp, "123",
+    assertEquals(new ConfigEntry(TopicConfig.SEGMENT_JITTER_MS_CONFIG, "123",
       ConfigSource.STATIC_BROKER_CONFIG, false, false, Collections.emptyList(), null, null),
-      topicConfigs.get(LogConfig.SegmentJitterMsProp))
+      topicConfigs.get(TopicConfig.SEGMENT_JITTER_MS_CONFIG))
 
     // From static broker config by the synonym LogRollTimeHoursProp.
     val segmentMsPropType = if (isKRaftTest()) {
@@ -2582,14 +2597,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     } else {
       ConfigSource.DEFAULT_CONFIG
     }
-    assertEquals(new ConfigEntry(LogConfig.SegmentMsProp, "7200000",
+    assertEquals(new ConfigEntry(TopicConfig.SEGMENT_MS_CONFIG, "7200000",
       segmentMsPropType, false, false, Collections.emptyList(), null, null),
-      topicConfigs.get(LogConfig.SegmentMsProp))
+      topicConfigs.get(TopicConfig.SEGMENT_MS_CONFIG))
 
     // From the dynamic topic config.
-    assertEquals(new ConfigEntry(LogConfig.IndexIntervalBytesProp, "9999999",
+    assertEquals(new ConfigEntry(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "9999999",
       ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList(), null, null),
-      topicConfigs.get(LogConfig.IndexIntervalBytesProp))
+      topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
 }
 
@@ -2604,12 +2619,12 @@ object PlaintextAdminIntegrationTest {
   ): Unit = {
     // Alter topics
     var topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.FlushMsProp, "1000")
+      new ConfigEntry(TopicConfig.FLUSH_MS_CONFIG, "1000")
     ).asJava
 
     var topicConfigEntries2 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
-      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
+      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"),
+      new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
     ).asJava
 
     var alterResult = admin.alterConfigs(Map(
@@ -2627,22 +2642,21 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(2, configs.size)
 
-    assertEquals("1000", configs.get(topicResource1).get(LogConfig.FlushMsProp).value)
-    assertEquals(Defaults.MessageMaxBytes.toString,
-      configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp).value)
-    assertEquals((Defaults.LogRetentionHours * 60 * 60 * 1000).toString,
-      configs.get(topicResource1).get(LogConfig.RetentionMsProp).value)
+    assertEquals("1000", configs.get(topicResource1).get(TopicConfig.FLUSH_MS_CONFIG).value)
+    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES.toString,
+      configs.get(topicResource1).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).value)
+    assertEquals(LogConfig.DEFAULT_RETENTION_MS.toString, configs.get(topicResource1).get(TopicConfig.RETENTION_MS_CONFIG).value)
 
-    assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals("lz4", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
+    assertEquals("0.9", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
+    assertEquals("lz4", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     // Alter topics with validateOnly=true
     topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.MaxMessageBytesProp, "10")
+      new ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "10")
     ).asJava
 
     topicConfigEntries2 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.3")
+      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.3")
     ).asJava
 
     alterResult = admin.alterConfigs(Map(
@@ -2660,9 +2674,9 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(2, configs.size)
 
-    assertEquals(Defaults.MessageMaxBytes.toString,
-      configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp).value)
-    assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES.toString,
+      configs.get(topicResource1).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).value)
+    assertEquals("0.9", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
   }
 
   @nowarn("cat=deprecation")
@@ -2680,11 +2694,11 @@ object PlaintextAdminIntegrationTest {
     createTopicWithAdmin(admin, topic2, test.brokers, numPartitions = 1, replicationFactor = 1)
 
     val topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), // this value is invalid as it's above 1.0
-      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
+      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "1.1"), // this value is invalid as it's above 1.0
+      new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
     ).asJava
 
-    var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy")).asJava
+    var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, test.brokers.head.config.brokerId.toString)
     val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181")).asJava
@@ -2707,17 +2721,17 @@ object PlaintextAdminIntegrationTest {
     var configs = describeResult.all.get
     assertEquals(3, configs.size)
 
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.CompressionType,
-      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString,
+      configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE,
+      configs.get(topicResource1).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
+    assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(Defaults.CompressionType, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
 
     // Alter configs with validateOnly = true: first and third are invalid, second is valid
-    topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip")).asJava
+    topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip")).asJava
 
     alterResult = admin.alterConfigs(Map(
       topicResource1 -> new Config(topicConfigEntries1),
@@ -2736,13 +2750,13 @@ object PlaintextAdminIntegrationTest {
     configs = describeResult.all.get
     assertEquals(3, configs.size)
 
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.CompressionType,
-      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString,
+      configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE,
+      configs.get(topicResource1).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
+    assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(Defaults.CompressionType, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
   }
 }

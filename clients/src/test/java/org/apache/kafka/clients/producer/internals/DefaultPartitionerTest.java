@@ -45,8 +45,8 @@ public class DefaultPartitionerTest {
         @SuppressWarnings("deprecation")
         final Partitioner partitioner = new DefaultPartitioner();
         final Cluster cluster = new Cluster("clusterId", asList(NODES), PARTITIONS,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
-        int partition = partitioner.partition("test",  null, KEY_BYTES, null, null, cluster);
-        assertEquals(partition, partitioner.partition("test", null, KEY_BYTES, null, null, cluster), "Same key should yield same partition");
+            Collections.emptySet(), Collections.emptySet());
+        int partition = partitioner.partition(TOPIC,  null, KEY_BYTES, null, null, cluster);
+        assertEquals(partition, partitioner.partition(TOPIC, null, KEY_BYTES, null, null, cluster), "Same key should yield same partition");
     }
 }

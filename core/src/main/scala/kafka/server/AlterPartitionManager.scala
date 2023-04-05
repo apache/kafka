@@ -18,10 +18,9 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import kafka.api.LeaderAndIsr
-import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{KafkaScheduler, Logging, Scheduler}
+import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
@@ -29,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.AlterPartitionRequestData
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.RequestHeader
@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionRe
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -77,11 +78,11 @@ object AlterPartitionManager {
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
-    scheduler: KafkaScheduler,
+    scheduler: Scheduler,
     controllerNodeProvider: ControllerNodeProvider,
     time: Time,
     metrics: Metrics,
-    threadNamePrefix: Option[String],
+    threadNamePrefix: String,
     brokerEpochSupplier: () => Long,
   ): AlterPartitionManager = {
     val channelManager = BrokerToControllerChannelManager(
@@ -89,7 +90,7 @@ object AlterPartitionManager {
       time = time,
       metrics = metrics,
       config = config,
-      channelName = "alterPartition",
+      channelName = "alter-partition",
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )
@@ -122,7 +123,7 @@ class DefaultAlterPartitionManager(
   val brokerId: Int,
   val brokerEpochSupplier: () => Long,
   val metadataVersionSupplier: () => MetadataVersion
-) extends AlterPartitionManager with Logging with KafkaMetricsGroup {
+) extends AlterPartitionManager with Logging {
 
   // Used to allow only one pending ISR update per partition (visible for testing).
   // Note that we key items by TopicPartition despite using TopicIdPartition while
@@ -226,7 +227,7 @@ class DefaultAlterPartitionManager(
                 maybePropagateIsrChanges()
               case _ =>
                 // If we received a top-level error from the controller, retry the request in the near future
-                scheduler.schedule("send-alter-partition", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
+                scheduler.scheduleOnce("send-alter-partition", () => maybePropagateIsrChanges(), 50)
             }
         }
 
@@ -280,10 +281,12 @@ class DefaultAlterPartitionManager(
       message.topics.add(topicData)
 
       items.foreach { item =>
+        val isrWithEpoch = new util.ArrayList[BrokerState](item.leaderAndIsr.isr.size)
+        item.leaderAndIsr.isr.foreach(brokerId => isrWithEpoch.add(new BrokerState().setBrokerId(brokerId)))
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicIdPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-          .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+          .setNewIsrWithEpochs(isrWithEpoch)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
         if (metadataVersion.isLeaderRecoverySupported) {
