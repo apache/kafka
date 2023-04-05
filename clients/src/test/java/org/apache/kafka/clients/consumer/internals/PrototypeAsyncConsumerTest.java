@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -54,6 +53,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -64,7 +64,7 @@ import static org.mockito.Mockito.when;
 
 public class PrototypeAsyncConsumerTest {
 
-    private Consumer<?, ?> consumer;
+    private PrototypeAsyncConsumer<?, ?> consumer;
     private Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
@@ -91,6 +91,7 @@ public class PrototypeAsyncConsumerTest {
 
     @AfterEach
     public void cleanup() {
+        assertTrue(consumer.wakeupStateResetted());
         if (consumer != null) {
             consumer.close(Duration.ZERO);
         }
@@ -116,9 +117,9 @@ public class PrototypeAsyncConsumerTest {
         offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
-        PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
-        doReturn(future).when(mockedConsumer).commit(offsets);
-        mockedConsumer.commitAsync(offsets, null);
+        consumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
+        doReturn(future).when(consumer).commit(offsets);
+        consumer.commitAsync(offsets, null);
         future.complete(null);
         TestUtils.waitForCondition(() -> future.isDone(),
                 2000,
@@ -135,11 +136,11 @@ public class PrototypeAsyncConsumerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
-        PrototypeAsyncConsumer<?, ?> mockedConsumer = spy(newConsumer(time, new StringDeserializer(),
+        consumer = spy(newConsumer(time, new StringDeserializer(),
             new StringDeserializer()));
-        doReturn(future).when(mockedConsumer).commit(offsets);
+        doReturn(future).when(consumer).commit(offsets);
         OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
-        mockedConsumer.commitAsync(offsets, customCallback);
+        consumer.commitAsync(offsets, customCallback);
         future.complete(null);
         verify(customCallback).onComplete(offsets, null);
     }
@@ -155,6 +156,7 @@ public class PrototypeAsyncConsumerTest {
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
         assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
         verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        assertTrue(consumer.wakeupStateResetted());
     }
 
     @Test
@@ -165,10 +167,12 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testWakeup_commitSync() {
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        consumer = newConsumer(time, new StringDeserializer(),
+            new StringDeserializer());
         doReturn(mockTopicPartitionOffset()).when(subscriptions).allConsumed();
         consumer.wakeup();
         assertThrows(WakeupException.class, () -> consumer.commitSync());
+        assertTrue(consumer.wakeupStateResetted());
     }
 
     @Test
@@ -179,6 +183,14 @@ public class PrototypeAsyncConsumerTest {
         assertThrows(WakeupException.class, () -> consumer.committed(mockTopicPartitions));
         // empty topic list should return early
         assertDoesNotThrow(() -> consumer.committed(new HashSet<>()));
+        assertTrue(consumer.wakeupStateResetted());
+    }
+
+    @Test
+    public void testClosed() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        consumer.close();
+        assertThrows(IllegalStateException.class, () -> consumer.committed(new HashSet<>()));
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

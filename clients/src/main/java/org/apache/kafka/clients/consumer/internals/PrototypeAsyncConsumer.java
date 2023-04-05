@@ -98,8 +98,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
+
+    // Wakeup atomic reference to ensure no two blocking calls are active at the same time. Also ensure wakeup call
+    // can interrupt upon the next blocking call.
     private AtomicReference<Optional<WakeupableFuture>> activeFuture = new AtomicReference<>(Optional.empty());
     private AtomicBoolean shouldWakeup = new AtomicBoolean(false);
+    private volatile boolean closed = false;
 
     public PrototypeAsyncConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
@@ -217,6 +221,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         return ConsumerRecords.empty();
     }
 
+    /**
+     * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and
+     * partitions.
+     */
     @Override
     public void commitSync() {
         commitSync(Duration.ofMillis(defaultApiTimeoutMs));
@@ -251,6 +259,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+        maybeWakeup();
         CompletableFuture<Void> future = commit(offsets);
         final OffsetCommitCallback commitCallback = callback == null ? new DefaultOffsetCommitCallback() : callback;
         future.whenComplete((r, t) -> {
@@ -325,10 +334,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      * Retrieve the last committed offset for the given partition (whether the commit happened by this process or
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
-     * If any of the partitions requested do not exist, an exception would be thrown.
-     * <p>
-     * This call blocks until the result returns or the timeout expires. If an unrecoverable error is encountered, or
-     * the timeout specified by {@code default.api.timeout.ms} expires
+     * If the timeout specified by {@code default.api.timeout.ms} expires
      * {@link org.apache.kafka.common.errors.TimeoutException} is thrown.
      *
      * @param partitions The partition to check
@@ -367,7 +373,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } finally {
-            this.activeFuture.set(Optional.empty());
+            resetWakeupState();
         }
     }
 
@@ -475,6 +481,20 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close(Duration timeout) {
+        if (timeout.toMillis() < 0)
+            throw new IllegalArgumentException("The timeout cannot be negative.");
+        ensureNoInflightBlockingFutures(new WakeupableFuture<>());
+        try {
+            if (!closed) {
+                close(timeout, false);
+            }
+        } finally {
+            closed = true;
+            resetWakeupState();
+        }
+    }
+
+    private void close(Duration timeout, boolean swallowException) {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         Utils.closeQuietly(this.eventHandler, "event handler", firstException);
         log.debug("Kafka consumer has been closed");
@@ -542,7 +562,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } finally {
-            this.activeFuture.set(Optional.empty());
+            resetWakeupState();
         }
     }
 
@@ -597,16 +617,29 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         throw new KafkaException("method not implemented");
     }
 
-    private void ensureNoInflightBlockingFutures(final WakeupableFuture future) {
+    private void ensureNoInflightBlockingFutures(final WakeupableFuture<?> future) {
         if (!this.activeFuture.compareAndSet(Optional.empty(), Optional.of(future))) {
             throw new ConcurrentTransactionsException("Only one inflight blocking future can be active at a time");
         }
     }
 
     private void maybeWakeup() {
+        if (this.closed)
+            throw new IllegalStateException("This consumer has already been closed.");
+
         if (this.shouldWakeup.getAndSet(false)) {
             throw new WakeupException();
         }
+    }
+
+    private void resetWakeupState() {
+        this.shouldWakeup.set(false);
+        this.activeFuture.set(Optional.empty());
+    }
+
+    // Visible for testing
+    boolean wakeupStateResetted() {
+        return !this.shouldWakeup.get() && !this.activeFuture.get().isPresent();
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
