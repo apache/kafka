@@ -30,10 +30,11 @@ import java.util.stream.Collectors;
 
 public class EnvVarConfigProvider implements ConfigProvider {
 
-    public static final String ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG = "allowlist.pattern";
-    public static final String ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG_DOC = "A pattern / regular expression that needs to match for environment variables" +
+    public static final String ALLOWLIST_PATTERN_CONFIG = "allowlist.pattern";
+    public static final String ALLOWLIST_PATTERN_CONFIG_DOC = "A pattern / regular expression that needs to match for environment variables" +
             " to be used by this config provider.";
     private final Map<String, String> envVarMap;
+    private Map<String, String> filteredEnvVarMap;
     private Pattern envVarPattern;
 
     public EnvVarConfigProvider() {
@@ -48,14 +49,19 @@ public class EnvVarConfigProvider implements ConfigProvider {
 
     @Override
     public void configure(Map<String, ?> configs) {
-        if (configs.containsKey(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG)) {
+        if (configs.containsKey(ALLOWLIST_PATTERN_CONFIG)) {
             envVarPattern = Pattern.compile(
-                    String.valueOf(configs.get(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG))
+                    String.valueOf(configs.get(ALLOWLIST_PATTERN_CONFIG))
             );
         } else {
             envVarPattern = Pattern.compile(".*");
             log.info("No pattern for environment variables provided. Using default pattern '(.*)'.");
         }
+
+        filteredEnvVarMap = envVarMap.entrySet().stream()
+                .filter(envVar -> envVarPattern.matcher(envVar.getKey()).matches())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)
+                );
     }
 
     @Override
@@ -88,16 +94,11 @@ public class EnvVarConfigProvider implements ConfigProvider {
             return new ConfigData(new HashMap<>());
         }
 
-        Map<String, String> filteredEnvVarMap = envVarMap.entrySet().stream()
-                .filter(envVar -> envVarPattern.matcher(envVar.getKey()).matches())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)
-                );
-
         if (keys == null) {
             return new ConfigData(filteredEnvVarMap);
         }
 
-        HashMap<String, String> filteredData = new HashMap<>(filteredEnvVarMap);
+        Map<String, String> filteredData = new HashMap<>(filteredEnvVarMap);
         filteredData.keySet().retainAll(keys);
 
         return new ConfigData(filteredData);
