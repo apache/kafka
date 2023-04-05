@@ -16,19 +16,16 @@
  */
 package kafka.zk
 
-import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, ZkAdminManager}
 import kafka.utils.{Logging, PasswordEncoder}
-import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.ZkMigrationClient.wrapZkException
 import kafka.zk.migration.{ZkConfigMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.metadata.PartitionRegistration
-import org.apache.kafka.metadata.migration.TopicMigrationClient.TopicVisitor
+import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException
@@ -124,7 +121,9 @@ class ZkMigrationClient(
     brokerIdConsumer: Consumer[Integer]
   ): Unit = wrapZkException {
     var topicBatch = new util.ArrayList[ApiMessageAndVersion]()
-    topicClient.iterateTopics(new TopicVisitor() {
+    topicClient.iterateTopics(
+      util.EnumSet.allOf(classOf[TopicVisitorInterest]),
+      new TopicVisitor() {
       override def visitTopic(topicName: String, topicId: Uuid, assignments: util.Map[Integer, util.List[Integer]]): Unit = {
         if (!topicBatch.isEmpty) {
           recordConsumer.accept(topicBatch)
@@ -231,18 +230,6 @@ class ZkMigrationClient(
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
     new util.HashSet[Integer](zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava)
-  }
-
-  override def readBrokerIdsFromTopicAssignments(): util.Set[Integer] = wrapZkException {
-    val topics = zkClient.getAllTopicsInCluster()
-    val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
-    val brokersWithAssignments = new util.HashSet[Integer]()
-    replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(_, _, assignments) =>
-      assignments.values.foreach { assignment =>
-        assignment.replicas.foreach { brokerId => brokersWithAssignments.add(brokerId) }
-      }
-    }
-    brokersWithAssignments
   }
 
   override def writeProducerId(

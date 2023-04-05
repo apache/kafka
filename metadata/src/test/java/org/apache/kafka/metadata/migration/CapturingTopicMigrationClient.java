@@ -4,6 +4,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,9 +20,10 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
         deletedTopics.clear();
     }
 
-    @Override
-    public void iterateTopics(TopicVisitor visitor) {
 
+    @Override
+    public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
+        
     }
 
     @Override

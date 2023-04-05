@@ -217,7 +217,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
                                         quotas: Map[String, java.lang.Double],
                                         zkEntityType: String,
                                         zkEntityName: String): ZkMigrationLeadershipState = {
-    val nextMigrationState = migrationClient.writeClientQuotas(
+    val nextMigrationState = migrationClient.configClient().writeClientQuotas(
       entity.asJava,
       quotas.asJava,
       migrationState)
@@ -407,7 +407,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testWriteNewTopicConfigs(): Unit = {
-    migrationState = migrationClient.writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
+    migrationState = migrationClient.configClient().writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
       java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 
@@ -423,7 +423,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     props.put(TopicConfig.RETENTION_MS_CONFIG, "300000")
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, "test", props)
 
-    migrationState = migrationClient.writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
+    migrationState = migrationClient.configClient().writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
       java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 

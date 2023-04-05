@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -82,6 +80,4 @@ public interface MigrationClient {
     void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer);
 
     Set<Integer> readBrokerIds();
-
-    Set<Integer> readBrokerIdsFromTopicAssignments();
 }

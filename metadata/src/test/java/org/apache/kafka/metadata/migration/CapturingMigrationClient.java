@@ -53,22 +53,8 @@ class CapturingMigrationClient implements MigrationClient {
     }
 
     @Override
-    public ZkMigrationLeadershipState writeConfigs(
-            ConfigResource configResource,
-            Map<String, String> configMap,
-            ZkMigrationLeadershipState state
-    ) {
-        capturedConfigs.computeIfAbsent(configResource, __ -> new HashMap<>()).putAll(configMap);
-        return state;
-    }
-
-    @Override
-    public ZkMigrationLeadershipState writeClientQuotas(
-            Map<String, String> clientQuotaEntity,
-            Map<String, Double> quotas,
-            ZkMigrationLeadershipState state
-    ) {
-        return state;
+    public ConfigMigrationClient configClient() {
+        return null;
     }
 
     @Override

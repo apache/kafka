@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.utils.LogContext;
@@ -27,6 +29,7 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LoaderManifestType;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -36,8 +39,11 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -60,7 +66,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final Logger log;
     private final int nodeId;
     private final MigrationClient zkMigrationClient;
-    private final TopicMetadataZkWriter topicZkWriter;
+    private final KRaftMigrationZkWriter zkMetadataWriter;
     private final LegacyPropagator propagator;
     private final ZkRecordConsumer zkRecordConsumer;
     private final KafkaEventQueue eventQueue;
@@ -97,7 +103,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
-        this.topicZkWriter = new TopicMetadataZkWriter(zkMigrationClient, this::applyMigrationOperation);
+        this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient, this::applyMigrationOperation);
     }
 
     public void start() {
@@ -156,7 +162,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
 
         // Once all of those are found, check the topic assignments. This is much more expensive than listing /brokers
-        Set<Integer> zkBrokersWithAssignments = zkMigrationClient.readBrokerIdsFromTopicAssignments();
+        Set<Integer> zkBrokersWithAssignments = new HashSet<>();
+        zkMigrationClient.topicClient().iterateTopics(
+            EnumSet.of(TopicMigrationClient.TopicVisitorInterest.TOPICS),
+            (topicName, topicId, assignments) -> assignments.values().forEach(zkBrokersWithAssignments::addAll)
+        );
+
         if (imageDoesNotContainAllBrokers(image, zkBrokersWithAssignments)) {
             log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokersWithAssignments);
             return false;
@@ -549,33 +560,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             if(isSnapshot) {
-                topicZkWriter.handleSnapshot(image.topics(), image.configs());
+                zkMetadataWriter.handleSnapshot(image);
             } else {
-                if (delta.topicsDelta() != null) {
-                    topicZkWriter.handleDelta(prevImage.topics(), delta.topicsDelta());
-                }
-            }
-
-
-            // For configs and client quotas, we need to send all of the data to the ZK client since we persist
-            // everything for a given entity in a single ZK node.
-            if (delta.configsDelta() != null) {
-                delta.configsDelta().changes().forEach((configResource, configDelta) ->
-                    applyMigrationOperation("Updating config resource " + configResource, migrationState ->
-                        zkMigrationClient.writeConfigs(configResource, image.configs().configMapForResource(configResource), migrationState)));
-            }
-
-            if (delta.clientQuotasDelta() != null) {
-                delta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
-                    Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                    applyMigrationOperation("Updating client quota " + clientQuotaEntity, migrationState ->
-                        zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, migrationState));
-                });
-            }
-
-            if (delta.producerIdsDelta() != null) {
-                applyMigrationOperation("Updating next producer ID", migrationState ->
-                    zkMigrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
+                zkMetadataWriter.handleDelta(image, delta);
             }
 
             // TODO: Unhappy path: Probably relinquish leadership and let new controller

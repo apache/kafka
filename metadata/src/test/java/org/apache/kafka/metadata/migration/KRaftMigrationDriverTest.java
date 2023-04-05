@@ -54,6 +54,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -301,7 +302,7 @@ public class KRaftMigrationDriverTest {
 
         CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
             @Override
-            public void iterateTopics(TopicVisitor visitor) {
+            public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
                 IMAGE1.topicsByName().forEach((topicName, topicImage) -> {
                     Map<Integer, List<Integer>> assignment = new HashMap<>();
                     topicImage.partitions().forEach(((partitionId, partitionRegistration) ->

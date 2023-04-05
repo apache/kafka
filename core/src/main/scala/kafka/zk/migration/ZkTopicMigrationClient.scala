@@ -10,6 +10,7 @@ import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, GetChildrenRequest, SetDataRequest}
 import org.apache.kafka.common.metadata.PartitionRecord
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.metadata.migration.TopicMigrationClient.TopicVisitorInterest
 import org.apache.kafka.metadata.migration.{MigrationClientException, TopicMigrationClient, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.zookeeper.CreateMode
@@ -22,7 +23,13 @@ import scala.jdk.CollectionConverters._
 
 
 class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClient with Logging {
-  override def iterateTopics(visitor: TopicMigrationClient.TopicVisitor): Unit = wrapZkException {
+  override def iterateTopics(
+    interests: util.EnumSet[TopicVisitorInterest],
+    visitor: TopicMigrationClient.TopicVisitor,
+  ): Unit = wrapZkException {
+    if (!interests.contains(TopicVisitorInterest.TOPICS)) {
+      throw new IllegalArgumentException("Must specify at least TOPICS in topic visitor interests.")
+    }
     val topics = zkClient.getAllTopicsInCluster()
     val topicConfigs = zkClient.getEntitiesConfigs(ConfigType.Topic, topics)
     val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
@@ -31,41 +38,42 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
         partition.partition().asInstanceOf[Integer] -> assignment.replicas.map(Integer.valueOf).asJava
       }.toMap.asJava
       visitor.visitTopic(topic, topicIdOpt.get, topicAssignment)
-      val partitions = partitionAssignments.keys.toSeq
-      val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
-      partitionAssignments.foreach { case (topicPartition, replicaAssignment) =>
-        //replicaAssignment.replicas.foreach(brokerIdConsumer.accept(_))
-        //replicaAssignment.addingReplicas.foreach(brokerIdConsumer.accept(_))
-
-        val replicaList = replicaAssignment.replicas.map(Integer.valueOf).asJava
-        val record = new PartitionRecord()
-          .setTopicId(topicIdOpt.get)
-          .setPartitionId(topicPartition.partition)
-          .setReplicas(replicaList)
-          .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
-          .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
-        leaderIsrAndControllerEpochs.get(topicPartition) match {
-          case Some(leaderIsrAndEpoch) =>
-            record
-              .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-              .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
-              .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
-              .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
-              .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value())
-          case None =>
-            warn(s"Could not find partition state in ZK for $topicPartition. Initializing this partition " +
-              s"with ISR={$replicaList} and leaderEpoch=0.")
-            record
-              .setIsr(replicaList)
-              .setLeader(replicaList.get(0))
-              .setLeaderEpoch(0)
-              .setPartitionEpoch(0)
-              .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+      if (interests.contains(TopicVisitorInterest.PARTITIONS)) {
+        val partitions = partitionAssignments.keys.toSeq
+        val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
+        partitionAssignments.foreach { case (topicPartition, replicaAssignment) =>
+          val replicaList = replicaAssignment.replicas.map(Integer.valueOf).asJava
+          val record = new PartitionRecord()
+            .setTopicId(topicIdOpt.get)
+            .setPartitionId(topicPartition.partition)
+            .setReplicas(replicaList)
+            .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
+            .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
+          leaderIsrAndControllerEpochs.get(topicPartition) match {
+            case Some(leaderIsrAndEpoch) =>
+              record
+                .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
+                .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
+                .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
+                .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value())
+            case None =>
+              warn(s"Could not find partition state in ZK for $topicPartition. Initializing this partition " +
+                s"with ISR={$replicaList} and leaderEpoch=0.")
+              record
+                .setIsr(replicaList)
+                .setLeader(replicaList.get(0))
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(0)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+          }
+          visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(record))
         }
-        visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(record))
       }
-      val props = topicConfigs(topic)
-      visitor.visitConfigs(topic, props)
+      if (interests.contains(TopicVisitorInterest.CONFIGS)) {
+        val props = topicConfigs(topic)
+        visitor.visitConfigs(topic, props)
+      }
     }
   }
 

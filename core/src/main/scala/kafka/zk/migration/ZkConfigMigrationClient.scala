@@ -1,11 +1,12 @@
 package kafka.zk.migration
 
-import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, ZkAdminManager}
+import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.wrapZkException
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, SetDataRequest}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
@@ -50,7 +51,13 @@ class ZkConfigMigrationClient(
         new EntityData().setEntityType(ConfigType.User).setEntityName(components(0)),
         new EntityData().setEntityType(ConfigType.Client).setEntityName(components(2))
       )
-      val quotaMap = ZkAdminManager.clientQuotaPropsToDoubleMap(props.asScala).asJava
+      val quotaMap = props.asScala.map { case (key, value) =>
+        val doubleValue = try lang.Double.valueOf(value) catch {
+          case _: NumberFormatException =>
+            throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
+        }
+        key -> doubleValue
+      }.asJava
       quotaEntityConsumer.accept(entity.asJava, quotaMap)
     }
 
@@ -129,23 +136,47 @@ class ZkConfigMigrationClient(
     val hasClient = entityMap.contains(ClientQuotaEntity.CLIENT_ID)
     val hasIp = entityMap.contains(ClientQuotaEntity.IP)
     val props = new Properties()
-    // We store client quota values as strings in the ZK JSON
-    quotas.forEach { case (key, value) => props.put(key, value.toString) }
-    val (configType, path) = if (hasUser && !hasClient) {
-      (Some(ConfigType.User), Some(entityMap(ClientQuotaEntity.USER)))
+
+    val (configType, path, configKeys) = if (hasUser && !hasClient) {
+      (Some(ConfigType.User), Some(entityMap(ClientQuotaEntity.USER)), DynamicConfig.User.configKeys)
     } else if (hasUser && hasClient) {
-      (Some(ConfigType.User), Some(s"${entityMap(ClientQuotaEntity.USER)}/clients/${entityMap(ClientQuotaEntity.CLIENT_ID)}"))
+      (Some(ConfigType.User), Some(s"${entityMap(ClientQuotaEntity.USER)}/clients/${entityMap(ClientQuotaEntity.CLIENT_ID)}"),
+        DynamicConfig.User.configKeys)
     } else if (hasClient) {
-      (Some(ConfigType.Client), Some(entityMap(ClientQuotaEntity.CLIENT_ID)))
+      (Some(ConfigType.Client), Some(entityMap(ClientQuotaEntity.CLIENT_ID)), DynamicConfig.Client.configKeys)
     } else if (hasIp) {
-      (Some(ConfigType.Ip), Some(entityMap(ClientQuotaEntity.IP)))
+      (Some(ConfigType.Ip), Some(entityMap(ClientQuotaEntity.IP)), DynamicConfig.Ip.configKeys)
     } else {
-      (None, None)
+      (None, None, Map.empty.asJava)
     }
 
     if (path.isEmpty) {
       error(s"Skipping unknown client quota entity $entity")
       return state
+    }
+
+    // This logic is duplicated from ZkAdminManager
+    quotas.forEach { case (key, value) =>
+      val configKey = configKeys.get(key)
+      if (configKey == null) {
+        throw new MigrationClientException(s"Invalid configuration key ${key}")
+      } else {
+        configKey.`type` match {
+          case ConfigDef.Type.DOUBLE =>
+            props.setProperty(key, value.toString)
+          case ConfigDef.Type.LONG | ConfigDef.Type.INT =>
+            val epsilon = 1e-6
+            val intValue = if (configKey.`type` == ConfigDef.Type.LONG)
+              (value + epsilon).toLong
+            else
+              (value + epsilon).toInt
+            if ((intValue.toDouble - value).abs > epsilon)
+              throw new InvalidRequestException(s"Configuration ${key} must be a ${configKey.`type`} value")
+            props.setProperty(key, intValue.toString)
+          case _ =>
+            throw new MigrationClientException(s"Unexpected config type ${configKey.`type`}")
+        }
+      }
     }
 
     // Try to write the client quota configs once with create=false, and again with create=true if the first operation fails
