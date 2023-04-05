@@ -28,8 +28,9 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
@@ -60,7 +61,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @Category(IntegrationTest.class)
-@SuppressWarnings("deprecation")
 public class StandbyTaskEOSMultiRebalanceIntegrationTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(StandbyTaskEOSMultiRebalanceIntegrationTest.class);
@@ -237,21 +237,23 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
                 Serdes.Integer()).withCachingEnabled()
         );
         builder.<Integer, Integer>stream(inputTopic)
-                .transform(
-                        () -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+                .process(
+                        () -> new Processor<Integer, Integer, Integer, Integer>() {
                             private KeyValueStore<Integer, Integer> store;
                             private KeyValueStore<Integer, Integer> counter;
-                            private ProcessorContext context;
+                            private ProcessorContext<Integer, Integer> context;
 
                             @Override
-                            public void init(final ProcessorContext context) {
+                            public void init(final ProcessorContext<Integer, Integer> context) {
                                 this.context = context;
                                 store = context.getStateStore(storeName);
                                 counter = context.getStateStore(counterName);
                             }
 
                             @Override
-                            public KeyValue<Integer, Integer> transform(final Integer key, final Integer unused) {
+                            public void process(final Record<Integer, Integer> record) {
+                                final Integer key = record.key();
+                                final Integer unused = record.value();
                                 assertThat("Key and value mus be equal", key.equals(unused));
                                 Integer id = store.get(key);
                                 // Only assign a new id if the value have not been observed before
@@ -261,10 +263,10 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
                                     final int newCounter = lastCounter == null ? 0 : lastCounter + 1;
                                     counter.put(counterKey, newCounter);
                                     // Partitions assign ids from their own id space
-                                    id = newCounter * partitionCount + context.partition();
+                                    id = newCounter * partitionCount + context.recordMetadata().get().partition();
                                     store.put(key, id);
                                 }
-                                return KeyValue.pair(key, id);
+                                context.forward(record.withKey(id));
                             }
 
                             @Override
