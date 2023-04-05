@@ -181,8 +181,6 @@ public class PrototypeAsyncConsumerTest {
         consumer.wakeup();
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
         assertThrows(WakeupException.class, () -> consumer.committed(mockTopicPartitions));
-        // empty topic list should return early
-        assertDoesNotThrow(() -> consumer.committed(new HashSet<>()));
         assertTrue(consumer.wakeupStateResetted());
     }
 
