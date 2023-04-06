@@ -38,7 +38,6 @@ trait ApiRequestHandler {
 
 object KafkaRequestHandler {
   // Support for scheduling callbacks on a request thread.
-  // TODO: we may want to pass more request context, e.g. processor id (see RequestChannel.Request)
   private val threadRequestChannel = new ThreadLocal[RequestChannel]
   private val currentRequest = new ThreadLocal[RequestChannel.Request]
 
@@ -68,7 +67,6 @@ object KafkaRequestHandler {
       T => {
         // The requestChannel is captured in this lambda, so when it's executed on the callback thread
         // we can re-schedule the original callback on a request thread.
-        // TODO: we may want to pass more request context, e.g. time we put request in queue
         requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), request))
       }
     }
