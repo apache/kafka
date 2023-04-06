@@ -258,6 +258,13 @@ public class ThreadCache {
         }
     }
 
+    synchronized void clear(final String namespace) {
+        final NamedCache cleared = caches.get(namespace);
+        if (cleared != null) {
+            cleared.clear();
+        }
+    }
+
     private void maybeEvict(final String namespace) {
         int numEvicted = 0;
         while (sizeBytes() > maxCacheSizeBytes) {
