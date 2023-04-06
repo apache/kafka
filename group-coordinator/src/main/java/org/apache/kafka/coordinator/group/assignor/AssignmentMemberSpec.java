@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The assignment specification for a consumer group member.
@@ -37,29 +39,30 @@ public class AssignmentMemberSpec {
     final Optional<String> rackId;
 
     /**
-     * The topics that the member is subscribed to.
+     * The topicIds of topics that the member is subscribed to.
      */
-    final Collection<String> subscribedTopics;
+    final Collection<Uuid> subscribedTopics;
 
     /**
-     * The current target partitions of the member.
+     * Partitions assigned for this member grouped by topicId
      */
-    final Collection<TopicPartition> targetPartitions;
+    final Map<Uuid, Set<Integer>> currentAssignmentTopicIdPartitions;
 
     public AssignmentMemberSpec(
+
         Optional<String> instanceId,
         Optional<String> rackId,
-        Collection<String> subscribedTopics,
-        Collection<TopicPartition> targetPartitions
+        Collection<Uuid> subscribedTopics,
+        Map<Uuid, Set<Integer>> currentAssignmentTopicIdPartitions
     ) {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
         Objects.requireNonNull(subscribedTopics);
-        Objects.requireNonNull(targetPartitions);
+        Objects.requireNonNull(currentAssignmentTopicIdPartitions);
         this.instanceId = instanceId;
         this.rackId = rackId;
         this.subscribedTopics = subscribedTopics;
-        this.targetPartitions = targetPartitions;
+        this.currentAssignmentTopicIdPartitions = currentAssignmentTopicIdPartitions;
     }
 
     @Override
@@ -72,7 +75,7 @@ public class AssignmentMemberSpec {
         if (!instanceId.equals(that.instanceId)) return false;
         if (!rackId.equals(that.rackId)) return false;
         if (!subscribedTopics.equals(that.subscribedTopics)) return false;
-        return targetPartitions.equals(that.targetPartitions);
+        return currentAssignmentTopicIdPartitions.equals(that.currentAssignmentTopicIdPartitions);
     }
 
     @Override
@@ -80,7 +83,7 @@ public class AssignmentMemberSpec {
         int result = instanceId.hashCode();
         result = 31 * result + rackId.hashCode();
         result = 31 * result + subscribedTopics.hashCode();
-        result = 31 * result + targetPartitions.hashCode();
+        result = 31 * result + currentAssignmentTopicIdPartitions.hashCode();
         return result;
     }
 
@@ -89,7 +92,7 @@ public class AssignmentMemberSpec {
         return "AssignmentMemberSpec(instanceId=" + instanceId +
             ", rackId=" + rackId +
             ", subscribedTopics=" + subscribedTopics +
-            ", targetPartitions=" + targetPartitions +
+            ", targetPartitions=" + currentAssignmentTopicIdPartitions +
             ')';
     }
 }
