@@ -1238,10 +1238,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           }
 
           remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset, leaderEpochCache.get)
-        } else None
+        } else Optional.empty()
 
-        if (remoteOffset.nonEmpty) {
-          remoteOffset
+        if (remoteOffset.isPresent) {
+          remoteOffset.asScala
         } else {
           // If it is not found in remote storage, search in the local storage starting with local log start offset.
 

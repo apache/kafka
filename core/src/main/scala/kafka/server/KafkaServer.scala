@@ -44,7 +44,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, KafkaException, Node}
+import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
@@ -63,6 +63,7 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 object KafkaServer {
@@ -603,7 +604,7 @@ class KafkaServer(
       }
 
       Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head, time,
-        tp => logManager.getLog(tp)))
+        (tp: TopicPartition) => logManager.getLog(tp).asJava));
     } else {
       None
     }

@@ -39,7 +39,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import java.io.{ByteArrayInputStream, File, FileInputStream}
 import java.nio.file.Files
 import java.util
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -71,7 +71,7 @@ class RemoteLogManagerTest {
   def setUp(): Unit = {
     val props = new Properties()
     remoteLogManagerConfig = createRLMConfig(props)
-    remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, _ => Option.empty) {
+    remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, (_: TopicPartition) => Optional.empty[UnifiedLog]) {
       override private[remote] def createRemoteStorageManager() = remoteStorageManager
       override private[remote] def createRemoteLogMetadataManager() = remoteLogMetadataManager
     }
@@ -107,7 +107,7 @@ class RemoteLogManagerTest {
   def testGetClassLoaderAwareRemoteStorageManager(): Unit = {
     val rsmManager: ClassLoaderAwareRemoteStorageManager = mock(classOf[ClassLoaderAwareRemoteStorageManager])
     val remoteLogManager =
-      new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, _ => Option.empty) {
+      new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, (_: TopicPartition) => Optional.empty[UnifiedLog]) {
         override private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = rsmManager
       }
     assertEquals(rsmManager, remoteLogManager.storageManager())
@@ -118,14 +118,14 @@ class RemoteLogManagerTest {
     def verifyInCache(topicIdPartitions: TopicIdPartition*): Unit = {
       topicIdPartitions.foreach { topicIdPartition =>
         assertDoesNotThrow(() =>
-          remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), epochForOffset = 0, offset = 0L))
+          remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L))
       }
     }
 
     def verifyNotInCache(topicIdPartitions: TopicIdPartition*): Unit = {
       topicIdPartitions.foreach { topicIdPartition =>
         assertThrows(classOf[KafkaException], () =>
-          remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), epochForOffset = 0, offset = 0L))
+          remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L))
       }
     }
 
@@ -136,25 +136,25 @@ class RemoteLogManagerTest {
       .thenReturn(Optional.empty[RemoteLogSegmentMetadata]())
     verifyNotInCache(followerTopicIdPartition, leaderTopicIdPartition)
     // Load topicId cache
-    remoteLogManager.onLeadershipChange(Set(mockLeaderPartition), Set(mockFollowerPartition), topicIds)
+    remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds)
     verify(remoteLogMetadataManager, times(1))
       .onPartitionLeadershipChanges(Set(leaderTopicIdPartition).asJava, Set(followerTopicIdPartition).asJava)
     verifyInCache(followerTopicIdPartition, leaderTopicIdPartition)
 
     // Evicts from topicId cache
-    remoteLogManager.stopPartitions(leaderTopicIdPartition.topicPartition(), delete = true)
+    remoteLogManager.stopPartitions(leaderTopicIdPartition.topicPartition(), true)
     verifyNotInCache(leaderTopicIdPartition)
     verifyInCache(followerTopicIdPartition)
 
     // Evicts from topicId cache
-    remoteLogManager.stopPartitions(followerTopicIdPartition.topicPartition(), delete = true)
+    remoteLogManager.stopPartitions(followerTopicIdPartition.topicPartition(), true)
     verifyNotInCache(leaderTopicIdPartition, followerTopicIdPartition)
   }
 
   @Test
   def testFetchRemoteLogSegmentMetadata(): Unit = {
     remoteLogManager.onLeadershipChange(
-      Set(mockPartition(leaderTopicIdPartition)), Set(mockPartition(followerTopicIdPartition)), topicIds)
+      Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds)
     remoteLogManager.fetchRemoteLogSegmentMetadata(leaderTopicIdPartition.topicPartition(), 10, 100L)
     remoteLogManager.fetchRemoteLogSegmentMetadata(followerTopicIdPartition.topicPartition(), 20, 200L)
 
@@ -231,19 +231,19 @@ class RemoteLogManagerTest {
     leaderEpochFileCache.assign(targetLeaderEpoch, startOffset)
     leaderEpochFileCache.assign(12, 500L)
 
-    remoteLogManager.onLeadershipChange(Set(mockPartition(leaderTopicIdPartition)), Set(), topicIds)
+    remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds)
     // Fetching message for timestamp `ts` will return the message with startOffset+1, and `ts+1` as there are no
     // messages starting with the startOffset and with `ts`.
     val maybeTimestampAndOffset1 = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache)
-    assertEquals(Some(new TimestampAndOffset(ts + 1, startOffset + 1, Optional.of(targetLeaderEpoch))), maybeTimestampAndOffset1)
+    assertEquals(Optional.of(new TimestampAndOffset(ts + 1, startOffset + 1, Optional.of(targetLeaderEpoch))), maybeTimestampAndOffset1)
 
     // Fetching message for `ts+2` will return the message with startOffset+2 and its timestamp value is `ts+2`.
     val maybeTimestampAndOffset2 = remoteLogManager.findOffsetByTimestamp(tp, ts + 2, startOffset, leaderEpochFileCache)
-    assertEquals(Some(new TimestampAndOffset(ts + 2, startOffset + 2, Optional.of(targetLeaderEpoch))), maybeTimestampAndOffset2)
+    assertEquals(Optional.of(new TimestampAndOffset(ts + 2, startOffset + 2, Optional.of(targetLeaderEpoch))), maybeTimestampAndOffset2)
 
     // Fetching message for `ts+3` will return None as there are no records with timestamp >= ts+3.
     val maybeTimestampAndOffset3 = remoteLogManager.findOffsetByTimestamp(tp, ts + 3, startOffset, leaderEpochFileCache)
-    assertEquals(None, maybeTimestampAndOffset3)
+    assertEquals(Optional.empty(), maybeTimestampAndOffset3)
   }
 
   @Test
