@@ -19,8 +19,12 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.image.AclsDelta;
+import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotasDelta;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ConfigurationsDelta;
@@ -31,7 +35,9 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.authorizer.StandardAcl;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -230,5 +236,38 @@ public class KRaftMigrationZkWriter {
             operationConsumer.accept("Update client quotas for " + clientQuotaEntity, migrationState ->
                 migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, migrationState));
         });
+    }
+
+    private void addStandardAclToMap(Map<ResourcePattern, List<AccessControlEntry>> aclMap, StandardAcl acl) {
+        ResourcePattern resource = new ResourcePattern(acl.resourceType(), acl.resourceName(), acl.patternType());
+        aclMap.computeIfAbsent(resource, __ -> new ArrayList<>()).add(
+            new AccessControlEntry(acl.principal(), acl.host(), acl.operation(), acl.permissionType())
+        );
+    }
+
+    void handleAclsDelta(AclsImage image, AclsDelta delta) {
+        Map<ResourcePattern, List<AccessControlEntry>> deletedAcls = new HashMap<>();
+        Map<ResourcePattern, List<AccessControlEntry>> addedAcls = new HashMap<>();
+        delta.changes().forEach((uuid, standardAclOpt) -> {
+            if (standardAclOpt.isPresent()) {
+                StandardAcl acl = standardAclOpt.get();
+                addStandardAclToMap(addedAcls, acl);
+            }
+        });
+        delta.deleted().forEach(acl -> addStandardAclToMap(deletedAcls, acl));
+
+        deletedAcls.forEach((resourcePattern, accessControlEntries) -> {
+            String name = "Deleting " + accessControlEntries.size() + " for resource " + resourcePattern;
+            operationConsumer.accept(name, migrationState ->
+                migrationClient.aclClient().removeDeletedAcls(resourcePattern, accessControlEntries, migrationState));
+        });
+
+        addedAcls.forEach((resourcePattern, accessControlEntries) -> {
+            String name = "Adding " + accessControlEntries.size() + " for resource " + resourcePattern;
+            operationConsumer.accept(name, migrationState ->
+                migrationClient.aclClient().writeAddedAcls(resourcePattern, accessControlEntries, migrationState));
+        });
+
+        
     }
 }
