@@ -133,37 +133,13 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             if (record.value().oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(record.value().oldValue);
                 if (oldForeignKey == null) {
-                    if (context().recordMetadata().isPresent()) {
-                        final RecordMetadata recordMetadata = context().recordMetadata().get();
-                        LOG.warn(
-                            "Skipping record due to null foreign key. "
-                                + "topic=[{}] partition=[{}] offset=[{}]",
-                            recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                        );
-                    } else {
-                        LOG.warn(
-                            "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                        );
-                    }
-                    droppedRecordsSensor.record();
+                    logSkippedRecordDueToNullForeignKey();
                     return;
                 }
                 if (record.value().newValue != null) {
                     final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                     if (newForeignKey == null) {
-                        if (context().recordMetadata().isPresent()) {
-                            final RecordMetadata recordMetadata = context().recordMetadata().get();
-                            LOG.warn(
-                                "Skipping record due to null foreign key. "
-                                    + "topic=[{}] partition=[{}] offset=[{}]",
-                                recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                            );
-                        } else {
-                            LOG.warn(
-                                "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                            );
-                        }
-                        droppedRecordsSensor.record();
+                        logSkippedRecordDueToNullForeignKey();
                         return;
                     }
 
@@ -219,19 +195,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 }
                 final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                 if (newForeignKey == null) {
-                    if (context().recordMetadata().isPresent()) {
-                        final RecordMetadata recordMetadata = context().recordMetadata().get();
-                        LOG.warn(
-                            "Skipping record due to null foreign key. "
-                                + "topic=[{}] partition=[{}] offset=[{}]",
-                            recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                        );
-                    } else {
-                        LOG.warn(
-                            "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                        );
-                    }
-                    droppedRecordsSensor.record();
+                    logSkippedRecordDueToNullForeignKey();
                 } else {
                     context().forward(
                         record.withKey(newForeignKey)
@@ -247,6 +211,22 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
         @Override
         public void close() {
             primaryKeyValueGetter.close();
+        }
+
+        private void logSkippedRecordDueToNullForeignKey() {
+            if (context().recordMetadata().isPresent()) {
+                final RecordMetadata recordMetadata = context().recordMetadata().get();
+                LOG.warn(
+                    "Skipping record due to null foreign key. "
+                        + "topic=[{}] partition=[{}] offset=[{}]",
+                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                );
+            } else {
+                LOG.warn(
+                    "Skipping record due to null foreign key. Topic, partition, and offset not known."
+                );
+            }
+            droppedRecordsSensor.record();
         }
     }
 }
