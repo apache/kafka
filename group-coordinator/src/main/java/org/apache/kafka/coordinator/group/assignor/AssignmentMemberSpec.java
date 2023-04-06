@@ -18,11 +18,12 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * The assignment specification for a consumer group member.
@@ -41,7 +42,7 @@ public class AssignmentMemberSpec {
     /**
      * The topicIds of topics that the member is subscribed to.
      */
-    final List<Uuid> subscribedTopics;
+    final Collection<Uuid> subscribedTopics;
 
     /**
      * Maps the partitions assigned for this member per topicId

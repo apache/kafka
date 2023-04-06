@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-
 import org.apache.kafka.common.Uuid;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.HashMap;
-import java.util.Collections;
 
 import static java.lang.Math.min;
 
@@ -107,7 +107,7 @@ public class ServerSideStickyRangeAssignor implements PartitionAssignor {
         for (Map.Entry<String, AssignmentMemberSpec> memberEntry : membersData.entrySet()) {
             String memberId = memberEntry.getKey();
             AssignmentMemberSpec memberMetadata = memberEntry.getValue();
-            List<Uuid> topics = memberMetadata.subscribedTopics;
+            Collection<Uuid> topics = memberMetadata.subscribedTopics;
             for (Uuid topicId: topics) {
                 putList(mapTopicsToConsumers, topicId, memberId);
             }
