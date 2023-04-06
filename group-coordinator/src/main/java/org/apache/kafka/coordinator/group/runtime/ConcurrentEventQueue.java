@@ -117,7 +117,7 @@ public class ConcurrentEventQueue<K, T extends ConcurrentEventQueue.Event<K>> im
     public void add(T event) {
         lock.lock();
         try {
-            if (closed) throw new IllegalStateException("Can't accept an event because the queue is close.");
+            if (closed) throw new IllegalStateException("Can't accept an event because the queue is closed.");
 
             K key = event.key();
             Queue<T> queue = queues.get(key);
