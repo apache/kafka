@@ -74,6 +74,7 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_SUSPENDED;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
+import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expectLastCall;
@@ -389,7 +390,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId);
+        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
         EasyMock.replay(stateManager, storeMetadata, store);
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
@@ -419,7 +420,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId);
+        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
         EasyMock.replay(stateManager, storeMetadata, store);
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
@@ -621,6 +622,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         mockTask.clearTaskTimeout();
         mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), anyObject());
         EasyMock.expectLastCall();
+        mockTask.recordRestoration(anyObject(), anyLong(), anyBoolean());
+        EasyMock.expectLastCall();
         EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
         EasyMock.expect(activeStateManager.changelogOffsets()).andReturn(singletonMap(tp, 10L));
         EasyMock.expect(activeStateManager.taskId()).andReturn(taskId).anyTimes();
@@ -697,7 +700,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRequestEndOffsetsAndHandleTimeoutException() {
         final TaskId taskId = new TaskId(0, 0);
 
-        final Task mockTask = mock(Task.class);
+        final Task mockTask = niceMock(Task.class);
         mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), anyObject());
         EasyMock.expectLastCall();
 
@@ -742,6 +745,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         EasyMock.resetToDefault(mockTask);
         mockTask.clearTaskTimeout();
+        mockTask.recordRestoration(anyObject(), anyLong(), anyBoolean());
+        EasyMock.expectLastCall();
         EasyMock.replay(mockTask);
 
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
@@ -835,6 +840,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         if (type == ACTIVE) {
             mockTask.clearTaskTimeout();
             mockTask.clearTaskTimeout();
+            expectLastCall();
+            mockTask.recordRestoration(anyObject(), anyLong(), anyBoolean());
             expectLastCall();
         }
         replay(mockTask);
