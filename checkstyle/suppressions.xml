@@ -323,8 +323,6 @@
               files="ServerSideStickyRangeAssignor.java"/>
     <suppress checks="NPathComplexity"
               files="ServerSideStickyRangeAssignor.java"/>
-    <suppress checks="AvoidStarImport"
-              files="ServerSideStickyRangeAssignorTest.java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
