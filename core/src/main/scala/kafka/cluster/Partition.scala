@@ -1005,7 +1005,7 @@ class Partition(val topicPartition: TopicPartition,
 
   private def isBrokerEpochIsrEligible(storedBrokerEpoch: Option[Long], cachedBrokerEpoch: Option[Long]): Boolean = {
     storedBrokerEpoch.isDefined && cachedBrokerEpoch.isDefined &&
-      (storedBrokerEpoch.get == -1 || (storedBrokerEpoch == cachedBrokerEpoch))
+      (storedBrokerEpoch.get == -1 || storedBrokerEpoch == cachedBrokerEpoch)
   }
 
   /*
@@ -1717,18 +1717,22 @@ class Partition(val topicPartition: TopicPartition,
         brokerState.setBrokerEpoch(-1)
       } else if (brokerId == localBrokerId) {
         brokerState.setBrokerEpoch(localBrokerEpochSupplier())
-      } else if (!remoteReplicasMap.contains(brokerId) || !remoteReplicasMap.get(brokerId).stateSnapshot.brokerEpoch.isDefined) {
-        // There are two cases where the broker epoch can be missing:
-        // 1. During ISR expansion, we already held lock for the partition and did the broker epoch check, so the new
-        //   ISR replica should have a valid broker epoch. Then, the missing broker epoch can only happens to the
-        //   existing ISR replicas whose fetch request has not been received by this leader. It is safe to set the epoch
-        //   -1 for this replica because even if it crashes at the moment, the controller will remove it from ISR
-        //   and bump the partition epoch to reject this AlterPartition request.
-        // 2. In ISR shrinking. Similarly, if the existing ISR replicas does not have broker epoch, it is safe to
-        //   set the broker epoch to -1 here.
-        brokerState.setBrokerEpoch(-1)
       } else {
-        brokerState.setBrokerEpoch(remoteReplicasMap.get(brokerId).stateSnapshot.brokerEpoch.get)
+        val replica = remoteReplicasMap.get(brokerId)
+        val brokerEpoch = if (replica == null) Option.empty else replica.stateSnapshot.brokerEpoch
+        if (!brokerEpoch.isDefined) {
+          // There are two cases where the broker epoch can be missing:
+          // 1. During ISR expansion, we already held lock for the partition and did the broker epoch check, so the new
+          //   ISR replica should have a valid broker epoch. Then, the missing broker epoch can only happen to the
+          //   existing ISR replicas whose fetch request has not been received by this leader. It is safe to set the epoch
+          //   -1 for this replica because even if it crashes at the moment, the controller will remove it from ISR
+          //   and bump the partition epoch to reject this AlterPartition request.
+          // 2. In ISR shrinking. Similarly, if the existing ISR replicas does not have broker epoch, it is safe to
+          //   set the broker epoch to -1 here.
+          brokerState.setBrokerEpoch(-1)
+        } else {
+          brokerState.setBrokerEpoch(brokerEpoch.get)
+        }
       }
       brokerState
     }

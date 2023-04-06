@@ -1614,14 +1614,14 @@ class PartitionTest extends AbstractPartitionTest {
     fetchFollower(partition,
       replicaId = remoteBrokerId1,
       fetchOffset = log.logEndOffset,
-      replicaEpoch = wrongReplicaEpoch
+      replicaEpoch = Some(wrongReplicaEpoch)
     )
 
     assertReplicaState(partition, remoteBrokerId1,
       lastCaughtUpTimeMs = time.milliseconds(),
       logStartOffset = 0L,
       logEndOffset = log.logEndOffset,
-      brokerEpoch = Option[Long](wrongReplicaEpoch)
+      brokerEpoch = Some(wrongReplicaEpoch)
     )
 
     // Expansion is not triggered.
@@ -3375,12 +3375,12 @@ class PartitionTest extends AbstractPartitionTest {
     lastFetchedEpoch: Option[Int] = None,
     fetchTimeMs: Long = time.milliseconds(),
     topicId: Uuid = Uuid.ZERO_UUID,
-    replicaEpoch: Long = -2
+    replicaEpoch: Option[Long] = Option.empty
   ): LogReadInfo = {
     val fetchParams = followerFetchParams(
       replicaId,
       maxBytes = maxBytes,
-      replicaEpoch = if (replicaEpoch == -2) defaultBrokerEpoch(replicaId) else replicaEpoch
+      replicaEpoch = if (!replicaEpoch.isDefined) defaultBrokerEpoch(replicaId) else replicaEpoch.get
     )
 
     val fetchPartitionData = new FetchRequest.PartitionData(

@@ -95,7 +95,7 @@ class AlterPartitionManagerTest {
     }
     alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, LeaderRecoveryState.RECOVERED, isrWithBrokerEpoch.toList, 10), 0)
 
-    val message = new AlterPartitionRequestData()
+    val expectedAlterPartitionData = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(101)
     val topicData = new AlterPartitionRequestData.TopicData()
@@ -120,12 +120,12 @@ class AlterPartitionManagerTest {
         .setNewIsr(List(1, 2, 3).map(Integer.valueOf).asJava))
     }
 
-    message.topics.add(topicData)
+    expectedAlterPartitionData.topics.add(topicData)
 
     verify(brokerToController).start()
     val captor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     verify(brokerToController).sendRequest(captor.capture(), any())
-    assertEquals(message, captor.getValue.asInstanceOf[AlterPartitionRequest.Builder].build().data())
+    assertEquals(expectedAlterPartitionData, captor.getValue.asInstanceOf[AlterPartitionRequest.Builder].build().data())
   }
 
   @ParameterizedTest
