@@ -20,12 +20,15 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -34,11 +37,14 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -615,7 +621,7 @@ public class KafkaRaftClientTest {
 
         // Leader change record appended
         assertEquals(1L, context.log.endOffset().offset);
-        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
@@ -655,7 +661,7 @@ public class KafkaRaftClientTest {
 
         // Leader change record appended
         assertEquals(1L, context.log.endOffset().offset);
-        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
@@ -1435,6 +1441,33 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
     }
 
+    // This test mainly focuses on whether the leader state is correctly updated under different fetch version.
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+    public void testLeaderStateUpdateWithDifferentFetchRequestVersions(short version) throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // First poll has no high watermark advance.
+        context.client.poll();
+        assertEquals(OptionalLong.empty(), context.client.highWatermark());
+        assertEquals(1L, context.log.endOffset().offset);
+
+        // Now we will advance the high watermark with a follower fetch request.
+        FetchRequestData fetchRequestData = context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0);
+        FetchRequestData request = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
+        assertEquals((version < 15) ? 1 : -1, fetchRequestData.replicaId());
+        assertEquals((version < 15) ? -1 : 1, fetchRequestData.replicaState().replicaId());
+        context.deliverRequest(request);
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(OptionalLong.of(1L), context.client.highWatermark());
+    }
+
     @Test
     public void testFetchRequestClusterIdValidation() throws Exception {
         int localId = 0;
@@ -1947,6 +1980,34 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testDescribeQuorumNonLeader() throws Exception {
+        int localId = 0;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
+        int epoch = 2;
+        Set<Integer> voters = Utils.mkSet(localId, voter2, voter3);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .build();
+
+        context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
+        context.pollUntilResponse();
+
+        DescribeQuorumResponseData responseData = context.collectDescribeQuorumResponse();
+        assertEquals(Errors.NONE, Errors.forCode(responseData.errorCode()));
+
+        assertEquals(1, responseData.topics().size());
+        DescribeQuorumResponseData.TopicData topicData = responseData.topics().get(0);
+        assertEquals(context.metadataPartition.topic(), topicData.topicName());
+
+        assertEquals(1, topicData.partitions().size());
+        DescribeQuorumResponseData.PartitionData partitionData = topicData.partitions().get(0);
+        assertEquals(context.metadataPartition.partition(), partitionData.partitionIndex());
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionData.errorCode()));
+    }
+
+    @Test
     public void testDescribeQuorum() throws Exception {
         int localId = 0;
         int closeFollower = 2;
@@ -1956,6 +2017,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
+        long laggingFollowerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(1, laggingFollower, 1L, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(1L, epoch);
@@ -1963,16 +2025,21 @@ public class KafkaRaftClientTest {
         context.client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
         context.client.poll();
 
+        context.time.sleep(100);
+        long closeFollowerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(epoch, closeFollower, 3L, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(3L, epoch);
 
         // Create observer
         int observerId = 3;
+        context.time.sleep(100);
+        long observerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(epoch, observerId, 0L, 0, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(3L, epoch);
 
+        context.time.sleep(100);
         context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
         context.pollUntilResponse();
 
@@ -1982,17 +2049,25 @@ public class KafkaRaftClientTest {
                     .setReplicaId(localId)
                     // As we are appending the records directly to the log,
                     // the leader end offset hasn't been updated yet.
-                    .setLogEndOffset(3L),
+                    .setLogEndOffset(3L)
+                    .setLastFetchTimestamp(context.time.milliseconds())
+                    .setLastCaughtUpTimestamp(context.time.milliseconds()),
                 new ReplicaState()
                     .setReplicaId(laggingFollower)
-                    .setLogEndOffset(1L),
+                    .setLogEndOffset(1L)
+                    .setLastFetchTimestamp(laggingFollowerFetchTime)
+                    .setLastCaughtUpTimestamp(laggingFollowerFetchTime),
                 new ReplicaState()
                     .setReplicaId(closeFollower)
-                    .setLogEndOffset(3)),
+                    .setLogEndOffset(3L)
+                    .setLastFetchTimestamp(closeFollowerFetchTime)
+                    .setLastCaughtUpTimestamp(closeFollowerFetchTime)),
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId)
-                    .setLogEndOffset(0L)));
+                    .setLogEndOffset(0L)
+                    .setLastFetchTimestamp(observerFetchTime)
+                    .setLastCaughtUpTimestamp(-1L)));
     }
 
     @Test
@@ -2113,7 +2188,7 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
-        assertEquals(2L, context.log.lastFlushedOffset());
+        assertEquals(2L, context.log.firstUnflushedOffset());
     }
 
     @Test
@@ -2296,6 +2371,7 @@ public class KafkaRaftClientTest {
         // Poll again to complete truncation
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.firstUnflushedOffset());
 
         // Now we should be fetching
         context.client.poll();

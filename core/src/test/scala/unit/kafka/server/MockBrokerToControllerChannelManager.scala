@@ -73,7 +73,7 @@ class MockBrokerToControllerChannelManager(
         queueItem.callback.onTimeout()
         unsentIterator.remove()
       } else {
-        controllerNodeProvider.get() match {
+        controllerNodeProvider.getControllerInfo().node match {
           case Some(controller) if client.ready(controller, time.milliseconds()) =>
             val clientRequest = client.newClientRequest(
               controller.idString,

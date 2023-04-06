@@ -255,6 +255,8 @@ public class CandidateState implements EpochState {
             "localId=" + localId +
             ", epoch=" + epoch +
             ", retries=" + retries +
+            ", voteStates=" + voteStates +
+            ", highWatermark=" + highWatermark +
             ", electionTimeoutMs=" + electionTimeoutMs +
             ')';
     }

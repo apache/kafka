@@ -51,7 +51,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-public class DescribeConsumerGroupsHandler implements AdminApiHandler<CoordinatorKey, ConsumerGroupDescription> {
+public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, ConsumerGroupDescription> {
 
     private final boolean includeAuthorizedOperations;
     private final Logger log;
@@ -89,7 +89,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     }
 
     @Override
-    public DescribeGroupsRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public DescribeGroupsRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         List<String> groupIds = keys.stream().map(key -> {
             if (key.type != FindCoordinatorRequest.CoordinatorType.GROUP) {
                 throw new IllegalArgumentException("Invalid transaction coordinator key " + key +

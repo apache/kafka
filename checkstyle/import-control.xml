@@ -36,6 +36,7 @@
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
+  <allow pkg="net.jqwik.api" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />
@@ -139,9 +140,7 @@
       </subpackage>
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
-        <subpackage name="secured">
-          <allow pkg="org.jose4j" />
-        </subpackage>
+        <allow pkg="org.jose4j" />
       </subpackage>
     </subpackage>
 
@@ -199,6 +198,7 @@
 
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
+      <allow pkg="org.apache.log4j" />
     </subpackage>
 
     <subpackage name="quotas">
@@ -225,14 +225,21 @@
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.controller" />
+    <allow pkg="org.apache.kafka.image" />
+    <allow pkg="org.apache.kafka.image.writer" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metadata.authorizer" />
+    <allow pkg="org.apache.kafka.metadata.migration" />
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.authorizer" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.config" />
+    <allow pkg="org.apache.kafka.server.fault" />
+    <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.server.policy"/>
+    <allow pkg="org.apache.kafka.server.util"/>
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.timeline" />
@@ -244,31 +251,56 @@
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.quota" />
-    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.common.requests" />
+    <allow pkg="org.apache.kafka.common.resource" />
+    <allow pkg="org.apache.kafka.image" />
+    <allow pkg="org.apache.kafka.image.writer" />
     <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.queue" />
+    <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="org.apache.kafka.snapshot" />
+    <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
   <subpackage name="metadata">
     <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.common.acl" />
     <allow pkg="org.apache.kafka.common.annotation" />
+    <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
+    <allow pkg="org.apache.kafka.common.record" />
+    <allow pkg="org.apache.kafka.common.resource" />
+    <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metalog" />
+    <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.authorizer" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
+    <allow pkg="org.apache.kafka.server.config" />
+    <allow pkg="org.apache.kafka.server.util"/>
     <allow pkg="org.apache.kafka.test" />
     <subpackage name="authorizer">
       <allow pkg="org.apache.kafka.common.acl" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
+      <allow pkg="org.apache.kafka.controller" />
       <allow pkg="org.apache.kafka.metadata" />
+      <allow pkg="org.apache.kafka.common.internals" />
+    </subpackage>
+    <subpackage name="bootstrap">
+      <allow pkg="org.apache.kafka.snapshot" />
+    </subpackage>
+    <subpackage name="fault">
+      <allow pkg="org.apache.kafka.server.fault" />
     </subpackage>
   </subpackage>
 
@@ -282,6 +314,10 @@
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
+  <subpackage name="queue">
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
@@ -306,11 +342,30 @@
     </subpackage>
   </subpackage>
 
+  <subpackage name="coordinator">
+    <subpackage name="group">
+      <allow pkg="org.apache.kafka.common.annotation" />
+      <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.common.requests" />
+      <allow pkg="org.apache.kafka.image"/>
+      <allow pkg="org.apache.kafka.server.util"/>
+    </subpackage>
+  </subpackage>
+
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
+    <allow pkg="joptsimple" />
+
+    <!-- This is required to make AlterConfigPolicyTest work. -->
+    <allow pkg="org.apache.kafka.server.policy" />
 
     <subpackage name="common">
       <allow pkg="org.apache.kafka.server.common" />
+    </subpackage>
+
+    <subpackage name="metrics">
+      <allow pkg="com.yammer.metrics" />
     </subpackage>
 
     <subpackage name="log">
@@ -319,14 +374,22 @@
       <allow pkg="kafka.utils" />
       <allow pkg="org.apache.kafka.clients" />
       <allow pkg="org.apache.kafka.server.common" />
+      <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="org.apache.kafka.server.log" />
+      <allow pkg="org.apache.kafka.server.record" />
       <allow pkg="org.apache.kafka.test" />
-
+      <allow pkg="org.apache.kafka.storage"/>
       <subpackage name="remote">
         <allow pkg="scala.collection" />
       </subpackage>
 
     </subpackage>
+  </subpackage>
+
+  <subpackage name="storage.internals">
+    <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.storage.internals"/>
+    <allow pkg="org.apache.kafka.common" />
   </subpackage>
 
   <subpackage name="shell">
@@ -337,6 +400,7 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>
+    <allow pkg="org.apache.kafka.controller.util"/>
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
@@ -348,13 +412,21 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
+    <allow pkg="org.apache.kafka.test" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
+    <allow pkg="kafka.test" />
+    <allow pkg="joptsimple" />
+    <allow pkg="javax.rmi.ssl"/>
+    <allow pkg="kafka.utils" />
+    <allow pkg="scala.collection" />
   </subpackage>
 
   <subpackage name="trogdor">
@@ -413,6 +485,7 @@
       <allow pkg="scala" />
       <allow class="kafka.zk.EmbeddedZookeeper"/>
       <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="test">
@@ -420,7 +493,7 @@
     </subpackage>
 
     <subpackage name="tools">
-      <allow pkg="kafka.tools" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="state">
@@ -432,9 +505,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
-        <subpackage name="testutil">
-          <allow pkg="org.apache.log4j" />
-        </subpackage>
       </subpackage>
     </subpackage>
   </subpackage>
@@ -516,6 +586,7 @@
       <allow pkg= "javax.security.auth"/>
       <subpackage name="basic">
         <allow pkg="org.apache.kafka.connect.rest"/>
+        <allow pkg="javax.annotation"/>
       </subpackage>
     </subpackage>
 
@@ -529,11 +600,15 @@
       <allow pkg="org.apache.kafka.connect.runtime.distributed" />
       <allow pkg="org.apache.kafka.connect.util" />
       <allow pkg="org.apache.kafka.connect.converters" />
+      <allow pkg="org.apache.kafka.connect.json" />
       <allow pkg="net.sourceforge.argparse4j" />
       <!-- for tests -->
       <allow pkg="org.apache.kafka.connect.integration" />
       <allow pkg="org.apache.kafka.connect.mirror" />
       <allow pkg="kafka.server" />
+      <subpackage name="rest">
+        <allow pkg="javax.ws.rs" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="runtime">
@@ -550,6 +625,7 @@
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
+        <allow pkg="io.swagger.v3.oas.annotations"/>
         <subpackage name="resources">
           <allow pkg="org.apache.log4j" />
         </subpackage>
@@ -572,6 +648,7 @@
       <allow pkg="org.apache.kafka.connect.util" />
       <allow pkg="org.apache.kafka.common" />
       <allow pkg="org.apache.kafka.connect.connector.policy" />
+      <allow pkg="org.apache.kafka.connect.json" />
     </subpackage>
 
     <subpackage name="storage">
@@ -603,6 +680,8 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="javax.ws.rs" />
+      <allow pkg="org.apache.http"/>
+      <allow pkg="org.eclipse.jetty.util"/>
     </subpackage>
 
     <subpackage name="json">

@@ -34,7 +34,7 @@ public enum ConsumerGroupState {
     EMPTY("Empty");
 
     private final static Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
-        .collect(Collectors.toMap(state -> state.name, Function.identity()));;
+        .collect(Collectors.toMap(state -> state.name, Function.identity()));
 
     private final String name;
 

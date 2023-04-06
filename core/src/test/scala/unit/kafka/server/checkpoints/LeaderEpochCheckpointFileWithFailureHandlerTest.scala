@@ -16,10 +16,9 @@
   */
 package kafka.server.checkpoints
 
-import java.io.File
-
-import kafka.server.epoch.EpochEntry
-import kafka.utils.Logging
+import kafka.utils.{Logging, TestUtils}
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
+import org.apache.kafka.storage.internals.log.{EpochEntry, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -27,13 +26,12 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
   @Test
   def shouldPersistAndOverwriteAndReloadFile(): Unit ={
-    val file = File.createTempFile("temp-checkpoint-file", System.nanoTime().toString)
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("temp-checkpoint-file", System.nanoTime().toString)
 
-    val checkpoint = new LeaderEpochCheckpointFile(file)
+    val checkpoint = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1))
 
     //Given
-    val epochs = Seq(EpochEntry(0, 1L), EpochEntry(1, 2L), EpochEntry(2, 3L))
+    val epochs = java.util.Arrays.asList(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
 
     //When
     checkpoint.write(epochs)
@@ -42,7 +40,7 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
     assertEquals(epochs, checkpoint.read())
 
     //Given overwrite
-    val epochs2 = Seq(EpochEntry(3, 4L), EpochEntry(4, 5L))
+    val epochs2 = java.util.Arrays.asList(new EpochEntry(3, 4L), new EpochEntry(4, 5L))
 
     //When
     checkpoint.write(epochs2)
@@ -53,16 +51,15 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
   @Test
   def shouldRetainValuesEvenIfCheckpointIsRecreated(): Unit ={
-    val file = File.createTempFile("temp-checkpoint-file", System.nanoTime().toString)
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("temp-checkpoint-file", System.nanoTime().toString)
 
     //Given a file with data in
-    val checkpoint = new LeaderEpochCheckpointFile(file)
-    val epochs = Seq(EpochEntry(0, 1L), EpochEntry(1, 2L), EpochEntry(2, 3L))
+    val checkpoint = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1))
+    val epochs = java.util.Arrays.asList(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
     checkpoint.write(epochs)
 
     //When we recreate
-    val checkpoint2 = new LeaderEpochCheckpointFile(file)
+    val checkpoint2 = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1))
 
     //The data should still be there
     assertEquals(epochs, checkpoint2.read())

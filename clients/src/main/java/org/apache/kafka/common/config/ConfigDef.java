@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -33,8 +31,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -208,7 +208,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
-        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
     }
 
     /**
@@ -284,7 +284,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
-        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
     }
 
     /**
@@ -356,7 +356,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
     }
 
     /**
@@ -408,7 +408,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
-        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.emptyList(), null, true));
     }
 
     /**
@@ -423,7 +423,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.emptyList(), null, true));
     }
 
     /**
@@ -1121,6 +1121,32 @@ public class ConfigDef {
         }
     }
 
+    public static class ListSize implements Validator {
+        final int maxSize;
+
+        private ListSize(final int maxSize) {
+            this.maxSize = maxSize;
+        }
+
+        public static ListSize atMostOfSize(final int maxSize) {
+            return new ListSize(maxSize);
+        }
+
+        @Override
+        public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
+            List<String> values = (List<String>) value;
+            if (values.size() > maxSize) {
+                throw new ConfigException(name, value, "exceeds maximum list size of [" + maxSize + "].");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "List containing maximum of " + maxSize + " elements";
+        }
+    }
+
     public static class ConfigKey {
         public final String name;
         public final Type type;
@@ -1217,15 +1243,16 @@ public class ConfigDef {
                 break;
             }
         }
+        String resultFormat = " (" + value + " %s" + (value == 1 ? ")" : "s)");
         switch (i) {
             case 1:
-                return " (" + value + " kibibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "kibibyte");
             case 2:
-                return " (" + value + " mebibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "mebibyte");
             case 3:
-                return " (" + value + " gibibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "gibibyte");
             case 4:
-                return " (" + value + " tebibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "tebibyte");
             default:
                 return "";
         }
@@ -1251,7 +1278,7 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
-        return toHtmlTable(Collections.<String, String>emptyMap());
+        return toHtmlTable(Collections.emptyMap());
     }
 
     private void addHeader(StringBuilder builder, String headerName) {

@@ -32,6 +32,7 @@ class KafkaProducerMetricsTest {
     private static final String TXN_COMMIT_TIME_TOTAL = "txn-commit-time-ns-total";
     private static final String TXN_ABORT_TIME_TOTAL = "txn-abort-time-ns-total";
     private static final String TXN_SEND_OFFSETS_TIME_TOTAL = "txn-send-offsets-time-ns-total";
+    private static final String METADATA_WAIT_TIME_TOTAL = "metadata-wait-time-ns-total";
 
     private final Metrics metrics = new Metrics();
     private final KafkaProducerMetrics producerMetrics = new KafkaProducerMetrics(metrics);
@@ -91,6 +92,15 @@ class KafkaProducerMetricsTest {
     }
 
     @Test
+    public void shouldRecordMetadataWaitTime() {
+        // When:
+        producerMetrics.recordMetadataWait(METRIC_VALUE);
+
+        // Then:
+        assertMetricValue(METADATA_WAIT_TIME_TOTAL);
+    }
+
+    @Test
     public void shouldRemoveMetricsOnClose() {
         // When:
         producerMetrics.close();
@@ -102,6 +112,7 @@ class KafkaProducerMetricsTest {
         assertMetricRemoved(TXN_COMMIT_TIME_TOTAL);
         assertMetricRemoved(TXN_ABORT_TIME_TOTAL);
         assertMetricRemoved(TXN_SEND_OFFSETS_TIME_TOTAL);
+        assertMetricRemoved(METADATA_WAIT_TIME_TOTAL);
     }
 
     private void assertMetricRemoved(final String name) {

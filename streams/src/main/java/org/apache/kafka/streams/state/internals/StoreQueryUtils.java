@@ -142,7 +142,9 @@ public final class StoreQueryUtils {
 
         if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
             final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-            position.withComponent(meta.topic(), meta.partition(), meta.offset());
+            if (meta.topic() != null) {
+                position.withComponent(meta.topic(), meta.partition(), meta.offset());
+            }
         }
     }
 

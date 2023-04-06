@@ -91,7 +91,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                     droppedRecordsSensor.record();
                     return;
                 }
-                if (record.value().getVersion() != SubscriptionWrapper.CURRENT_VERSION) {
+                if (record.value().getVersion() > SubscriptionWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionWrapper. Need to ensure that there is compatibility
                     //with previous versions to enable rolling upgrades. Must develop a strategy for upgrading
                     //from older SubscriptionWrapper versions to newer versions.

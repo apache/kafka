@@ -15,17 +15,17 @@
  * limitations under the License.
  */
 
-package integration.kafka.server
+package kafka.server
 
 import java.time.Duration
 import java.util.Arrays.asList
 
-import kafka.api.{ApiVersion, KAFKA_2_7_IV0, KAFKA_3_1_IV0}
-import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_3_1_IV0}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -37,8 +37,8 @@ class FetchRequestTestDowngrade extends BaseRequestTest {
     override def generateConfigs: Seq[KafkaConfig] = {
         // Controller should start with newer IBP and downgrade to the older one.
         Seq(
-            createConfig(0, KAFKA_3_1_IV0),
-            createConfig(1, KAFKA_2_7_IV0)
+            createConfig(0, IBP_3_1_IV0),
+            createConfig(1, IBP_2_7_IV0)
         )
     }
 
@@ -72,7 +72,7 @@ class FetchRequestTestDowngrade extends BaseRequestTest {
         }
     }
 
-    private def createConfig(nodeId: Int, interBrokerVersion: ApiVersion): KafkaConfig = {
+    private def createConfig(nodeId: Int, interBrokerVersion: MetadataVersion): KafkaConfig = {
         val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
         props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
         KafkaConfig.fromProps(props)

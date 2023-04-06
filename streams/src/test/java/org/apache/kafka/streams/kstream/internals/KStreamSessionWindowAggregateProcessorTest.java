@@ -22,11 +22,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -37,12 +37,14 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -51,13 +53,18 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -69,29 +76,39 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-
+@RunWith(Parameterized.class)
 public class KStreamSessionWindowAggregateProcessorTest {
 
     private static final long GAP_MS = 5 * 60 * 1000L;
     private static final String STORE_NAME = "session-store";
 
+    private final MockTime time = new MockTime();
+    private final Metrics metrics = new Metrics();
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time);
     private final String threadId = Thread.currentThread().getName();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
-    private final KStreamSessionWindowAggregate<String, String, Long> sessionAggregator =
-        new KStreamSessionWindowAggregate<>(
-            SessionWindows.ofInactivityGapWithNoGrace(ofMillis(GAP_MS)),
-            STORE_NAME,
-            initializer,
-            aggregator,
-            sessionMerger);
-
     private final List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
-    private final Processor<String, String, Windowed<String>, Change<Long>> processor = sessionAggregator.get();
-    private SessionStore<String, Long> sessionStore;
+
     private InternalMockProcessorContext<Windowed<String>, Change<Long>> context;
-    private final Metrics metrics = new Metrics();
+    private KStreamSessionWindowAggregate<String, String, Long> sessionAggregator;
+    private Processor<String, String, Windowed<String>, Change<Long>> processor;
+    private SessionStore<String, Long> sessionStore;
+
+    @Parameterized.Parameter
+    public EmitStrategy.StrategyType type;
+
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<Object[]> data() {
+        return asList(new Object[][] {
+            {EmitStrategy.StrategyType.ON_WINDOW_UPDATE},
+            {EmitStrategy.StrategyType.ON_WINDOW_CLOSE}
+        });
+    }
+
+    private EmitStrategy emitStrategy;
+    private boolean emitFinal;
 
     @Before
     public void setup() {
@@ -99,23 +116,44 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void setup(final boolean enableCache) {
-        final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
+        // Always process
+        final Properties prop = StreamsTestUtils.getStreamsConfig();
+        prop.put(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
+        final StreamsConfig config = new StreamsConfig(prop);
+
         context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
             streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            config,
             MockRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
-            Time.SYSTEM
+            time
         ) {
             @Override
             public <K extends Windowed<String>, V extends Change<Long>> void forward(final Record<K, V> record) {
                 results.add(new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()));
             }
         };
+
+
+        emitFinal = type.equals(EmitStrategy.StrategyType.ON_WINDOW_CLOSE);
+        emitStrategy = EmitStrategy.StrategyType.forType(type);
+
+        sessionAggregator = new KStreamSessionWindowAggregate<>(
+            SessionWindows.ofInactivityGapWithNoGrace(ofMillis(GAP_MS)),
+            STORE_NAME,
+            emitStrategy,
+            initializer,
+            aggregator,
+            sessionMerger);
+
+        if (processor != null) {
+            processor.close();
+        }
+        processor = sessionAggregator.get();
+
         // Set initial timestamp for CachingSessionStore to prepare entry from as default
         // InternalMockProcessorContext#timestamp returns -1.
         context.setTime(0L);
@@ -126,14 +164,14 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void initStore(final boolean enableCaching) {
-        final StoreBuilder<SessionStore<String, Long>> storeBuilder =
-            Stores.sessionStoreBuilder(
-                Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),
-                Serdes.String(),
-                Serdes.Long())
+        final SessionBytesStoreSupplier supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
+            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, GAP_MS * 3, true) :
+            Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3));
+
+        final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(supplier, Serdes.String(), Serdes.Long())
             .withLoggingDisabled();
 
-        if (enableCaching) {
+        if (enableCaching && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
             storeBuilder.withCachingEnabled();
         }
 
@@ -147,6 +185,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @After
     public void closeStore() {
         sessionStore.close();
+        processor.close();
     }
 
     @Test
@@ -198,35 +237,51 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @Test
     public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap() {
         final String sessionId = "mel";
-        long time = 0;
-        processor.process(new Record<>(sessionId, "first", time));
-        final long time1 = time += GAP_MS + 1;
-        processor.process(new Record<>(sessionId, "second", time1));
-        processor.process(new Record<>(sessionId, "second", time1));
-        final long time2 = time += GAP_MS + 1;
-        processor.process(new Record<>(sessionId, "third", time2));
-        processor.process(new Record<>(sessionId, "third", time2));
-        processor.process(new Record<>(sessionId, "third", time2));
+        long now = 0;
+        processor.process(new Record<>(sessionId, "first", now));
+        now += GAP_MS + 1;
+        processor.process(new Record<>(sessionId, "second", now));
+        processor.process(new Record<>(sessionId, "second", now));
+        now += GAP_MS + 1;
+        processor.process(new Record<>(sessionId, "third", now));
+        processor.process(new Record<>(sessionId, "third", now));
+        processor.process(new Record<>(sessionId, "third", now));
 
         sessionStore.flush();
-        assertEquals(
-            Arrays.asList(
-                new KeyValueTimestamp<>(
-                    new Windowed<>(sessionId, new SessionWindow(0, 0)),
-                    new Change<>(1L, null),
-                    0L),
-                new KeyValueTimestamp<>(
-                    new Windowed<>(sessionId, new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
-                    new Change<>(2L, null),
-                    GAP_MS + 1),
-                new KeyValueTimestamp<>(
-                    new Windowed<>(sessionId, new SessionWindow(time, time)),
-                    new Change<>(3L, null),
-                    time)
-            ),
-            results
-        );
 
+        if (emitFinal) {
+            assertEquals(
+                Arrays.asList(
+                    new KeyValueTimestamp<>(
+                        new Windowed<>(sessionId, new SessionWindow(0, 0)),
+                        new Change<>(1L, null),
+                        0L),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>(sessionId, new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
+                        new Change<>(2L, null),
+                        GAP_MS + 1)
+                ),
+                results
+            );
+        } else {
+            assertEquals(
+                Arrays.asList(
+                    new KeyValueTimestamp<>(
+                        new Windowed<>(sessionId, new SessionWindow(0, 0)),
+                        new Change<>(1L, null),
+                        0L),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>(sessionId, new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
+                        new Change<>(2L, null),
+                        GAP_MS + 1),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>(sessionId, new SessionWindow(now, now)),
+                        new Change<>(3L, null),
+                        now)
+                ),
+                results
+            );
+        }
     }
 
     @Test
@@ -264,8 +319,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         sessionStore.flush();
 
-        assertEquals(
-            Arrays.asList(
+        if (emitFinal) {
+            assertEquals(Arrays.asList(
                 new KeyValueTimestamp<>(
                     new Windowed<>("a", new SessionWindow(0, 0)),
                     new Change<>(1L, null),
@@ -281,22 +336,44 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 new KeyValueTimestamp<>(
                     new Windowed<>("d", new SessionWindow(0, GAP_MS / 2)),
                     new Change<>(2L, null),
-                    GAP_MS / 2),
-                new KeyValueTimestamp<>(
-                    new Windowed<>("b", new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
-                    new Change<>(1L, null),
-                    GAP_MS + 1),
-                new KeyValueTimestamp<>(
-                    new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1 + GAP_MS / 2)),
-                    new Change<>(2L, null),
-                    GAP_MS + 1 + GAP_MS / 2),
-                new KeyValueTimestamp<>(new Windowed<>(
-                    "c",
-                    new SessionWindow(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null),
-                    GAP_MS + 1 + GAP_MS / 2)
-            ),
-            results
-        );
+                    GAP_MS / 2)
+                ),
+                results);
+        } else {
+            assertEquals(
+                Arrays.asList(
+                    new KeyValueTimestamp<>(
+                        new Windowed<>("a", new SessionWindow(0, 0)),
+                        new Change<>(1L, null),
+                        0L),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>("b", new SessionWindow(0, 0)),
+                        new Change<>(1L, null),
+                        0L),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>("c", new SessionWindow(0, 0)),
+                        new Change<>(1L, null),
+                       0L),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>("d", new SessionWindow(0, GAP_MS / 2)),
+                        new Change<>(2L, null),
+                        GAP_MS / 2),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>("b", new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
+                        new Change<>(1L, null),
+                        GAP_MS + 1),
+                    new KeyValueTimestamp<>(
+                        new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1 + GAP_MS / 2)),
+                        new Change<>(2L, null),
+                        GAP_MS + 1 + GAP_MS / 2),
+                    new KeyValueTimestamp<>(new Windowed<>(
+                        "c",
+                        new SessionWindow(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null),
+                        GAP_MS + 1 + GAP_MS / 2)
+                    ),
+                    results
+            );
+        }
     }
 
     @Test
@@ -314,6 +391,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldImmediatelyForwardNewSessionWhenNonCachedStore() {
+        if (emitFinal)
+            return;
+
         initStore(false);
         processor.init(context);
 
@@ -342,6 +422,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldImmediatelyForwardRemovedSessionsWhenMerging() {
+        if (emitFinal)
+            return;
+
         initStore(false);
         processor.init(context);
 
@@ -399,6 +482,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(0L)),
             STORE_NAME,
+            EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
             sessionMerger
@@ -464,6 +548,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1L)),
             STORE_NAME,
+            EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
             sessionMerger

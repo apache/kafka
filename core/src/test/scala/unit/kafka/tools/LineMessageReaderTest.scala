@@ -20,7 +20,7 @@ package kafka.tools
 import kafka.tools.ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows}
 import org.junit.jupiter.api.Test
 
 import java.io.ByteArrayInputStream
@@ -124,10 +124,11 @@ class LineMessageReaderTest {
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1\tkey0\tvalue0\n" +
       "headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1"
 
-    lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
-    lineReader.readMessage()
+    lineReader.configure(defaultTestProps.asInstanceOf[java.util.Map[String, _]])
+    val iter = lineReader.readRecords(new ByteArrayInputStream(input.getBytes))
+    iter.next()
 
-    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
+    val expectedException = assertThrows(classOf[KafkaException], () => iter.next())
 
     assertEquals(
       "No key separator found on line number 2: 'headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1'",
@@ -139,9 +140,10 @@ class LineMessageReaderTest {
   def testMissingHeaderKeySeparator(): Unit = {
     val lineReader = new LineMessageReader()
     val input = "key[MISSING-DELIMITER]val\tkey0\tvalue0\n"
-    lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
+    lineReader.configure(defaultTestProps.asInstanceOf[java.util.Map[String, _]])
+    val iter = lineReader.readRecords(new ByteArrayInputStream(input.getBytes))
 
-    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
+    val expectedException = assertThrows(classOf[KafkaException], () => iter.next())
 
     assertEquals(
       "No header key separator found in pair 'key[MISSING-DELIMITER]val' on line number 1",
@@ -166,7 +168,7 @@ class LineMessageReaderTest {
   }
 
   private def assertThrowsOnInvalidPatternConfig(props: Properties, expectedMessage: String): Unit = {
-    val exception = assertThrows(classOf[KafkaException], () => new LineMessageReader().init(null, props))
+    val exception = assertThrows(classOf[KafkaException], () => new LineMessageReader().configure(props.asInstanceOf[java.util.Map[String, _]]))
     assertEquals(
       expectedMessage,
       exception.getMessage
@@ -273,17 +275,18 @@ class LineMessageReaderTest {
     // If the null marker is not set
     val lineReader = new LineMessageReader()
     props.remove("null.marker")
-    lineReader.init(new ByteArrayInputStream(input.getBytes), props)
-    assertRecordEquals(record("<NULL>", "value", List("h0" -> "v0", header)), lineReader.readMessage())
+    lineReader.configure(props.asInstanceOf[java.util.Map[String, _]])
+    val iter = lineReader.readRecords(new ByteArrayInputStream(input.getBytes))
+    assertRecordEquals(record("<NULL>", "value", List("h0" -> "v0", header)), iter.next())
     // line 2 is not valid anymore
-    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
+    val expectedException = assertThrows(classOf[KafkaException], () => iter.next())
     assertEquals(
       "No header key separator found in pair '<NULL>' on line number 2",
       expectedException.getMessage
     )
-    assertRecordEquals(record("<NULL>", "<NULL>", List("h0" -> "", header)), lineReader.readMessage())
-    assertRecordEquals(record("key", "<NULL>", List("h0" -> "<NULL>", header)), lineReader.readMessage())
-    assertRecordEquals(record("key", "<NULL>", List("h0" -> "<NULL>", "h1" -> "<NULL>value")), lineReader.readMessage())
+    assertRecordEquals(record("<NULL>", "<NULL>", List("h0" -> "", header)), iter.next())
+    assertRecordEquals(record("key", "<NULL>", List("h0" -> "<NULL>", header)), iter.next())
+    assertRecordEquals(record("key", "<NULL>", List("h0" -> "<NULL>", "h1" -> "<NULL>value")), iter.next())
   }
 
   @Test
@@ -293,8 +296,9 @@ class LineMessageReaderTest {
     val props = defaultTestProps
     props.put("null.marker", "<NULL>")
     val lineReader = new LineMessageReader()
-    lineReader.init(new ByteArrayInputStream(input.getBytes), props)
-    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
+    lineReader.configure(props.asInstanceOf[java.util.Map[String, _]])
+    val iter = lineReader.readRecords(new ByteArrayInputStream(input.getBytes))
+    val expectedException = assertThrows(classOf[KafkaException], () => iter.next())
     assertEquals(
       "Header keys should not be equal to the null marker '<NULL>' as they can't be null",
       expectedException.getMessage
@@ -324,8 +328,11 @@ class LineMessageReaderTest {
 
   def runTest(props: Properties, input: String, expectedRecords: ProducerRecord[String, String]*): Unit = {
     val lineReader = new LineMessageReader
-    lineReader.init(new ByteArrayInputStream(input.getBytes), props)
-    expectedRecords.foreach(r => assertRecordEquals(r, lineReader.readMessage()))
+    lineReader.configure(props.asInstanceOf[java.util.Map[String, _]])
+    val iter = lineReader.readRecords(new ByteArrayInputStream(input.getBytes))
+    expectedRecords.foreach(r => assertRecordEquals(r, iter.next()))
+    assertFalse(iter.hasNext)
+    assertThrows(classOf[NoSuchElementException], () => iter.next())
   }
 
   //  The equality method of ProducerRecord compares memory references for the header iterator, this is why this custom equality check is used.

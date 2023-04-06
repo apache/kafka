@@ -194,6 +194,48 @@ it is important to keep configuration consistent across flows to the same
 target cluster. In most cases, your entire organization should use a single
 MM2 configuration file.
 
+### Exactly-once
+Exactly-once semantics are supported for dedicated MM2 clusters as of version 3.5.0.
+
+For new MM2 clusters, set the `exactly.once.source.support` property to `enabled` for
+all targeted Kafka clusters that should be written to with exactly-once semantics. For example,
+to enable exactly-once for writes to cluster `B`, add the following to your MM2 config file:
+
+    B.exactly.once.source.support = enabled
+
+For existing MM2 clusters, a two-step upgrade is necessary. Instead of immediately
+setting the `exactly.once.source.support` property to `enabled`, first set it to `preparing` on
+all nodes in the cluster. Once this is complete, it can be set to `enabled` on all nodes in the
+cluster, in a second round of restarts.
+
+In either case, it is also necessary to enable intra-cluster communication between your MM2
+nodes, as described in
+[KIP-710](https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters).
+To do this, the `dedicated.mode.enable.internal.rest` property must be set to `true` in your MM2 config.
+In addition, many of the REST-related
+[configuration properties available for Kafka Connect](https://kafka.apache.org/documentation/#connectconfigs)
+can be specified in your MM2 config. For example, to enable intra-cluster communication in your MM2
+cluster with each node listening on port 8080 of their local machine, add this to your config file:
+
+    dedicated.mode.enable.internal.rest = true
+    listeners = http://localhost:8080
+
+**Note that, if intra-cluster communication is enabled in production environments, it is highly
+recommended to secure the REST servers brought up by each MM2 node. See the configuration
+properties for Kafka Connect for information on how this can be accomplished.**
+
+It is also recommended to filter records from aborted transactions out from replicated data
+when running MM2. To do this, ensure that the consumer used to read from source clusters is
+configured with `isolation.level` set to `read_committed`. If replicating data from cluster `A`,
+this can  be done for all replication flows that read from that cluster by adding the following
+to your MM2 config:
+
+    A.consumer.isolation.level = read_committed
+
+As a final note, under the hood, MM2 uses Kafka Connect source connectors to replicate data.
+For more information on exactly-once support for these kinds of connectors, see the
+[relevant docs page](https://kafka.apache.org/documentation/#connect_exactlyoncesource).
+
 ## Remote topics
 
 MM2 employs a naming convention to ensure that records from different

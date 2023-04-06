@@ -19,11 +19,11 @@ package org.apache.kafka.streams.scala.kstream
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig
 import org.apache.kafka.streams.kstream.{
   Named,
-  SlidingWindows,
   SessionWindows,
+  SlidingWindows,
+  Suppressed => JSuppressed,
   TimeWindows,
-  Windowed,
-  Suppressed => JSuppressed
+  Windowed
 }
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
@@ -495,5 +495,43 @@ class KTableTest extends TestDriver {
     val joinNodeRight = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(7)
     assertTrue(joinNodeLeft.name().contains("my-name"))
     assertTrue(joinNodeRight.name().contains("my-name"))
+  }
+
+  @Test
+  def testMapValuesWithValueMapperWithMaterialized(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val stateStore = "store"
+    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
+
+    val table = builder.stream[String, String](sourceTopic).toTable
+    table.mapValues(value => value.length.toLong, materialized)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+
+    testInput.pipeInput("1", "topic1value1")
+    assertEquals(12, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
+
+    testDriver.close()
+  }
+
+  @Test
+  def testMapValuesWithValueMapperWithKeyAndWithMaterialized(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val stateStore = "store"
+    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
+
+    val table = builder.stream[String, String](sourceTopic).toTable
+    table.mapValues((key, value) => key.length + value.length.toLong, materialized)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+
+    testInput.pipeInput("1", "topic1value1")
+    assertEquals(13, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
+
+    testDriver.close()
   }
 }

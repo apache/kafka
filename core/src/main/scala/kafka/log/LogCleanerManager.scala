@@ -21,17 +21,18 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.common.{KafkaException, LogCleaningAbortedException}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.server.LogDirFailureChannel
+import kafka.common.LogCleaningAbortedException
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{Iterable, Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
@@ -60,11 +61,12 @@ private[log] class LogCleaningException(val log: UnifiedLog,
   */
 private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, UnifiedLog],
-                                     val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+                                     val logDirFailureChannel: LogDirFailureChannel) extends Logging {
   import LogCleanerManager._
 
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  protected override def loggerName = classOf[LogCleaner].getName
+  protected override def loggerName: String = classOf[LogCleaner].getName
 
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
@@ -88,15 +90,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
   for (dir <- logDirs) {
-    newGauge("uncleanable-partitions-count",
+    metricsGroup.newGauge("uncleanable-partitions-count",
       () => inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) },
-      Map("logDirectory" -> dir.getAbsolutePath)
+      Map("logDirectory" -> dir.getAbsolutePath).asJava
     )
   }
 
   /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
   for (dir <- logDirs) {
-    newGauge("uncleanable-bytes",
+    metricsGroup.newGauge("uncleanable-bytes",
       () => inLock(lock) {
         uncleanablePartitions.get(dir.getAbsolutePath) match {
           case Some(partitions) =>
@@ -114,17 +116,17 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           case None => 0
         }
       },
-      Map("logDirectory" -> dir.getAbsolutePath)
+      Map("logDirectory" -> dir.getAbsolutePath).asJava
     )
   }
 
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
   @volatile private var dirtiestLogCleanableRatio = 0.0
-  newGauge("max-dirty-percent", () => (100 * dirtiestLogCleanableRatio).toInt)
+  metricsGroup.newGauge("max-dirty-percent", () => (100 * dirtiestLogCleanableRatio).toInt)
 
   /* a gauge for tracking the time since the last log cleaner run, in milli seconds */
   @volatile private var timeOfLastRun: Long = Time.SYSTEM.milliseconds
-  newGauge("time-since-last-run-ms", () => Time.SYSTEM.milliseconds - timeOfLastRun)
+  metricsGroup.newGauge("time-since-last-run-ms", () => Time.SYSTEM.milliseconds - timeOfLastRun)
 
   /**
    * @return the position processed for all logs.
@@ -400,11 +402,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       try {
         checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
           case Some(offset) =>
-            debug(s"Removing the partition offset data in checkpoint file for '${topicPartition}' " +
+            debug(s"Removing the partition offset data in checkpoint file for '$topicPartition' " +
               s"from ${sourceLogDir.getAbsoluteFile} directory.")
             updateCheckpoints(sourceLogDir, partitionToRemove = Option(topicPartition))
 
-            debug(s"Adding the partition offset data in checkpoint file for '${topicPartition}' " +
+            debug(s"Adding the partition offset data in checkpoint file for '$topicPartition' " +
               s"to ${destLogDir.getAbsoluteFile} directory.")
             updateCheckpoints(destLogDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
           case None =>
@@ -525,15 +527,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       // Remove deleted partitions
       uncleanablePartitions.values.foreach {
         partitions =>
-          val partitionsToRemove = partitions.filterNot(logs.contains(_)).toList
-          partitionsToRemove.foreach { partitions.remove(_) }
+          val partitionsToRemove = partitions.filterNot(logs.contains).toList
+          partitionsToRemove.foreach { partitions.remove }
       }
 
       // Remove entries with empty partition set.
       val logDirsToRemove = uncleanablePartitions.filter {
         case (_, partitions) => partitions.isEmpty
-      }.map { _._1}.toList
-      logDirsToRemove.foreach { uncleanablePartitions.remove(_) }
+      }.keys.toList
+      logDirsToRemove.foreach { uncleanablePartitions.remove }
     }
   }
 }

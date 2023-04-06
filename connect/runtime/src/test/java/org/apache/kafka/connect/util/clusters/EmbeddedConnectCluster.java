@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -54,7 +55,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.LISTENERS_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
@@ -94,11 +95,12 @@ public class EmbeddedConnectCluster {
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
-                                   boolean maskExitProcedures) {
+                                   boolean maskExitProcedures,
+                                   Map<String, String> additionalKafkaClusterClientConfigs) {
         this.workerProps = workerProps;
         this.connectClusterName = name;
         this.numBrokers = numBrokers;
-        this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
+        this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps, additionalKafkaClusterClientConfigs);
         this.connectCluster = new LinkedHashSet<>();
         this.numInitialWorkers = numWorkers;
         this.maskExitProcedures = maskExitProcedures;
@@ -220,6 +222,16 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Set a new timeout for REST requests to each worker in the cluster. Useful if a request
+     * is expected to block, since the time spent awaiting that request can be reduced
+     * and test runtime bloat can be avoided.
+     * @param requestTimeoutMs the new timeout in milliseconds; must be positive
+     */
+    public void requestTimeout(long requestTimeoutMs) {
+        connectCluster.forEach(worker -> worker.requestTimeout(requestTimeoutMs));
+    }
+
+    /**
      * Determine whether the Connect cluster has any workers running.
      *
      * @return true if any worker is running, or false otherwise
@@ -250,7 +262,7 @@ public class EmbeddedConnectCluster {
         putIfAbsent(workerProps, OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
         putIfAbsent(workerProps, CONFIG_TOPIC_CONFIG, "connect-config-topic-" + connectClusterName);
         putIfAbsent(workerProps, CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
-        putIfAbsent(workerProps, STATUS_STORAGE_TOPIC_CONFIG, "connect-storage-topic-" + connectClusterName);
+        putIfAbsent(workerProps, STATUS_STORAGE_TOPIC_CONFIG, "connect-status-topic-" + connectClusterName);
         putIfAbsent(workerProps, STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
         putIfAbsent(workerProps, KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
         putIfAbsent(workerProps, VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
@@ -560,6 +572,27 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Get the offsets for a connector via the <strong><em>GET /connectors/{connector}/offsets</em></strong> endpoint
+     * @param connectorName name of the connector
+     * @return the connector's offsets
+     */
+    public ConnectorOffsets connectorOffsets(String connectorName) {
+        String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
+        Response response = requestGet(url);
+        ObjectMapper mapper = new ObjectMapper();
+
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                return mapper.readerFor(ConnectorOffsets.class).readValue(responseToString(response));
+            }
+        } catch (IOException e) {
+            throw new ConnectException("Could not not parse connector offsets", e);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not fetch connector offsets. Error response: " + responseToString(response));
+    }
+
+    /**
      * Get the full URL of the admin endpoint that corresponds to the given REST resource
      *
      * @param resource the resource under the worker's admin endpoint
@@ -798,6 +831,8 @@ public class EmbeddedConnectCluster {
         private Properties brokerProps = DEFAULT_BROKER_CONFIG;
         private boolean maskExitProcedures = true;
 
+        private Map<String, String> clientConfigs = new HashMap<>();
+
         public Builder name(String name) {
             this.name = name;
             return this;
@@ -823,6 +858,11 @@ public class EmbeddedConnectCluster {
             return this;
         }
 
+        public Builder clientConfigs(Map<String, String> clientConfigs) {
+            this.clientConfigs.putAll(clientConfigs);
+            return this;
+        }
+
         /**
          * In the event of ungraceful shutdown, embedded clusters call exit or halt with non-zero
          * exit statuses. Exiting with a non-zero status forces a test to fail and is hard to
@@ -842,7 +882,7 @@ public class EmbeddedConnectCluster {
 
         public EmbeddedConnectCluster build() {
             return new EmbeddedConnectCluster(name, workerProps, numWorkers, numBrokers,
-                    brokerProps, maskExitProcedures);
+                    brokerProps, maskExitProcedures, clientConfigs);
         }
     }
 

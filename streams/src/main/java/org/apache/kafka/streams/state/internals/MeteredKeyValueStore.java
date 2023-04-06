@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
@@ -32,7 +31,6 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.KeyQuery;
@@ -83,14 +81,14 @@ public class MeteredKeyValueStore<K, V>
     protected Sensor putSensor;
     private Sensor putIfAbsentSensor;
     protected Sensor getSensor;
-    private Sensor deleteSensor;
+    protected Sensor deleteSensor;
     private Sensor putAllSensor;
     private Sensor allSensor;
     private Sensor rangeSensor;
     private Sensor prefixScanSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
-    private InternalProcessorContext context;
+    protected InternalProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
@@ -173,12 +171,9 @@ public class MeteredKeyValueStore<K, V>
     @Deprecated
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
+            changelogTopic,
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
@@ -186,27 +181,12 @@ public class MeteredKeyValueStore<K, V>
 
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
+            changelogTopic,
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
-    }
-
-    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
-        if (configs == null) {
-            return applicationId;
-        } else {
-            return StreamsConfig.InternalConfig.getString(
-                configs,
-                StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-                applicationId
-            );
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -266,9 +246,9 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
+    protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                               final PositionBound positionBound,
+                                               final QueryConfig config) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
@@ -309,9 +289,9 @@ public class MeteredKeyValueStore<K, V>
 
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                           final PositionBound positionBound,
-                                           final QueryConfig config) {
+    protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =

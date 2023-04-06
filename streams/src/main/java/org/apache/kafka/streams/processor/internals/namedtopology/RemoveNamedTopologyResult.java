@@ -18,30 +18,38 @@ package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.LogContext;
 
+import org.slf4j.Logger;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RemoveNamedTopologyResult {
-    private final KafkaFuture<Void> removeTopologyFuture;
-    private final KafkaFuture<Void> deleteOffsetsResult;
+    private final KafkaFutureImpl<Void> removeTopologyFuture;
+    private final KafkaFutureImpl<Void> resetOffsetsFuture;
 
-    public RemoveNamedTopologyResult(final KafkaFuture<Void> removeTopologyFuture, final KafkaFuture<Void> deleteOffsetsResult) {
+    public RemoveNamedTopologyResult(final KafkaFutureImpl<Void> removeTopologyFuture) {
+
+        Objects.requireNonNull(removeTopologyFuture);
         this.removeTopologyFuture = removeTopologyFuture;
-        this.deleteOffsetsResult = deleteOffsetsResult;
+        this.resetOffsetsFuture = null;
     }
 
-    public RemoveNamedTopologyResult(final KafkaFuture<Void> removeTopologyFuture) {
-        this(removeTopologyFuture, null);
+    public RemoveNamedTopologyResult(final KafkaFutureImpl<Void> removeTopologyFuture,
+                                     final String removedTopology,
+                                     final Runnable resetOffsets) {
         Objects.requireNonNull(removeTopologyFuture);
+        this.removeTopologyFuture = removeTopologyFuture;
+        resetOffsetsFuture = new ResetOffsetsFuture(removedTopology, removeTopologyFuture, resetOffsets);
     }
 
     public KafkaFuture<Void> removeTopologyFuture() {
         return removeTopologyFuture;
     }
 
-    public KafkaFuture<Void> deleteOffsetsResult() {
-        return deleteOffsetsResult;
+    public KafkaFuture<Void> resetOffsetsFuture() {
+        return resetOffsetsFuture;
     }
 
     /**
@@ -52,34 +60,54 @@ public class RemoveNamedTopologyResult {
      * successfully completed their corresponding {@link KafkaFuture}.
      */
     public final KafkaFuture<Void> all() {
-        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+        if (resetOffsetsFuture == null) {
+            return removeTopologyFuture;
+        } else {
+            return resetOffsetsFuture;
+        }
+    }
 
-        removeTopologyFuture.whenComplete((ignore, throwable) -> {
-            if (throwable != null) {
-                result.completeExceptionally(throwable);
-            } else {
-                if (deleteOffsetsResult == null) {
-                    result.complete(null);
-                }
+    private static class ResetOffsetsFuture extends KafkaFutureImpl<Void> {
+        private final Logger log;
+
+        final Runnable resetOffsets;
+        final KafkaFutureImpl<Void> removeTopologyFuture;
+
+        public ResetOffsetsFuture(final String removedTopology,
+                                  final KafkaFutureImpl<Void> removeTopologyFuture,
+                                  final Runnable resetOffsets) {
+            final LogContext logContext = new LogContext(String.format("topology [%s]", removedTopology));
+            this.log = logContext.logger(this.getClass());
+
+            this.resetOffsets = resetOffsets;
+            this.removeTopologyFuture = removeTopologyFuture;
+        }
+
+        @Override
+        public Void get() throws ExecutionException {
+            final AtomicReference<Throwable> firstError = new AtomicReference<>(null);
+            try {
+                removeTopologyFuture.get();
+            } catch (final InterruptedException | ExecutionException e) {
+                final Throwable error = e.getCause() != null ? e.getCause() : e;
+                log.error("Removing named topology failed. Offset reset will still be attempted.", error);
+                firstError.compareAndSet(e, null);
             }
-        });
+            try {
+                resetOffsets.run();
+            } catch (final Throwable e) {
+                log.error("Failed to reset offsets, you should do so manually if you want to add new topologies"
+                              + "in the future that consume from the same input topics");
+                firstError.compareAndSet(e, null);
+            }
 
-        if (deleteOffsetsResult != null) {
-            deleteOffsetsResult.whenComplete((ignore, throwable) -> {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else {
-                    try {
-                        removeTopologyFuture.get();
-                    } catch (final InterruptedException | ExecutionException e) {
-                        result.completeExceptionally(e);
-                    }
-                    result.complete(null);
-                }
-            });
+            if (firstError.get() != null) {
+                throw new ExecutionException(firstError.get());
+            } else {
+                return null;
+            }
         }
 
 
-        return result;
     }
 }

@@ -38,8 +38,9 @@ import org.junit.jupiter.api.Test
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
-  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
+  val controllerPrincipalName = "admin"
 
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val saslContext = context.asInstanceOf[SaslAuthenticationContext]
 
@@ -50,7 +51,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
 
       saslContext.server.getAuthorizationID match {
         case KafkaPlainAdmin =>
-          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
         case KafkaPlainUser =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
         case _ =>
@@ -70,13 +71,12 @@ object SaslPlainSslEndToEndAuthorizationTest {
     def handle(callbacks: Array[Callback]): Unit = {
       var username: String = null
       for (callback <- callbacks) {
-        if (callback.isInstanceOf[NameCallback])
-          username = callback.asInstanceOf[NameCallback].getDefaultName
-        else if (callback.isInstanceOf[PlainAuthenticateCallback]) {
-          val plainCallback = callback.asInstanceOf[PlainAuthenticateCallback]
-          plainCallback.authenticated(Credentials.allUsers(username) == new String(plainCallback.password))
-        } else
-          throw new UnsupportedCallbackException(callback)
+        callback match {
+          case nameCallback: NameCallback => username = nameCallback.getDefaultName
+          case plainCallback: PlainAuthenticateCallback =>
+            plainCallback.authenticated(Credentials.allUsers(username) == new String(plainCallback.password))
+          case _ => throw new UnsupportedCallbackException(callback)
+        }
       }
     }
     def close(): Unit = {}
@@ -85,16 +85,16 @@ object SaslPlainSslEndToEndAuthorizationTest {
   class TestClientCallbackHandler extends AuthenticateCallbackHandler {
     def configure(configs: java.util.Map[String, _], saslMechanism: String, jaasConfigEntries: java.util.List[AppConfigurationEntry]): Unit = {}
     def handle(callbacks: Array[Callback]): Unit = {
-      val subject = Subject.getSubject(AccessController.getContext())
+      val subject = Subject.getSubject(AccessController.getContext)
       val username = subject.getPublicCredentials(classOf[String]).iterator().next()
       for (callback <- callbacks) {
-        if (callback.isInstanceOf[NameCallback])
-          callback.asInstanceOf[NameCallback].setName(username)
-        else if (callback.isInstanceOf[PasswordCallback]) {
-          if (username == KafkaPlainUser || username == KafkaPlainAdmin)
-            callback.asInstanceOf[PasswordCallback].setPassword(Credentials.allUsers(username).toCharArray)
-        } else
-          throw new UnsupportedCallbackException(callback)
+        callback match {
+          case nameCallback: NameCallback => nameCallback.setName(username)
+          case passwordCallback: PasswordCallback =>
+            if (username == KafkaPlainUser || username == KafkaPlainAdmin)
+              passwordCallback.setPassword(Credentials.allUsers(username).toCharArray)
+          case _ => throw new UnsupportedCallbackException(callback)
+        }
       }
     }
     def close(): Unit = {}
@@ -118,16 +118,13 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.adminClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
-  private val plainLogin = s"org.apache.kafka.common.security.plain.PlainLoginModule username=$KafkaPlainUser required;"
-  this.producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
+  this.superuserClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
 
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
 
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
-  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
 
   override def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                             kafkaClientSaslMechanism: Option[String],

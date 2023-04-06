@@ -15,15 +15,16 @@
  * limitations under the License.
  */
 
-package integration.kafka.server
+package kafka.server
 
 import java.time.Duration
 import java.util.Arrays.asList
-import kafka.api.{ApiVersion, DefaultApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV1, KAFKA_3_1_IV0}
-import kafka.server.{BaseRequestTest, KafkaConfig}
+
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_2_8_IV1, IBP_3_1_IV0}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -35,26 +36,26 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
   override def generateConfigs: Seq[KafkaConfig] = {
     // Brokers should be at most 2 different IBP versions, but for more test coverage, three are used here.
     Seq(
-      createConfig(0, KAFKA_2_7_IV0),
-      createConfig(1, KAFKA_2_8_IV1),
-      createConfig(2, KAFKA_3_1_IV0)
+      createConfig(0, IBP_2_7_IV0),
+      createConfig(1, IBP_2_8_IV1),
+      createConfig(2, IBP_3_1_IV0)
     )
   }
 
   @Test
   def testControllerOldIBP(): Unit = {
-    // Ensure controller version < KAFKA_2_8_IV1, and then create a topic where leader of partition 0 is not the controller,
+    // Ensure controller version < IBP_2_8_IV1, and then create a topic where leader of partition 0 is not the controller,
     // leader of partition 1 is.
-    testControllerWithGivenIBP(KAFKA_2_7_IV0, 0)
+    testControllerWithGivenIBP(IBP_2_7_IV0, 0)
   }
 
   @Test
   def testControllerNewIBP(): Unit = {
-    // Ensure controller version = KAFKA_3_1_IV0, and then create a topic where leader of partition 1 is the old version.
-    testControllerWithGivenIBP(KAFKA_3_1_IV0, 2)
+    // Ensure controller version = IBP_3_1_IV0, and then create a topic where leader of partition 1 is the old version.
+    testControllerWithGivenIBP(IBP_3_1_IV0, 2)
   }
 
-  def testControllerWithGivenIBP(version: DefaultApiVersion, controllerBroker: Int): Unit = {
+  def testControllerWithGivenIBP(version: MetadataVersion, controllerBroker: Int): Unit = {
     val topic = "topic"
     val producer = createProducer()
     val consumer = createConsumer()
@@ -79,16 +80,16 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   @Test
   def testControllerNewToOldIBP(): Unit = {
-    testControllerSwitchingIBP(KAFKA_3_1_IV0, 2, KAFKA_2_7_IV0, 0)
+    testControllerSwitchingIBP(IBP_3_1_IV0, 2, IBP_2_7_IV0, 0)
   }
 
   @Test
   def testControllerOldToNewIBP(): Unit = {
-    testControllerSwitchingIBP(KAFKA_2_7_IV0, 0, KAFKA_3_1_IV0, 2)
+    testControllerSwitchingIBP(IBP_2_7_IV0, 0, IBP_3_1_IV0, 2)
   }
 
 
-  def testControllerSwitchingIBP(version1: DefaultApiVersion, broker1: Int, version2: DefaultApiVersion, broker2: Int): Unit = {
+  def testControllerSwitchingIBP(version1: MetadataVersion, broker1: Int, version2: MetadataVersion, broker2: Int): Unit = {
     val topic = "topic"
     val topic2 = "topic2"
     val producer = createProducer()
@@ -132,7 +133,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     assertEquals(2, count2)
   }
 
-  private def ensureControllerWithIBP(version: DefaultApiVersion): Unit = {
+  private def ensureControllerWithIBP(version: MetadataVersion): Unit = {
     val nonControllerServers = servers.filter(_.config.interBrokerProtocolVersion != version)
     nonControllerServers.iterator.foreach(server => {
       server.shutdown()
@@ -143,7 +144,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     })
   }
 
-  private def createConfig(nodeId: Int, interBrokerVersion: ApiVersion): KafkaConfig = {
+  private def createConfig(nodeId: Int, interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
     KafkaConfig.fromProps(props)

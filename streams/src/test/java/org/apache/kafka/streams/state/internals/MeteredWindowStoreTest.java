@@ -45,6 +45,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -82,6 +83,7 @@ public class MeteredWindowStoreTest {
     private static final String VALUE = "value";
     private static final byte[] VALUE_BYTES = VALUE.getBytes();
     private static final int WINDOW_SIZE_MS = 10;
+    private static final int RETENTION_PERIOD = 100;
     private static final long TIMESTAMP = 42L;
 
     private final String threadId = Thread.currentThread().getName();
@@ -267,6 +269,18 @@ public class MeteredWindowStoreTest {
         // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldReturnNoRecordWhenFetchedKeyHasExpired() {
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1 + RETENTION_PERIOD))
+                .andReturn(KeyValueIterators.emptyWindowStoreIterator());
+        replay(innerStoreMock);
+
+        store.init((StateStoreContext) context, store);
+        store.fetch("a", ofEpochMilli(1), ofEpochMilli(1).plus(RETENTION_PERIOD, ChronoUnit.MILLIS)).close(); // recorded on close;
+
         verify(innerStoreMock);
     }
 

@@ -17,7 +17,8 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.Uuid;
+import java.util.Collections;
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -25,38 +26,40 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Random;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class ProducerIdControlManagerTest {
 
     private SnapshotRegistry snapshotRegistry;
+    private FeatureControlManager featureControl;
     private ClusterControlManager clusterControl;
     private ProducerIdControlManager producerIdControlManager;
 
     @BeforeEach
     public void setUp() {
-        final LogContext logContext = new LogContext();
-        String clusterId = Uuid.randomUuid().toString();
         final MockTime time = new MockTime();
-        final Random random = new Random();
-        snapshotRegistry = new SnapshotRegistry(logContext);
-        clusterControl = new ClusterControlManager(
-            logContext, clusterId, time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(random), new MockControllerMetrics());
+        snapshotRegistry = new SnapshotRegistry(new LogContext());
+        featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                QuorumFeatures.defaultFeatureMap(),
+                Collections.singletonList(0))).
+            setMetadataVersion(MetadataVersion.latest()).
+            build();
+        clusterControl = new ClusterControlManager.Builder().
+            setTime(time).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setFeatureControlManager(featureControl).
+            build();
 
         clusterControl.activate();
         for (int i = 0; i < 4; i++) {
@@ -66,7 +69,7 @@ public class ProducerIdControlManagerTest {
                     setPort((short) 9092).
                     setName("PLAINTEXT").
                     setHost(String.format("broker-%02d.example.org", i)));
-            clusterControl.replay(brokerRecord);
+            clusterControl.replay(brokerRecord, 100L);
         }
 
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
@@ -139,29 +142,11 @@ public class ProducerIdControlManagerTest {
     }
 
     @Test
-    public void testSnapshotIterator() {
-        ProducerIdsBlock range = null;
+    public void testGenerateProducerIds() {
         for (int i = 0; i < 100; i++) {
-            range = generateProducerIds(producerIdControlManager, i % 4, 100);
+            generateProducerIds(producerIdControlManager, i % 4, 100);
         }
-
-        Iterator<List<ApiMessageAndVersion>> snapshotIterator = producerIdControlManager.iterator(Long.MAX_VALUE);
-        assertTrue(snapshotIterator.hasNext());
-        List<ApiMessageAndVersion> batch = snapshotIterator.next();
-        assertEquals(1, batch.size(), "Producer IDs record batch should only contain a single record");
-        assertEquals(range.firstProducerId() + range.size(), ((ProducerIdsRecord) batch.get(0).message()).nextProducerId());
-        assertFalse(snapshotIterator.hasNext(), "Producer IDs iterator should only contain a single batch");
-
-        ProducerIdControlManager newProducerIdManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
-        snapshotIterator = producerIdControlManager.iterator(Long.MAX_VALUE);
-        while (snapshotIterator.hasNext()) {
-            snapshotIterator.next().forEach(message -> newProducerIdManager.replay((ProducerIdsRecord) message.message()));
-        }
-
-        // Verify that after reloading state from this "snapshot", we don't produce any overlapping IDs
-        long lastProducerID = range.firstProducerId() + range.size() - 1;
-        range = generateProducerIds(producerIdControlManager, 1, 100);
-        assertTrue(range.firstProducerId() > lastProducerID);
+        assertEquals(new ProducerIdsBlock(3, 100000, 1000), producerIdControlManager.nextProducerBlock());
     }
 
     static ProducerIdsBlock generateProducerIds(

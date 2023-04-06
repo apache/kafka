@@ -65,6 +65,12 @@ object EndPoint {
       case _ => throw new KafkaException(s"Unable to parse a listener name from $connectionString")
     }
   }
+
+  def fromJava(endpoint: JEndpoint): EndPoint =
+    new EndPoint(endpoint.host(),
+      endpoint.port(),
+      new ListenerName(endpoint.listenerName().get()),
+      endpoint.securityProtocol())
 }
 
 /**

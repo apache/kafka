@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class Scheduler implements AutoCloseable {
-    private static Logger log = LoggerFactory.getLogger(Scheduler.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Scheduler.class);
 
     private final String name;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
@@ -39,8 +39,8 @@ class Scheduler implements AutoCloseable {
         this.timeout = timeout;
     }
 
-    Scheduler(Class<?> clazz, Duration timeout) {
-        this("Scheduler for " + clazz.getSimpleName(), timeout);
+    Scheduler(Class<?> clazz, String role, Duration timeout) {
+        this("Scheduler for " + clazz.getSimpleName() + ": " + role, timeout);
     }
 
     void scheduleRepeating(Task task, Duration interval, String description) {
@@ -62,11 +62,11 @@ class Scheduler implements AutoCloseable {
         try {
             executor.submit(() -> executeThread(task, description)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            log.warn("{} was interrupted running task: {}", name, description);
+            LOG.warn("{} was interrupted running task: {}", name, description);
         } catch (TimeoutException e) {
-            log.error("{} timed out running task: {}", name, description);
+            LOG.error("{} timed out running task: {}", name, description);
         } catch (Throwable e) {
-            log.error("{} caught exception in task: {}", name, description, e);
+            LOG.error("{} caught exception in task: {}", name, description, e);
         }
     } 
 
@@ -76,10 +76,10 @@ class Scheduler implements AutoCloseable {
         try {
             boolean terminated = executor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!terminated) {
-                log.error("{} timed out during shutdown of internal scheduler.", name);
+                LOG.error("{} timed out during shutdown of internal scheduler.", name);
             }
         } catch (InterruptedException e) {
-            log.warn("{} was interrupted during shutdown of internal scheduler.", name);
+            LOG.warn("{} was interrupted during shutdown of internal scheduler.", name);
         }
     }
 
@@ -92,21 +92,21 @@ class Scheduler implements AutoCloseable {
             long start = System.currentTimeMillis();
             task.run();
             long elapsed = System.currentTimeMillis() - start;
-            log.info("{} took {} ms", description, elapsed);
+            LOG.info("{} took {} ms", description, elapsed);
             if (elapsed > timeout.toMillis()) {
-                log.warn("{} took too long ({} ms) running task: {}", name, elapsed, description);
+                LOG.warn("{} took too long ({} ms) running task: {}", name, elapsed, description);
             }
         } catch (InterruptedException e) {
-            log.warn("{} was interrupted running task: {}", name, description);
+            LOG.warn("{} was interrupted running task: {}", name, description);
         } catch (Throwable e) {
-            log.error("{} caught exception in scheduled task: {}", name, description, e);
+            LOG.error("{} caught exception in scheduled task: {}", name, description, e);
         }
     }
 
     private void executeThread(Task task, String description) {
         Thread.currentThread().setName(name + "-" + description);
         if (closed) {
-            log.info("{} skipping task due to shutdown: {}", name, description);
+            LOG.info("{} skipping task due to shutdown: {}", name, description);
             return;
         }
         run(task, description);

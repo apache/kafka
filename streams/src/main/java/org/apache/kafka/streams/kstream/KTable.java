@@ -663,7 +663,7 @@ public interface KTable<K, V> {
      * For example, you can compute the new key as the length of the value string.
      * <pre>{@code
      * KTable<String, String> table = builder.table("topic");
-     * KTable<Integer, String> keyedStream = table.toStream(new KeyValueMapper<String, String, Integer> {
+     * KStream<Integer, String> keyedStream = table.toStream(new KeyValueMapper<String, String, Integer> {
      *     Integer apply(String key, String value) {
      *         return value.length();
      *     }

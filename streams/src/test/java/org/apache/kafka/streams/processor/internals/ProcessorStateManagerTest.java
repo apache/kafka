@@ -31,10 +31,11 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -55,6 +56,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -209,7 +211,8 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            mkSet(persistentStorePartition, nonPersistentStorePartition));
+            mkSet(persistentStorePartition, nonPersistentStorePartition),
+            false);
 
         assertTrue(stateMgr.changelogAsSource(persistentStorePartition));
         assertTrue(stateMgr.changelogAsSource(nonPersistentStorePartition));
@@ -228,7 +231,8 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTopicName)
             ),
-            Collections.emptySet());
+            Collections.emptySet(),
+            false);
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
         stateMgr.registerStore(persistentStoreTwo, persistentStore.stateRestoreCallback, null);
@@ -369,6 +373,32 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldClearStoreCache() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        reset(storeMetadata);
+        final CachingStore store = EasyMock.createMock(CachingStore.class);
+        expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
+        expect(storeMetadata.store()).andStubReturn(store);
+        expect(store.name()).andStubReturn(persistentStoreName);
+        store.clearCache();
+        expectLastCall().once();
+
+        context.uninitialize();
+        store.init((StateStoreContext) context, store);
+        replay(storeMetadata, context, store);
+
+        stateMgr.registerStateStores(singletonList(store), context);
+
+        stateMgr.registerStore(store, noopStateRestoreCallback, null);
+        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
+
+        stateMgr.recycle();
+        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
+        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        verify(context, store);
+    }
+
+    @Test
     public void shouldRegisterPersistentStores() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
@@ -402,7 +432,8 @@ public class ProcessorStateManagerTest {
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet());
+            emptySet(),
+            false);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -674,7 +705,8 @@ public class ProcessorStateManagerTest {
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet());
+            emptySet(),
+            false);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -813,7 +845,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
         final File file = new File(stateMgr.baseDir(), CHECKPOINT_FILE_NAME);
-        file.createNewFile();
+        Files.createFile(file.toPath());
         final FileWriter writer = new FileWriter(file);
         writer.write("abcdefg");
         writer.close();
@@ -1158,7 +1190,7 @@ public class ProcessorStateManagerTest {
         public void onCommit() throws IOException {
             StoreQueryUtils.checkpointPosition(checkpointFile, position);
         }
-    };
+    }
 
 
 
@@ -1178,7 +1210,8 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            emptySet());
+            emptySet(),
+            false);
     }
 
     private ProcessorStateManager getStateManager(final Task.TaskType taskType) {
@@ -1194,4 +1227,6 @@ public class ProcessorStateManagerTest {
             super(name, persistent);
         }
     }
+
+    interface CachingStore extends CachedStateStore, StateStore { }
 }

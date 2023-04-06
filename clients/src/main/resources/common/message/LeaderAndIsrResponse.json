@@ -25,9 +25,9 @@
   //
   // Version 4 is the first flexible version.
   //
-  // Version 5 removes TopicName and replaces it with TopicId and reorganizes 
+  // Version 5 removes TopicName and replaces it with TopicId and reorganizes
   // the partitions by topic, as described by KIP-516.
-  "validVersions": "0-5",
+  "validVersions": "0-7",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",

@@ -76,6 +76,8 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
 
     // settable record metadata ================================================
     private MockRecordMetadata recordMetadata;
+    private Long currentSystemTimeMs;
+    private Long currentStreamTimeMs;
 
     // mocks ================================================
     private final Map<String, StateStore> stateStores = new HashMap<>();
@@ -285,6 +287,22 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     }
 
     @Override
+    public long currentSystemTimeMs() {
+        if (currentSystemTimeMs == null) {
+            throw new IllegalStateException("System time must be set before use via setCurrentSystemTimeMs().");
+        }
+        return currentSystemTimeMs;
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        if (currentStreamTimeMs == null) {
+            throw new IllegalStateException("Stream time must be set before use via setCurrentStreamTimeMs().");
+        }
+        return currentStreamTimeMs;
+    }
+
+    @Override
     public Serde<?> keySerde() {
         return config.defaultKeySerde();
     }
@@ -324,6 +342,14 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                                   final int partition,
                                   final long offset) {
         recordMetadata = new MockRecordMetadata(topic, partition, offset);
+    }
+
+    public void setCurrentSystemTimeMs(final long currentSystemTimeMs) {
+        this.currentSystemTimeMs = currentSystemTimeMs;
+    }
+
+    public void setCurrentStreamTimeMs(final long currentStreamTimeMs) {
+        this.currentStreamTimeMs = currentStreamTimeMs;
     }
 
     @Override

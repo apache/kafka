@@ -20,7 +20,7 @@ trait TimerTask extends Runnable {
 
   val delayMs: Long // timestamp in millisecond
 
-  private[this] var timerTaskEntry: TimerTaskEntry = null
+  private[this] var timerTaskEntry: TimerTaskEntry = _
 
   def cancel(): Unit = {
     synchronized {

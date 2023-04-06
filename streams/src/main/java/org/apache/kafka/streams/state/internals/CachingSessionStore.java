@@ -105,11 +105,11 @@ class CachingSessionStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (newValueBytes != null || oldValueBytes != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(bytesKey, entry.newValue());
 
                 final ProcessorRecordContext current = context.recordContext();
-                context.setRecordContext(entry.entry().context());
                 try {
+                    context.setRecordContext(entry.entry().context());
+                    wrapped().put(bytesKey, entry.newValue());
                     flushListener.apply(
                         new Record<>(
                             binaryKey.get(),
@@ -121,7 +121,13 @@ class CachingSessionStore
                 }
             }
         } else {
-            wrapped().put(bytesKey, entry.newValue());
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(entry.entry().context());
+                wrapped().put(bytesKey, entry.newValue());
+            } finally {
+                context.setRecordContext(current);
+            }
         }
     }
 
@@ -177,7 +183,8 @@ class CachingSessionStore
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
                                                                              key,
                                                                              earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+                                                                             latestSessionStartTime,
+                                                                             true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -207,7 +214,8 @@ class CachingSessionStore
             key,
             key,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            false
         );
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
@@ -236,7 +244,8 @@ class CachingSessionStore
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
                                                                              keyTo,
                                                                              earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+                                                                             latestSessionStartTime,
+                                                                     true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -264,7 +273,8 @@ class CachingSessionStore
             keyFrom,
             keyTo,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            false
         );
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
@@ -322,6 +332,11 @@ class CachingSessionStore
     @Override
     public void flushCache() {
         context.cache().flush(cacheName);
+    }
+
+    @Override
+    public void clearCache() {
+        context.cache().clear(cacheName);
     }
 
     public void close() {

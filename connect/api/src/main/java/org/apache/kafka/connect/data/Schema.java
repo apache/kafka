@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.connect.errors.DataException;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,25 +47,25 @@ public interface Schema {
     enum Type {
         /**
          *  8-bit signed integer
-         *
+         *  <p>
          *  Note that if you have an unsigned 8-bit data source, {@link Type#INT16} will be required to safely capture all valid values
          */
         INT8,
         /**
          *  16-bit signed integer
-         *
+         *  <p>
          *  Note that if you have an unsigned 16-bit data source, {@link Type#INT32} will be required to safely capture all valid values
          */
         INT16,
         /**
          *  32-bit signed integer
-         *
+         *  <p>
          *  Note that if you have an unsigned 32-bit data source, {@link Type#INT64} will be required to safely capture all valid values
          */
         INT32,
         /**
          *  64-bit signed integer
-         *
+         *  <p>
          *  Note that if you have an unsigned 64-bit data source, the {@link Decimal} logical type (encoded as {@link Type#BYTES})
          *  will be required to safely capture all valid values
          */
@@ -82,7 +84,7 @@ public interface Schema {
         BOOLEAN,
         /**
          * Character string that supports all Unicode characters.
-         *
+         * <p>
          * Note that this does not imply any specific encoding (e.g. UTF-8) as this is an in-memory representation.
          */
         STRING,
@@ -104,7 +106,7 @@ public interface Schema {
          */
         STRUCT;
 
-        private String name;
+        private final String name;
 
         Type() {
             this.name = this.name().toLowerCase(Locale.ROOT);
@@ -173,7 +175,7 @@ public interface Schema {
     String name();
 
     /**
-     * Get the optional version of the schema. If a version is included, newer versions *must* be larger than older ones.
+     * Get the optional version of the schema. If a version is included, newer versions <b>must</b> be larger than older ones.
      * @return the version of this schema
      */
     Integer version();
@@ -190,25 +192,29 @@ public interface Schema {
     Map<String, String> parameters();
 
     /**
-     * Get the key schema for this map schema. Throws a DataException if this schema is not a map.
+     * Get the key schema for this map schema. Throws a {@link DataException} if this schema is not a map.
      * @return the key schema
      */
     Schema keySchema();
 
     /**
-     * Get the value schema for this map or array schema. Throws a DataException if this schema is not a map or array.
+     * Get the value schema for this map or array schema. Throws a {@link DataException} if this schema is not a map or array.
      * @return the value schema
      */
     Schema valueSchema();
 
     /**
-     * Get the list of fields for this Schema. Throws a DataException if this schema is not a struct.
+     * Get the list of Fields for this Schema. Throws a {@link DataException} if this schema is not a
+     * {@link Schema.Type#STRUCT}.
+     *
      * @return the list of fields for this Schema
      */
     List<Field> fields();
 
     /**
-     * Get a field for this Schema by name. Throws a DataException if this schema is not a struct.
+     * Get a {@link Field} for this Schema by name. Throws a {@link DataException} if this schema is not a
+     * {@link Schema.Type#STRUCT}.
+     *
      * @param fieldName the name of the field to look up
      * @return the Field object for the specified field, or null if there is no field with the given name
      */

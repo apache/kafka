@@ -22,10 +22,9 @@ import java.util.Properties
 import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
-import kafka.utils.{CommandLineUtils, Exit, Logging}
+import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
-
-import scala.jdk.CollectionConverters._
+import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
 
@@ -40,13 +39,13 @@ object Kafka extends Logging {
     // This is a bit of an ugly crutch till we get a chance to rework the entire command line parsing
     optionParser.accepts("version", "Print version information and exit.")
 
-    if (args.length == 0 || args.contains("--help")) {
-      CommandLineUtils.printUsageAndDie(optionParser,
+    if (args.isEmpty || args.contains("--help")) {
+      CommandLineUtils.printUsageAndExit(optionParser,
         "USAGE: java [options] %s server.properties [--override property=value]*".format(this.getClass.getCanonicalName.split('$').head))
     }
 
     if (args.contains("--version")) {
-      CommandLineUtils.printVersionAndDie()
+      CommandLineUtils.printVersionAndExit()
     }
 
     val props = Utils.loadProps(args(0))
@@ -55,13 +54,19 @@ object Kafka extends Logging {
       val options = optionParser.parse(args.slice(1, args.length): _*)
 
       if (options.nonOptionArguments().size() > 0) {
-        CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
+        CommandLineUtils.printUsageAndExit(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
       }
 
-      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt).asScala)
+      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt))
     }
     props
   }
+
+  // For Zk mode, the API forwarding is currently enabled only under migration flag. We can
+  // directly do a static IBP check to see API forwarding is enabled here because IBP check is
+  // static in Zk mode.
+  private def enableApiForwarding(config: KafkaConfig) =
+    config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
 
   private def buildServer(props: Properties): Server = {
     val config = KafkaConfig.fromProps(props, false)
@@ -70,13 +75,12 @@ object Kafka extends Logging {
         config,
         Time.SYSTEM,
         threadNamePrefix = None,
-        enableForwarding = false
+        enableForwarding = enableApiForwarding(config)
       )
     } else {
       new KafkaRaftServer(
         config,
         Time.SYSTEM,
-        threadNamePrefix = None
       )
     }
   }
@@ -108,9 +112,9 @@ object Kafka extends Logging {
 
       try server.startup()
       catch {
-        case _: Throwable =>
+        case e: Throwable =>
           // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
-          fatal("Exiting Kafka.")
+          fatal("Exiting Kafka due to fatal exception during startup.", e)
           Exit.exit(1)
       }
 

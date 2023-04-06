@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashSet;
@@ -37,6 +38,9 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
@@ -48,6 +52,7 @@ import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
+@RunWith(Parameterized.class)
 public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB window store";
@@ -56,21 +61,66 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
     private final KeyValueSegments segments =
         new KeyValueSegments(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
 
+    enum StoreType {
+        RocksDBWindowStore,
+        RocksDBTimeOrderedWindowStoreWithIndex,
+        RocksDBTimeOrderedWindowStoreWithoutIndex
+    }
+
+    @Parameter
+    public StoreType storeType;
+
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<Object[]> getKeySchema() {
+        return asList(new Object[][] {
+            {StoreType.RocksDBWindowStore},
+            {StoreType.RocksDBTimeOrderedWindowStoreWithIndex},
+            {StoreType.RocksDBTimeOrderedWindowStoreWithoutIndex}
+        });
+    }
+
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
                                               final long windowSize,
                                               final boolean retainDuplicates,
                                               final Serde<K> keySerde,
                                               final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                STORE_NAME,
-                ofMillis(retentionPeriod),
-                ofMillis(windowSize),
-                retainDuplicates),
-            keySerde,
-            valueSerde)
-            .build();
+
+        switch (storeType) {
+            case RocksDBWindowStore: {
+                return Stores.windowStoreBuilder(
+                        Stores.persistentWindowStore(
+                            STORE_NAME,
+                            ofMillis(retentionPeriod),
+                            ofMillis(windowSize),
+                            retainDuplicates),
+                        keySerde,
+                        valueSerde)
+                    .build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        true),
+                    keySerde,
+                    valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithoutIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        false),
+                    keySerde,
+                    valueSerde
+                ).build();
+            }
+            default:
+                throw new IllegalStateException("Unknown StoreType: " + storeType);
+        }
     }
 
     @Test
@@ -137,19 +187,40 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             ),
             segmentDirs(baseDir)
         );
-
+        // For all tests, for WindowStore actualFrom is computed using observedStreamTime - retention + 1.
+        // while for TimeOrderedWindowStores, actualFrom = observedStreamTime - retention
+        // expired record
         assertEquals(
-            new HashSet<>(Collections.singletonList("zero")),
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 0,
                 ofEpochMilli(startTime - WINDOW_SIZE),
                 ofEpochMilli(startTime + WINDOW_SIZE))));
-        assertEquals(
-            new HashSet<>(Collections.singletonList("one")),
-            valuesToSet(windowStore.fetch(
-                1,
-                ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+        // RocksDbWindwStore =>
+        //  from = 149997
+        //  to = 150003
+        //  actualFrom = 150001
+        // record one timestamp is 150,000 So, it's ignored.
+        // RocksDBTimeOrderedWindowStore*Index =>
+        //  from = 149997
+        //  to = 150003
+        //  actualFrom = 150000, hence not ignored
+        if (storeType == StoreType.RocksDBWindowStore) {
+            assertEquals(
+                new HashSet<>(Collections.emptyList()),
+                valuesToSet(windowStore.fetch(
+                    1,
+                        ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                        ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+
+        } else {
+            assertEquals(
+                new HashSet<>(Collections.singletonList("one")),
+                valuesToSet(windowStore.fetch(
+                        1,
+                        ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                        ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+        }
         assertEquals(
             new HashSet<>(Collections.singletonList("two")),
             valuesToSet(windowStore.fetch(
@@ -197,12 +268,32 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 1,
                 ofEpochMilli(startTime + increment - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment + WINDOW_SIZE))));
-        assertEquals(
-            new HashSet<>(Collections.singletonList("two")),
-            valuesToSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+        // RocksDbWindwStore =>
+        //  from = 179997
+        //  to = 180003
+        //  actualFrom = 170001
+        // record one timestamp is 180,000 So, it's ignored.
+        // RocksDBTimeOrderedWindowStore*Index =>
+        //  from = 179997
+        //  to = 180003
+        //  actualFrom = 180000, hence not ignored
+        if (storeType == StoreType.RocksDBWindowStore) {
+            assertEquals(
+                    // expired record
+                    new HashSet<>(Collections.emptyList()),
+                    valuesToSet(windowStore.fetch(
+                            2,
+                            ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                            ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+        } else {
+            assertEquals(
+                    // expired record
+                    new HashSet<>(Collections.singletonList("two")),
+                    valuesToSet(windowStore.fetch(
+                            2,
+                            ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                            ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+        }
         assertEquals(
             new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
@@ -251,7 +342,8 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 ofEpochMilli(startTime + increment - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.singletonList("two")),
+            // expired record
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 2,
                 ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
@@ -321,12 +413,24 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 3,
                 ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
-        assertEquals(
-            new HashSet<>(Collections.singletonList("four")),
-            valuesToSet(windowStore.fetch(
-                4,
-                ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+        if (storeType == StoreType.RocksDBWindowStore) {
+            assertEquals(
+                    // expired record
+                    new HashSet<>(Collections.emptyList()),
+                    valuesToSet(windowStore.fetch(
+                            4,
+                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+        } else {
+            assertEquals(
+                    // expired record
+                    new HashSet<>(Collections.singletonList("four")),
+                    valuesToSet(windowStore.fetch(
+                            4,
+                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+
+        }
         assertEquals(
             new HashSet<>(Collections.singletonList("five")),
             valuesToSet(windowStore.fetch(
@@ -415,7 +519,14 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             iter.next();
             fetchedCount++;
         }
-        assertEquals(2, fetchedCount);
+        // 1 extra record is expired in the case of RocksDBWindowStore as
+        // actualFrom = observedStreamTime - retentionPeriod + 1. The +1
+        // isn't present for RocksDbTimeOrderedStoreWith*Index
+        if (storeType == StoreType.RocksDBWindowStore) {
+            assertEquals(1, fetchedCount);
+        } else {
+            assertEquals(2, fetchedCount);
+        }
 
         assertEquals(
             Utils.mkSet(segments.segmentName(1L), segments.segmentName(3L)),
@@ -430,8 +541,10 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             iter.next();
             fetchedCount++;
         }
-        assertEquals(1, fetchedCount);
 
+        // the latest record has a timestamp > 60k. So, the +1 in actualFrom calculation in
+        // RocksDbWindowStore shouldn't have an implciation and all stores should return the same fetched counts.
+        assertEquals(1, fetchedCount);
         assertEquals(
             Utils.mkSet(segments.segmentName(3L), segments.segmentName(5L)),
             segmentDirs(baseDir)
@@ -513,6 +626,9 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                                        Serdes.Integer(),
                                        Serdes.String());
         windowStore.init((StateStoreContext) context, windowStore);
+
+        // For all tests, for WindowStore actualFrom is computed using observedStreamTime - retention + 1.
+        // while for TimeOrderedWindowStores, actualFrom = observedStreamTime - retention
 
         assertEquals(
             new HashSet<>(Collections.emptyList()),
@@ -600,12 +716,31 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 3,
                 ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
-        assertEquals(
-            new HashSet<>(Collections.singletonList("four")),
-            valuesToSet(windowStore.fetch(
-                4,
-                ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+        // RocksDbWindwStore =>
+        //  from = 239,997
+        //  to = 240,003
+        //  actualFrom = 240,001
+        // record four timestamp is 240,000 So, it's ignored.
+        // RocksDBTimeOrderedWindowStore*Index =>
+        //  from = 239,997
+        //  to = 240,003
+        //  actualFrom = 240,000, hence not ignored
+        if (storeType == StoreType.RocksDBWindowStore) {
+            assertEquals(
+                    new HashSet<>(Collections.emptyList()),
+                    valuesToSet(windowStore.fetch(
+                            4,
+                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+        } else {
+            assertEquals(
+                    new HashSet<>(Collections.singletonList("four")),
+                    valuesToSet(windowStore.fetch(
+                            4,
+                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+
+        }
         assertEquals(
             new HashSet<>(Collections.singletonList("five")),
             valuesToSet(windowStore.fetch(
@@ -646,7 +781,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
     public void shouldMatchPositionAfterPut() {
         final MeteredWindowStore<Integer, String> meteredSessionStore = (MeteredWindowStore<Integer, String>) windowStore;
         final ChangeLoggingWindowBytesStore changeLoggingSessionBytesStore = (ChangeLoggingWindowBytesStore) meteredSessionStore.wrapped();
-        final RocksDBWindowStore rocksDBWindowStore = (RocksDBWindowStore) changeLoggingSessionBytesStore.wrapped();
+        final WrappedStateStore rocksDBWindowStore = (WrappedStateStore) changeLoggingSessionBytesStore.wrapped();
 
         context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
         windowStore.put(0, "0", SEGMENT_INTERVAL);

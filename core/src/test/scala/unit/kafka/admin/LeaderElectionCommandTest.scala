@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
@@ -35,7 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Tag}
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
+@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3)
 @Tag("integration")
 final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   import LeaderElectionCommandTest._
@@ -56,12 +55,12 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testAllTopicPartition(): Unit = {
-    val client = cluster.createAdminClient()
     val topic = "unclean-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
+    val client = cluster.createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -87,12 +86,12 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testTopicPartition(): Unit = {
-    val client = cluster.createAdminClient()
     val topic = "unclean-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
+    val client = cluster.createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -120,12 +119,12 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testPathToJsonFile(): Unit = {
-    val client = cluster.createAdminClient()
     val topic = "unclean-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
+    val client = cluster.createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -154,12 +153,12 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testPreferredReplicaElection(): Unit = {
-    val client = cluster.createAdminClient()
     val topic = "preferred-topic"
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
+    val client = cluster.createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -197,7 +196,6 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testElectionResultOutput(): Unit = {
-    val client = cluster.createAdminClient()
     val topic = "non-preferred-topic"
     val partition0 = 0
     val partition1 = 1
@@ -205,6 +203,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val assignment1 = Seq(broker3, broker2)
 
     cluster.waitForReadyBrokers()
+    val client = cluster.createAdminClient()
     createTopic(client, topic, Map(
       partition0 -> assignment0,
       partition1 -> assignment1
@@ -261,8 +260,7 @@ object LeaderElectionCommandTest {
   }
 
   def tempTopicPartitionFile(partitions: Set[TopicPartition]): Path = {
-    val file = File.createTempFile("leader-election-command", ".json")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("leader-election-command", ".json")
 
     val jsonString = TestUtils.stringifyTopicPartitions(partitions)
 

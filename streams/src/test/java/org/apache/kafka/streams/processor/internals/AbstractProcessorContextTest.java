@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -262,6 +263,19 @@ public class AbstractProcessorContextTest {
         @Override
         public String changelogFor(final String storeName) {
             return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName, taskId().topologyName());
+        }
+
+        @Override
+        public <K, V> void forward(final FixedKeyRecord<K, V> record) {
+            forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+        }
+
+        @Override
+        public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
+            forward(
+                new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+                childName
+            );
         }
     }
 }

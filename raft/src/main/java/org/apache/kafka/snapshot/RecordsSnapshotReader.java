@@ -49,12 +49,12 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public long lastContainedLogOffset() {
-        return snapshotId.offset - 1;
+        return snapshotId.offset() - 1;
     }
 
     @Override
     public int lastContainedLogEpoch() {
-        return snapshotId.epoch;
+        return snapshotId.epoch();
     }
 
     @Override
@@ -104,11 +104,12 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         RawSnapshotReader snapshot,
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
-        int maxBatchSize
+        int maxBatchSize,
+        boolean doCrcValidation
     ) {
         return new RecordsSnapshotReader<>(
             snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
+            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation)
         );
     }
 

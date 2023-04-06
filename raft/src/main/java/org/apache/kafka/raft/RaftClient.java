@@ -24,6 +24,7 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 public interface RaftClient<T> extends AutoCloseable {
@@ -114,6 +115,11 @@ public interface RaftClient<T> extends AutoCloseable {
     void unregister(Listener<T> listener);
 
     /**
+     * Returns the current high water mark, or OptionalLong.empty if it is not known.
+     */
+    OptionalLong highWatermark();
+
+    /**
      * Return the current {@link LeaderAndEpoch}.
      *
      * @return the current leader and epoch
@@ -199,25 +205,40 @@ public interface RaftClient<T> extends AutoCloseable {
      * Notification of successful resignation can be observed through
      * {@link Listener#handleLeaderChange(LeaderAndEpoch)}.
      *
-     * @param epoch the epoch to resign from. If this does not match the current epoch, this
+     * @param epoch the epoch to resign from. If this epoch is smaller than the current epoch, this
      *              call will be ignored.
+     *
+     * @throws IllegalArgumentException - if the passed epoch is invalid (negative or greater than current) or
+     * if the listener is not the leader associated with this epoch.
      */
     void resign(int epoch);
 
     /**
      * Create a writable snapshot file for a committed offset and epoch.
      *
-     * The RaftClient assumes that the snapshot returned will contain the records up to and
-     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
-     * how to use this object. If a snapshot already exists then returns an
-     * {@link Optional#empty()}.
+     * The RaftClient assumes that the snapshot returned will contain the records up to, but not
+     * including the committed offset and epoch. If no records have been committed, it is possible
+     * to generate an empty snapshot using 0 for both the offset and epoch.
      *
-     * @param committedEpoch the epoch of the committed offset
-     * @param committedOffset the last committed offset that will be included in the snapshot
+     * See {@link SnapshotWriter} for details on how to use this object. If a snapshot already
+     * exists then returns an {@link Optional#empty()}.
+     *
+     * @param snapshotId The ID of the new snapshot, which includes the (exclusive) last committed offset
+     *                   and the last committed epoch.
      * @param lastContainedLogTime The append time of the highest record contained in this snapshot
      * @return a writable snapshot if it doesn't already exists
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
+    Optional<SnapshotWriter<T>> createSnapshot(OffsetAndEpoch snapshotId, long lastContainedLogTime);
+
+    /**
+     * The snapshot id for the latest snapshot.
+     *
+     * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exist, returns an
+     * {@link Optional#empty()}.
+     *
+     * @return the id of the latest snapshot, if it exists
+     */
+    Optional<OffsetAndEpoch> latestSnapshotId();
 }

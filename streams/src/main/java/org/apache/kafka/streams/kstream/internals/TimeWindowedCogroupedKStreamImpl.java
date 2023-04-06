@@ -120,12 +120,26 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                         + "]");
             }
 
-            supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
-                    false
-            );
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemoryWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.size()),
+                        false
+                    );
+                    break;
+                case ROCKS_DB:
+                    supplier = Stores.persistentTimestampedWindowStore(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.size()),
+                        false
+                    );
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
+            }
         }
 
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores

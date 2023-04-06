@@ -19,24 +19,26 @@ package kafka.server
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 
 import java.util
-import util.Arrays.asList
+import java.util.Arrays.asList
+import java.util.Collections
+
+import kafka.api.LeaderAndIsr
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.raft.{OffsetAndEpoch => RaftOffsetAndEpoch}
+import org.apache.kafka.common.metadata.{BrokerRegistrationChangeRecord, PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.server.common.MetadataVersion
+
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-
-import java.util.Collections
-import kafka.api.LeaderAndIsr
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
-import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
-import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
-import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage}
+import org.junit.jupiter.api.Test
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -44,12 +46,12 @@ import scala.jdk.CollectionConverters._
 object MetadataCacheTest {
   def zkCacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1)
+      MetadataCache.zkMetadataCache(1, MetadataVersion.latest())
     )
 
   def cacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1),
+      MetadataCache.zkMetadataCache(1, MetadataVersion.latest()),
       MetadataCache.kRaftMetadataCache(1)
     )
 
@@ -62,15 +64,16 @@ object MetadataCacheTest {
         // contains no brokers, but which contains the previous partitions.
         val image = c.currentImage()
         val partialImage = new MetadataImage(
-          new RaftOffsetAndEpoch(100, 10),
+          new MetadataProvenance(100L, 10, 1000L),
           image.features(),
           ClusterImage.EMPTY,
           image.topics(),
           image.configs(),
           image.clientQuotas(),
           image.producerIds(),
-          image.acls())
-        val delta = new MetadataDelta(partialImage)
+          image.acls(),
+          image.scram())
+        val delta = new MetadataDelta.Builder().setImage(partialImage).build()
 
         def toRecord(broker: UpdateMetadataBroker): RegisterBrokerRecord = {
           val endpoints = new BrokerEndpointCollection()
@@ -97,7 +100,7 @@ object MetadataCacheTest {
             setFenced(fenced)
         }
         request.liveBrokers().iterator().asScala.foreach { brokerInfo =>
-          delta.replay(100, 10, toRecord(brokerInfo))
+          delta.replay(toRecord(brokerInfo))
         }
 
         def toRecords(topic: UpdateMetadataTopicState): Seq[ApiMessage] = {
@@ -122,9 +125,9 @@ object MetadataCacheTest {
           results
         }
         request.topicStates().forEach { topic =>
-          toRecords(topic).foreach(delta.replay(100, 10, _))
+          toRecords(topic).foreach(delta.replay)
         }
-        c.setImage(delta.apply())
+        c.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L)))
       }
       case _ => throw new RuntimeException("Unsupported cache type")
     }
@@ -593,7 +596,7 @@ class MetadataCacheTest {
     val brokers = Seq(
       new UpdateMetadataBroker()
         .setId(0)
-        .setRack("")
+        .setRack("r")
         .setEndpoints(Seq(new UpdateMetadataEndpoint()
           .setHost("foo")
           .setPort(9092)
@@ -624,7 +627,7 @@ class MetadataCacheTest {
       brokers.asJava, Collections.emptyMap()).build()
     MetadataCacheTest.updateCache(cache, updateMetadataRequest)
 
-    val expectedNode0 = new Node(0, "foo", 9092)
+    val expectedNode0 = new Node(0, "foo", 9092, "r")
     val expectedNode1 = new Node(1, "", -1)
 
     val cluster = cache.getClusterMetadata("clusterId", listenerName)
@@ -637,5 +640,49 @@ class MetadataCacheTest {
     assertEquals(Seq(expectedNode0, expectedNode1), partitionInfo.replicas.toSeq)
     assertEquals(Seq(expectedNode0, expectedNode1), partitionInfo.inSyncReplicas.toSeq)
     assertEquals(Seq(expectedNode1), partitionInfo.offlineReplicas.toSeq)
+  }
+
+  @Test
+  def testIsBrokerFenced(): Unit = {
+    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+
+    val delta = new MetadataDelta.Builder().build()
+    delta.replay(new RegisterBrokerRecord()
+      .setBrokerId(0)
+      .setFenced(false))
+
+    metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
+
+    assertFalse(metadataCache.isBrokerFenced(0))
+
+    delta.replay(new BrokerRegistrationChangeRecord()
+      .setBrokerId(0)
+      .setFenced(1.toByte))
+
+    metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
+
+    assertTrue(metadataCache.isBrokerFenced(0))
+  }
+
+  @Test
+  def testIsBrokerInControlledShutdown(): Unit = {
+    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+
+    val delta = new MetadataDelta.Builder().build()
+    delta.replay(new RegisterBrokerRecord()
+      .setBrokerId(0)
+      .setInControlledShutdown(false))
+
+    metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
+
+    assertFalse(metadataCache.isBrokerShuttingDown(0))
+
+    delta.replay(new BrokerRegistrationChangeRecord()
+      .setBrokerId(0)
+      .setInControlledShutdown(1.toByte))
+
+    metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
+
+    assertTrue(metadataCache.isBrokerShuttingDown(0))
   }
 }

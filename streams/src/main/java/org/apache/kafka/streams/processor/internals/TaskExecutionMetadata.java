@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,22 +34,54 @@ import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNA
  * shared between all StreamThreads.
  */
 public class TaskExecutionMetadata {
+    // TODO: implement exponential backoff, for now we just wait 5s
+    private static final long CONSTANT_BACKOFF_MS = 5_000L;
+
     private final boolean hasNamedTopologies;
+    private final Set<String> pausedTopologies;
+    private final ProcessingMode processingMode;
+    private final Collection<Task> successfullyProcessed = new HashSet<>();
     // map of topologies experiencing errors/currently under backoff
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
 
-    public TaskExecutionMetadata(final Set<String> allTopologyNames) {
+    public TaskExecutionMetadata(final Set<String> allTopologyNames,
+                                 final Set<String> pausedTopologies,
+                                 final ProcessingMode processingMode) {
         this.hasNamedTopologies = !(allTopologyNames.size() == 1 && allTopologyNames.contains(UNNAMED_TOPOLOGY));
+        this.pausedTopologies = pausedTopologies;
+        this.processingMode = processingMode;
+    }
+
+    public boolean hasNamedTopologies() {
+        return hasNamedTopologies;
+    }
+
+    public ProcessingMode processingMode() {
+        return processingMode;
     }
 
     public boolean canProcessTask(final Task task, final long now) {
         final String topologyName = task.id().topologyName();
         if (!hasNamedTopologies) {
             // TODO implement error handling/backoff for non-named topologies (needs KIP)
-            return true;
+            return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
         } else {
-            final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
-            return metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
+            if (pausedTopologies.contains(topologyName)) {
+                return false;
+            } else {
+                final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
+                return metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
+            }
+        }
+    }
+
+    public boolean canPunctuateTask(final Task task) {
+        final String topologyName = task.id().topologyName();
+
+        if (topologyName == null) {
+            return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
+        } else {
+            return !pausedTopologies.contains(topologyName);
         }
     }
 
@@ -58,7 +93,23 @@ public class TaskExecutionMetadata {
         }
     }
 
-    class NamedTopologyMetadata {
+    Collection<Task> successfullyProcessed() {
+        return successfullyProcessed;
+    }
+
+    void addToSuccessfullyProcessed(final Task task) {
+        successfullyProcessed.add(task);
+    }
+
+    void removeTaskFromSuccessfullyProcessedBeforeClosing(final Task task) {
+        successfullyProcessed.remove(task);
+    }
+
+    void clearSuccessfullyProcessed() {
+        successfullyProcessed.clear();
+    }
+
+    private class NamedTopologyMetadata {
         private final Logger log;
         private final Map<TaskId, Long> tasksToErrorTime = new ConcurrentHashMap<>();
 
@@ -73,11 +124,10 @@ public class TaskExecutionMetadata {
         }
 
         public boolean canProcessTask(final Task task, final long now) {
-            // TODO: implement exponential backoff, for now we just wait 15s
             final Long errorTime = tasksToErrorTime.get(task.id());
             if (errorTime == null) {
                 return true;
-            } else if (now - errorTime > 15000L) {
+            } else if (now - errorTime > CONSTANT_BACKOFF_MS) {
                 log.info("End backoff for task {} at t={}", task.id(), now);
                 tasksToErrorTime.remove(task.id());
                 if (tasksToErrorTime.isEmpty()) {
@@ -91,7 +141,7 @@ public class TaskExecutionMetadata {
         }
 
         public synchronized void registerTaskError(final Task task, final Throwable t, final long now) {
-            log.info("Begin backoff for unhealthy task {} at t={}", task.id(), now);
+            log.info("Begin backoff for unhealthy task {} at t={} due to {}", task.id(), now, t.getClass().getName());
             tasksToErrorTime.put(task.id(), now);
         }
     }

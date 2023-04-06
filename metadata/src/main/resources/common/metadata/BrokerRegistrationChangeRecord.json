@@ -17,7 +17,7 @@
   "apiKey": 17,
   "type": "metadata",
   "name": "BrokerRegistrationChangeRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -25,6 +25,8 @@
    { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
      "about": "The broker epoch assigned by the controller." },
    { "name": "Fenced", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 0,
-     "about": "-1 if the broker has been unfenced, 0 if no change, 1 if the broker has been fenced." }
+     "about": "-1 if the broker has been unfenced, 0 if no change, 1 if the broker has been fenced." },
+   { "name": "InControlledShutdown", "type": "int8", "versions": "1+", "taggedVersions": "1+", "tag": 1,
+     "about": "0 if no change, 1 if the broker is in controlled shutdown." }
   ]
 }

@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.io.Closeable;
 import java.io.DataOutput;
@@ -52,6 +53,9 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -463,8 +467,7 @@ public final class Utils {
             throw new ClassNotFoundException(String.format("Unable to access " +
                 "constructor of %s", className), e);
         } catch (InvocationTargetException e) {
-            throw new ClassNotFoundException(String.format("Unable to invoke " +
-                "constructor of %s", className), e);
+            throw new KafkaException(String.format("The constructor of %s threw an exception", className), e.getCause());
         }
     }
 
@@ -596,13 +599,25 @@ public final class Utils {
      */
     public static <T> String join(Collection<T> collection, String separator) {
         Objects.requireNonNull(collection);
+        return mkString(collection.stream(), "", "", separator);
+    }
+
+    /**
+     * Create a string representation of a stream surrounded by `begin` and `end` and joined by `separator`.
+     *
+     * @return The string representation.
+     */
+    public static <T> String mkString(Stream<T> stream, String begin, String end, String separator) {
+        Objects.requireNonNull(stream);
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = collection.iterator();
+        sb.append(begin);
+        Iterator<T> iter = stream.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
                 sb.append(separator);
         }
+        sb.append(end);
         return sb.toString();
     }
 
@@ -983,6 +998,41 @@ public final class Utils {
         if (exception != null)
             throw exception;
     }
+    public static void swallow(final Logger log, final Level level, final String what, final Runnable code) {
+        swallow(log, level, what, code, null);
+    }
+
+    /**
+     * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
+     */
+    public static void swallow(final Logger log, final Level level, final String what, final Runnable code,
+                               final AtomicReference<Throwable> firstException) {
+        if (code != null) {
+            try {
+                code.run();
+            } catch (Throwable t) {
+                switch (level) {
+                    case INFO:
+                        log.info(what, t);
+                        break;
+                    case DEBUG:
+                        log.debug(what, t);
+                        break;
+                    case ERROR:
+                        log.error(what, t);
+                        break;
+                    case TRACE:
+                        log.trace(what, t);
+                        break;
+                    case WARN:
+                    default:
+                        log.warn(what, t);
+                }
+                if (firstException != null)
+                    firstException.compareAndSet(null, t);
+            }
+        }
+    }
 
     /**
      * An {@link AutoCloseable} interface without a throws clause in the signature
@@ -998,6 +1048,14 @@ public final class Utils {
 
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
@@ -1009,6 +1067,17 @@ public final class Utils {
         }
     }
 
+    /**
+    * Closes {@code closeable} and if an exception is thrown, it is registered to the firstException parameter.
+    * <b>Be cautious when passing method references as an argument.</b> For example:
+    * <p>
+    * {@code closeQuietly(task::stop, "source task");}
+    * <p>
+    * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+    * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+    * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+    * use a method reference from it.
+    */
     public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
         if (closeable != null) {
             try {
@@ -1038,7 +1107,7 @@ public final class Utils {
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
-     * in producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}
+     * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
      *
      * @param number a given number
      * @return a positive number.
@@ -1212,15 +1281,6 @@ public final class Utils {
         return res;
     }
 
-    public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
-        return concatLists(left, right, Collections::unmodifiableList);
-    }
-
-    public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
-        return Stream.concat(left.stream(), right.stream())
-                .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
-    }
-
     public static int to32BitField(final Set<Byte> bytes) {
         int value = 0;
         for (final byte b : bytes)
@@ -1244,18 +1304,6 @@ public final class Utils {
             count++;
         }
         return result;
-    }
-
-    public static <K1, V1, K2, V2> Map<K2, V2> transformMap(
-            Map<? extends K1, ? extends V1> map,
-            Function<K1, K2> keyMapper,
-            Function<V1, V2> valueMapper) {
-        return map.entrySet().stream().collect(
-            Collectors.toMap(
-                entry -> keyMapper.apply(entry.getKey()),
-                entry -> valueMapper.apply(entry.getValue())
-            )
-        );
     }
 
     /**
@@ -1409,14 +1457,8 @@ public final class Utils {
         return str == null || str.trim().isEmpty();
     }
 
-    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
-        Map<K, V> res = new HashMap<>(keys.size());
-        keys.forEach(key -> res.put(key, valueSupplier.get()));
-        return res;
-    }
-
     /**
-     * Get an array containing all of the {@link Object#toString names} of a given enumerable type.
+     * Get an array containing all of the {@link Object#toString string representations} of a given enumerable type.
      * @param enumClass the enum class; may not be null
      * @return an array with the names of every value for the enum class; never null, but may be empty
      * if there are no values defined for the enum
@@ -1430,6 +1472,63 @@ public final class Utils {
         return Stream.of(enumClass.getEnumConstants())
                 .map(Object::toString)
                 .toArray(String[]::new);
+    }
+
+    /**
+     * Convert time instant to readable string for logging
+     * @param timestamp the timestamp of the instant to be converted.
+     *
+     * @return string value of a given timestamp in the format "yyyy-MM-dd HH:mm:ss,SSS"
+     */
+    public static String toLogDateTimeFormat(long timestamp) {
+        final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS XXX");
+        return Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
+    }
+
+    /**
+     * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
+     */
+    public static String replaceSuffix(String str, String oldSuffix, String newSuffix) {
+        if (!str.endsWith(oldSuffix))
+            throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + str);
+        return str.substring(0, str.length() - oldSuffix.length()) + newSuffix;
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, and remove that prefix from all
+     * resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix} and whose corresponding keys have
+     * the prefix stripped from them; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix) {
+        return entriesWithPrefix(map, prefix, true);
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, optionally removing that prefix
+     * from all resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @param strip whether the keys of the returned map should not include the prefix
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix}; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip) {
+        Map<String, V> result = new HashMap<>();
+        for (Map.Entry<String, V> entry : map.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+                if (strip)
+                    result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+                else
+                    result.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
     }
 
 }

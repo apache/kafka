@@ -32,10 +32,10 @@ public interface ReplicationPolicy {
     String topicSource(String topic);
 
     /** Name of topic on the source cluster, e.g. "topic1" for "us-west.topic1".
-     *
+     *  <p>
      *  Topics may be replicated multiple hops, so the immediately upstream topic
      *  may itself be a remote topic.
-     *
+     *  <p>
      *  Returns null if not a remote topic.
      */
     String upstreamTopic(String topic); 

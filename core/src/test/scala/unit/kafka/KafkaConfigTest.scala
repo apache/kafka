@@ -16,12 +16,11 @@
  */
 package kafka
 
-import java.io.File
 import java.nio.file.Files
 import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
@@ -113,8 +112,8 @@ class KafkaTest {
   }
 
   @Test
-  def testColocatedRoleNodeIdValidation(): Unit = {
-    // Ensure that validation is happening at startup to check that colocated processes use their node.id as a voter in controller.quorum.voters 
+  def testCombinedRoleNodeIdValidation(): Unit = {
+    // Ensure that validation is happening at startup to check that combined processes use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
@@ -126,6 +125,17 @@ class KafkaTest {
     // Ensure that with a valid config no exception is thrown
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
     KafkaConfig.fromProps(propertiesFile)
+  }
+
+  @Test
+  def testIsKRaftCombinedMode(): Unit = {
+    val propertiesFile = new Properties
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    setListenerProps(propertiesFile)
+    val config = KafkaConfig.fromProps(propertiesFile)
+    assertTrue(config.isKRaftCombinedMode)
   }
 
   @Test
@@ -390,8 +400,7 @@ class KafkaTest {
   }
 
   def prepareConfig(lines : Array[String]): String = {
-    val file = File.createTempFile("kafkatest", ".properties")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("kafkatest", ".properties")
 
     val writer = Files.newOutputStream(file.toPath)
     try {

@@ -19,9 +19,9 @@ package org.apache.kafka.streams.state.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
 import org.junit.Test;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.mockito.MockedStatic;
 
 import java.util.Map;
 
@@ -29,6 +29,9 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
 public class NamedCacheMetricsTest {
 
@@ -48,18 +51,21 @@ public class NamedCacheMetricsTest {
         final String hitRatio = "hit-ratio";
         when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
         when(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).thenReturn(tagMap);
-        StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
-            expectedSensor,
-            StreamsMetricsImpl.CACHE_LEVEL_GROUP,
-            tagMap,
-            hitRatio,
-            HIT_RATIO_AVG_DESCRIPTION,
-            HIT_RATIO_MIN_DESCRIPTION,
-            HIT_RATIO_MAX_DESCRIPTION);
 
-        final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
-
-        assertThat(sensor, is(expectedSensor));
+        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
+            final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
+            streamsMetricsStaticMock.verify(
+                () -> StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
+                    expectedSensor,
+                    StreamsMetricsImpl.CACHE_LEVEL_GROUP,
+                    tagMap,
+                    hitRatio,
+                    HIT_RATIO_AVG_DESCRIPTION,
+                    HIT_RATIO_MIN_DESCRIPTION,
+                    HIT_RATIO_MAX_DESCRIPTION
+                )
+            );
+            assertThat(sensor, is(expectedSensor));
+        }
     }
-
 }

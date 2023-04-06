@@ -48,6 +48,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -74,7 +75,8 @@ import static org.junit.Assert.assertTrue;
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
     private final static int KEY_0 = 0;
     private final static int KEY_1 = 1;
@@ -227,7 +229,7 @@ public class StandbyTaskEOSIntegrationTest {
         streamInstanceTwo = buildWithDeduplicationTopology(base + "-2");
 
         // start first instance and wait for processing
-        startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceOne), Duration.ofSeconds(30));
+        startApplicationAndWaitUntilRunning(streamInstanceOne);
         IntegrationTestUtils.waitUntilMinRecordsReceived(
             TestUtils.consumerConfig(
                 CLUSTER.bootstrapServers(),
@@ -239,7 +241,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
 
         // start second instance and wait for standby replication
-        startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceTwo), Duration.ofSeconds(30));
+        startApplicationAndWaitUntilRunning(streamInstanceTwo);
         waitForCondition(
             () -> streamInstanceTwo.store(
                 StoreQueryParameters.fromNameAndType(
@@ -295,10 +297,7 @@ public class StandbyTaskEOSIntegrationTest {
 
         // "restart" first client and wait for standby recovery
         // (could actually also be active, but it does not matter as long as we enable "state stores"
-        startApplicationAndWaitUntilRunning(
-            Collections.singletonList(streamInstanceOneRecovery),
-            Duration.ofSeconds(30)
-        );
+        startApplicationAndWaitUntilRunning(streamInstanceOneRecovery);
         waitForCondition(
             () -> streamInstanceOneRecovery.store(
                 StoreQueryParameters.fromNameAndType(
@@ -342,6 +341,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -400,7 +400,7 @@ public class StandbyTaskEOSIntegrationTest {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);

@@ -100,7 +100,10 @@ public class FetchResponse extends AbstractResponse {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
-                    responseData = new LinkedHashMap<>();
+                    // Assigning the lazy-initialized `responseData` in the last step
+                    // to avoid other threads accessing a half-initialized object.
+                    final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseDataTmp =
+                            new LinkedHashMap<>();
                     data.responses().forEach(topicResponse -> {
                         String name;
                         if (version < 13) {
@@ -110,9 +113,10 @@ public class FetchResponse extends AbstractResponse {
                         }
                         if (name != null) {
                             topicResponse.partitions().forEach(partition ->
-                                responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                                responseDataTmp.put(new TopicPartition(name, partition.partitionIndex()), partition));
                         }
                     });
+                    responseData = responseDataTmp;
                 }
             }
         }
@@ -122,6 +126,11 @@ public class FetchResponse extends AbstractResponse {
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
+    }
+
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
     }
 
     public int sessionId() {

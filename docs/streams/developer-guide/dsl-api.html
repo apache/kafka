@@ -463,7 +463,7 @@ KStream&lt;String, Integer&gt; transformed = stream.flatMap(
 // Java 7 example: cf. `map` for how to create `KeyValueMapper` instances</code></pre>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>FlatMap (values only)</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>FlatMapValues</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -956,7 +956,7 @@ KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
 KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
-    Materialized.as(&quot;aggregated-stream-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-stream-store&quot;) /* state store name */
         .withValueSerde(Serdes.Long()); /* serde for aggregate value */
 
 // Aggregating a KGroupedTable (note how the value type changes from String to Long)
@@ -964,7 +964,7 @@ KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
     (aggKey, oldValue, aggValue) -&gt; aggValue - oldValue.length(), /* subtractor */
-    Materialized.as(&quot;aggregated-table-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-table-store&quot;) /* state store name */
 	.withValueSerde(Serdes.Long()) /* serde for aggregate value */
 
 
@@ -1732,7 +1732,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
                             You may follow a procedure such as outlined below.
                             It is recommended to repartition the topic with fewer partitions to match the larger partition number of avoid bottlenecks.
                             Technically it would also be possible to repartition the topic with more partitions to the smaller partition number.
-                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result is a second state store.
+                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result in a second state store.
                             For table-table joins, you might also consider to size of the KTables and repartition the smaller KTable.</p>
                         <ol class="arabic">
                             <li><p class="first">Identify the input KStream/KTable in the join whose underlying Kafka topic has the smaller number of partitions.
@@ -2567,7 +2567,7 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
 Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
 
 // Java 8+ example, using lambda expressions
-                KTable&lt;String, String&gt; joined = left.join(right, foreignKeyExtractor,
+                KTable&lt;String, String&gt; joined = left.leftJoin(right, foreignKeyExtractor,
                     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
                   );</code></pre>
                               <p>Detailed behavior:</p>

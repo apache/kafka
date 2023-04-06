@@ -17,19 +17,19 @@
 
 package kafka.api.test
 
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
-import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.{Collections, Properties}
-import scala.jdk.CollectionConverters._
 
 class ProducerCompressionTest extends QuorumTestHarness {
 
@@ -37,18 +37,18 @@ class ProducerCompressionTest extends QuorumTestHarness {
   private val topic = "topic"
   private val numRecords = 2000
 
-  private var server: KafkaServer = null
+  private var broker: KafkaBroker = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    server = TestUtils.createServer(KafkaConfig.fromProps(props))
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnectOrNull)
+    broker = createBroker(new KafkaConfig(props))
   }
 
   @AfterEach
   override def tearDown(): Unit = {
-    TestUtils.shutdownServers(Seq(server))
+    TestUtils.shutdownServers(Seq(broker))
     super.tearDown()
   }
 
@@ -58,11 +58,18 @@ class ProducerCompressionTest extends QuorumTestHarness {
    * Compressed messages should be able to sent and consumed correctly
    */
   @ParameterizedTest
-  @MethodSource(Array("parameters"))
-  def testCompression(compression: String): Unit = {
+  @CsvSource(value = Array(
+    "kraft,none",
+    "kraft,gzip",
+    "kraft,snappy",
+    "kraft,lz4",
+    "kraft,zstd",
+    "zk,gzip"
+  ))
+  def testCompression(quorum: String, compression: String): Unit = {
 
     val producerProps = new Properties()
-    val bootstrapServers = TestUtils.plaintextBootstrapServers(Seq(server))
+    val bootstrapServers = TestUtils.plaintextBootstrapServers(Seq(broker))
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
@@ -72,7 +79,13 @@ class ProducerCompressionTest extends QuorumTestHarness {
 
     try {
       // create topic
-      TestUtils.createTopic(zkClient, topic, 1, 1, List(server))
+      val admin = TestUtils.createAdminClient(Seq(broker),
+        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      try {
+        TestUtils.createTopicWithAdmin(admin, topic, Seq(broker))
+      } finally {
+        admin.close()
+      }
       val partition = 0
 
       // prepare the messages
@@ -101,17 +114,5 @@ class ProducerCompressionTest extends QuorumTestHarness {
       producer.close()
       consumer.close()
     }
-  }
-}
-
-object ProducerCompressionTest {
-  def parameters: java.util.stream.Stream[Arguments] = {
-    Seq(
-      Arguments.of("none"),
-      Arguments.of("gzip"),
-      Arguments.of("snappy"),
-      Arguments.of("lz4"),
-      Arguments.of("zstd")
-    ).asJava.stream()
   }
 }

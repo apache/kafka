@@ -17,7 +17,8 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Collection;
-import java.util.Map.Entry;
+import java.util.Collections;
+import java.util.List;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -26,8 +27,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
-import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -49,11 +50,13 @@ import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.expect;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public final class AssignmentTestUtils {
 
@@ -63,6 +66,9 @@ public final class AssignmentTestUtils {
     public static final UUID UUID_4 = uuidForInt(4);
     public static final UUID UUID_5 = uuidForInt(5);
     public static final UUID UUID_6 = uuidForInt(6);
+    public static final UUID UUID_7 = uuidForInt(7);
+    public static final UUID UUID_8 = uuidForInt(8);
+    public static final UUID UUID_9 = uuidForInt(9);
 
     public static final TopicPartition TP_0_0 = new TopicPartition("topic0", 0);
     public static final TopicPartition TP_0_1 = new TopicPartition("topic0", 1);
@@ -102,8 +108,97 @@ public final class AssignmentTestUtils {
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
+    public static final List<String> EMPTY_RACK_AWARE_ASSIGNMENT_TAGS = Collections.emptyList();
+    public static final Map<String, String> EMPTY_CLIENT_TAGS = Collections.emptyMap();
 
     private AssignmentTestUtils() {}
+
+    public static final long ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT = 100;
+
+    public static AssignmentConfigs getDefaultConfigsWithZeroStandbys() {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            2,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getDefaultConfigsWithOneStandbys() {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            2,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            maxWarmups,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndLagAndWarmups(final long acceptableRecoveryLag,
+                                                                              final int maxWarmups) {
+        return new AssignmentConfigs(
+            acceptableRecoveryLag,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
 
     static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<UUID, ClientState> clientStates = new HashMap<>();
@@ -118,24 +213,18 @@ public final class AssignmentTestUtils {
     // If you don't care about setting the end offsets for each specific topic partition, the helper method
     // getTopicPartitionOffsetMap is useful for building this input map for all partitions
     public static AdminClient createMockAdminClientForAssignor(final Map<TopicPartition, Long> changelogEndOffsets) {
-        final AdminClient adminClient = EasyMock.createMock(AdminClient.class);
+        final AdminClient adminClient = mock(AdminClient.class);
 
-        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
-        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
-        allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
-            Entry::getKey,
-            t -> {
-                final ListOffsetsResultInfo info = EasyMock.createNiceMock(ListOffsetsResultInfo.class);
-                expect(info.offset()).andStubReturn(t.getValue());
-                EasyMock.replay(info);
-                return info;
-            }))
-        );
+        final ListOffsetsResult result = mock(ListOffsetsResult.class);
+        when(adminClient.listOffsets(any())).thenReturn(result);
+        for (final Map.Entry<TopicPartition, Long> entry : changelogEndOffsets.entrySet()) {
+            final KafkaFutureImpl<ListOffsetsResultInfo> partitionFuture = new KafkaFutureImpl<>();
+            final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
+            lenient().when(info.offset()).thenReturn(entry.getValue());
+            partitionFuture.complete(info);
+            lenient().when(result.partitionResult(entry.getKey())).thenReturn(partitionFuture);
+        }
 
-        expect(adminClient.listOffsets(anyObject())).andStubReturn(result);
-        expect(result.all()).andStubReturn(allFuture);
-
-        EasyMock.replay(result);
         return adminClient;
     }
 
@@ -143,7 +232,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
@@ -151,7 +240,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> standbyTasks,
                                            final String userEndPoint) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0,  0);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
@@ -159,7 +248,16 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> standbyTasks,
                                            final byte uniqueField) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, EMPTY_CLIENT_TAGS);
+    }
+
+    public static SubscriptionInfo getInfo(final UUID processId,
+                                           final Set<TaskId> prevTasks,
+                                           final Set<TaskId> standbyTasks,
+                                           final byte uniqueField,
+                                           final Map<String, String> clientTags) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, clientTags);
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

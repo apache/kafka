@@ -17,7 +17,8 @@
 
 package kafka.server
 
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -27,7 +28,7 @@ class BrokerFeaturesTest {
 
   @Test
   def testEmpty(): Unit = {
-    assertTrue(BrokerFeatures.createDefault().supportedFeatures.empty)
+    assertTrue(BrokerFeatures.createEmpty().supportedFeatures.empty)
   }
 
   @Test
@@ -38,15 +39,12 @@ class BrokerFeaturesTest {
       "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
-    val compatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_1" -> new FinalizedVersionRange(2, 3))
-    val inCompatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_3" -> new FinalizedVersionRange(3, 4))
+    val compatibleFeatures = Map[String, Short]("test_feature_1" -> 4)
+    val inCompatibleFeatures = Map[String, Short]("test_feature_3" -> 4)
     val features = compatibleFeatures++inCompatibleFeatures
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = features
 
-    assertEquals(
-      Features.finalizedFeatures(inCompatibleFeatures.asJava),
+    assertEquals(inCompatibleFeatures,
       brokerFeatures.incompatibleFeatures(finalizedFeatures))
     assertTrue(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
   }
@@ -59,15 +57,13 @@ class BrokerFeaturesTest {
       "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
-    val compatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_1" -> new FinalizedVersionRange(2, 3))
-    val inCompatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_2" -> new FinalizedVersionRange(1, 4))
+    val compatibleFeatures = Map[String, Short]("test_feature_1" -> 3)
+    val inCompatibleFeatures = Map[String, Short]("test_feature_2" -> 4)
     val features = compatibleFeatures++inCompatibleFeatures
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
+    val finalizedFeatures = features
 
     assertEquals(
-      Features.finalizedFeatures(inCompatibleFeatures.asJava),
+      inCompatibleFeatures,
       brokerFeatures.incompatibleFeatures(finalizedFeatures))
     assertTrue(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
   }
@@ -80,11 +76,11 @@ class BrokerFeaturesTest {
       "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
-    val compatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_1" -> new FinalizedVersionRange(2, 3),
-      "test_feature_2" -> new FinalizedVersionRange(1, 3))
-    val finalizedFeatures = Features.finalizedFeatures(compatibleFeatures.asJava)
-    assertTrue(brokerFeatures.incompatibleFeatures(finalizedFeatures).empty())
+    val compatibleFeatures = Map[String, Short](
+      "test_feature_1" -> 3,
+      "test_feature_2" -> 3)
+    val finalizedFeatures = compatibleFeatures
+    assertTrue(brokerFeatures.incompatibleFeatures(finalizedFeatures).isEmpty)
     assertFalse(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
   }
 
@@ -97,10 +93,11 @@ class BrokerFeaturesTest {
       "test_feature_3" -> new SupportedVersionRange(3, 7)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
-    val expectedFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_1" -> new FinalizedVersionRange(1, 4),
-      "test_feature_2" -> new FinalizedVersionRange(1, 3),
-      "test_feature_3" -> new FinalizedVersionRange(3, 7))
-    assertEquals(Features.finalizedFeatures(expectedFeatures.asJava), brokerFeatures.defaultFinalizedFeatures)
+    val expectedFeatures = Map[String, Short](
+      MetadataVersion.FEATURE_NAME -> MetadataVersion.latest().featureLevel(),
+      "test_feature_1" -> 4,
+      "test_feature_2" -> 3,
+      "test_feature_3" -> 7)
+    assertEquals(expectedFeatures, brokerFeatures.defaultFinalizedFeatures)
   }
 }
