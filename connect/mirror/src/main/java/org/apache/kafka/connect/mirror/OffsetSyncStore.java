@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *     <li>Invariant A: syncs[0] is the latest offset sync from the syncs topic</li>
  *     <li>Invariant B: For each i,j, i < j, syncs[i] != syncs[j]: syncs[i].upstream <= syncs[j].upstream + 2^j - 2^i</li>
- *     <li>Invariant C: For each i,j, i < j, syncs[i] != syncs[j]: syncs[j].upstream + 2^(i-1) <= syncs[i].upstream</li>
+ *     <li>Invariant C: For each i,j, i < j, syncs[i] != syncs[j]: syncs[j].upstream + 2^(i-2) <= syncs[i].upstream</li>
  * </ul>
  * <p>The above invariants ensure that the store is kept updated upon receipt of each sync, and that distinct
  * offset syncs are separated by approximately exponential space. They can be checked locally (by comparing all adjacent
@@ -282,7 +282,7 @@ class OffsetSyncStore implements AutoCloseable {
     }
 
     private boolean invariantC(OffsetSync iSync, OffsetSync jSync, int i, int j) {
-        long bound = jSync.upstreamOffset() + (1L << (i - 1));
+        long bound = jSync.upstreamOffset() + (1L << (i - 2));
         return iSync == jSync || bound < 0 || bound <= iSync.upstreamOffset();
     }
 
