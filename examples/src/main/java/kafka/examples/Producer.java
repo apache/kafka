@@ -25,34 +25,82 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 /**
- * Demo producer that demonstrate two modes of KafkaProducer.
- * If the user uses the Async mode: The messages will be printed to stdout upon successful completion
- * If the user uses the sync mode (isAsync = false): Each send loop will block until completion.
+ * A simple producer thread supporting two send modes:
+ * - Async mode (default): records are sent without waiting for the response.
+ * - Sync mode: each send operation blocks waiting for the response.
  */
 public class Producer extends Thread {
-    private final KafkaProducer<Integer, String> producer;
+    private final String bootstrapServers;
     private final String topic;
-    private final Boolean isAsync;
-    private int numRecords;
+    private final boolean isAsync;
+    private final String transactionalId;
+    private final boolean enableIdempotency;
+    private final int numRecords;
+    private final int transactionTimeoutMs;
     private final CountDownLatch latch;
+    private volatile boolean closed;
 
-    public Producer(final String topic,
-                    final Boolean isAsync,
-                    final String transactionalId,
-                    final boolean enableIdempotency,
-                    final int numRecords,
-                    final int transactionTimeoutMs,
-                    final CountDownLatch latch) {
+    public Producer(String threadName,
+                    String bootstrapServers,
+                    String topic,
+                    boolean isAsync,
+                    String transactionalId,
+                    boolean enableIdempotency,
+                    int numRecords,
+                    int transactionTimeoutMs,
+                    CountDownLatch latch) {
+        super(threadName);
+        this.bootstrapServers = bootstrapServers;
+        this.topic = topic;
+        this.isAsync = isAsync;
+        this.transactionalId = transactionalId;
+        this.enableIdempotency = enableIdempotency;
+        this.numRecords = numRecords;
+        this.transactionTimeoutMs = transactionTimeoutMs;
+        this.latch = latch;
+    }
+
+    @Override
+    public void run() {
+        int key = 0;
+        int sentRecords = 0;
+        // the producer instance is thread safe
+        try (KafkaProducer<Integer, String> producer = createKafkaProducer()) {
+            while (!closed && sentRecords < numRecords) {
+                if (isAsync) {
+                    asyncSend(producer, key, "test");
+                } else {
+                    syncSend(producer, key, "test");
+                }
+                key++;
+                sentRecords++;
+            }
+        } catch (Throwable e) {
+            Utils.printOut("Fatal error");
+            e.printStackTrace();
+        }
+        Utils.printOut("Sent %d records", sentRecords);
+        shutdown();
+    }
+
+    public void shutdown() {
+        if (!closed) {
+            closed = true;
+            latch.countDown();
+        }
+    }
+
+    public KafkaProducer<Integer, String> createKafkaProducer() {
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "client-" + UUID.randomUUID());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         if (transactionTimeoutMs > 0) {
             props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs);
         }
@@ -60,94 +108,39 @@ public class Producer extends Thread {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         }
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
-        producer = new KafkaProducer<>(props);
-
-        this.topic = topic;
-        this.isAsync = isAsync;
-        this.numRecords = numRecords;
-        this.latch = latch;
+        return new KafkaProducer<>(props);
     }
 
-    KafkaProducer<Integer, String> get() {
-        return producer;
+    private void asyncSend(KafkaProducer<Integer, String> producer, int key, String value) {
+        // still blocks when buffer.memory is full or metadata are not available
+        producer.send(new ProducerRecord<>(topic, key, value),
+            new ProducerCallback(key, value));
     }
 
-    @Override
-    public void run() {
-        int messageKey = 0;
-        int recordsSent = 0;
-        try {
-            while (recordsSent < numRecords) {
-                final long currentTimeMs = System.currentTimeMillis();
-                produceOnce(messageKey, recordsSent, currentTimeMs);
-                messageKey += 2;
-                recordsSent += 1;
+    private RecordMetadata syncSend(KafkaProducer<Integer, String> producer, int key, String value)
+        throws ExecutionException, InterruptedException {
+        // add your application retry strategy here
+        RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
+        Utils.maybePrintRecord(numRecords, key, value, metadata);
+        return metadata;
+    }
+
+    class ProducerCallback implements Callback {
+        private final int key;
+        private final String value;
+
+        public ProducerCallback(int key, String value) {
+            this.key = key;
+            this.value = value;
+        }
+
+        public void onCompletion(RecordMetadata metadata, Exception e) {
+            // add your stateful application retry strategy here
+            if (e != null) {
+                Utils.printErr(e.getMessage());
+            } else {
+                Utils.maybePrintRecord(numRecords, key, value, metadata);
             }
-        } catch (Exception e) {
-            System.out.println("Producer encountered exception:" + e);
-        } finally {
-            System.out.println("Producer sent " + numRecords + " records successfully");
-            this.producer.close();
-            latch.countDown();
-        }
-    }
-
-    private void produceOnce(final int messageKey, final int recordsSent, final long currentTimeMs) throws ExecutionException, InterruptedException {
-        String messageStr = "Message_" + messageKey;
-
-        if (isAsync) { // Send asynchronously
-            sendAsync(messageKey, messageStr, currentTimeMs);
-            return;
-        }
-        Future<RecordMetadata> future = send(messageKey, messageStr);
-        future.get();
-        System.out.println("Sent message: (" + messageKey + ", " + messageStr + ")");
-    }
-
-    private void sendAsync(final int messageKey, final String messageStr, final long currentTimeMs) {
-        this.producer.send(new ProducerRecord<>(topic,
-                        messageKey,
-                        messageStr),
-                new DemoCallBack(currentTimeMs, messageKey, messageStr));
-    }
-
-    private Future<RecordMetadata> send(final int messageKey, final String messageStr) {
-        return producer.send(new ProducerRecord<>(topic,
-                messageKey,
-                messageStr));
-    }
-}
-
-class DemoCallBack implements Callback {
-
-    private final long startTime;
-    private final int key;
-    private final String message;
-
-    public DemoCallBack(long startTime, int key, String message) {
-        this.startTime = startTime;
-        this.key = key;
-        this.message = message;
-    }
-
-    /**
-     * A callback method the user can implement to provide asynchronous handling of request completion. This method will
-     * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
-     * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
-     *
-     * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
-     *                  with -1 value for all fields except for topicPartition will be returned if an error occurred.
-     * @param exception The exception thrown during processing of this record. Null if no error occurred.
-     */
-    public void onCompletion(RecordMetadata metadata, Exception exception) {
-        long elapsedTime = System.currentTimeMillis() - startTime;
-        if (metadata != null) {
-            System.out.println(
-                "message(" + key + ", " + message + ") sent to partition(" + metadata.partition() +
-                    "), " +
-                    "offset(" + metadata.offset() + ") in " + elapsedTime + " ms");
-        } else {
-            exception.printStackTrace();
         }
     }
 }
