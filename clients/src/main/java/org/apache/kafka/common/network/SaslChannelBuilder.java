@@ -210,16 +210,18 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
                                      MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+        TransportLayer transportLayer = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             Socket socket = socketChannel.socket();
-            TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel, metadataRegistry);
+            transportLayer = buildTransportLayer(id, key, socketChannel, metadataRegistry);
+            final TransportLayer finalTransportLayer = transportLayer;
             Supplier<Authenticator> authenticatorCreator;
             if (mode == Mode.SERVER) {
                 authenticatorCreator = () -> buildServerAuthenticator(configs,
                         Collections.unmodifiableMap(saslCallbackHandlers),
                         id,
-                        transportLayer,
+                        finalTransportLayer,
                         Collections.unmodifiableMap(subjects),
                         Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism),
                         metadataRegistry);
@@ -230,12 +232,15 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         id,
                         socket.getInetAddress().getHostName(),
                         loginManager.serviceName(),
-                        transportLayer,
+                        finalTransportLayer,
                         subjects.get(clientSaslMechanism));
             }
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                 memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
+            // Ideally these resources are closed by the KafkaChannel but this builder should close the resources instead
+            // if an error occurs due to which KafkaChannel is not created.
+            Utils.closeQuietly(transportLayer, "transport layer for channel Id: " + id);
             throw new KafkaException(e);
         }
     }

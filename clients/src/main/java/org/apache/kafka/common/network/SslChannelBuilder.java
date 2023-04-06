@@ -101,13 +101,18 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
                                      MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+        SslTransportLayer transportLayer = null;
         try {
-            SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, metadataRegistry);
+            transportLayer = buildTransportLayer(sslFactory, id, key, metadataRegistry);
+            final SslTransportLayer finalTransportLayer = transportLayer;
             Supplier<Authenticator> authenticatorCreator = () ->
-                new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
+                new SslAuthenticator(configs, finalTransportLayer, listenerName, sslPrincipalMapper);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
+            // Ideally these resources are closed by the KafkaChannel but this builder should close the resources instead
+            // if an error occurs due to which KafkaChannel is not created.
+            Utils.closeQuietly(transportLayer, "transport layer for channel Id: " + id);
             throw new KafkaException(e);
         }
     }
