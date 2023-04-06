@@ -24,8 +24,6 @@ import org.apache.kafka.common.security.scram.ScramCredential;
 import java.util.Arrays;
 import java.util.Objects;
 
-// XXX Can I replace org.apache.kafka.common.security.scram.ScramCredential with this --proven 2023/03/31
-
 /**
  * Represents the ACLs in the metadata image.
  *
