@@ -55,23 +55,33 @@ public class ConcurrentEventQueue<K, T extends ConcurrentEventQueue.Event<K>> im
     /**
      * The random generator used by this class.
      */
-    private Random random;
+    private final Random random;
 
     /**
      * The map of queues keyed by K.
      */
-    private Map<K, Queue<T>> queues;
+    private final Map<K, Queue<T>> queues;
 
     /**
      * The list of available keys. Keys in this list can
      * be delivered to pollers.
      */
-    private List<K> availableKeys;
+    private final List<K> availableKeys;
 
     /**
      * The set of keys that are being processed.
      */
-    private Set<K> inflightKeys;
+    private final Set<K> inflightKeys;
+
+    /**
+     * The lock for protecting access to the resources.
+     */
+    private final ReentrantLock lock;
+
+    /**
+     * The condition variable for waking up poller threads.
+     */
+    private final Condition condition;
 
     /**
      * The number of events in the queue.
@@ -82,16 +92,6 @@ public class ConcurrentEventQueue<K, T extends ConcurrentEventQueue.Event<K>> im
      * A boolean indicated whether the queue is closed.
      */
     private boolean closed;
-
-    /**
-     * The lock for protecting access to the resources.
-     */
-    private ReentrantLock lock;
-
-    /**
-     * The condition variable for waking up poller threads.
-     */
-    private Condition condition;
 
     public ConcurrentEventQueue() {
         this(new Random());
