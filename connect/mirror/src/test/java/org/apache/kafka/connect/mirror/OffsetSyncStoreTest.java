@@ -143,9 +143,28 @@ public class OffsetSyncStoreTest {
 
             // Rewind upstream offsets should clear all historical syncs
             store.sync(tp, 1500, 11000);
+            assertSparseSyncInvariant(store, tp);
             assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 1499));
             assertEquals(OptionalLong.of(11000), store.translateDownstream(null, tp, 1500));
             assertEquals(OptionalLong.of(11001), store.translateDownstream(null, tp, 2000));
+        }
+    }
+
+    @Test
+    public void testNumberOfDistinctSyncsMonotonicallyIncreases() {
+        // We should not expire multiple more syncs from the store than necessary;
+        // Each new sync should expire at most one other sync from the cache.
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
+            int lastCount = 1;
+            store.start();
+            for (int offset = 0; offset <= 1000000; offset++) {
+                store.sync(tp, offset, offset);
+                int count = countDistinctStoredSyncs(store, tp);
+                int diff = count - lastCount;
+                assertTrue(diff >= 0,
+                        "Store expired too many syncs: " + diff + " after receiving offset " + offset);
+                lastCount = count;
+            }
         }
     }
 
@@ -156,8 +175,18 @@ public class OffsetSyncStoreTest {
         assertEquals(OptionalLong.of(syncOffset + 1), store.translateDownstream(null, tp, syncOffset + 2));
     }
 
+    private int countDistinctStoredSyncs(FakeOffsetSyncStore store, TopicPartition topicPartition) {
+        int count = 1;
+        for (int i = 1; i < OffsetSyncStore.SYNCS_PER_PARTITION; i++) {
+            if (store.syncFor(topicPartition, i - 1) != store.syncFor(topicPartition, i)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private void assertSparseSyncInvariant(FakeOffsetSyncStore store, TopicPartition topicPartition) {
-        for (int j = 0; j < Long.SIZE; j++) {
+        for (int j = 0; j < OffsetSyncStore.SYNCS_PER_PARTITION; j++) {
             for (int i = 0; i <= j; i++) {
                 long jUpstream = store.syncFor(topicPartition, j).upstreamOffset();
                 long iUpstream = store.syncFor(topicPartition, i).upstreamOffset();
@@ -177,7 +206,7 @@ public class OffsetSyncStoreTest {
                 if (iUpstreamBound < 0)
                     continue;
                 assertTrue(
-                        iUpstream < iUpstreamBound,
+                        iUpstream <= iUpstreamBound,
                         "Invariant B(" + i + "," + j + "): Upstream offset " + iUpstream + " at position " + i
                                 + " should be no greater than " + iUpstreamBound + " (" + jUpstream + " + 2^" + j + ")"
                 );

@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * This maintains the following invariants for each topic-partition in the in-memory sync storage:
  * <ul>
  *     <li>Invariant A: syncs[0] is the latest offset sync from the syncs topic</li>
- *     <li>Invariant B: For each i,j, i < j, syncs[i] != syncs[j]: syncs[i].upstream < syncs[j].upstream + 2^j - 2^i</li>
+ *     <li>Invariant B: For each i,j, i < j, syncs[i] != syncs[j]: syncs[i].upstream <= syncs[j].upstream + 2^j - 2^i</li>
  *     <li>Invariant C: For each i,j, i < j, syncs[i] != syncs[j]: syncs[j].upstream + 2^(i-1) <= syncs[i].upstream</li>
  * </ul>
  * <p>The above invariants ensure that the store is kept updated upon receipt of each sync, and that distinct
@@ -60,7 +60,8 @@ class OffsetSyncStore implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetSyncStore.class);
     // Store one offset sync for each bit of the topic offset.
-    private static final int SYNCS_PER_PARTITION = Long.SIZE;
+    // Visible for testing
+    static final int SYNCS_PER_PARTITION = Long.SIZE;
     private final KafkaBasedLog<byte[], byte[]> backingStore;
     private final Map<TopicPartition, OffsetSync[]> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
@@ -277,7 +278,7 @@ class OffsetSyncStore implements AutoCloseable {
 
     private boolean invariantB(OffsetSync iSync, OffsetSync jSync, int i, int j) {
         long bound = jSync.upstreamOffset() + (1L << j) - (1L << i);
-        return iSync == jSync || bound < 0 || iSync.upstreamOffset() < bound;
+        return iSync == jSync || bound < 0 || iSync.upstreamOffset() <= bound;
     }
 
     private boolean invariantC(OffsetSync iSync, OffsetSync jSync, int i, int j) {
