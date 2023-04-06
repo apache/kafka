@@ -36,6 +36,8 @@ import java.util.stream.Collectors;
  */
 public class EnvVarConfigProvider implements ConfigProvider {
 
+    private static final Logger log = LoggerFactory.getLogger(EnvVarConfigProvider.class);
+
     public static final String ALLOWLIST_PATTERN_CONFIG = "allowlist.pattern";
     public static final String ALLOWLIST_PATTERN_CONFIG_DOC = "A pattern / regular expression that needs to match for environment variables" +
             " to be used by this config provider.";
@@ -49,8 +51,6 @@ public class EnvVarConfigProvider implements ConfigProvider {
     public EnvVarConfigProvider(Map<String, String> envVarsAsArgument) {
         envVarMap = envVarsAsArgument;
     }
-
-    private static final Logger log = LoggerFactory.getLogger(EnvVarConfigProvider.class);
 
     @Override
     public void configure(Map<String, ?> configs) {
@@ -76,12 +76,12 @@ public class EnvVarConfigProvider implements ConfigProvider {
     }
 
     /**
-     * @param s unused
+     * @param path unused
      * @return returns environment variables as configuration
      */
     @Override
-    public ConfigData get(String s) {
-        return get(s, null);
+    public ConfigData get(String path) {
+        return get(path, null);
     }
 
     /**
