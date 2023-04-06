@@ -33,9 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class ConcurrentEventQueueTest {
+public class EventDispatcherTest {
 
-    private class MockEvent implements ConcurrentEventQueue.Event<Integer> {
+    private class MockEvent implements EventDispatcher.Event<Integer> {
         int key;
         int value;
 
@@ -75,10 +75,10 @@ public class ConcurrentEventQueueTest {
 
     @Test
     public void testBasicOperations() {
-        ConcurrentEventQueue<Integer, MockEvent> queue = new ConcurrentEventQueue<>();
+        EventDispatcher<Integer, MockEvent> dispatcher = new EventDispatcher<>();
 
-        assertEquals(0, queue.size());
-        assertNull(queue.poll(0, TimeUnit.MICROSECONDS));
+        assertEquals(0, dispatcher.size());
+        assertNull(dispatcher.poll(0, TimeUnit.MICROSECONDS));
 
         List<MockEvent> events = Arrays.asList(
             new MockEvent(1, 0),
@@ -92,86 +92,86 @@ public class ConcurrentEventQueueTest {
             new MockEvent(3, 2)
         );
 
-        events.forEach(queue::add);
-        assertEquals(9, queue.size());
+        events.forEach(dispatcher::add);
+        assertEquals(9, dispatcher.size());
 
         Set<MockEvent> polledEvents = new HashSet<>();
         for (int i = 0; i < events.size(); i++) {
-            MockEvent event = queue.poll(0, TimeUnit.MICROSECONDS);
+            MockEvent event = dispatcher.poll(0, TimeUnit.MICROSECONDS);
             assertNotNull(event);
             polledEvents.add(event);
-            assertEquals(events.size() - 1 - i, queue.size());
-            queue.done(event);
+            assertEquals(events.size() - 1 - i, dispatcher.size());
+            dispatcher.done(event);
         }
 
-        assertNull(queue.poll(0, TimeUnit.MICROSECONDS));
+        assertNull(dispatcher.poll(0, TimeUnit.MICROSECONDS));
         assertEquals(new HashSet<>(events), polledEvents);
-        assertEquals(0, queue.size());
+        assertEquals(0, dispatcher.size());
 
-        queue.close();
+        dispatcher.close();
     }
 
     @Test
     public void testKeyConcurrentProcessingAndOrdering() {
-        ConcurrentEventQueue<Integer, MockEvent> queue = new ConcurrentEventQueue<>();
+        EventDispatcher<Integer, MockEvent> dispatcher = new EventDispatcher<>();
 
         MockEvent event0 = new MockEvent(1, 0);
         MockEvent event1 = new MockEvent(1, 1);
         MockEvent event2 = new MockEvent(1, 2);
-        queue.add(event0);
-        queue.add(event1);
-        queue.add(event2);
-        assertEquals(3, queue.size());
+        dispatcher.add(event0);
+        dispatcher.add(event1);
+        dispatcher.add(event2);
+        assertEquals(3, dispatcher.size());
 
         MockEvent event = null;
 
         // Poll event0.
-        event = queue.poll(0, TimeUnit.MICROSECONDS);
+        event = dispatcher.poll(0, TimeUnit.MICROSECONDS);
         assertEquals(event0, event);
 
         // Poll returns null because key is inflight.
-        assertNull(queue.poll(0, TimeUnit.MICROSECONDS));
-        queue.done(event);
+        assertNull(dispatcher.poll(0, TimeUnit.MICROSECONDS));
+        dispatcher.done(event);
 
         // Poll event1.
-        event = queue.poll(0, TimeUnit.MICROSECONDS);
+        event = dispatcher.poll(0, TimeUnit.MICROSECONDS);
         assertEquals(event1, event);
 
         // Poll returns null because key is inflight.
-        assertNull(queue.poll(0, TimeUnit.MICROSECONDS));
-        queue.done(event);
+        assertNull(dispatcher.poll(0, TimeUnit.MICROSECONDS));
+        dispatcher.done(event);
 
         // Poll event2.
-        event = queue.poll(0, TimeUnit.MICROSECONDS);
+        event = dispatcher.poll(0, TimeUnit.MICROSECONDS);
         assertEquals(event2, event);
 
         // Poll returns null because key is inflight.
-        assertNull(queue.poll(0, TimeUnit.MICROSECONDS));
-        queue.done(event);
+        assertNull(dispatcher.poll(0, TimeUnit.MICROSECONDS));
+        dispatcher.done(event);
 
-        queue.close();
+        dispatcher.close();
     }
 
     @Test
     public void testDoneUnblockWaitingThreads() throws ExecutionException, InterruptedException, TimeoutException {
-        ConcurrentEventQueue<Integer, MockEvent> queue = new ConcurrentEventQueue<>();
+        EventDispatcher<Integer, MockEvent> dispatcher = new EventDispatcher<>();
 
         MockEvent event0 = new MockEvent(1, 0);
         MockEvent event1 = new MockEvent(1, 1);
         MockEvent event2 = new MockEvent(1, 2);
 
-        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(queue::poll);
-        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(queue::poll);
-        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(queue::poll);
+        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(dispatcher::poll);
+        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(dispatcher::poll);
+        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(dispatcher::poll);
         List<CompletableFuture<MockEvent>> futures = Arrays.asList(future0, future1, future2);
 
         assertFalse(future0.isDone());
         assertFalse(future1.isDone());
         assertFalse(future2.isDone());
 
-        queue.add(event0);
-        queue.add(event1);
-        queue.add(event2);
+        dispatcher.add(event0);
+        dispatcher.add(event1);
+        dispatcher.add(event2);
 
         // One future should be completed with event0.
         assertEquals(event0, CompletableFuture
@@ -182,7 +182,7 @@ public class ConcurrentEventQueueTest {
         assertEquals(2, futures.size());
 
         // Processing of event0 is done.
-        queue.done(event0);
+        dispatcher.done(event0);
 
         // One future should be completed with event1.
         assertEquals(event1, CompletableFuture
@@ -193,7 +193,7 @@ public class ConcurrentEventQueueTest {
         assertEquals(1, futures.size());
 
         // Processing of event1 is done.
-        queue.done(event1);
+        dispatcher.done(event1);
 
         // One future should be completed with event1.
         assertEquals(event2, CompletableFuture
@@ -204,27 +204,27 @@ public class ConcurrentEventQueueTest {
         assertEquals(0, futures.size());
 
         // Processing of event2 is done.
-        queue.done(event2);
+        dispatcher.done(event2);
 
-        assertEquals(0, queue.size());
+        assertEquals(0, dispatcher.size());
 
-        queue.close();
+        dispatcher.close();
     }
 
     @Test
     public void testCloseUnblockWaitingThreads() throws ExecutionException, InterruptedException, TimeoutException {
-        ConcurrentEventQueue<Integer, MockEvent> queue = new ConcurrentEventQueue<>();
+        EventDispatcher<Integer, MockEvent> dispatcher = new EventDispatcher<>();
 
-        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(queue::poll);
-        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(queue::poll);
-        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(queue::poll);
+        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(dispatcher::poll);
+        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(dispatcher::poll);
+        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(dispatcher::poll);
 
         assertFalse(future0.isDone());
         assertFalse(future1.isDone());
         assertFalse(future2.isDone());
 
         // Closing should release all the pending futures.
-        queue.close();
+        dispatcher.close();
 
         assertNull(future0.get(5, TimeUnit.SECONDS));
         assertNull(future1.get(5, TimeUnit.SECONDS));

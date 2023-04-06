@@ -41,7 +41,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * There are a few examples about how to use it in the unit tests.
  */
-public class ConcurrentEventQueue<K, T extends ConcurrentEventQueue.Event<K>> implements AutoCloseable {
+public class EventDispatcher<K, T extends EventDispatcher.Event<K>> implements AutoCloseable {
 
     /**
      * The interface which must be implemented by all events.
@@ -93,11 +93,11 @@ public class ConcurrentEventQueue<K, T extends ConcurrentEventQueue.Event<K>> im
      */
     private boolean closed;
 
-    public ConcurrentEventQueue() {
+    public EventDispatcher() {
         this(new Random());
     }
 
-    public ConcurrentEventQueue(
+    public EventDispatcher(
         Random random
     ) {
         this.random = random;
