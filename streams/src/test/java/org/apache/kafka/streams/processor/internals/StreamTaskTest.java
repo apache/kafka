@@ -97,6 +97,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
@@ -242,6 +243,7 @@ public class StreamTaskTest {
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
+            mkEntry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
             mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
             mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
@@ -765,6 +767,35 @@ public class StreamTaskTest {
         assertThat(terminalAvg.metricValue(), equalTo(16.5));
         assertThat(terminalMin.metricValue(), equalTo(10.0));
         assertThat(terminalMax.metricValue(), equalTo(23.0));
+    }
+
+    @Test
+    public void shouldRecordRestoredRecords() {
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+
+        final KafkaMetric totalMetric = getMetric("restore", "%s-total", task.id().toString());
+        final KafkaMetric rateMetric = getMetric("restore", "%s-rate", task.id().toString());
+        final KafkaMetric remainMetric = getMetric("restore", "%s-remaining-records-total", task.id().toString());
+
+        assertThat(totalMetric.metricValue(), equalTo(0.0));
+        assertThat(rateMetric.metricValue(), equalTo(0.0));
+        assertThat(remainMetric.metricValue(), equalTo(0.0));
+
+        task.initRemainingRecordsToRestore(time, 100L);
+
+        assertThat(remainMetric.metricValue(), equalTo(100.0));
+
+        task.maybeRecordRestored(time, 25L);
+
+        assertThat(totalMetric.metricValue(), equalTo(25.0));
+        assertThat(rateMetric.metricValue(), not(0.0));
+        assertThat(remainMetric.metricValue(), equalTo(75.0));
+
+        task.maybeRecordRestored(time, 50L);
+
+        assertThat(totalMetric.metricValue(), equalTo(75.0));
+        assertThat(rateMetric.metricValue(), not(0.0));
+        assertThat(remainMetric.metricValue(), equalTo(25.0));
     }
 
     @Test
