@@ -986,7 +986,7 @@ class Partition(val topicPartition: TopicPartition,
       // 1. It is not fenced.
       // 2. It is not in controlled shutdown.
       // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
-      //    request broker epoch is -1 which bypass the epoch verification.
+      //    request broker epoch is -1 which bypasses the epoch verification.
       case kRaftMetadataCache: KRaftMetadataCache =>
         val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch
         val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
@@ -1711,30 +1711,27 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def addBrokerEpochToIsr(isr: List[Int]): List[BrokerState] = {
-    isr.map(brokerId => {
+    isr.map { brokerId =>
       val brokerState = new BrokerState().setBrokerId(brokerId)
       if (!metadataCache.isInstanceOf[KRaftMetadataCache]) {
         brokerState.setBrokerEpoch(-1)
       } else if (brokerId == localBrokerId) {
         brokerState.setBrokerEpoch(localBrokerEpochSupplier())
+      } else if (!remoteReplicasMap.contains(brokerId) || !remoteReplicasMap.get(brokerId).stateSnapshot.brokerEpoch.isDefined) {
+        // There are two cases where the broker epoch can be missing:
+        // 1. In ISR expansion. We already held lock for the partition and did the broker epoch check, so the new
+        //   ISR replica should have a valid broker epoch. Then, the missing broker epoch can only be the existing
+        //   ISR replicas whose fetch request has not been received by this leader. It is safe to set the epoch -1
+        //   for this replica because even if it crashed at the moment, the controller will remove it from ISR
+        //   later and bump the partition epoch to reject this AlterPartition request.
+        // 2. In ISR shrinking. Similarly, if the existing ISR replicas does not have broker epoch, it is safe to
+        //   set the broker epoch to -1 here.
+        brokerState.setBrokerEpoch(-1)
       } else {
-        try {
-          brokerState.setBrokerEpoch(remoteReplicasMap.get(brokerId).stateSnapshot.brokerEpoch.get)
-        } catch {
-          case _: Throwable =>
-            // There are two cases where the broker epoch can be missing:
-            // 1. In ISR expansion. We already held lock for the partition and did the broker epoch check, so the new
-            //   ISR replica should have a valid broker epoch. Then, the missing broker epoch can only be the existing
-            //   ISR replicas whose fetch request has not been received by this leader. It is safe to set the epoch -1
-            //   for this replica because even if it crashed at the moment, the controller will remove it from ISR
-            //   later and bump the partition epoch to reject this AlterPartition request.
-            // 2. In ISR shrinking. Similarly, if the existing ISR replicas does not have broker epoch, it is safe to
-            //   set the broker epoch to -1 here.
-            brokerState.setBrokerEpoch(-1)
-        }
+        brokerState.setBrokerEpoch(remoteReplicasMap.get(brokerId).stateSnapshot.brokerEpoch.get)
       }
       brokerState
-    })
+    }
   }
 
   private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {

@@ -125,7 +125,7 @@ class AlterPartitionManagerTest {
     verify(brokerToController).start()
     val captor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     verify(brokerToController).sendRequest(captor.capture(), any())
-    assertEquals(message.toString, captor.getValue.asInstanceOf[AlterPartitionRequest.Builder].build().toString)
+    assertEquals(message, captor.getValue.asInstanceOf[AlterPartitionRequest.Builder].build().data())
   }
 
   @ParameterizedTest
