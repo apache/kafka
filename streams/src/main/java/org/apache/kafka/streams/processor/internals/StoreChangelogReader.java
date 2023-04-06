@@ -651,7 +651,8 @@ public class StoreChangelogReader implements ChangelogReader {
             // otherwise one-at-a-time removal or addition would be very costly; if all records are restored
             // then we can further optimize to save the array-shift but just set array elements to null
             if (numRecords < changelogMetadata.bufferedRecords.size()) {
-                records.clear();
+                // TODO: should optimize this
+                changelogMetadata.bufferedRecords.removeAll(records);
             } else {
                 changelogMetadata.bufferedRecords.clear();
             }
@@ -690,7 +691,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        if (numRecords > 0 || changelogMetadata.state().equals(ChangelogState.COMPLETED)) {
+        if (task != null && (numRecords > 0 || changelogMetadata.state().equals(ChangelogState.COMPLETED))) {
             task.clearTaskTimeout();
         }
 
@@ -987,14 +988,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
-
-                final TaskId taskId = changelogs.get(partition).stateManager.taskId();
-                final StreamTask task = (StreamTask) tasks.get(taskId);
-                // if the log is truncated between when we get the log end offset and when we get the
-                // consumer position, then it's possible that the difference become negative and there's actually
-                // no records to restore; in this case we just initialize the sensor to zero
-                final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
-                task.initRemainingRecordsToRestore(time, recordsToRestore);
             }
         }
     }
