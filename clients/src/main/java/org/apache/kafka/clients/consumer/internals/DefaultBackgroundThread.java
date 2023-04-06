@@ -49,8 +49,7 @@ import java.util.concurrent.BlockingQueue;
  */
 public class DefaultBackgroundThread extends KafkaThread {
     private static final long MAX_POLL_TIMEOUT_MS = 5000;
-    private static final String BACKGROUND_THREAD_NAME =
-            "consumer_background_thread";
+    private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;

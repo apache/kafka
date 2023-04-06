@@ -718,7 +718,8 @@ class Partition(val topicPartition: TopicPartition,
           s"leader epoch ${partitionState.leaderEpoch} from offset $leaderEpochStartOffset " +
           s"with partition epoch ${partitionState.partitionEpoch}, high watermark ${leaderLog.highWatermark}, " +
           s"ISR ${isr.mkString("[", ",", "]")}, adding replicas ${addingReplicas.mkString("[", ",", "]")} and " +
-          s"removing replicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
+          s"removing replicas ${removingReplicas.mkString("[", ",", "]")} ${if (isUnderMinIsr) "(under-min-isr)" else ""}. " +
+          s"Previous leader epoch was $leaderEpoch.")
 
         // In the case of successive leader elections in a short time period, a follower may have
         // entries in its log from a later epoch than any entry in the new leader's log. In order
@@ -1820,7 +1821,8 @@ class Partition(val topicPartition: TopicPartition,
 
       partitionState = CommittedPartitionState(leaderAndIsr.isr.toSet, leaderAndIsr.leaderRecoveryState)
       partitionEpoch = leaderAndIsr.partitionEpoch
-      info(s"ISR updated to ${partitionState.isr.mkString(",")} and version updated to $partitionEpoch")
+      info(s"ISR updated to ${partitionState.isr.mkString(",")} ${if (isUnderMinIsr) "(under-min-isr)" else ""} " +
+        s"and version updated to $partitionEpoch")
 
       proposedIsrState.notifyListener(alterPartitionListener)
 

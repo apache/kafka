@@ -27,8 +27,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Arrays;
+import java.util.SplittableRandom;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -92,7 +92,8 @@ public class ProducerPerformance {
             if (recordSize != null) {
                 payload = new byte[recordSize];
             }
-            Random random = new Random(0);
+            // not threadsafe, do not share with other threads
+            SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
             stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
@@ -169,7 +170,7 @@ public class ProducerPerformance {
     Stats stats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
-            Random random) {
+            SplittableRandom random) {
         if (!payloadByteList.isEmpty()) {
             payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
         } else if (recordSize != null) {

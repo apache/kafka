@@ -165,7 +165,7 @@ class SecurityTest(EndToEndTest):
         if quorum.for_test(self.test_context) == quorum.zk:
             self.kafka.zk.restart_cluster()
         else:
-            self.kafka.remote_controller_quorum.restart_cluster()
+            self.kafka.isolated_controller_quorum.restart_cluster()
 
         try:
             self.kafka.start_node(self.kafka.nodes[0], timeout_sec=30)

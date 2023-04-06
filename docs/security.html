@@ -402,7 +402,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             If private key is encrypted using a password, the key password must be provided in <code>ssl.key.password</code>. Private keys may be provided
             in unencrypted form without a password. In production deployments, configs should be encrypted or
             externalized using password protection feature in Kafka in this case. Note that the default SSL engine factory has limited capabilities for decryption
-            of encrypted private keys when external tools like OpenSSL are used for encryption. Third party libraries like BouncyCastle may be integrated witn a
+            of encrypted private keys when external tools like OpenSSL are used for encryption. Third party libraries like BouncyCastle may be integrated with a
             custom <code>SslEngineFactory</code> to support a wider range of encrypted private keys.</p>
 
         </li>
@@ -417,7 +417,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
 
             <ol>
                 <li><b><a href="https://tools.ietf.org/html/rfc5280#section-4.2.1.12">Extended Key Usage</a></b><br>Certificates may contain an extension
-                    field that controls the purpose for which the certificate can be used. If this field is empty, there are no restricitions on the usage,
+                    field that controls the purpose for which the certificate can be used. If this field is empty, there are no restrictions on the usage,
                     but if any usage is specified in here, valid SSL implementations have to enforce these usages.<br>
                     Relevant usages for Kafka are:
                     <ul>
@@ -431,7 +431,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                 <li><b>Intermediate Certificates</b><br>
                     Corporate Root CAs are often kept offline for security reasons. To enable day-to-day usage, so called intermediate CAs are created, which
                     are then used to sign the final certificates. When importing a certificate into the keystore that was signed by an intermediate CA it is
-                    necessarry to provide the entire chain of trust up to the root CA. This can be done by simply <i>cat</i>ing the certificate files into one
+                    necessary to provide the entire chain of trust up to the root CA. This can be done by simply <i>cat</i>ing the certificate files into one
                     combined certificate file and then importing this with keytool.
                 </li>
                 <li><b>Failure to copy extension fields</b><br>

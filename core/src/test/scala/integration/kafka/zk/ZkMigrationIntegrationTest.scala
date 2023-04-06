@@ -16,20 +16,30 @@
  */
 package kafka.zk
 
+import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
+import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.{PasswordEncoder, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult, AlterConfigOp, AlterConfigsResult, ConfigEntry, NewTopic}
+import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
+import org.apache.kafka.common.acl.AclPermissionType.ALLOW
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
+import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.ResourceType.TOPIC
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.metadata.authorizer.StandardAcl
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
@@ -39,8 +49,8 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
 import java.util
-import java.util.Properties
 import java.util.concurrent.TimeUnit
+import java.util.{Properties, UUID}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -64,6 +74,49 @@ class ZkMigrationIntegrationTest {
     def verify(verifier: MetadataImage => Unit): Unit = {
       val image = metadataDelta.apply(new MetadataProvenance(offset, 0, 0))
       verifier.apply(image)
+    }
+  }
+
+  @ClusterTest(
+    brokers = 3, clusterType = Type.ZK, autoStart = AutoStart.YES,
+    metadataVersion = MetadataVersion.IBP_3_4_IV0,
+    serverProperties = Array(
+      new ClusterConfigProperty(key="authorizer.class.name", value="kafka.security.authorizer.AclAuthorizer"),
+      new ClusterConfigProperty(key="super.users", value="User:ANONYMOUS")
+    )
+  )
+  def testMigrateAcls(clusterInstance: ClusterInstance): Unit = {
+    val admin = clusterInstance.createAdminClient()
+
+    val resource1 = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
+    val resource2 = new ResourcePattern(TOPIC, "bar-" + UUID.randomUUID(), LITERAL)
+    val prefixedResource = new ResourcePattern(TOPIC, "bar-", PREFIXED)
+    val username = "alice"
+    val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val wildcardPrincipal = SecurityUtils.parseKafkaPrincipal(WildcardPrincipalString)
+
+    val acl1 = new AclBinding(resource1, new AccessControlEntry(principal.toString, WildcardHost, READ, ALLOW))
+    val acl2 = new AclBinding(resource1, new AccessControlEntry(principal.toString, "192.168.0.1", WRITE, ALLOW))
+    val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WildcardHost, DESCRIBE, ALLOW))
+    val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WildcardHost, READ, ALLOW))
+
+    val result = admin.createAcls(List(acl1, acl2, acl3, acl4).asJava)
+    result.all().get
+
+    val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
+    val zkClient = underlying.zkClient
+    val migrationClient = new ZkMigrationClient(zkClient, PasswordEncoder.noop())
+    val verifier = new MetadataDeltaVerifier()
+    migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => { })
+    verifier.verify { image =>
+      val aclMap = image.acls().acls()
+      assertEquals(4, aclMap.size())
+      assertTrue(aclMap.values().containsAll(Seq(
+        StandardAcl.fromAclBinding(acl1),
+        StandardAcl.fromAclBinding(acl2),
+        StandardAcl.fromAclBinding(acl3),
+        StandardAcl.fromAclBinding(acl4)
+      ).asJava))
     }
   }
 

@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -37,8 +37,6 @@ import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -909,11 +907,10 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
         builder.addStateStore(
-            new VersionedKeyValueStoreBuilder<>(
-                new RocksDbVersionedKeyValueBytesStoreSupplier("vstore", 60_000L),
+            Stores.versionedKeyValueStoreBuilder(
+                Stores.persistentVersionedKeyValueStore("vstore", Duration.ofMillis(60_000L)),
                 Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+                Serdes.String()
             ),
             "processor"
         );

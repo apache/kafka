@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import javax.ws.rs.core.HttpHeaders;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -32,6 +30,8 @@ import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -50,11 +50,11 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Stubber;
 
 import javax.ws.rs.BadRequestException;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
-
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -70,6 +70,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -399,7 +400,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackResult(cb, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
             .when(herder).connectorInfo(eq(CONNECTOR_NAME), cb.capture());
 
-        ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME);
         assertEquals(new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE),
             connInfo);
     }
@@ -409,7 +410,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Map<String, String>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, CONNECTOR_CONFIG).when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
-        Map<String, String> connConfig = connectorsResource.getConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        Map<String, String> connConfig = connectorsResource.getConnectorConfig(CONNECTOR_NAME);
         assertEquals(CONNECTOR_CONFIG, connConfig);
     }
 
@@ -419,7 +420,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackException(cb, new NotFoundException("not found"))
             .when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
-        assertThrows(NotFoundException.class, () -> connectorsResource.getConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+        assertThrows(NotFoundException.class, () -> connectorsResource.getConnectorConfig(CONNECTOR_NAME));
     }
 
     @Test
@@ -446,9 +447,9 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb2 = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb2, expectedTasksConnector2).when(herder).tasksConfig(eq(CONNECTOR2_NAME), cb2.capture());
 
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME);
         assertEquals(expectedTasksConnector, tasksConfig);
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME, NULL_HEADERS, FORWARD);
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME);
         assertEquals(expectedTasksConnector2, tasksConfig2);
     }
 
@@ -459,7 +460,7 @@ public class ConnectorsResourceTest {
             .when(herder).tasksConfig(eq(CONNECTOR_NAME), cb.capture());
 
         assertThrows(NotFoundException.class, () ->
-            connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+            connectorsResource.getTasksConfig(CONNECTOR_NAME));
     }
 
     @Test
@@ -547,7 +548,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<List<TaskInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, TASK_INFOS).when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
 
-        List<TaskInfo> taskInfos = connectorsResource.getTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        List<TaskInfo> taskInfos = connectorsResource.getTaskConfigs(CONNECTOR_NAME);
         assertEquals(TASK_INFOS, taskInfos);
     }
 
@@ -557,7 +558,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackException(cb, new NotFoundException("connector not found"))
             .when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
 
-        assertThrows(NotFoundException.class, () -> connectorsResource.getTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+        assertThrows(NotFoundException.class, () -> connectorsResource.getTaskConfigs(CONNECTOR_NAME));
     }
 
     @Test
@@ -761,6 +762,27 @@ public class ConnectorsResourceTest {
         ConnectRestException e = assertThrows(ConnectRestException.class, () ->
             connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
         assertTrue(e.getMessage().contains("no known leader URL"));
+    }
+
+    @Test
+    public void testGetOffsetsConnectorNotFound() {
+        final ArgumentCaptor<Callback<ConnectorOffsets>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackException(cb, new NotFoundException("Connector not found"))
+                .when(herder).connectorOffsets(anyString(), cb.capture());
+
+        assertThrows(NotFoundException.class, () -> connectorsResource.getOffsets("unknown-connector"));
+    }
+
+    @Test
+    public void testGetOffsets() throws Throwable {
+        final ArgumentCaptor<Callback<ConnectorOffsets>> cb = ArgumentCaptor.forClass(Callback.class);
+        ConnectorOffsets offsets = new ConnectorOffsets(Arrays.asList(
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"))
+        ));
+        expectAndCallbackResult(cb, offsets).when(herder).connectorOffsets(eq(CONNECTOR_NAME), cb.capture());
+
+        assertEquals(offsets, connectorsResource.getOffsets(CONNECTOR_NAME));
     }
 
     private <T> byte[] serializeAsBytes(final T value) throws IOException {
