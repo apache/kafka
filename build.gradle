@@ -858,6 +858,7 @@ project(':core') {
     implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':storage:api')
+    implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
 
@@ -1106,6 +1107,8 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':tools:tools-api').jar) { into("libs/") }
+    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -1766,6 +1769,61 @@ project(':storage') {
   }
 }
 
+project(':tools:tools-api') {
+  archivesBaseName = "kafka-tools-api"
+
+  dependencies {
+    implementation project(':clients')
+    testImplementation libs.junitJupiter
+  }
+
+  task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/tools/api/*"
+  }
+}
+
 project(':tools') {
   archivesBaseName = "kafka-tools"
 
@@ -1773,6 +1831,7 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':server-common')
     implementation project(':log4j-appender')
+    implementation project(':tools:tools-api')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
