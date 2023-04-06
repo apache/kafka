@@ -287,8 +287,8 @@ public class StreamTaskTest {
             task.closeDirty();
             task = null;
         }
-        mockito.finishMocking();
         Utils.delete(BASE_DIR);
+        mockito.finishMocking();
     }
 
     @Test
