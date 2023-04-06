@@ -271,7 +271,6 @@ public class ScramControlManager {
                 setIterations(upsertion.iterations()), (short) 0));
 
         } catch (Throwable e) {
-            // XXX Should We just return UNACCEPTABLE_CREDENTIAL --proven 2023/03/31
             return ApiError.fromThrowable(e);
         }
         return ApiError.NONE;

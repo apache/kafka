@@ -65,7 +65,7 @@ object StorageTool extends Logging {
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported()) {
-              throw new TerseFailure(s"SCRAM is only supported in metadataVersion IBP_3_5_IV1 or later.");
+              throw new TerseFailure(s"SCRAM is only supported in metadataVersion IBP_3_5_IV2 or later.");
             }
             for (record <- userScramCredentialRecords) {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
