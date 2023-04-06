@@ -644,7 +644,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final int numRecords = changelogMetadata.bufferedLimitIndex;
 
         if (numRecords != 0) {
-            final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
+            final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>(changelogMetadata.bufferedRecords.subList(0, numRecords));
             stateManager.restore(storeMetadata, records);
 
             // NOTE here we use removeRange of ArrayList in order to achieve efficiency with range shifting,
