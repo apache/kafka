@@ -98,7 +98,7 @@ public class ServerSideStickyRangeAssignorTest {
         // Topics
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
         topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic1Name, 3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
         topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
         // Members
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
