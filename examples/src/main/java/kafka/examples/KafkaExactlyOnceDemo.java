@@ -31,6 +31,8 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * This exactly once demo driver takes 3 arguments:
@@ -71,7 +73,7 @@ import java.util.concurrent.TimeUnit;
  * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
  */
 public class KafkaExactlyOnceDemo {
-
+    public static final String BOOTSTRAP_SERVERS = "localhost:9092";
     private static final String INPUT_TOPIC = "input-topic";
     private static final String OUTPUT_TOPIC = "output-topic";
 
@@ -102,11 +104,12 @@ public class KafkaExactlyOnceDemo {
         CountDownLatch transactionalCopyLatch = new CountDownLatch(numInstances);
 
         /* Stage 3: transactionally process all messages */
-        for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
-            ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(
-                INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx, transactionalCopyLatch);
-            messageProcessor.start();
-        }
+        CountDownLatch processorsLatch = new CountDownLatch(numInstances);
+        List<ExactlyOnceMessageProcessor> processors = IntStream.range(0, numInstances)
+            .mapToObj(id -> new ExactlyOnceMessageProcessor(
+                "processor-" + id, BOOTSTRAP_SERVERS, INPUT_TOPIC, OUTPUT_TOPIC, processorsLatch))
+            .collect(Collectors.toList());
+        processors.forEach(ExactlyOnceMessageProcessor::start);
 
         if (!transactionalCopyLatch.await(5, TimeUnit.MINUTES)) {
             throw new TimeoutException("Timeout after 5 minutes waiting for transactionally message copy");
