@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -84,7 +85,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     private final long gracePeriod;
     private final RocksDBMetricsRecorder metricsRecorder;
 
-    private final RocksDBStore latestValueStore;
+    private final LogicalKeyValueSegment latestValueStore; // implemented as a "reserved segment" of the segments store
     private final LogicalKeyValueSegments segmentStores;
     private final RocksDBVersionedStoreClient versionedStoreClient;
     private final RocksDBVersionedStoreRestoreWriteBuffer restoreWriteBuffer;
@@ -106,8 +107,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // history retention >= grace period, for sound semantics.
         this.gracePeriod = historyRetention;
         this.metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
-        this.latestValueStore = new RocksDBStore(latestValueStoreName(name), name, metricsRecorder);
-        this.segmentStores = new LogicalKeyValueSegments(segmentsStoreName(name), name, historyRetention, segmentInterval, metricsRecorder);
+        // pass store name as segments name so state dir subdirectory uses the store name
+        this.segmentStores = new LogicalKeyValueSegments(name, DB_FILE_DIR, historyRetention, segmentInterval, metricsRecorder);
+        this.latestValueStore = this.segmentStores.createReservedSegment(-1L, latestValueStoreName(name));
         this.versionedStoreClient = new RocksDBVersionedStoreClient();
         this.restoreWriteBuffer = new RocksDBVersionedStoreRestoreWriteBuffer(versionedStoreClient);
     }
@@ -133,8 +135,23 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> delete(final Bytes key, final long timestamp) {
+        if (timestamp < observedStreamTime - gracePeriod) {
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            LOG.warn("Skipping record for expired delete.");
+            return null;
+        }
+
         final VersionedRecord<byte[]> existingRecord = get(key, timestamp);
-        put(key, null, timestamp);
+
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
+        doPut(
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            null,
+            timestamp
+        );
+
         return existingRecord;
     }
 
@@ -156,9 +173,25 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
+            // history retention exceeded. we still check the latest value store in case the
+            // latest record version satisfies the timestamp bound, in which case it should
+            // still be returned (i.e., the latest record version per key never expires).
+            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+            if (rawLatestValueAndTimestamp != null) {
+                final long latestTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                if (latestTimestamp <= asOfTimestamp) {
+                    // latest value satisfies timestamp bound
+                    return new VersionedRecord<>(
+                        LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
+                        latestTimestamp
+                    );
+                }
+            }
+
+            // history retention has elapsed and the latest record version (if present) does
+            // not satisfy the timestamp bound. return null for predictability, even if data
+            // is still present in segments.
             LOG.warn("Returning null for expired get.");
-            // history retention has elapsed. return null for predictability, even if data
-            // is still present in store.
             return null;
         }
 
@@ -215,19 +248,18 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public void flush() {
-        // order shouldn't matter since failure to flush is a fatal exception
         segmentStores.flush();
-        latestValueStore.flush();
+        // flushing segments store includes flushing latest value store, since they share the
+        // same physical RocksDB instance
     }
 
     @Override
     public void close() {
         open = false;
 
-        // close latest value store first so that calls to get() immediately begin to fail with
-        // store not open, as all calls to get() first get() from latest value store
-        latestValueStore.close();
         segmentStores.close();
+        // closing segments store includes closing latest value store, since they share the
+        // same physical RocksDB instance
     }
 
     @Override
@@ -262,7 +294,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
 
-        latestValueStore.openDB(context.appConfigs(), context.stateDir());
         segmentStores.openExisting(context, observedStreamTime);
 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
@@ -480,6 +511,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         final byte[] value,
         final long timestamp
     ) {
+        segmentStores.cleanupExpiredSegments(observedStreamTime);
+
         // track the smallest timestamp seen so far that is larger than insertion timestamp.
         // this timestamp determines, based on all segments searched so far, which segment the
         // new record should be inserted into.
@@ -894,9 +927,5 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private static String latestValueStoreName(final String storeName) {
         return storeName + ".latestValues";
-    }
-
-    private static String segmentsStoreName(final String storeName) {
-        return storeName + ".segments";
     }
 }

@@ -17,15 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
@@ -56,6 +53,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
@@ -68,7 +66,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_8;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_9;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -169,26 +166,6 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         topologyMetadata.buildAndRewriteTopology();
     }
 
-    // If you don't care about setting the end offsets for each specific topic partition, the helper method
-    // getTopicPartitionOffsetMap is useful for building this input map for all partitions
-    private void createMockAdminClient(final Map<TopicPartition, Long> changelogEndOffsets) {
-        adminClient = mock(AdminClient.class);
-
-        final ListOffsetsResult result = mock(ListOffsetsResult.class);
-        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
-        allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                t -> {
-                    final ListOffsetsResult.ListOffsetsResultInfo info = mock(ListOffsetsResult.ListOffsetsResultInfo.class);
-                    when(info.offset()).thenReturn(t.getValue());
-                    return info;
-                }))
-        );
-
-        when(adminClient.listOffsets(any())).thenReturn(result);
-        when(result.all()).thenReturn(allFuture);
-    }
-
     private void overwriteInternalTopicManagerWithMock() {
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
                 time,
@@ -201,7 +178,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
     @Before
     public void setUp() {
-        createMockAdminClient(EMPTY_CHANGELOG_END_OFFSETS);
+        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
     }
 
     @Test
@@ -209,7 +186,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         setupTopology(3, 2);
 
         createMockTaskManager();
-        createMockAdminClient(getTopicPartitionOffsetsMap(
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store2-changelog", APPLICATION_ID + "-store3-changelog", APPLICATION_ID + "-store4-changelog"),
             Arrays.asList(3, 3, 3)));
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
@@ -253,7 +230,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         setupTopology(3, 0);
 
         createMockTaskManager();
-        createMockAdminClient(getTopicPartitionOffsetsMap(
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
             Arrays.asList(3, 3, 3)));
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
@@ -300,7 +277,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         setupTopology(3, 0);
 
         createMockTaskManager();
-        createMockAdminClient(getTopicPartitionOffsetsMap(
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
             Arrays.asList(3, 3, 3)));
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));
@@ -365,7 +342,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         setupTopology(3, 0);
 
         createMockTaskManager();
-        createMockAdminClient(getTopicPartitionOffsetsMap(
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
             Arrays.asList(3, 3, 3)));
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));

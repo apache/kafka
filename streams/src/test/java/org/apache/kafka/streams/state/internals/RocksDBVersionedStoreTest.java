@@ -375,6 +375,26 @@ public class RocksDBVersionedStoreTest {
     }
 
     @Test
+    public void shouldNotDeleteExpired() {
+        putToStore("k1", "v1", 1L);
+        putToStore("k2", "v2", 1L);
+        putToStore("kother", "vother", HISTORY_RETENTION + 10); // use separate key to advance stream time
+
+        // grace period has not elapsed
+        VersionedRecord<String> deleted = deleteFromStore("k1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+        assertThat(deleted.value(), equalTo("v1"));
+        assertThat(deleted.timestamp(), equalTo(1L));
+        verifyGetNullFromStore("k1");
+
+        // grace period has elapsed, so this delete does not take place
+        deleted = deleteFromStore("k2", HISTORY_RETENTION + 9 - GRACE_PERIOD);
+        assertThat(deleted, nullValue()); // return value is null even though record exists because delete did not take place
+        verifyGetValueFromStore("k2", "v2", 1L);
+
+        verifyExpiredRecordSensor(1);
+    }
+
+    @Test
     public void shouldGetFromOlderSegments() {
         // use a different key to create three different segments
         putToStore("ko", null, SEGMENT_INTERVAL - 10);
@@ -419,6 +439,19 @@ public class RocksDBVersionedStoreTest {
 
         // old record is expired now
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 11);
+    }
+
+    @Test
+    public void shouldGetExpiredIfLatestValue() {
+        putToStore("k", "v", 1);
+        putToStore("ko", "vo_old", 1);
+        putToStore("ko", "vo_new", HISTORY_RETENTION + 12);
+
+        // expired get on key where latest satisfies timestamp bound still returns data
+        verifyTimestampedGetValueFromStore("k", 10, "v", 1);
+
+        // same expired get on key where latest value does not satisfy timestamp bound does not return data
+        verifyTimestampedGetNullFromStore("ko", 10);
     }
 
     @Test

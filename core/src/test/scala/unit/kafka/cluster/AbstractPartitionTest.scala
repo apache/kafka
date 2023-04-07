@@ -82,6 +82,7 @@ class AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
       delayedOperations,
@@ -145,5 +146,9 @@ class AbstractPartitionTest {
     }
 
     partition
+  }
+
+  def defaultBrokerEpoch(brokerId: Int): Long = {
+    brokerId + 1000L
   }
 }

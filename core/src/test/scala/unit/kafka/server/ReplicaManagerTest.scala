@@ -2081,7 +2081,7 @@ class ReplicaManagerTest {
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
 
     try {
-      val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp.topic), tp, Seq(0, 1), new LeaderAndIsr(0, 1, List(0, 1), null, 0))
+      val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp.topic), tp, Seq(0, 1), LeaderAndIsr(0,  List(0, 1)))
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
       // Append some transactional records. We must set up the metadata cache to handle the append and verification.
@@ -2158,7 +2158,7 @@ class ReplicaManagerTest {
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
 
     try {
-      val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp.topic), tp, Seq(0, 1), new LeaderAndIsr(0, 1, List(0, 1), null, 0))
+      val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp.topic), tp, Seq(0, 1), LeaderAndIsr(0, List(0, 1)))
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
       
       when(metadataCache.contains(tp)).thenReturn(true)

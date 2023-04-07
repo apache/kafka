@@ -19,6 +19,8 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -387,6 +389,33 @@ public class SerializationTest {
             assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanSerializer(Boolean dataToSerialize) {
+        byte[] testData = new byte[1];
+        testData[0] = (byte) (dataToSerialize ? 1 : 0);
+
+        Serde<Boolean> booleanSerde = Serdes.Boolean();
+        assertArrayEquals(testData, booleanSerde.serializer().serialize(topic, dataToSerialize));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanDeserializer(Boolean dataToDeserialize) {
+        byte[] testData = new byte[1];
+        testData[0] = (byte) (dataToDeserialize ? 1 : 0);
+
+        Serde<Boolean> booleanSerde = Serdes.Boolean();
+        assertEquals(dataToDeserialize, booleanSerde.deserializer().deserialize(topic, testData));
+    }
+
+    @Test
+    public void booleanDeserializerShouldThrowOnEmptyInput() {
+        try (Serde<Boolean> serde = Serdes.Boolean()) {
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
         }
     }
 }
