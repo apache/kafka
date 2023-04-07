@@ -2334,6 +2334,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
+      // If this callback was executed after KafkaApis returned we will need to adjust the callback completion time here.
+      if (request.callbackRequestDequeTimeNanos.isDefined)
+        request.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
+
       if (numAppends.decrementAndGet() == 0)
         requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
     }

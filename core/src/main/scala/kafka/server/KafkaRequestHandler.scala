@@ -65,8 +65,8 @@ object KafkaRequestHandler {
       T => fun(T)
     } else {
       T => {
-        // The requestChannel is captured in this lambda, so when it's executed on the callback thread
-        // we can re-schedule the original callback on a request thread.
+        // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
+        // we can re-schedule the original callback on a request thread and update the metrics accordingly.
         requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), request))
       }
     }
@@ -108,11 +108,10 @@ class KafkaRequestHandler(id: Int,
           completeShutdown()
           return
 
-        case request: RequestChannel.CallbackRequest =>
+        case callback: RequestChannel.CallbackRequest =>
           try {
-            request.originalRequest.callbackRequestDequeTimeNanos = Some(time.nanoseconds())
-            request.fun() 
-            request.originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
+            callback.originalRequest.callbackRequestDequeTimeNanos = Some(time.nanoseconds())
+            callback.fun()
           } catch {
             case e: FatalExitError =>
               completeShutdown()
@@ -132,6 +131,7 @@ class KafkaRequestHandler(id: Int,
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
+            currentRequest.remove()
             request.releaseBuffer()
           }
 

@@ -44,6 +44,8 @@ class KafkaRequestHandlerTest {
 
     def callback(ms: Int): Unit = {
       time.sleep(ms)
+      // Callbacks should include the complete time.
+      request.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
       handler.stop()
     }
 
