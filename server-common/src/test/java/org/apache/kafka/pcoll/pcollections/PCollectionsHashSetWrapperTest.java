@@ -25,8 +25,10 @@ import org.pcollections.HashTreePSet;
 import org.pcollections.MapPSet;
 
 import java.util.Collections;
-import java.util.Set;
+import java.util.Iterator;
+import java.util.Spliterator;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import static java.util.function.Function.identity;
@@ -36,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "deprecation"})
 public class PCollectionsHashSetWrapperTest {
 
     private static final MapPSet<Object> SINGLETON_SET = HashTreePSet.singleton(new Object());
@@ -51,23 +53,9 @@ public class PCollectionsHashSetWrapperTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfIsEmpty(boolean mockFunctionReturnValue) {
-        new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(MapPSet::isEmpty, mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashSetWrapper::isEmpty, identity())
-            .doFunctionDelegationCheck();
-    }
-
     @Test
     public void testUnderlying() {
         assertSame(SINGLETON_SET, new PCollectionsHashSetWrapper<>(SINGLETON_SET).underlying());
-    }
-
-    @Test
-    public void testAsJava() {
-        assertSame(SINGLETON_SET, new PCollectionsHashSetWrapper<>(SINGLETON_SET).asJava());
     }
 
     @Test
@@ -88,6 +76,148 @@ public class PCollectionsHashSetWrapperTest {
             .doFunctionDelegationCheck();
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    public void testDelegationOfSize(int mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(MapPSet::size, mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashSetWrapper::size, identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfIsEmpty(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(MapPSet::isEmpty, mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashSetWrapper::isEmpty, identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfContains(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.contains(eq(this)), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.contains(this), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @Test
+    public void testDelegationOfIterator() {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(MapPSet::iterator, mock(Iterator.class))
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashSetWrapper::iterator, identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @Test
+    public void testDelegationOfForEach() {
+        final Consumer<Object> mockConsumer = mock(Consumer.class);
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForVoidMethodInvocation(mock -> mock.forEach(eq(mockConsumer)))
+            .defineWrapperVoidMethodInvocation(wrapper -> wrapper.forEach(mockConsumer))
+            .doVoidMethodDelegationCheck();
+    }
+
+    @Test
+    public void testDelegationOfToArray() {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(MapPSet::toArray, new Object[0])
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashSetWrapper::toArray, identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @Test
+    public void testDelegationOfToArrayIntoGivenDestination() {
+        Object[] destinationArray = new Object[0];
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.toArray(eq(destinationArray)), new Object[0])
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.toArray(destinationArray), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfAdd(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.add(eq(this)), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.add(this), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfRemove(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.remove(eq(this)), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.remove(this), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfContainsAll(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.containsAll(eq(Collections.emptyList())), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.containsAll(Collections.emptyList()), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfAddAll(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.addAll(eq(Collections.emptyList())), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.addAll(Collections.emptyList()), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfRetainAll(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.retainAll(eq(Collections.emptyList())), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.retainAll(Collections.emptyList()), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfRemoveAll(boolean mockFunctionReturnValue) {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.removeAll(eq(Collections.emptyList())), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removeAll(Collections.emptyList()), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfRemoveIf(boolean mockFunctionReturnValue) {
+        final Predicate<Object> mockPredicate = mock(Predicate.class);
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.removeIf(eq(mockPredicate)), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removeIf(mockPredicate), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @Test
+    public void testDelegationOfClear() {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForVoidMethodInvocation(MapPSet::clear)
+            .defineWrapperVoidMethodInvocation(PCollectionsHashSetWrapper::clear)
+            .doVoidMethodDelegationCheck();
+    }
+
+    @Test
+    public void testDelegationOfSpliterator() {
+        new PCollectionsHashSetWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(MapPSet::spliterator, mock(Spliterator.class))
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashSetWrapper::spliterator, identity())
+            .doFunctionDelegationCheck();
+    }
+
+
     @Test
     public void testDelegationOfStream() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
@@ -105,22 +235,11 @@ public class PCollectionsHashSetWrapperTest {
     }
 
     @Test
-    public void testDelegationOfForEach() {
-        final Consumer<Object> mockConsumer = mock(Consumer.class);
-        new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForVoidMethodInvocation(mock -> mock.forEach(eq(mockConsumer)))
-            .defineWrapperVoidMethodInvocation(wrapper -> wrapper.forEach(mockConsumer))
-            .doVoidMethodDelegationCheck();
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfContainsAll(boolean mockFunctionReturnValue) {
-        Set<Object> c = Collections.emptySet();
-        new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.containsAll(eq(c)), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.containsAll(c), identity())
-            .doFunctionDelegationCheck();
+    public void testEquals() {
+        final MapPSet<Object> mock = mock(MapPSet.class);
+        assertEquals(new PCollectionsHashSetWrapper<>(mock), new PCollectionsHashSetWrapper<>(mock));
+        final MapPSet<Object> someOtherMock = mock(MapPSet.class);
+        assertNotEquals(new PCollectionsHashSetWrapper<>(mock), new PCollectionsHashSetWrapper<>(someOtherMock));
     }
 
     @Test
@@ -129,14 +248,6 @@ public class PCollectionsHashSetWrapperTest {
         assertEquals(mock.hashCode(), new PCollectionsHashSetWrapper<>(mock).hashCode());
         final MapPSet<Object> someOtherMock = mock(MapPSet.class);
         assertNotEquals(mock.hashCode(), new PCollectionsHashSetWrapper<>(someOtherMock).hashCode());
-    }
-
-    @Test
-    public void testEquals() {
-        final MapPSet<Object> mock = mock(MapPSet.class);
-        assertEquals(new PCollectionsHashSetWrapper<>(mock), new PCollectionsHashSetWrapper<>(mock));
-        final MapPSet<Object> someOtherMock = mock(MapPSet.class);
-        assertNotEquals(new PCollectionsHashSetWrapper<>(mock), new PCollectionsHashSetWrapper<>(someOtherMock));
     }
 
     @ParameterizedTest

@@ -17,32 +17,19 @@
 
 package org.apache.kafka.pcoll;
 
-import java.util.Collection;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * A persistent Hash-based Set wrapper
+ * java.util.Set methods that mutate in-place will throw UnsupportedOperationException
  *
  * @param <E> the element type
  */
-public interface PHashSetWrapper<E> extends Iterable<E> {
+public interface PHashSetWrapper<E> extends Set<E> {
     /**
      * @return the underlying persistent set
      */
     Object underlying();
-
-    int size();
-
-    /**
-     * @return true iff the set is empty
-     */
-    boolean isEmpty();
-
-    /**
-     * @return the persistent set as a standard Java {@link Set}
-     */
-    Set<E> asJava();
 
     /**
      * @param e the element
@@ -55,20 +42,4 @@ public interface PHashSetWrapper<E> extends Iterable<E> {
      * @return a wrapped persistent set that differs from this one in that the given element is added (if necessary)
      */
     PHashSetWrapper<E> afterRemoving(E e);
-
-    /**
-     * @return a sequential Stream with this collection as its source.
-     */
-    Stream<E> stream();
-
-    /**
-     * @return a possibly parallel Stream with this collection as its source.
-     */
-    Stream<E> parallelStream();
-
-    /**
-     * @param c the collection
-     * @return true iff this collection contains all of the elements in the specified collection.
-     */
-    boolean containsAll(Collection<?> c);
 }

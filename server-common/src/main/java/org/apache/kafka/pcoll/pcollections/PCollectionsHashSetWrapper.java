@@ -23,11 +23,12 @@ import org.pcollections.MapPSet;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Objects;
-import java.util.Set;
 import java.util.Spliterator;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+@SuppressWarnings("deprecation")
 public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
     private final MapPSet<E> underlying;
 
@@ -39,6 +40,16 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
     @Override
     public MapPSet<E> underlying() {
         return this.underlying;
+    }
+    
+    @Override
+    public PHashSetWrapper<E> afterAdding(E e) {
+        return new PCollectionsHashSetWrapper<>(underlying().plus(e));
+    }
+    
+    @Override
+    public PHashSetWrapper<E> afterRemoving(E e) {
+        return new PCollectionsHashSetWrapper<>(underlying().minus(e));
     }
 
     @Override
@@ -52,31 +63,75 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
     }
 
     @Override
-    public Set<E> asJava() {
-        return underlying();
+    public boolean contains(Object o) {
+        return underlying().contains(o);
     }
 
     @Override
-    public PHashSetWrapper<E> afterAdding(E e) {
-        return new PCollectionsHashSetWrapper<>(underlying().plus(e));
+    public Iterator<E> iterator() {
+        return underlying.iterator();
     }
 
     @Override
-    public PHashSetWrapper<E> afterRemoving(E e) {
-        return new PCollectionsHashSetWrapper<>(underlying().minus(e));
+    public void forEach(Consumer<? super E> action) {
+        underlying().forEach(action);
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        PCollectionsHashSetWrapper<?> that = (PCollectionsHashSetWrapper<?>) o;
-        return Objects.equals(underlying(), that.underlying());
+    public Object[] toArray() {
+        return underlying().toArray();
     }
 
     @Override
-    public int hashCode() {
-        return underlying().hashCode();
+    public <T> T[] toArray(T[] a) {
+        return underlying().toArray(a);
+    }
+
+    @Override
+    public boolean add(E e) {
+        // will throw UnsupportedOperationException; delegate anyway for testability
+        return underlying().add(e);
+    }
+
+    @Override
+    public boolean remove(Object o) {
+        // will throw UnsupportedOperationException; delegate anyway for testability
+        return underlying().remove(o);
+    }
+
+    @Override
+    public boolean containsAll(Collection<?> c) {
+        return underlying.containsAll(c);
+    }
+
+    @Override
+    public boolean addAll(Collection<? extends E> c) {
+        // will throw UnsupportedOperationException; delegate anyway for testability
+        return underlying().addAll(c);
+    }
+
+    @Override
+    public boolean retainAll(Collection<?> c) {
+        // will throw UnsupportedOperationException; delegate anyway for testability
+        return underlying().retainAll(c);
+    }
+
+    @Override
+    public boolean removeAll(Collection<?> c) {
+        // will throw UnsupportedOperationException; delegate anyway for testability
+        return underlying().removeAll(c);
+    }
+
+    @Override
+    public boolean removeIf(Predicate<? super E> filter) {
+        // will throw UnsupportedOperationException; delegate anyway for testability
+        return underlying().removeIf(filter);
+    }
+
+    @Override
+    public void clear() {
+        // will throw UnsupportedOperationException; delegate anyway for testability
+        underlying().clear();
     }
 
     @Override
@@ -95,24 +150,22 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PCollectionsHashSetWrapper<?> that = (PCollectionsHashSetWrapper<?>) o;
+        return Objects.equals(underlying(), that.underlying());
+    }
+
+    @Override
+    public int hashCode() {
+        return underlying().hashCode();
+    }
+
+    @Override
     public String toString() {
         return "PCollectionsHashSetWrapper{" +
             "underlying=" + underlying() +
             '}';
-    }
-
-    @Override
-    public Iterator<E> iterator() {
-        return underlying().iterator();
-    }
-
-    @Override
-    public void forEach(Consumer<? super E> action) {
-        underlying().forEach(action);
-    }
-
-    @Override
-    public boolean containsAll(Collection<?> c) {
-        return underlying().containsAll(c);
     }
 }

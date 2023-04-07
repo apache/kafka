@@ -23,6 +23,7 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.pcoll.PHashMapWrapper;
 import org.apache.kafka.pcoll.PHashMapSetWrapperFactory;
+import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Map;
 import java.util.Objects;
@@ -57,12 +58,12 @@ public final class TopicsImage {
         return topicsById.isEmpty() && topicsByName.isEmpty();
     }
 
-    public Map<Uuid, TopicImage> topicsById() {
-        return topicsById.asJava();
+    public PHashMapWrapper<Uuid, TopicImage> topicsById() {
+        return topicsById;
     }
 
-    public Map<String, TopicImage> topicsByName() {
-        return topicsByName.asJava();
+    public PHashMapWrapper<String, TopicImage> topicsByName() {
+        return topicsByName;
     }
 
     public PartitionRegistration getPartition(Uuid id, int partitionId) {
@@ -104,7 +105,7 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<String, Uuid> topicNameToIdView() {
-        return topicsByName.asJava(TopicImage::id);
+        return new TranslatedValueMapView<>(topicsByName, image -> image.id());
     }
 
     /**
@@ -113,7 +114,7 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<Uuid, String> topicIdToNameView() {
-        return topicsById.asJava(TopicImage::name);
+        return new TranslatedValueMapView<>(topicsById, image -> image.name());
     }
 
     @Override

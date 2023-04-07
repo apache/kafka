@@ -17,45 +17,24 @@
 
 package org.apache.kafka.pcoll;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 /**
- * A persistent Hash-based Map wrapper
+ * A persistent Hash-based Map wrapper.
+ * java.util.Map methods that mutate in-place will throw UnsupportedOperationException
  *
  * @param <K> the key type
  * @param <V> the value type
  */
-public interface PHashMapWrapper<K, V> {
+public interface PHashMapWrapper<K, V> extends Map<K, V> {
     /**
      * @return the underlying persistent map
      */
     Object underlying();
-
-    /**
-     * @return the number of mappings in the underlying persistent collection
-     */
-    int size();
-
-    /**
-     * @return true iff the map is empty
-     */
-    boolean isEmpty();
-
-    /**
-     * @return the persistent map as a standard Java {@link Map}
-     */
-    Map<K, V> asJava();
-
-    /**
-     * @return the persistent map as a standard Java {@link Map} with values translated according to the given function.
-     */
-    default <T> Map<K, T> asJava(Function<V, T> valueMapping) {
-        return new TranslatedValueMapView<>(asJava(), valueMapping);
-    }
 
     /**
      * @param key the key
@@ -69,41 +48,4 @@ public interface PHashMapWrapper<K, V> {
      * @return a wrapped persistent map that differs from this one in that the given mapping is removed (if necessary)
      */
     PHashMapWrapper<K, V> afterRemoving(K key);
-
-    /**
-     * @param key the key
-     * @return the value mapped to the given key (which may be null if the underlying persistent collection supports
-     * null values).  Null is also returned if no such mapping exists.
-     */
-    V get(K key);
-
-    /**
-     * @return the set of map entries
-     */
-    Set<Map.Entry<K, V>> entrySet();
-
-    /**
-     * @return the set of map keys
-     */
-    Set<K> keySet();
-
-    /**
-     * @param key the key to be checked for existence in the map
-     * @return true iff there is a mapping for the given key (which may be null if the underlying persistent collection supports
-     * null values).
-     */
-    boolean containsKey(K key);
-
-    /**
-     * @param key the key
-     * @param value the value to return if no mapping for the given key exists
-     * @return the value mapped for the given key if there is such a mapping, otherwise the given value
-     */
-    default V getOrElse(K key, V value) {
-        if (containsKey(key)) {
-            return get(key);
-        } else {
-            return value;
-        }
-    }
 }
