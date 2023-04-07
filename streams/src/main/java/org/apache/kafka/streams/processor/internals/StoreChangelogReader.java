@@ -920,7 +920,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
-        if (partitions.isEmpty())
+        if (partitions.isEmpty()) {
             return;
 
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
