@@ -35,7 +35,7 @@ public final class ScramCredentialData {
     private final byte[] serverKey;
     private final int iterations;
 
-    static ScramCredentialData fromRecord(
+    public static ScramCredentialData fromRecord(
         UserScramCredentialRecord record
     ) {
         return new ScramCredentialData(

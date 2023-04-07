@@ -342,15 +342,4 @@ public class ScramControlManager {
         }
     }
 
-    ApiMessageAndVersion toRecord(ScramCredentialKey key, ScramCredentialValue value) {
-        return new ApiMessageAndVersion(new UserScramCredentialRecord().
-                setName(key.username).
-                setMechanism(key.mechanism.type()).
-                setSalt(value.salt).
-                setStoredKey(value.storedKey).
-                setServerKey(value.serverKey).
-                setIterations(value.iterations),
-            (short) 0);
-    }
-
 }
