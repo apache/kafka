@@ -456,15 +456,21 @@ public class StoreChangelogReader implements ChangelogReader {
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
-                try {
-                    final Task task = tasks.get(taskId);
-                    final ChangelogMetadata changelogMetadata = changelogs.get(partition);
-                    totalRestored += restoreChangelog(task, changelogMetadata);
-                } catch (final TimeoutException timeoutException) {
-                    tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
-                        time.milliseconds(),
-                        timeoutException
-                    );
+                final Task task = tasks.get(taskId);
+
+                // if a task is null, it means the task is paused and hence not included
+                // in the parameter set of the restore call; in this case we would not restore
+                // that task
+                if (task != null) {
+                    try {
+                        final ChangelogMetadata changelogMetadata = changelogs.get(partition);
+                        totalRestored += restoreChangelog(task, changelogMetadata);
+                    } catch (final TimeoutException timeoutException) {
+                        tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
+                            time.milliseconds(),
+                            timeoutException
+                        );
+                    }
                 }
             }
 
@@ -748,6 +754,11 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    private void filterNewPartitionsToRestore(final Map<TaskId, Task> tasks, final Set<ChangelogMetadata> newPartitionsToRestore) {
+        newPartitionsToRestore.removeIf(changelogMetadata ->
+            !tasks.containsKey(changelogs.get(changelogMetadata.storeMetadata.changelogPartition()).stateManager.taskId()));
+    }
+
     private Map<TopicPartition, Long> endOffsetForChangelogs(final Map<TaskId, Task> tasks, final Set<TopicPartition> partitions) {
         if (partitions.isEmpty()) {
             return Collections.emptyMap();
@@ -806,6 +817,11 @@ public class StoreChangelogReader implements ChangelogReader {
             return;
         }
 
+        // for those changelog partitions whose tasks are not included, in means those tasks
+        // are paused at the moment, and hence we should not try to initialize those
+        // changelogs yet
+        filterNewPartitionsToRestore(tasks, newPartitionsToRestore);
+
         // for active changelogs, we need to find their end offset before transit to restoring
         // if the changelog is on source topic, then its end offset should be the minimum of
         // its committed offset and its end offset; for standby tasks that use source topics
@@ -853,7 +869,8 @@ public class StoreChangelogReader implements ChangelogReader {
                         " does not contain the one looking for end offset: " + partition + ", this should not happen.");
                 }
 
-                log.info("End offset for changelog {} cannot be found; will retry in the next time.", partition);
+                log.info("End offset for changelog {} cannot be found or the corresponding task is paused and hence " +
+                    "not need to be retrieved yet; will retry in the next time.", partition);
             }
         }
 
@@ -879,6 +896,9 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void addChangelogsToRestoreConsumer(final Set<TopicPartition> partitions) {
+        if (partitions.isEmpty())
+            return;
+
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
         // the current assignment should not contain any of the new partitions
@@ -906,6 +926,9 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
+        if (partitions.isEmpty())
+            return;
+
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
         // the current assignment should contain all the partitions to remove
