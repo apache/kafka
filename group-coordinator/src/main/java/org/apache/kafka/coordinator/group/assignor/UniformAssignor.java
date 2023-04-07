@@ -21,7 +21,16 @@ import org.apache.kafka.common.Uuid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static java.lang.Math.min;
 
@@ -36,12 +45,23 @@ public class UniformAssignor implements PartitionAssignor {
 
     @Override
     public GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException {
-        AbstractAssignmentBuilder assignmentBuilder = null;
-        if (allSubscriptionsEqual(assignmentSpec.members)) {
-            log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
+        AbstractAssignmentBuilder assignmentBuilder;
+        boolean value = allSubscriptionsEqual(assignmentSpec.members);
+        if (value) {
+            if (assignmentSpec.members.values().iterator().next().subscribedTopics.size() == 0) {
+                Map<String, MemberAssignment> emptyMemberMap = new HashMap<>();
+                for (String memberId : assignmentSpec.members.keySet()) {
+                    emptyMemberMap.put(memberId, new MemberAssignment(new HashMap<>()));
+                }
+                return new GroupAssignment(emptyMemberMap);
+            }
+            log.debug("Value is " + value + "Detected that all consumers were subscribed to same set of topics, invoking the "
                     + "optimized assignment algorithm");
             assignmentBuilder = new OptimisedAssignmentBuilder(assignmentSpec);
+        } else {
+            assignmentBuilder = new GeneralAssignmentBuilder(assignmentSpec);
         }
+        
         Map<String, List<TopicIdToPartition>> assignmentInTopicIdToPartitionFormat = assignmentBuilder.build();
         return assignmentBuilder.assignmentInCorrectFormat(assignmentInTopicIdToPartitionFormat);
     }
@@ -110,7 +130,16 @@ public class UniformAssignor implements PartitionAssignor {
             return allPartitions;
         }
     }
+    private class GeneralAssignmentBuilder extends AbstractAssignmentBuilder {
+        GeneralAssignmentBuilder(AssignmentSpec assignmentSpec) {
+            super(assignmentSpec);
+        }
 
+        @Override
+        Map<String, List<TopicIdToPartition>> build() {
+            return null;
+        }
+    }
     /**
      * Only used when all consumers have identical subscriptions
      *
@@ -124,6 +153,8 @@ public class UniformAssignor implements PartitionAssignor {
      * 5) Allocate all unassigned partitions to the unfilled consumers first
      */
     private class OptimisedAssignmentBuilder extends AbstractAssignmentBuilder {
+        // Subscription list is same for all consumers
+        private final Collection<Uuid> subscriptionList;
         private final int minQuota;
         // the expected number of members receiving more than minQuota partitions (zero when minQuota == maxQuota)
         private int expectedNumMembersWithExtraPartition;
@@ -144,10 +175,13 @@ public class UniformAssignor implements PartitionAssignor {
             int numberOfConsumers = metadataPerMember.size();
             minQuota = (int) Math.floor(((double) totalPartitionsCount) / numberOfConsumers);
             expectedNumMembersWithExtraPartition = totalPartitionsCount % numberOfConsumers;
+            subscriptionList = assignmentSpec.members.values().iterator().next().subscribedTopics;
+            System.out.println("subscribed topics list is " + subscriptionList);
 
             potentiallyUnfilledConsumers = new HashMap<>();
             unfilledConsumers = new HashMap<>();
             assignedStickyPartitionsPerMember = new HashMap<>();
+            fullAssignment = new HashMap<>();
         }
 
         @Override
@@ -179,12 +213,12 @@ public class UniformAssignor implements PartitionAssignor {
         }
 
         // Keep the partitions in the assignment only if they are still part of the new topic metadata and the consumers subscriptions.
-        private List<TopicIdToPartition> getValidCurrentAssignment(String memberId, AssignmentMemberSpec assignmentMemberSpec) {
+        private List<TopicIdToPartition> getValidCurrentAssignment(AssignmentMemberSpec assignmentMemberSpec) {
             List<TopicIdToPartition> validCurrentAssignmentList = new ArrayList<>();
             for (Map.Entry<Uuid, Set<Integer>> currentAssignment : assignmentMemberSpec.currentAssignmentPerTopic.entrySet()) {
                 Uuid topicId = currentAssignment.getKey();
                 List<Integer> currentAssignmentList = new ArrayList<>(currentAssignment.getValue());
-                if (metadataPerTopic.containsKey(topicId) && metadataPerMember.get(memberId).subscribedTopics.contains(topicId)) {
+                if (metadataPerTopic.containsKey(topicId) && subscriptionList.contains(topicId)) {
                     for (Integer partition : currentAssignmentList) {
                         validCurrentAssignmentList.add(new TopicIdToPartition(topicId, partition, null));
                     }
@@ -203,7 +237,7 @@ public class UniformAssignor implements PartitionAssignor {
                 String memberId = assignmentMemberSpecEntry.getKey();
                 List<TopicIdToPartition> assignedStickyListForMember = new ArrayList<>();
                 // Remove all the topics that aren't in the subscriptions or the topic metadata anymore
-                List<TopicIdToPartition> validCurrentAssignment = getValidCurrentAssignment(memberId, metadataPerMember.get(memberId));
+                List<TopicIdToPartition> validCurrentAssignment = getValidCurrentAssignment(metadataPerMember.get(memberId));
                 System.out.println("valid current assignment is " + validCurrentAssignment);
                 int currentAssignmentSize = validCurrentAssignment.size();
 
@@ -233,7 +267,6 @@ public class UniformAssignor implements PartitionAssignor {
         private void addAssignedStickyPartitionsToNewAssignment() {
             for (String memberId : metadataPerMember.keySet()) {
                 fullAssignment.computeIfAbsent(memberId, k -> new ArrayList<>());
-                List<TopicIdToPartition> assignmentForMember = new ArrayList<>();
                 if (assignedStickyPartitionsPerMember.containsKey(memberId)) {
                     fullAssignment.get(memberId).addAll(assignedStickyPartitionsPerMember.get(memberId));
                 }
@@ -242,8 +275,8 @@ public class UniformAssignor implements PartitionAssignor {
 
         private boolean ensureTotalUnassignedPartitionsEqualsTotalRemainingAssignments() {
             int totalRemaining = 0;
-            for (String consumer : unfilledConsumers.keySet()) {
-                totalRemaining += unfilledConsumers.get(consumer);
+            for (Map.Entry<String, Integer> unfilledEntry  : unfilledConsumers.entrySet()) {
+                totalRemaining += unfilledEntry.getValue();
             }
             return totalRemaining == unassignedPartitions.size();
         }
@@ -291,7 +324,8 @@ public class UniformAssignor implements PartitionAssignor {
         }
         private List<TopicIdToPartition> getUnassignedPartitions(List<TopicIdToPartition> allAssignedStickyPartitions) {
             List<TopicIdToPartition> unassignedPartitions = new ArrayList<>();
-            List<Uuid> sortedAllTopics = new ArrayList<>(metadataPerTopic.keySet());
+            // We only care about the topics that the consumers are subscribed to
+            List<Uuid> sortedAllTopics = new ArrayList<>(subscriptionList);
             Collections.sort(sortedAllTopics);
             if (allAssignedStickyPartitions.isEmpty()) {
                 return getAllTopicPartitions(sortedAllTopics);
@@ -304,6 +338,7 @@ public class UniformAssignor implements PartitionAssignor {
 
             for (Uuid topic : sortedAllTopics) {
                 int partitionCount = metadataPerTopic.get(topic).numPartitions;
+
                 for (int i = 0; i < partitionCount; i++) {
                     if (shouldAddDirectly || !(nextAssignedPartition.topicId().equals(topic) && nextAssignedPartition.partition() == i)) {
                         unassignedPartitions.add(new TopicIdToPartition(topic, i, null));

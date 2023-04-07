@@ -47,5 +47,30 @@ public class TopicIdToPartition {
         return partition;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        TopicIdToPartition that = (TopicIdToPartition) o;
+        return topicId.equals(that.topicId) &&
+                partition.equals(that.partition);
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = prime + topicId.hashCode();
+        result = prime * result + partition.hashCode();
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return topicId() + "-" + partition();
+    }
 
 }

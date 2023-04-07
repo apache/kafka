@@ -19,7 +19,15 @@ package org.apache.kafka.coordinator.group.assignor;
 import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,6 +59,36 @@ public class UniformAssignorTest {
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
 
         assertTrue(groupAssignment.getMembers().isEmpty());
+    }
+
+    @Test
+    public void testFirstAssignmentTwoConsumersTwoTopics() {
+        // A -> T1, T3 // B -> T1, T3 // T1 -> 3 Partitions // T3 -> 2 Partitions
+        // Topics
+        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
+        // Members
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        // Consumer A
+        List<Uuid> subscribedTopicsA = new ArrayList<>(Arrays.asList(topic1Uuid, topic3Uuid));
+        members.put(consumerA, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, new HashMap<>()));
+        // Consumer B
+        List<Uuid> subscribedTopicsB = new ArrayList<>(Arrays.asList(topic1Uuid, topic3Uuid));
+        members.put(consumerB, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, new HashMap<>()));
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+
+        Map<Uuid, Set<Set<Integer>>> expectedAssignment = new HashMap<>();
+        // Topic 1 Partitions Assignment
+        expectedAssignment.computeIfAbsent(topic1Uuid, k -> new HashSet<>()).add(new HashSet<>(Arrays.asList(0, 1)));
+        expectedAssignment.computeIfAbsent(topic1Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(2)));
+        // Topic 3 Partitions Assignment
+        expectedAssignment.computeIfAbsent(topic3Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(0)));
+        expectedAssignment.computeIfAbsent(topic3Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(1)));
+
+        //assertAssignment(expectedAssignment, computedAssignment);
     }
 
 }
