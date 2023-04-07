@@ -748,7 +748,7 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public boolean restoresActiveTasks() {
         return !executeWithQueuesLocked(
-            () -> getStreamOfNonPausedTasks().filter(Task::isActive).collect(Collectors.toSet())
+            () -> getStreamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
         ).isEmpty();
     }
 
