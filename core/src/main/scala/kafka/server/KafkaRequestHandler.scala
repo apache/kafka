@@ -132,6 +132,8 @@ class KafkaRequestHandler(id: Int,
               completeShutdown()
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
+          } finally {
+            currentRequest.remove()
           }
 
         case request: RequestChannel.Request =>
