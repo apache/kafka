@@ -71,6 +71,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 return "candidate";
             } else if (state.isVoted()) {
                 return "voted";
+            } else if (state.isObserver()) {
+                return "observer";
             } else if (state.isFollower()) {
                 return "follower";
             } else {
