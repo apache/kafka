@@ -100,7 +100,7 @@ object RequestChannel extends Logging {
     @volatile var apiThrottleTimeMs = 0L
     @volatile var temporaryMemoryBytes = 0L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
-    @volatile var callbackRequestDequeTimeNanos: Option[Long] = None
+    @volatile var callbackRequestDequeueTimeNanos: Option[Long] = None
     @volatile var callbackRequestCompleteTimeNanos: Option[Long] = None
 
     val session = Session(context.principal, context.clientAddress)
@@ -233,7 +233,7 @@ object RequestChannel extends Logging {
       }
 
       val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-      val callbackRequestTimeNanos = callbackRequestDequeTimeNanos.getOrElse(0L) - callbackRequestCompleteTimeNanos.getOrElse(0L)
+      val callbackRequestTimeNanos = callbackRequestCompleteTimeNanos.getOrElse(0L) - callbackRequestDequeueTimeNanos.getOrElse(0L)
       val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos + callbackRequestTimeNanos)
       val apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos - callbackRequestTimeNanos)
       val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
@@ -452,6 +452,9 @@ class RequestChannel(val queueSize: Int,
         request.responseCompleteTimeNanos = timeNanos
         if (request.apiLocalCompleteTimeNanos == -1L)
           request.apiLocalCompleteTimeNanos = timeNanos
+        // If this callback was executed after KafkaApis returned we will need to adjust the callback completion time here.
+        if (request.callbackRequestDequeueTimeNanos.isDefined && request.callbackRequestCompleteTimeNanos.isEmpty)
+          request.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
       // For a given request, these may happen in addition to one in the previous section, skip updating the metrics
       case _: StartThrottlingResponse | _: EndThrottlingResponse => ()
     }

@@ -110,8 +110,23 @@ class KafkaRequestHandler(id: Int,
 
         case callback: RequestChannel.CallbackRequest =>
           try {
-            callback.originalRequest.callbackRequestDequeTimeNanos = Some(time.nanoseconds())
+            val originalRequest = callback.originalRequest
+            
+            // If we've already executed a callback for this request, reset the times and subtract the callback time from the 
+            // new dequeue time. This will allow calculation of multiple callback times.
+            // Otherwise, set dequeue time to now.
+            if (originalRequest.callbackRequestDequeueTimeNanos.isDefined) {
+              val prevCallbacksTimeNanos = originalRequest.callbackRequestCompleteTimeNanos.getOrElse(0L) - originalRequest.callbackRequestDequeueTimeNanos.getOrElse(0L)
+              originalRequest.callbackRequestCompleteTimeNanos = None
+              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds() - prevCallbacksTimeNanos)
+            } else {
+              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds())
+            }
+            
+            currentRequest.set(originalRequest)
             callback.fun()
+            if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
+              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
           } catch {
             case e: FatalExitError =>
               completeShutdown()
