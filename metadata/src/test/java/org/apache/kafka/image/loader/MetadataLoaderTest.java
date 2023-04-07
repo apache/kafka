@@ -18,9 +18,11 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -28,6 +30,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -236,8 +239,17 @@ public class MetadataLoaderTest {
             loader.installPublishers(asList(publisher)).get();
             if (loadSnapshot) {
                 MockSnapshotReader snapshotReader = new MockSnapshotReader(
-                        new MetadataProvenance(200, 100, 4000),
-                        asList(Batch.control(200, 100, 4000, 10, 200)));
+                    new MetadataProvenance(200, 100, 4000),
+                    asList(
+                        Batch.control(
+                            200,
+                            100,
+                            4000,
+                            10,
+                            asList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                        )
+                    )
+                );
                 loader.handleSnapshot(snapshotReader);
             }
             loader.waitForAllEventsToBeHandled();
@@ -329,8 +341,17 @@ public class MetadataLoaderTest {
         long offset
     ) throws Exception {
         MockSnapshotReader snapshotReader = new MockSnapshotReader(
-                new MetadataProvenance(offset, 100, 4000),
-                asList(Batch.control(200, 100, 4000, 10, 200)));
+            new MetadataProvenance(offset, 100, 4000),
+            asList(
+                Batch.control(
+                    200,
+                    100,
+                    4000,
+                    10,
+                    asList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                )
+            )
+        );
         if (loader.time() instanceof MockTime) {
             snapshotReader.setTime((MockTime) loader.time());
         }
@@ -409,16 +430,25 @@ public class MetadataLoaderTest {
             loader.installPublishers(publishers).get();
             loadTestSnapshot(loader, 200);
             publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
-            MockBatchReader batchReader = new MockBatchReader(300, asList(
-                    Batch.control(300, 100, 4000, 10, 400))).
-                    setTime(time);
+            MockBatchReader batchReader = new MockBatchReader(
+                300,
+                asList(
+                    Batch.control(
+                        300,
+                        100,
+                        4000,
+                        10,
+                        asList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                    )
+                )
+            ).setTime(time);
             loader.handleCommit(batchReader);
             loader.waitForAllEventsToBeHandled();
             assertTrue(batchReader.closed);
-            assertEquals(400L, loader.lastAppliedOffset());
+            assertEquals(300L, loader.lastAppliedOffset());
         }
         assertTrue(publishers.get(0).closed);
-        assertEquals(new LogDeltaManifest(new MetadataProvenance(400, 100, 4000), LeaderAndEpoch.UNKNOWN, 1,
+        assertEquals(new LogDeltaManifest(new MetadataProvenance(300, 100, 4000), LeaderAndEpoch.UNKNOWN, 1,
                         3000000L, 10),
             publishers.get(0).latestLogDeltaManifest);
         assertEquals(MetadataVersion.IBP_3_3_IV1,
