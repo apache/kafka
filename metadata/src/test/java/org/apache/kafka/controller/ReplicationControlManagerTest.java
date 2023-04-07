@@ -2368,7 +2368,7 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testReassignPartitionsKeepsAllPreviousReassigningReplicas() throws Exception {
+    public void testReassignPartitionsHandlesNewReassignmentThatRemovesPreviouslyAddingReplicas() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4, 5);
@@ -2378,6 +2378,8 @@ public class ReplicationControlManagerTest {
         // Create topic with assignment [0, 1]
         Uuid topicId = ctx.createTestTopic(topic, new int[][] {new int[] {0, 1}}).topicId();
         log.debug("Created topic with ID {}", topicId);
+
+        // Confirm we start off with no reassignments.
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
 
         // Reassign to [2, 3]
@@ -2406,16 +2408,18 @@ public class ReplicationControlManagerTest {
         // Make sure the reassignment metadata is as expected.
         assertEquals(currentReassigning, replication.listPartitionReassignments(null));
 
-        // Add 2, a new replica, to the ISR
+        PartitionRegistration partition = replication.getPartition(topicId, 0);
+
+        // Add replica 2 to the ISR.
         AlterPartitionRequestData alterPartitionRequestData = new AlterPartitionRequestData().
-            setBrokerId(0).
-            setBrokerEpoch(100).
+            setBrokerId(partition.leader).
+            setBrokerEpoch(ctx.currentBrokerEpoch(partition.leader)).
             setTopics(asList(new TopicData().
                 setTopicId(topicId).
                 setPartitions(asList(new PartitionData().
                     setPartitionIndex(0).
-                    setPartitionEpoch(1).
-                    setLeaderEpoch(0).
+                    setPartitionEpoch(partition.partitionEpoch).
+                    setLeaderEpoch(partition.leaderEpoch).
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
@@ -2427,27 +2431,28 @@ public class ReplicationControlManagerTest {
                         new AlterPartitionResponseData.PartitionData().
                             setPartitionIndex(0).
                             setIsr(Arrays.asList(0, 1, 2)).
-                            setPartitionEpoch(2).
+                            setPartitionEpoch(partition.partitionEpoch + 1).
                             setErrorCode(NONE.code()))))),
             alterPartitionResult.response());
+
         ctx.replay(alterPartitionResult.records());
 
-        // Elect 2 as leader
+        // Elect replica 2 as leader via preferred leader election. 2 is at the front of the replicas list.
         ElectLeadersRequestData request = buildElectLeadersRequest(
             ElectionType.PREFERRED,
             singletonMap(topic, singletonList(0))
         );
-        ControllerResult<ElectLeadersResponseData> result = replication.electLeaders(request);
-        assertEquals(1, result.records().size());
-        ApiMessageAndVersion record = result.records().get(0);
-        assertTrue(record.message() instanceof PartitionChangeRecord);
-        PartitionChangeRecord partitionChangeRecord = (PartitionChangeRecord) record.message();
-        assertEquals(0, partitionChangeRecord.partitionId());
-
-        ctx.replay(result.records());
-
+        ControllerResult<ElectLeadersResponseData> electLeaderTwoResult = replication.electLeaders(request);
+        ReplicaElectionResult replicaElectionResult = new ReplicaElectionResult().setTopic(topic);
+        replicaElectionResult.setPartitionResult(Arrays.asList(new PartitionResult().setPartitionId(0).setErrorCode(NONE.code()).setErrorMessage(null)));
+        assertEquals(
+            new ElectLeadersResponseData().setErrorCode(NONE.code()).setReplicaElectionResults(Arrays.asList(replicaElectionResult)),
+            electLeaderTwoResult.response()
+        );
+        ctx.replay(electLeaderTwoResult.records());
         // Make sure 2 is the leader
-        assertEquals(2, replication.getPartition(topicId, 0).leader);
+        partition = replication.getPartition(topicId, 0);
+        assertEquals(2, partition.leader);
 
         // Reassign to [4, 5]
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResultTwo =
@@ -2456,15 +2461,14 @@ public class ReplicationControlManagerTest {
                     new ReassignableTopic().setName(topic).setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
                             setReplicas(asList(4, 5)))))));
-
         assertEquals(new AlterPartitionReassignmentsResponseData().
             setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName(topic).setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
                         setErrorMessage(null))))), alterResultTwo.response());
-
         ctx.replay(alterResultTwo.records());
 
+        // Make sure the replicas list contains all the previous replicas 0, 1, 2, 3 as well as the new replicas 3, 4
         currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
                 setTopics(asList(new OngoingTopicReassignment().
@@ -2474,24 +2478,17 @@ public class ReplicationControlManagerTest {
                             setAddingReplicas(asList(4, 5)).
                             setReplicas(asList(4, 5, 0, 1, 2, 3))))));
 
-        // Make sure the replicas list contains all the previous replicas 0, 1, 2, 3 as well as the new replicas 3, 4
         assertEquals(currentReassigning, replication.listPartitionReassignments(null));
-        PartitionRegistration partition = replication.getPartition(
-            topicId,
-            0
-        );
 
-        assertEquals(2, partition.leader);
         // Make sure the leader is in the replicas still
+        partition = replication.getPartition(topicId, 0);
+        assertEquals(2, partition.leader);
         assertTrue(Replicas.toSet(partition.replicas).contains(partition.leader));
-
-        BrokerRegistration registration = ctx.clusterControl.brokerRegistrations().get(2);
-        assertFalse(registration.fenced());
 
         // Add 3, 4 to the ISR to complete the reassignment
         AlterPartitionRequestData alterPartitionRequestDataTwo = new AlterPartitionRequestData().
-            setBrokerId(2).
-            setBrokerEpoch(registration.epoch()).
+            setBrokerId(partition.leader).
+            setBrokerEpoch(ctx.currentBrokerEpoch(partition.leader)).
             setTopics(asList(new TopicData().
                 setTopicId(topicId).
                 setPartitions(asList(new PartitionData().
@@ -2499,11 +2496,9 @@ public class ReplicationControlManagerTest {
                     setPartitionEpoch(partition.partitionEpoch).
                     setLeaderEpoch(partition.leaderEpoch).
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2, 3, 4, 5))))));
-
         ControllerResult<AlterPartitionResponseData> alterPartitionResultTwo = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo, true).build().data());
-
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
                 new AlterPartitionResponseData.TopicData().
                     setTopicId(topicId).
@@ -2512,11 +2507,11 @@ public class ReplicationControlManagerTest {
                             setPartitionIndex(0).
                             setErrorCode(NEW_LEADER_ELECTED.code()))))),
             alterPartitionResultTwo.response());
-
         ctx.replay(alterPartitionResultTwo.records());
 
-        int leader = replication.getPartition(topicId, 0).leader;
-        assertEquals(4, leader);
+        // After reassignment is finally complete, make sure 4 is the leader now.
+        partition = replication.getPartition(topicId, 0);
+        assertEquals(4, partition.leader);
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
     }
 
