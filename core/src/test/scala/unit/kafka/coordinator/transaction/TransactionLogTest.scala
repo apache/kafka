@@ -17,12 +17,14 @@
 package kafka.coordinator.transaction
 
 
+import kafka.internals.generated.TransactionLogValue
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
+import java.nio.ByteBuffer
 import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
@@ -133,6 +135,13 @@ class TransactionLogTest {
     val (keyStringOpt, valueStringOpt) = TransactionLog.formatRecordKeyAndValue(transactionMetadataRecord)
     assertEquals(Some(s"transaction_metadata::transactionalId=$transactionalId"), keyStringOpt)
     assertEquals(Some("<DELETE>"), valueStringOpt)
+  }
+
+  @Test
+  def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
+    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500)
+    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata))
+    assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION, txnLogValueBuffer.getShort)
   }
 
 }

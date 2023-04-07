@@ -40,6 +40,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -2467,6 +2468,34 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testSerializeGroupMetadataValueToHighestNonFlexibleVersion(): Unit = {
+    val generation = 935
+    val protocolType = "consumer"
+    val protocol = "range"
+    val memberId = "98098230493"
+    val assignmentBytes = Utils.toArray(ConsumerProtocol.serializeAssignment(
+      new ConsumerPartitionAssignor.Assignment(List(new TopicPartition("topic", 0)).asJava, null)
+    ))
+    val record = TestUtils.records(Seq(
+      buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, assignmentBytes)
+    )).records.asScala.head
+    assertEquals(GroupMetadataValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION, record.value().getShort)
+  }
+
+  @Test
+  def testSerializeOffsetCommitValueToHighestNonFlexibleVersion(): Unit = {
+    val committedOffsets = Map(
+      new TopicPartition("foo", 0) -> 23L,
+      new TopicPartition("foo", 1) -> 455L,
+    )
+
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
+    offsetCommitRecords.foreach { record =>
+      assertEquals(OffsetCommitValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION, record.value().getShort)
+    }
+  }
+
+  @Test
   def testLoadOffsetsWithEmptyControlBatch(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val startOffset = 15L
@@ -2616,7 +2645,8 @@ class GroupMetadataManagerTest {
                                                memberId: String,
                                                assignmentBytes: Array[Byte] = Array.emptyByteArray,
                                                metadataVersion: MetadataVersion = MetadataVersion.latest): SimpleRecord = {
-    val memberProtocols = List((protocol, Array.emptyByteArray))
+    val subscription = new Subscription(List("topic").asJava)
+    val memberProtocols = List((protocol, ConsumerProtocol.serializeSubscription(subscription).array()))
     val member = new MemberMetadata(memberId, Some(groupInstanceId), "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
       if (metadataVersion.isAtLeast(IBP_2_1_IV0)) Some(time.milliseconds()) else None, Seq(member), time)
