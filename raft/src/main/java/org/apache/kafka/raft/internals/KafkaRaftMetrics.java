@@ -65,14 +65,15 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached");
         Gauge<String> stateProvider = (mConfig, currentTimeMs) -> {
-            if (state.isLeader()) {
+            // a broker, as not being a voter, is always an observer
+            if (state.isObserver()) {
+                return "observer";
+            } else if (state.isLeader()) {
                 return "leader";
             } else if (state.isCandidate()) {
                 return "candidate";
             } else if (state.isVoted()) {
                 return "voted";
-            } else if (state.isObserver()) {
-                return "observer";
             } else if (state.isFollower()) {
                 return "follower";
             } else {
