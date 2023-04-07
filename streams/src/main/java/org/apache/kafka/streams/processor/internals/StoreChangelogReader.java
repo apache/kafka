@@ -458,19 +458,14 @@ public class StoreChangelogReader implements ChangelogReader {
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                 final Task task = tasks.get(taskId);
 
-                // if a task is null, it means the task is paused and hence not included
-                // in the parameter set of the restore call; in this case we would not restore
-                // that task
-                if (task != null) {
-                    try {
-                        final ChangelogMetadata changelogMetadata = changelogs.get(partition);
-                        totalRestored += restoreChangelog(task, changelogMetadata);
-                    } catch (final TimeoutException timeoutException) {
-                        tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
-                            time.milliseconds(),
-                            timeoutException
-                        );
-                    }
+                try {
+                    final ChangelogMetadata changelogMetadata = changelogs.get(partition);
+                    totalRestored += restoreChangelog(task, changelogMetadata);
+                } catch (final TimeoutException timeoutException) {
+                    tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
+                        time.milliseconds(),
+                        timeoutException
+                    );
                 }
             }
 
@@ -869,8 +864,7 @@ public class StoreChangelogReader implements ChangelogReader {
                         " does not contain the one looking for end offset: " + partition + ", this should not happen.");
                 }
 
-                log.info("End offset for changelog {} cannot be found or the corresponding task is paused and hence " +
-                    "not need to be retrieved yet; will retry in the next time.", partition);
+                log.info("End offset for changelog {} cannot be found; will retry in the next time.", partition);
             }
         }
 
