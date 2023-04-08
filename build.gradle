@@ -1219,6 +1219,10 @@ project(':metadata') {
   javadoc {
     enabled = false
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-metadata.xml")
+  }
 }
 
 project(':group-coordinator') {
@@ -1603,6 +1607,10 @@ project(':server-common') {
 
   clean.doFirst {
     delete "$buildDir/kafka/"
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-server-common.xml")
   }
 }
 
