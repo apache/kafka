@@ -77,7 +77,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             buffer.get(newData);
             buffer.get(oldData);
         } else {
-            throw new StreamsException("Encountered unknown byte value `" + newOldFlag + "` for oldNewFlag in in ChangedDeserializer.");
+            throw new StreamsException("Encountered unknown byte value `" + newOldFlag + "` for oldNewFlag in ChangedDeserializer.");
         }
 
         return new Change<>(
