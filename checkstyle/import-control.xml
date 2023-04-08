@@ -49,7 +49,7 @@
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
   <!-- anyone can use persistent collection factories/non-library-specific wrappers -->
-  <allow pkg="org.apache.kafka.pcoll" exact-match="true" />
+  <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
 
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
@@ -319,16 +319,6 @@
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
-  <subpackage name="pcoll">
-    <allow pkg="org.apache.kafka.server.util"/>
-    <!-- only the factory package can use persistent collection library-specific wrapper implementations -->
-    <!-- the library-specific wrapper implementation for PCollections -->
-    <allow pkg="org.apache.kafka.pcoll.pcollections" />
-    <subpackage name="pcollections">
-      <allow pkg="org.pcollections" />
-    </subpackage>
-  </subpackage>
-
   <subpackage name="queue">
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
@@ -374,6 +364,16 @@
 
     <subpackage name="common">
       <allow pkg="org.apache.kafka.server.common" />
+    </subpackage>
+
+    <subpackage name="immutable">
+      <allow pkg="org.apache.kafka.server.util"/>
+      <!-- only the factory package can use persistent collection library-specific wrapper implementations -->
+      <!-- the library-specific wrapper implementation for PCollections -->
+      <allow pkg="org.apache.kafka.server.immutable.pcollections" />
+      <subpackage name="pcollections">
+        <allow pkg="org.pcollections" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="metrics">

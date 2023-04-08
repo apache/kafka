@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.pcoll;
+package org.apache.kafka.server.immutable;
 
-import org.apache.kafka.pcoll.pcollections.PCollectionsHashMapSetWrapperFactory;
+import org.apache.kafka.server.immutable.pcollections.PCollectionsHashMapSetWrapperFactory;
 
 /**
  * A factory for instantiating persistent Hash-based Maps/Sets

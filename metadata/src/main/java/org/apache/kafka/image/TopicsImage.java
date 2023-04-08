@@ -21,8 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.pcoll.PHashMapWrapper;
-import org.apache.kafka.pcoll.PHashMapSetWrapperFactory;
+import org.apache.kafka.server.immutable.PHashMapWrapper;
+import org.apache.kafka.server.immutable.PHashMapSetWrapperFactory;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Map;

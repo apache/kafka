@@ -15,34 +15,33 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.pcoll.pcollections;
+package org.apache.kafka.server.immutable.pcollections;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.pcollections.HashTreePMap;
 import org.pcollections.HashTreePSet;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PHashMapSetWrapperFactoryTest {
     private static final PCollectionsHashMapSetWrapperFactory FACTORY = new PCollectionsHashMapSetWrapperFactory();
 
     @Test
     public void testEmptyMap() {
-        assertEquals(HashTreePMap.empty(), FACTORY.emptyMap().underlying());
+        Assertions.assertEquals(HashTreePMap.empty(), FACTORY.emptyMap().underlying());
     }
 
     @Test
     public void testSingletonMap() {
-        assertEquals(HashTreePMap.singleton(1, 2), FACTORY.singletonMap(1, 2).underlying());
+        Assertions.assertEquals(HashTreePMap.singleton(1, 2), FACTORY.singletonMap(1, 2).underlying());
     }
 
     @Test
     public void testEmptySet() {
-        assertEquals(HashTreePSet.empty(), FACTORY.emptySet().underlying());
+        Assertions.assertEquals(HashTreePSet.empty(), FACTORY.emptySet().underlying());
     }
 
     @Test
     public void testSingletonSet() {
-        assertEquals(HashTreePSet.singleton(1), FACTORY.singletonSet(1).underlying());
+        Assertions.assertEquals(HashTreePSet.singleton(1), FACTORY.singletonSet(1).underlying());
     }
 }

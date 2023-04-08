@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.pcoll.pcollections;
+package org.apache.kafka.server.immutable.pcollections;
 
-import org.apache.kafka.pcoll.DelegationChecker;
+import org.apache.kafka.server.immutable.DelegationChecker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

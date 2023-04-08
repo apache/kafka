@@ -15,13 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.pcoll;
-
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.server.util.TranslatedValueMapView;
+package org.apache.kafka.server.immutable;
 
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * A persistent Hash-based Map wrapper.

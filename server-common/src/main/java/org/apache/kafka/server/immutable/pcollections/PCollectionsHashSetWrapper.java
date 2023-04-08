@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.pcoll.pcollections;
+package org.apache.kafka.server.immutable.pcollections;
 
-import org.apache.kafka.pcoll.PHashSetWrapper;
+import org.apache.kafka.server.immutable.PHashSetWrapper;
 import org.pcollections.MapPSet;
 
 import java.util.Collection;

@@ -24,7 +24,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.Replicas;
-import org.apache.kafka.pcoll.PHashMapWrapper;
+import org.apache.kafka.server.immutable.PHashMapWrapper;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collections;

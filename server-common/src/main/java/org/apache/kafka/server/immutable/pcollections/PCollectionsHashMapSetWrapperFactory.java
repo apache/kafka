@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.pcoll.pcollections;
+package org.apache.kafka.server.immutable.pcollections;
 
-import org.apache.kafka.pcoll.PHashMapWrapper;
-import org.apache.kafka.pcoll.PHashMapSetWrapperFactory;
-import org.apache.kafka.pcoll.PHashSetWrapper;
+import org.apache.kafka.server.immutable.PHashMapWrapper;
+import org.apache.kafka.server.immutable.PHashMapSetWrapperFactory;
+import org.apache.kafka.server.immutable.PHashSetWrapper;
 import org.pcollections.HashTreePMap;
 import org.pcollections.HashTreePSet;
 

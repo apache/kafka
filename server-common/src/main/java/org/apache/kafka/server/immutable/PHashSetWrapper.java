@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.pcoll;
+package org.apache.kafka.server.immutable;
 
 import java.util.Set;
 
