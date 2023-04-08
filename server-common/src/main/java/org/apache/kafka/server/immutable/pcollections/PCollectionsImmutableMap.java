@@ -43,12 +43,12 @@ public class PCollectionsImmutableMap<K, V> implements ImmutableMap<K, V> {
     }
 
     @Override
-    public ImmutableMap<K, V> afterAdding(K key, V value) {
+    public ImmutableMap<K, V> updated(K key, V value) {
         return new PCollectionsImmutableMap<>(underlying().plus(key, value));
     }
 
     @Override
-    public ImmutableMap<K, V> afterRemoving(K key) {
+    public ImmutableMap<K, V> removed(K key) {
         return new PCollectionsImmutableMap<>(underlying().minus(key));
     }
 

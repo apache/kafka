@@ -59,7 +59,7 @@ public class PCollectionsImmutableMapTest {
     public void testDelegationOfAfterAdding() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.plus(eq(this), eq(this)), SINGLETON_MAP)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.afterAdding(this, this), identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.updated(this, this), identity())
             .expectWrapperToWrapMockFunctionReturnValue()
             .doFunctionDelegationCheck();
     }
@@ -68,7 +68,7 @@ public class PCollectionsImmutableMapTest {
     public void testDelegationOfAfterRemoving() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.minus(eq(this)), SINGLETON_MAP)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.afterRemoving(this), identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removed(this), identity())
             .expectWrapperToWrapMockFunctionReturnValue()
             .doFunctionDelegationCheck();
     }

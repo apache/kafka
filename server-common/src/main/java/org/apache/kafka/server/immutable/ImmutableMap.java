@@ -37,11 +37,11 @@ public interface ImmutableMap<K, V> extends Map<K, V> {
      * @param value the value
      * @return a wrapped persistent map that differs from this one in that the given mapping is added (if necessary)
      */
-    ImmutableMap<K, V> afterAdding(K key, V value);
+    ImmutableMap<K, V> updated(K key, V value);
 
     /**
      * @param key the key
      * @return a wrapped persistent map that differs from this one in that the given mapping is removed (if necessary)
      */
-    ImmutableMap<K, V> afterRemoving(K key);
+    ImmutableMap<K, V> removed(K key);
 }

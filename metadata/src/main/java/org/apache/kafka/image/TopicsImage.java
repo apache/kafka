@@ -50,8 +50,8 @@ public final class TopicsImage {
 
     public TopicsImage including(TopicImage topic) {
         return new TopicsImage(
-            this.topicsById.afterAdding(topic.id(), topic),
-            this.topicsByName.afterAdding(topic.name(), topic));
+            this.topicsById.updated(topic.id(), topic),
+            this.topicsByName.updated(topic.name(), topic));
     }
 
     public boolean isEmpty() {

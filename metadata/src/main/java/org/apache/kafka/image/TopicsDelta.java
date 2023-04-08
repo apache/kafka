@@ -135,8 +135,8 @@ public final class TopicsDelta {
             if (originalTopicToBeDeleted == null) {
                 throw new IllegalStateException("Missing topic id " + topicId);
             } else {
-                newTopicsById = newTopicsById.afterRemoving(topicId);
-                newTopicsByName = newTopicsByName.afterRemoving(originalTopicToBeDeleted.name());
+                newTopicsById = newTopicsById.removed(topicId);
+                newTopicsByName = newTopicsByName.removed(originalTopicToBeDeleted.name());
             }
         }
         // apply all the updates/additions
@@ -145,8 +145,8 @@ public final class TopicsDelta {
             TopicImage newTopicToBeAddedOrUpdated = entry.getValue().apply();
             // put new information into the maps
             String topicName = newTopicToBeAddedOrUpdated.name();
-            newTopicsById = newTopicsById.afterAdding(topicId, newTopicToBeAddedOrUpdated);
-            newTopicsByName = newTopicsByName.afterAdding(topicName, newTopicToBeAddedOrUpdated);
+            newTopicsById = newTopicsById.updated(topicId, newTopicToBeAddedOrUpdated);
+            newTopicsByName = newTopicsByName.updated(topicName, newTopicToBeAddedOrUpdated);
         }
         return new TopicsImage(newTopicsById, newTopicsByName);
     }

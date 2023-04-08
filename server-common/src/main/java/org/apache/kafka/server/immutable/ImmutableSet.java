@@ -35,11 +35,11 @@ public interface ImmutableSet<E> extends Set<E> {
      * @param e the element
      * @return a wrapped persistent set that differs from this one in that the given element is added (if necessary)
      */
-    ImmutableSet<E> afterAdding(E e);
+    ImmutableSet<E> added(E e);
 
     /**
      * @param e the element
      * @return a wrapped persistent set that differs from this one in that the given element is added (if necessary)
      */
-    ImmutableSet<E> afterRemoving(E e);
+    ImmutableSet<E> removed(E e);
 }

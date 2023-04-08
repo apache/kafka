@@ -62,7 +62,7 @@ public class PCollectionsImmutableSetTest {
     public void testDelegationOfAfterAdding() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.plus(eq(this)), SINGLETON_SET)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.afterAdding(this), identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.added(this), identity())
             .expectWrapperToWrapMockFunctionReturnValue()
             .doFunctionDelegationCheck();
     }
@@ -71,7 +71,7 @@ public class PCollectionsImmutableSetTest {
     public void testDelegationOfAfterRemoving() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.minus(eq(this)), SINGLETON_SET)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.afterRemoving(this), identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removed(this), identity())
             .expectWrapperToWrapMockFunctionReturnValue()
             .doFunctionDelegationCheck();
     }
