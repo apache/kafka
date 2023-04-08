@@ -137,7 +137,7 @@ public class KafkaRaftMetricsTest {
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
-        assertEquals("observer", getMetric(metrics, "current-state").metricValue());
+        assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
@@ -154,7 +154,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
         state.transitionToUnattached(4);
-        assertEquals("observer", getMetric(metrics, "current-state").metricValue());
+        assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 4, getMetric(metrics, "current-epoch").metricValue());
