@@ -50,7 +50,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     }
 
     @SuppressWarnings("checkstyle:cyclomaticComplexity")
-    private boolean isUpgrade(final Map<String, ?> configs) {
+    private static boolean isUpgrade(final Map<String, ?> configs) {
         final Object upgradeFrom = configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom == null) {
             return false;
