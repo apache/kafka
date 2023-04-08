@@ -77,7 +77,7 @@ public class CheckpointFile<T> {
             // write to temp file and then swap with the existing file
             try (FileOutputStream fileOutputStream = new FileOutputStream(tempPath.toFile());
                  BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-                CheckpointWriteBuffer<T> checkpointWriteBuffer = new CheckpointWriteBuffer<T>(writer, version, formatter);
+                CheckpointWriteBuffer<T> checkpointWriteBuffer = new CheckpointWriteBuffer<>(writer, version, formatter);
                 checkpointWriteBuffer.write(entries);
                 writer.flush();
                 fileOutputStream.getFD().sync();

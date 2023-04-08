@@ -609,8 +609,6 @@ public class ProducerStateManager {
         return Optional.empty();
     }
 
-
-
     public static List<ProducerStateEntry> readSnapshot(File file) throws IOException {
         try {
             byte[] buffer = Files.readAllBytes(file.toPath());
