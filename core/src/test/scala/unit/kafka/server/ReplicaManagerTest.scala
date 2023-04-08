@@ -3600,6 +3600,7 @@ class ReplicaManagerTest {
       "clusterId",
       time,
       _ => Optional.of(mockLog),
+      (TopicPartition, Long) => {},
       brokerTopicStats)
     val spyRLM = spy(remoteLogManager)
 

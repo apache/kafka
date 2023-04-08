@@ -430,7 +430,8 @@ class LogManager(logDirs: Seq[File],
               val remainingLogs = decNumRemainingLogs(numRemainingLogs, dir.getAbsolutePath)
               val currentNumLoaded = logsToLoad.length - remainingLogs
               log match {
-                case Some(loadedLog) => info(s"Completed load of $loadedLog with ${loadedLog.numberOfSegments} segments in ${logLoadDurationMs}ms " +
+                case Some(loadedLog) => info(s"Completed load of $loadedLog with ${loadedLog.numberOfSegments} segments, " +
+                  s"local-log-start-offset ${loadedLog.localLogStartOffset()} and log-end-offset ${loadedLog.logEndOffset} in ${logLoadDurationMs}ms " +
                   s"($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
                 case None => info(s"Error while loading logs in $logDir in ${logLoadDurationMs}ms ($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
               }
