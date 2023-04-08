@@ -614,8 +614,8 @@ public class RemoteLogManager implements Closeable {
         return offset.orElse(-1L);
     }
 
-    private void doHandleLeaderOrFollowerPartitions(TopicIdPartition topicPartition,
-                                                    Consumer<RLMTask> convertToLeaderOrFollower) {
+    void doHandleLeaderOrFollowerPartitions(TopicIdPartition topicPartition,
+                                            Consumer<RLMTask> convertToLeaderOrFollower) {
         RLMTaskWithFuture rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
                 topicIdPartition -> {
                     RLMTask task = new RLMTask(topicIdPartition);
