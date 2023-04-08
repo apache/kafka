@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -3444,6 +3445,53 @@ public class TransactionManagerTest {
 
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
+    }
+
+    @Test
+    public void testMakeIllegalTransitionFatal() {
+        doInitTransactions();
+        assertTrue(transactionManager.isTransactional());
+
+        // Step 1: create a transaction.
+        transactionManager.beginTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        // Step 2: abort a transaction (wait for it to complete) and then verify that the transaction manager is
+        // left in the READY state.
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        runUntil(abortResult::isCompleted);
+        abortResult.await();
+        assertTrue(abortResult.isSuccessful());
+        assertFalse(transactionManager.hasOngoingTransaction());
+        assertTrue(transactionManager.isReady());
+
+        // Step 3: create a batch and simulate the Sender handling a failed batch, which would *attempt* to put
+        // the transaction manager in the ABORTABLE_ERROR state. However, that is an illegal state transition, so
+        // verify that it failed and caused the transaction manager to be put in an unrecoverable FATAL_ERROR state.
+        ProducerBatch batch = batchWithValue(tp0, "test");
+        transactionManager.handleFailedBatch(batch, new NetworkException("Disconnected from node 4"), false);
+        assertTrue(transactionManager.hasFatalError());
+
+        // Step 4: validate that the transactions can't be started, committed
+        assertThrowsFatalStateException("beginTransaction", () -> transactionManager.beginTransaction());
+        assertThrowsFatalStateException("beginAbort", () -> transactionManager.beginAbort());
+        assertThrowsFatalStateException("beginCommit", () -> transactionManager.beginCommit());
+        assertThrowsFatalStateException("maybeAddPartition", () -> transactionManager.maybeAddPartition(tp0));
+        assertThrowsFatalStateException("initializeTransactions", () -> transactionManager.initializeTransactions());
+        assertThrowsFatalStateException("sendOffsetsToTransaction", () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
+        assertThrowsFatalStateException("maybeUpdateProducerIdAndEpoch", () -> transactionManager.maybeUpdateProducerIdAndEpoch(tp0));
+    }
+
+    private void assertThrowsFatalStateException(String methodName, Runnable operation) {
+        try {
+            operation.run();
+        } catch (Throwable t) {
+            assertEquals(KafkaException.class, t.getClass());
+            assertTrue(t.getMessage().contains("Cannot execute transactional method because we are in an error state"));
+            return;
+        }
+
+        fail("TransactionManager method " + methodName + " should have thrown an error while in a FATAL_ERROR state");
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {

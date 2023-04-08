@@ -231,7 +231,7 @@ public class TransactionManager {
         return handleCachedTransactionRequestResult(() -> {
             // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
             if (!isEpochBump) {
-                transitionTo(State.INITIALIZING);
+                transitionTo(State.INITIALIZING, null, true);
                 log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
             } else {
                 log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
@@ -252,13 +252,13 @@ public class TransactionManager {
         ensureTransactional();
         throwIfPendingState("beginTransaction");
         maybeFailWithError();
-        transitionTo(State.IN_TRANSACTION);
+        transitionTo(State.IN_TRANSACTION, null, true);
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
         return handleCachedTransactionRequestResult(() -> {
             maybeFailWithError();
-            transitionTo(State.COMMITTING_TRANSACTION);
+            transitionTo(State.COMMITTING_TRANSACTION, null, true);
             return beginCompletingTransaction(TransactionResult.COMMIT);
         }, State.COMMITTING_TRANSACTION, "commitTransaction");
     }
@@ -267,7 +267,7 @@ public class TransactionManager {
         return handleCachedTransactionRequestResult(() -> {
             if (currentState != State.ABORTABLE_ERROR)
                 maybeFailWithError();
-            transitionTo(State.ABORTING_TRANSACTION);
+            transitionTo(State.ABORTING_TRANSACTION, null, true);
 
             // We're aborting the transaction, so there should be no need to add new partitions
             newPartitionsInTransaction.clear();
@@ -982,13 +982,31 @@ public class TransactionManager {
     }
 
     private void transitionTo(State target, RuntimeException error) {
+        transitionTo(target, error, false);
+    }
+
+    private void transitionTo(State target, RuntimeException error, boolean throwError) {
         if (!currentState.isTransitionValid(currentState, target)) {
             String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
-            throw new IllegalStateException(idString + "Invalid transition attempted from state "
-                    + currentState.name() + " to state " + target.name());
-        }
+            String message = idString + "Invalid transition attempted from state "
+                    + currentState.name() + " to state " + target.name();
 
-        if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
+            // If the transition is being called on behalf of a direct user interaction, we want to continue to
+            // throw the IllegalStateException. This gives the user the opportunity to fix the issue without
+            // permanently poisoning the state.
+            //
+            // However, if the transition was triggered internally to the producer (e.g. as part of response
+            // handling inside Sender), we want to "poison" the transaction manager's state to avoid potential
+            // corruption from being in an otherwise inconsistent state.
+            //
+            // See KAFKA-14831 for more detail.
+            if (throwError) {
+                throw new IllegalStateException(message);
+            } else {
+                lastError = new IllegalStateException(message);
+                target = State.FATAL_ERROR;
+            }
+        } else if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
             if (error == null)
                 throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
