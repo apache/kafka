@@ -17,20 +17,20 @@
 
 package org.apache.kafka.server.immutable;
 
-import org.apache.kafka.server.immutable.pcollections.PCollectionsHashMapSetWrapperFactory;
+import org.apache.kafka.server.immutable.pcollections.PCollectionsImmutableMapSetFactory;
 
 /**
  * A factory for instantiating persistent Hash-based Maps/Sets
  */
-public interface PHashMapSetWrapperFactory {
-    PHashMapSetWrapperFactory PCOLLECTIONS_FACTORY = new PCollectionsHashMapSetWrapperFactory();
+public interface ImmutableMapSetFactory {
+    ImmutableMapSetFactory PCOLLECTIONS_FACTORY = new PCollectionsImmutableMapSetFactory();
 
     /**
      * @return a wrapped hash-based persistent map that is empty
      * @param <K> the key type
      * @param <V> the value type
      */
-    <K, V> PHashMapWrapper<K, V> emptyMap();
+    <K, V> ImmutableMap<K, V> emptyMap();
 
     /**
      * @param key the key
@@ -39,18 +39,18 @@ public interface PHashMapSetWrapperFactory {
      * @param <K> the key type
      * @param <V> the value type
      */
-    <K, V> PHashMapWrapper<K, V> singletonMap(K key, V value);
+    <K, V> ImmutableMap<K, V> singletonMap(K key, V value);
 
     /**
      * @return a wrapped hash-based persistent set that is empty
      * @param <E> the element type
      */
-    <E> PHashSetWrapper<E> emptySet();
+    <E> ImmutableSet<E> emptySet();
 
     /**
      * @param e the element
      * @return a wrapped hash-based persistent set that has a single element
      * @param <E> the element type
      */
-    <E> PHashSetWrapper<E> singletonSet(E e);
+    <E> ImmutableSet<E> singletonSet(E e);
 }

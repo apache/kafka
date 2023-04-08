@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.pcollections.HashTreePMap;
 import org.pcollections.HashTreePSet;
 
-public class PHashMapSetWrapperFactoryTest {
-    private static final PCollectionsHashMapSetWrapperFactory FACTORY = new PCollectionsHashMapSetWrapperFactory();
+public class ImmutableMapSetFactoryTest {
+    private static final PCollectionsImmutableMapSetFactory FACTORY = new PCollectionsImmutableMapSetFactory();
 
     @Test
     public void testEmptyMap() {

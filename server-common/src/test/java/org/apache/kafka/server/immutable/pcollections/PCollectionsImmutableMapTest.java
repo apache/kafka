@@ -37,22 +37,22 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 
 @SuppressWarnings({"unchecked", "deprecation"})
-public class PCollectionsHashMapWrapperTest {
+public class PCollectionsImmutableMapTest {
     private static final HashPMap<Object, Object> SINGLETON_MAP = HashTreePMap.singleton(new Object(), new Object());
 
-    private static final class PCollectionsHashMapWrapperDelegationChecker<R> extends DelegationChecker<HashPMap<Object, Object>, PCollectionsHashMapWrapper<Object, Object>, R> {
+    private static final class PCollectionsHashMapWrapperDelegationChecker<R> extends DelegationChecker<HashPMap<Object, Object>, PCollectionsImmutableMap<Object, Object>, R> {
         public PCollectionsHashMapWrapperDelegationChecker() {
-            super(mock(HashPMap.class), PCollectionsHashMapWrapper::new);
+            super(mock(HashPMap.class), PCollectionsImmutableMap::new);
         }
 
-        public HashPMap<Object, Object> unwrap(PCollectionsHashMapWrapper<Object, Object> wrapper) {
+        public HashPMap<Object, Object> unwrap(PCollectionsImmutableMap<Object, Object> wrapper) {
             return wrapper.underlying();
         }
     }
 
     @Test
     public void testUnderlying() {
-        assertSame(SINGLETON_MAP, new PCollectionsHashMapWrapper<>(SINGLETON_MAP).underlying());
+        assertSame(SINGLETON_MAP, new PCollectionsImmutableMap<>(SINGLETON_MAP).underlying());
     }
 
     @Test
@@ -78,7 +78,7 @@ public class PCollectionsHashMapWrapperTest {
     public void testDelegationOfSize(int mockFunctionReturnValue) {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(HashPMap::size, mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::size, identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::size, identity())
             .doFunctionDelegationCheck();
     }
 
@@ -87,7 +87,7 @@ public class PCollectionsHashMapWrapperTest {
     public void testDelegationOfIsEmpty(boolean mockFunctionReturnValue) {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(HashPMap::isEmpty, mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::isEmpty, identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::isEmpty, identity())
             .doFunctionDelegationCheck();
     }
 
@@ -145,7 +145,7 @@ public class PCollectionsHashMapWrapperTest {
     public void testDelegationOfClear() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForVoidMethodInvocation(HashPMap::clear)
-            .defineWrapperVoidMethodInvocation(PCollectionsHashMapWrapper::clear)
+            .defineWrapperVoidMethodInvocation(PCollectionsImmutableMap::clear)
             .doVoidMethodDelegationCheck();
     }
 
@@ -154,7 +154,7 @@ public class PCollectionsHashMapWrapperTest {
     public void testDelegationOfKeySet() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(HashPMap::keySet, Collections.emptySet())
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::keySet, identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::keySet, identity())
             .doFunctionDelegationCheck();
     }
 
@@ -162,7 +162,7 @@ public class PCollectionsHashMapWrapperTest {
     public void testDelegationOfValues() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(HashPMap::values, Collections.emptySet())
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::values, identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::values, identity())
             .doFunctionDelegationCheck();
     }
 
@@ -170,24 +170,24 @@ public class PCollectionsHashMapWrapperTest {
     public void testDelegationOfEntrySet() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(HashPMap::entrySet, Collections.emptySet())
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::entrySet, identity())
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::entrySet, identity())
             .doFunctionDelegationCheck();
     }
 
     @Test
     public void testEquals() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        assertEquals(new PCollectionsHashMapWrapper<>(mock), new PCollectionsHashMapWrapper<>(mock));
+        assertEquals(new PCollectionsImmutableMap<>(mock), new PCollectionsImmutableMap<>(mock));
         final HashPMap<Object, Object> someOtherMock = mock(HashPMap.class);
-        assertNotEquals(new PCollectionsHashMapWrapper<>(mock), new PCollectionsHashMapWrapper<>(someOtherMock));
+        assertNotEquals(new PCollectionsImmutableMap<>(mock), new PCollectionsImmutableMap<>(someOtherMock));
     }
 
     @Test
     public void testHashCode() {
         final HashPMap<Object, Object> mock = mock(HashPMap.class);
-        assertEquals(mock.hashCode(), new PCollectionsHashMapWrapper<>(mock).hashCode());
+        assertEquals(mock.hashCode(), new PCollectionsImmutableMap<>(mock).hashCode());
         final HashPMap<Object, Object> someOtherMock = mock(HashPMap.class);
-        assertNotEquals(mock.hashCode(), new PCollectionsHashMapWrapper<>(someOtherMock).hashCode());
+        assertNotEquals(mock.hashCode(), new PCollectionsImmutableMap<>(someOtherMock).hashCode());
     }
 
     @Test
@@ -291,8 +291,8 @@ public class PCollectionsHashMapWrapperTest {
     public void testDelegationOfToString(String mockFunctionReturnValue) {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(HashPMap::toString, mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsHashMapWrapper::toString,
-                text -> "PCollectionsHashMapWrapper{underlying=" + text + "}")
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::toString,
+                text -> "PCollectionsImmutableMap{underlying=" + text + "}")
             .doFunctionDelegationCheck();
     }
 }

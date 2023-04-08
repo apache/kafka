@@ -26,7 +26,7 @@ import java.util.Map;
  * @param <K> the key type
  * @param <V> the value type
  */
-public interface PHashMapWrapper<K, V> extends Map<K, V> {
+public interface ImmutableMap<K, V> extends Map<K, V> {
     /**
      * @return the underlying persistent map
      */
@@ -37,11 +37,11 @@ public interface PHashMapWrapper<K, V> extends Map<K, V> {
      * @param value the value
      * @return a wrapped persistent map that differs from this one in that the given mapping is added (if necessary)
      */
-    PHashMapWrapper<K, V> afterAdding(K key, V value);
+    ImmutableMap<K, V> afterAdding(K key, V value);
 
     /**
      * @param key the key
      * @return a wrapped persistent map that differs from this one in that the given mapping is removed (if necessary)
      */
-    PHashMapWrapper<K, V> afterRemoving(K key);
+    ImmutableMap<K, V> afterRemoving(K key);
 }

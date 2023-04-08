@@ -25,7 +25,7 @@ import java.util.Set;
  *
  * @param <E> the element type
  */
-public interface PHashSetWrapper<E> extends Set<E> {
+public interface ImmutableSet<E> extends Set<E> {
     /**
      * @return the underlying persistent set
      */
@@ -35,11 +35,11 @@ public interface PHashSetWrapper<E> extends Set<E> {
      * @param e the element
      * @return a wrapped persistent set that differs from this one in that the given element is added (if necessary)
      */
-    PHashSetWrapper<E> afterAdding(E e);
+    ImmutableSet<E> afterAdding(E e);
 
     /**
      * @param e the element
      * @return a wrapped persistent set that differs from this one in that the given element is added (if necessary)
      */
-    PHashSetWrapper<E> afterRemoving(E e);
+    ImmutableSet<E> afterRemoving(E e);
 }

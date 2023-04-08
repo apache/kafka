@@ -24,7 +24,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.Replicas;
-import org.apache.kafka.server.immutable.PHashMapWrapper;
+import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collections;
@@ -126,8 +126,8 @@ public final class TopicsDelta {
     }
 
     public TopicsImage apply() {
-        PHashMapWrapper<Uuid, TopicImage> newTopicsById = image.topicsById;
-        PHashMapWrapper<String, TopicImage> newTopicsByName = image.topicsByName;
+        ImmutableMap<Uuid, TopicImage> newTopicsById = image.topicsById;
+        ImmutableMap<String, TopicImage> newTopicsByName = image.topicsByName;
         // apply all the deletes
         for (Uuid topicId: deletedTopicIds) {
             // it was deleted, so we have to remove it from the maps

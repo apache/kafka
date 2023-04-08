@@ -17,7 +17,7 @@
 
 package org.apache.kafka.server.immutable.pcollections;
 
-import org.apache.kafka.server.immutable.PHashSetWrapper;
+import org.apache.kafka.server.immutable.ImmutableSet;
 import org.pcollections.MapPSet;
 
 import java.util.Collection;
@@ -29,11 +29,11 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 @SuppressWarnings("deprecation")
-public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
+public class PCollectionsImmutableSet<E> implements ImmutableSet<E> {
     private final MapPSet<E> underlying;
 
 
-    public PCollectionsHashSetWrapper(MapPSet<E> set) {
+    public PCollectionsImmutableSet(MapPSet<E> set) {
         this.underlying = Objects.requireNonNull(set);
     }
 
@@ -43,13 +43,13 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
     }
     
     @Override
-    public PHashSetWrapper<E> afterAdding(E e) {
-        return new PCollectionsHashSetWrapper<>(underlying().plus(e));
+    public ImmutableSet<E> afterAdding(E e) {
+        return new PCollectionsImmutableSet<>(underlying().plus(e));
     }
     
     @Override
-    public PHashSetWrapper<E> afterRemoving(E e) {
-        return new PCollectionsHashSetWrapper<>(underlying().minus(e));
+    public ImmutableSet<E> afterRemoving(E e) {
+        return new PCollectionsImmutableSet<>(underlying().minus(e));
     }
 
     @Override
@@ -153,7 +153,7 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        PCollectionsHashSetWrapper<?> that = (PCollectionsHashSetWrapper<?>) o;
+        PCollectionsImmutableSet<?> that = (PCollectionsImmutableSet<?>) o;
         return Objects.equals(underlying(), that.underlying());
     }
 
@@ -164,7 +164,7 @@ public class PCollectionsHashSetWrapper<E> implements PHashSetWrapper<E> {
 
     @Override
     public String toString() {
-        return "PCollectionsHashSetWrapper{" +
+        return "PCollectionsImmutableSet{" +
             "underlying=" + underlying() +
             '}';
     }

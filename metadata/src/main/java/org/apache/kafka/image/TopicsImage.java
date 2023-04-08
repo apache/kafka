@@ -21,8 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.immutable.PHashMapWrapper;
-import org.apache.kafka.server.immutable.PHashMapSetWrapperFactory;
+import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.server.immutable.ImmutableMapSetFactory;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Map;
@@ -35,15 +35,15 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class TopicsImage {
-    private static final PHashMapSetWrapperFactory FACTORY = PHashMapSetWrapperFactory.PCOLLECTIONS_FACTORY;
+    private static final ImmutableMapSetFactory FACTORY = ImmutableMapSetFactory.PCOLLECTIONS_FACTORY;
 
     public static final TopicsImage EMPTY =  new TopicsImage(FACTORY.emptyMap(), FACTORY.emptyMap());
 
-    final PHashMapWrapper<Uuid, TopicImage> topicsById;
-    final PHashMapWrapper<String, TopicImage> topicsByName;
+    final ImmutableMap<Uuid, TopicImage> topicsById;
+    final ImmutableMap<String, TopicImage> topicsByName;
 
-    public TopicsImage(PHashMapWrapper<Uuid, TopicImage> topicsById,
-                       PHashMapWrapper<String, TopicImage> topicsByName) {
+    public TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById,
+                       ImmutableMap<String, TopicImage> topicsByName) {
         this.topicsById = topicsById;
         this.topicsByName = topicsByName;
     }
@@ -58,11 +58,11 @@ public final class TopicsImage {
         return topicsById.isEmpty() && topicsByName.isEmpty();
     }
 
-    public PHashMapWrapper<Uuid, TopicImage> topicsById() {
+    public ImmutableMap<Uuid, TopicImage> topicsById() {
         return topicsById;
     }
 
-    public PHashMapWrapper<String, TopicImage> topicsByName() {
+    public ImmutableMap<String, TopicImage> topicsByName() {
         return topicsByName;
     }
 

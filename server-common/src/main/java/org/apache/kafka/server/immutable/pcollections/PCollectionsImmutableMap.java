@@ -17,7 +17,7 @@
 
 package org.apache.kafka.server.immutable.pcollections;
 
-import org.apache.kafka.server.immutable.PHashMapWrapper;
+import org.apache.kafka.server.immutable.ImmutableMap;
 import org.pcollections.HashPMap;
 
 import java.util.Collection;
@@ -29,11 +29,11 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 @SuppressWarnings("deprecation")
-public class PCollectionsHashMapWrapper<K, V> implements PHashMapWrapper<K, V> {
+public class PCollectionsImmutableMap<K, V> implements ImmutableMap<K, V> {
 
     private final HashPMap<K, V> underlying;
 
-    public PCollectionsHashMapWrapper(HashPMap<K, V> map) {
+    public PCollectionsImmutableMap(HashPMap<K, V> map) {
         this.underlying = Objects.requireNonNull(map);
     }
 
@@ -43,13 +43,13 @@ public class PCollectionsHashMapWrapper<K, V> implements PHashMapWrapper<K, V> {
     }
 
     @Override
-    public PHashMapWrapper<K, V> afterAdding(K key, V value) {
-        return new PCollectionsHashMapWrapper<>(underlying().plus(key, value));
+    public ImmutableMap<K, V> afterAdding(K key, V value) {
+        return new PCollectionsImmutableMap<>(underlying().plus(key, value));
     }
 
     @Override
-    public PHashMapWrapper<K, V> afterRemoving(K key) {
-        return new PCollectionsHashMapWrapper<>(underlying().minus(key));
+    public ImmutableMap<K, V> afterRemoving(K key) {
+        return new PCollectionsImmutableMap<>(underlying().minus(key));
     }
 
     @Override
@@ -120,7 +120,7 @@ public class PCollectionsHashMapWrapper<K, V> implements PHashMapWrapper<K, V> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        PCollectionsHashMapWrapper<?, ?> that = (PCollectionsHashMapWrapper<?, ?>) o;
+        PCollectionsImmutableMap<?, ?> that = (PCollectionsImmutableMap<?, ?>) o;
         return underlying().equals(that.underlying());
     }
 
@@ -195,7 +195,7 @@ public class PCollectionsHashMapWrapper<K, V> implements PHashMapWrapper<K, V> {
 
     @Override
     public String toString() {
-        return "PCollectionsHashMapWrapper{" +
+        return "PCollectionsImmutableMap{" +
             "underlying=" + underlying() +
             '}';
     }

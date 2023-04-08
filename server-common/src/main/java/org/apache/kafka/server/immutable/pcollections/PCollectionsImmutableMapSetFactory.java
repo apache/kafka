@@ -17,30 +17,30 @@
 
 package org.apache.kafka.server.immutable.pcollections;
 
-import org.apache.kafka.server.immutable.PHashMapWrapper;
-import org.apache.kafka.server.immutable.PHashMapSetWrapperFactory;
-import org.apache.kafka.server.immutable.PHashSetWrapper;
+import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.server.immutable.ImmutableMapSetFactory;
+import org.apache.kafka.server.immutable.ImmutableSet;
 import org.pcollections.HashTreePMap;
 import org.pcollections.HashTreePSet;
 
-public class PCollectionsHashMapSetWrapperFactory implements PHashMapSetWrapperFactory {
+public class PCollectionsImmutableMapSetFactory implements ImmutableMapSetFactory {
     @Override
-    public <K, V> PHashMapWrapper<K, V> emptyMap() {
-        return new PCollectionsHashMapWrapper<>(HashTreePMap.empty());
+    public <K, V> ImmutableMap<K, V> emptyMap() {
+        return new PCollectionsImmutableMap<>(HashTreePMap.empty());
     }
 
     @Override
-    public <K, V> PHashMapWrapper<K, V> singletonMap(K key, V value) {
-        return new PCollectionsHashMapWrapper<>(HashTreePMap.singleton(key, value));
+    public <K, V> ImmutableMap<K, V> singletonMap(K key, V value) {
+        return new PCollectionsImmutableMap<>(HashTreePMap.singleton(key, value));
     }
 
     @Override
-    public <E> PHashSetWrapper<E> emptySet() {
-        return new PCollectionsHashSetWrapper<>(HashTreePSet.empty());
+    public <E> ImmutableSet<E> emptySet() {
+        return new PCollectionsImmutableSet<>(HashTreePSet.empty());
     }
 
     @Override
-    public <E> PHashSetWrapper<E> singletonSet(E e) {
-        return new PCollectionsHashSetWrapper<>(HashTreePSet.singleton(e));
+    public <E> ImmutableSet<E> singletonSet(E e) {
+        return new PCollectionsImmutableSet<>(HashTreePSet.singleton(e));
     }
 }
