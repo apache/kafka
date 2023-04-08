@@ -94,21 +94,21 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
      */
     @Override
     public byte[] serialize(final String topic, final Headers headers, final Change<T> data) {
-        final boolean oldValueIsNull = data.oldValue == null;
-        final boolean newValueIsNull = data.newValue == null;
+        final boolean oldValueIsNotNull = data.oldValue != null;
+        final boolean newValueIsNotNull = data.newValue != null;
 
         final byte[] newData = inner.serialize(topic, headers, data.newValue);
         final byte[] oldData = inner.serialize(topic, headers, data.oldValue);
 
-        final int newDataLength = newValueIsNull ? 0 : newData.length;
-        final int oldDataLength = oldValueIsNull ? 0 : oldData.length;
+        final int newDataLength = newValueIsNotNull ? newData.length : 0;
+        final int oldDataLength = oldValueIsNotNull ? oldData.length : 0;
 
         // The serialization format is:
         // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
         // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
         // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
         final ByteBuffer buf;
-        if (!newValueIsNull && !oldValueIsNull) {
+        if (newValueIsNotNull && oldValueIsNotNull) {
             if (isUpgrade) {
                 throw new StreamsException("Both old and new values are not null (" + data.oldValue
                         + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
@@ -118,11 +118,11 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
                 ByteUtils.writeUnsignedInt(buf, newDataLength);
                 buf.put(newData).put(oldData).put((byte) 2);
             }
-        } else if (!newValueIsNull) {
+        } else if (newValueIsNotNull) {
             final int capacity = newDataLength + NEW_OLD_FLAG_SIZE;
             buf = ByteBuffer.allocate(capacity);
             buf.put(newData).put((byte) 1);
-        } else if (!oldValueIsNull) {
+        } else if (oldValueIsNotNull) {
             final int capacity = oldDataLength + NEW_OLD_FLAG_SIZE;
             buf = ByteBuffer.allocate(capacity);
             buf.put(oldData).put((byte) 0);
