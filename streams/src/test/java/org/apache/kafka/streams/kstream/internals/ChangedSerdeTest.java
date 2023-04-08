@@ -100,7 +100,7 @@ public class ChangedSerdeTest {
         // mutate the serialized array to replace OLD_NEW_FLAG with an unsupported byte value
         final ByteBuffer buffer = ByteBuffer.wrap(serialized);
         buffer.position(serialized.length - 1);
-        buffer.put((byte) 3);
+        buffer.put((byte) -1);
 
         Assert.assertThrows(
             StreamsException.class,
