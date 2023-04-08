@@ -82,24 +82,24 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class RemoteLogManagerTest {
-    Time time = new MockTime();
-    int brokerId = 0;
-    String logDir = TestUtils.tempDirectory("kafka-").toString();
+    private Time time = new MockTime();
+    private int brokerId = 0;
+    private String logDir = TestUtils.tempDirectory("kafka-").toString();
 
-    RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
-    RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
-    RemoteLogManagerConfig remoteLogManagerConfig = null;
-    RemoteLogManager remoteLogManager = null;
+    private RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
+    private RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
+    private RemoteLogManagerConfig remoteLogManagerConfig = null;
+    private RemoteLogManager remoteLogManager = null;
 
-    TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
-    TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Follower", 0));
-    Map<String, Uuid> topicIds = new HashMap<>();
-    TopicPartition tp = new TopicPartition("TestTopic", 5);
-    EpochEntry epochEntry0 = new EpochEntry(0, 0);
-    EpochEntry epochEntry1 = new EpochEntry(1, 100);
-    EpochEntry epochEntry2 = new EpochEntry(2, 200);
-    List<EpochEntry> totalEpochEntries = Arrays.asList(epochEntry0, epochEntry1, epochEntry2);
-    LeaderEpochCheckpoint checkpoint = new LeaderEpochCheckpoint() {
+    private TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
+    private TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Follower", 0));
+    private Map<String, Uuid> topicIds = new HashMap<>();
+    private TopicPartition tp = new TopicPartition("TestTopic", 5);
+    private EpochEntry epochEntry0 = new EpochEntry(0, 0);
+    private EpochEntry epochEntry1 = new EpochEntry(1, 100);
+    private EpochEntry epochEntry2 = new EpochEntry(2, 200);
+    private List<EpochEntry> totalEpochEntries = Arrays.asList(epochEntry0, epochEntry1, epochEntry2);
+    private LeaderEpochCheckpoint checkpoint = new LeaderEpochCheckpoint() {
         List<EpochEntry> epochs = Collections.emptyList();
         @Override
         public void write(Collection<EpochEntry> epochs) {
@@ -112,7 +112,7 @@ public class RemoteLogManagerTest {
         }
     };
 
-    UnifiedLog mockLog = mock(UnifiedLog.class);
+    private UnifiedLog mockLog = mock(UnifiedLog.class);
 
     @BeforeEach
     void setUp() throws Exception {
@@ -131,7 +131,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testGetLeaderEpochCheckpoint() {
+    public void testGetLeaderEpochCheckpoint() {
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
@@ -145,7 +145,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testFindHighestRemoteOffset() throws RemoteStorageException {
+    public void testFindHighestRemoteOffset() throws RemoteStorageException {
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
@@ -159,7 +159,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testRemoteLogMetadataManagerWithUserDefinedConfigs() {
+    public void testRemoteLogMetadataManagerWithUserDefinedConfigs() {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
@@ -173,7 +173,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testStartup() {
+    public void testStartup() {
         remoteLogManager.startup();
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteStorageManager, times(1)).configure(capture.capture());
@@ -210,7 +210,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testTopicIdCacheUpdates() throws RemoteStorageException {
+    public void testTopicIdCacheUpdates() throws RemoteStorageException {
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
 
@@ -234,7 +234,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testFetchRemoteLogSegmentMetadata() throws RemoteStorageException {
+    public void testFetchRemoteLogSegmentMetadata() throws RemoteStorageException {
         remoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
         remoteLogManager.fetchRemoteLogSegmentMetadata(leaderTopicIdPartition.topicPartition(), 10, 100L);
@@ -247,7 +247,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testOnLeadershipChangeWillStartScheduledThread() {
+    public void testOnLeadershipChangeWillStartScheduledThread() {
         assertEquals(1.0, remoteLogManager.rlmScheduledThreadPool().getIdlePercent());
         remoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
@@ -271,7 +271,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testRLMTaskShouldSetLeaderEpochCorrectly() {
+    public void testRLMTaskShouldSetLeaderEpochCorrectly() {
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         assertFalse(task.isLeader());
         task.convertToLeader(1);
@@ -281,7 +281,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testFindOffsetByTimestamp() throws IOException, RemoteStorageException {
+    public void testFindOffsetByTimestamp() throws IOException, RemoteStorageException {
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid());
         long ts = time.milliseconds();
@@ -357,7 +357,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testIdempotentClose() throws IOException {
+    public void testIdempotentClose() throws IOException {
         remoteLogManager.close();
         remoteLogManager.close();
         InOrder inorder = inOrder(remoteStorageManager, remoteLogMetadataManager);
