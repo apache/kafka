@@ -84,7 +84,7 @@
 
         For a downgrade, first switch the config from <code>"upgrade.from"</code> to the version you are downgrading to.
         This disables writing of the new serialization format in your application. It's important to wait in this state
-        for a few minutes to make sure that the application has finished processing any "in-flight" messages written
+        log enough to make sure that the application has finished processing any "in-flight" messages written
         into the repartition topics in the new serialization format. Afterwards, you can downgrade your application to a
         pre-3.5.x version.
     </p>
