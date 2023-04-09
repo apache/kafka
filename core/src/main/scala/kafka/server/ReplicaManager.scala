@@ -55,9 +55,9 @@ import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdParti
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, RemoteStorageFetchInfo}
 
 import java.io.File
 import java.nio.file.{Files, Paths}
@@ -1133,7 +1133,7 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit
   ): Unit = {
     // check if this fetch request can be satisfied right away
-    val logReadResults = readFromLocalLog(params, fetchInfos, quota, readFromPurgatory = false)
+    val logReadResults = readFromLog(params, fetchInfos, quota, readFromPurgatory = false)
     var bytesReadable: Long = 0
     var errorReadingData = false
     var hasDivergingEpoch = false
@@ -1196,13 +1196,25 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Read from multiple topic partitions at the given offset up to maxSize bytes
    */
-  def readFromLocalLog(
+  def readFromLog(
     params: FetchParams,
     readPartitionInfo: Seq[(TopicIdPartition, PartitionData)],
     quota: ReplicaQuota,
-    readFromPurgatory: Boolean
-  ): Seq[(TopicIdPartition, LogReadResult)] = {
+    readFromPurgatory: Boolean): Seq[(TopicIdPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
+
+    def checkFetchDataInfo(partition: Partition, givenFetchedDataInfo: FetchDataInfo) = {
+      if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
+        // If the partition is being throttled, simply return an empty set.
+        new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+      } else if (!params.hardMaxBytesLimit && givenFetchedDataInfo.firstEntryIncomplete) {
+        // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
+        // progress in such cases and don't need to report a `RecordTooLargeException`
+        new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+      } else {
+        givenFetchedDataInfo
+      }
+    }
 
     def read(tp: TopicIdPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
@@ -1210,13 +1222,15 @@ class ReplicaManager(val config: KafkaConfig,
       val followerLogStartOffset = fetchInfo.logStartOffset
 
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
+      var log: UnifiedLog = null
+      var partition : Partition = null
       try {
         if (traceEnabled)
           trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
             s"remaining response limit $limitBytes" +
             (if (minOneMessage) s", ignoring response/partition size limits" else ""))
 
-        val partition = getPartitionOrException(tp.topicPartition)
+        partition = getPartitionOrException(tp.topicPartition)
         val fetchTimeMs = time.milliseconds
 
         // Check if topic ID from the fetch request/session matches the ID in the log
@@ -1246,6 +1260,8 @@ class ReplicaManager(val config: KafkaConfig,
             preferredReadReplica = preferredReadReplica,
             exception = None)
         } else {
+          log = partition.localLogWithEpochOrThrow(fetchInfo.currentLeaderEpoch, params.fetchOnlyLeader())
+
           // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
           val readInfo: LogReadInfo = partition.fetchRecords(
             fetchParams = params,
@@ -1253,19 +1269,9 @@ class ReplicaManager(val config: KafkaConfig,
             fetchTimeMs = fetchTimeMs,
             maxBytes = adjustedMaxBytes,
             minOneMessage = minOneMessage,
-            updateFetchState = !readFromPurgatory
-          )
+            updateFetchState = !readFromPurgatory)
 
-          val fetchDataInfo = if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
-            // If the partition is being throttled, simply return an empty set.
-            new FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
-          } else if (!params.hardMaxBytesLimit && readInfo.fetchedData.firstEntryIncomplete) {
-            // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
-            // progress in such cases and don't need to report a `RecordTooLargeException`
-            new FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
-          } else {
-            readInfo.fetchedData
-          }
+          val fetchDataInfo = checkFetchDataInfo(partition, readInfo.fetchedData)
 
           LogReadResult(info = fetchDataInfo,
             divergingEpoch = readInfo.divergingEpoch.asScala,
@@ -1290,15 +1296,46 @@ class ReplicaManager(val config: KafkaConfig,
                  _: KafkaStorageException |
                  _: OffsetOutOfRangeException |
                  _: InconsistentTopicIdException) =>
-          LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
-            divergingEpoch = None,
-            highWatermark = UnifiedLog.UnknownOffset,
-            leaderLogStartOffset = UnifiedLog.UnknownOffset,
-            leaderLogEndOffset = UnifiedLog.UnknownOffset,
-            followerLogStartOffset = UnifiedLog.UnknownOffset,
-            fetchTimeMs = -1L,
-            lastStableOffset = None,
-            exception = Some(e))
+          createLogReadResult(e)
+        case e: OffsetOutOfRangeException =>
+          // In case of offset out of range errors, check for remote log manager for non-compacted topics
+          // to fetch from remote storage. `log` instance should not be null here as that would have caught earlier with
+          // NotLeaderForPartitionException or ReplicaNotAvailableException.
+          // If it is from a follower then send the offset metadata but not the records data as that can be fetched
+          // from the remote store.
+          if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
+            // Check that the fetch offset is with in the offset range with in the remote storage layer.
+            log.logStartOffset <= offset && offset < log.localLogStartOffset) {
+            // For follower fetch requests, throw an error saying that this offset is moved to tiered storage.
+            val highWatermark = log.highWatermark
+            val leaderLogStartOffset = log.logStartOffset
+            val leaderLogEndOffset = log.logEndOffset
+            if (params.isFromFollower) {
+              createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
+                new OffsetMovedToTieredStorageException("Given offset is moved to tiered storage"))
+            } else {
+              val fetchTimeMs = time.milliseconds
+              val lastStableOffset = Some(log.lastStableOffset)
+              // create a dummy FetchDataInfo with the remote storage fetch information
+              // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
+              // For the following topic-partitions, we return an empty record set
+              val fetchDataInfo =
+                new FetchDataInfo(new LogOffsetMetadata(fetchInfo.fetchOffset), MemoryRecords.EMPTY, false, Optional.empty(),
+                  util.Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(), fetchInfo, params.isolation)))
+
+              LogReadResult(checkFetchDataInfo(partition, fetchDataInfo),
+                divergingEpoch = None,
+                highWatermark,
+                leaderLogStartOffset,
+                leaderLogEndOffset,
+                followerLogStartOffset,
+                fetchTimeMs,
+                lastStableOffset,
+                exception = None)
+            }
+          } else {
+            createLogReadResult(e)
+          }
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
@@ -1333,6 +1370,33 @@ class ReplicaManager(val config: KafkaConfig,
       result += (tp -> readResult)
     }
     result
+  }
+
+  def createLogReadResult(highWatermark: Long,
+                          leaderLogStartOffset: Long,
+                          leaderLogEndOffset: Long,
+                          e: Throwable) = {
+    LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      divergingEpoch = None,
+      highWatermark,
+      leaderLogStartOffset,
+      leaderLogEndOffset,
+      followerLogStartOffset = -1L,
+      fetchTimeMs = -1L,
+      lastStableOffset = None,
+      exception = Some(e))
+  }
+
+  def createLogReadResult(e: Throwable) = {
+    LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      divergingEpoch = None,
+      highWatermark = UnifiedLog.UnknownOffset,
+      leaderLogStartOffset = UnifiedLog.UnknownOffset,
+      leaderLogEndOffset = UnifiedLog.UnknownOffset,
+      followerLogStartOffset = UnifiedLog.UnknownOffset,
+      fetchTimeMs = -1L,
+      lastStableOffset = None,
+      exception = Some(e))
   }
 
   /**
