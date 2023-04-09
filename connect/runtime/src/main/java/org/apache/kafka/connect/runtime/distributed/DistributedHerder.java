@@ -52,6 +52,7 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.storage.PrivilegedWriteException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -1234,74 +1235,84 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // Visible for testing
     void fenceZombieSourceTasks(final String connName, final Callback<Void> callback) {
-        addRequest(
-                () -> {
-                    log.trace("Performing zombie fencing request for connector {}", connName);
-                    if (!isLeader())
-                        callback.onCompletion(new NotLeaderException("Only the leader may perform zombie fencing.", leaderUrl()), null);
-                    else if (!configState.contains(connName))
-                        callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
-                    else if (!isSourceConnector(connName))
-                        callback.onCompletion(new BadRequestException("Connector " + connName + " is not a source connector"), null);
-                    else {
-                        if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
-                            throw new ConnectException("Failed to read to end of config topic before performing zombie fencing");
-                        }
+        addRequest(getFenceZombieSourceTasksCallable(connName, callback), forwardErrorCallback(callback));
+    }
 
-                        int taskCount = configState.taskCount(connName);
-                        Integer taskCountRecord = configState.taskCountRecord(connName);
+    /**
+     * Callable to fence out zombie source tasks if required and write a task count record to the config topic.
+     *
+     * @param connName the name of the connector whose tasks are to be fenced out
+     * @param callback callback to invoke upon completion
+     * @return a herder request (Callable) that can be submitted via {@link #addRequest}
+     */
+    private Callable<Void> getFenceZombieSourceTasksCallable(String connName, Callback<Void> callback) {
+        return () -> {
+            log.trace("Performing zombie fencing request for connector {}", connName);
+            if (checkRebalanceNeeded(callback))
+                return null;
+            else if (!isLeader())
+                callback.onCompletion(new NotLeaderException("Only the leader may perform zombie fencing.", leaderUrl()), null);
+            else if (!configState.contains(connName))
+                callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+            else if (!isSourceConnector(connName))
+                callback.onCompletion(new BadRequestException("Connector " + connName + " is not a source connector"), null);
+            else {
+                if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
+                    throw new ConnectException("Failed to read to end of config topic before performing zombie fencing");
+                }
 
-                        ZombieFencing zombieFencing = null;
-                        boolean newFencing = false;
-                        synchronized (DistributedHerder.this) {
-                            // Check first to see if we have to do a fencing. The control flow is a little awkward here (why not stick this in
-                            // an else block lower down?) but we can't synchronize around the body below since that may contain a synchronous
-                            // write to the config topic.
-                            if (configState.pendingFencing(connName) && taskCountRecord != null
-                                    && (taskCountRecord != 1 || taskCount != 1)) {
-                                int taskGen = configState.taskConfigGeneration(connName);
-                                zombieFencing = activeZombieFencings.get(connName);
-                                if (zombieFencing == null) {
-                                    zombieFencing = new ZombieFencing(connName, taskCountRecord, taskCount, taskGen);
-                                    activeZombieFencings.put(connName, zombieFencing);
-                                    newFencing = true;
-                                }
-                            }
-                        }
-                        if (zombieFencing != null) {
-                            if (newFencing) {
-                                zombieFencing.start();
-                            }
-                            zombieFencing.addCallback(callback);
-                            return null;
-                        }
+                int taskCount = configState.taskCount(connName);
+                Integer taskCountRecord = configState.taskCountRecord(connName);
 
-                        if (!configState.pendingFencing(connName)) {
-                            // If the latest task count record for the connector is present after the latest set of task configs, there's no need to
-                            // do any zombie fencing or write a new task count record to the config topic
-                            log.debug("Skipping zombie fencing round for connector {} as all old task generations have already been fenced out", connName);
-                        } else {
-                            if (taskCountRecord == null) {
-                                // If there is no task count record present for the connector, no transactional producers should have been brought up for it,
-                                // so there's nothing to fence--but we do need to write a task count record now so that we know to fence those tasks if/when
-                                // the connector is reconfigured
-                                log.debug("Skipping zombie fencing round but writing task count record for connector {} "
-                                        + "as it is being brought up for the first time with exactly-once source support", connName);
-                            } else {
-                                // If the last generation of tasks only had one task, and the next generation only has one, then the new task will automatically
-                                // fence out the older task if it's still running; no need to fence here, but again, we still need to write a task count record
-                                log.debug("Skipping zombie fencing round but writing task count record for connector {} "
-                                        + "as both the most recent and the current generation of task configs only contain one task", connName);
-                            }
-                            writeToConfigTopicAsLeader(() -> configBackingStore.putTaskCountRecord(connName, taskCount));
+                ZombieFencing zombieFencing = null;
+                boolean newFencing = false;
+                synchronized (DistributedHerder.this) {
+                    // Check first to see if we have to do a fencing. The control flow is a little awkward here (why not stick this in
+                    // an else block lower down?) but we can't synchronize around the body below since that may contain a synchronous
+                    // write to the config topic.
+                    if (configState.pendingFencing(connName) && taskCountRecord != null
+                            && (taskCountRecord != 1 || taskCount != 1)) {
+                        int taskGen = configState.taskConfigGeneration(connName);
+                        zombieFencing = activeZombieFencings.get(connName);
+                        if (zombieFencing == null) {
+                            zombieFencing = new ZombieFencing(connName, taskCountRecord, taskCount, taskGen);
+                            activeZombieFencings.put(connName, zombieFencing);
+                            newFencing = true;
                         }
-                        callback.onCompletion(null, null);
-                        return null;
                     }
+                }
+                if (zombieFencing != null) {
+                    if (newFencing) {
+                        zombieFencing.start();
+                    }
+                    zombieFencing.addCallback(callback);
                     return null;
-                },
-                forwardErrorCallback(callback)
-        );
+                }
+
+                if (!configState.pendingFencing(connName)) {
+                    // If the latest task count record for the connector is present after the latest set of task configs, there's no need to
+                    // do any zombie fencing or write a new task count record to the config topic
+                    log.debug("Skipping zombie fencing round for connector {} as all old task generations have already been fenced out", connName);
+                } else {
+                    if (taskCountRecord == null) {
+                        // If there is no task count record present for the connector, no transactional producers should have been brought up for it,
+                        // so there's nothing to fence--but we do need to write a task count record now so that we know to fence those tasks if/when
+                        // the connector is reconfigured
+                        log.debug("Skipping zombie fencing round but writing task count record for connector {} "
+                                + "as it is being brought up for the first time with exactly-once source support", connName);
+                    } else {
+                        // If the last generation of tasks only had one task, and the next generation only has one, then the new task will automatically
+                        // fence out the older task if it's still running; no need to fence here, but again, we still need to write a task count record
+                        log.debug("Skipping zombie fencing round but writing task count record for connector {} "
+                                + "as both the most recent and the current generation of task configs only contain one task", connName);
+                    }
+                    writeToConfigTopicAsLeader(() -> configBackingStore.putTaskCountRecord(connName, taskCount));
+                }
+                callback.onCompletion(null, null);
+                return null;
+            }
+            return null;
+        };
     }
 
     @Override
@@ -1513,6 +1524,92 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 },
                 forwardErrorCallback(cb)
         );
+    }
+
+    @Override
+    public void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
+        log.trace("Submitting alter offsets request for connector '{}'", connName);
+
+        addRequest(() -> {
+            refreshConfigSnapshot(workerSyncTimeoutMs);
+            if (!alterConnectorOffsetsChecks(connName, callback)) {
+                return null;
+            }
+            // At this point, we should be the leader (the call to alterConnectorOffsetsChecks makes sure of that) and can safely run
+            // a zombie fencing request
+            if (isSourceConnector(connName) && config.exactlyOnceSourceEnabled()) {
+                log.debug("Performing a round of zombie fencing before altering offsets for source connector {} with exactly-once semantics enabled.", connName);
+                getFenceZombieSourceTasksCallable(connName, (error, ignored) -> {
+                    if (error != null) {
+                        log.error("Failed to perform zombie fencing for exactly-once source connector prior to altering offsets", error);
+                        callback.onCompletion(new ConnectException("Failed to perform zombie fencing for exactly-once source connector prior to altering offsets",
+                                error), null);
+                    } else {
+                        log.debug("Successfully completed zombie fencing for source connector {}; proceeding to alter offsets.", connName);
+                        // We need to ensure that we perform the necessary checks again inside alterConnectorOffsetsHerderRequest
+                        // since it is being run in a separate herder request and the conditions could have changed since the
+                        // previous check
+                        addRequest(getAlterConnectorOffsetsCallable(connName, offsets, callback), forwardErrorCallback(callback));
+                    }
+                }).call();
+            } else {
+                getAlterConnectorOffsetsCallable(connName, offsets, callback).call();
+            }
+            return null;
+        }, forwardErrorCallback(callback));
+    }
+
+    private Callable<Void> getAlterConnectorOffsetsCallable(String connName, Map<Map<String, ?>, Map<String, ?>> offsets,
+                                                            Callback<Message> callback) {
+        return () -> {
+            if (!alterConnectorOffsetsChecks(connName, callback)) {
+                return null;
+            }
+            // The alter offsets request needs to be processed synchronously for the same reason that it needs to be done on the
+            // leader - to ensure that no new tasks are spun up before the offsets are altered.
+            if (worker.alterConnectorOffsets(connName, offsets, configState.connectorConfig(connName))) {
+                callback.onCompletion(null, new Message("The offsets for this connector have been altered successfully"));
+            } else {
+                callback.onCompletion(null, new Message("The Connect framework managed offsets for this connector have been " +
+                        "altered successfully. However, if this connector manages offsets externally, they will need to be " +
+                        "manually altered in the system that the connector uses."));
+            }
+            return null;
+        };
+    }
+
+    /**
+     * This method performs a few checks for alter connector offsets request and completes the callback exceptionally
+     * if any check fails.
+     * @param connName the name of the connector whose offsets are to be altered
+     * @param callback callback to invoke upon completion
+     * @return true if all the checks passed, false otherwise
+     */
+    private boolean alterConnectorOffsetsChecks(String connName, Callback<Message> callback) {
+        if (checkRebalanceNeeded(callback)) {
+            return false;
+        }
+        if (!configState.contains(connName)) {
+            callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+            return false;
+        }
+        // If the target state for the connector is stopped, its task count is 0, and there is no rebalance pending (checked above),
+        // we can be sure that the tasks have at least been attempted to be stopped (or cancelled if they took too long to stop).
+        // Zombie tasks are handled by a round of zombie fencing for exactly once source connectors. Zombie sink tasks are handled
+        // naturally because requests to alter consumer group offsets will fail if there are still active members in the group.
+        if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
+            callback.onCompletion(new BadRequestException("The connector needs to be stopped before its offsets can be altered"), null);
+            return false;
+        }
+        if (!isLeader()) {
+            // Alter offsets requests need to be handled by the leader in order to ensure that the connector's set of task configs is
+            // empty before altering offsets. Since task configs can only be written to the config store by the leader, we can be sure
+            // that new tasks aren't spun up in the interim between checking the set of tasks for a connector and actually processing
+            // the alter offsets request.
+            callback.onCompletion(new NotLeaderException("Only the leader can process alter offsets requests", leaderUrl()), null);
+            return false;
+        }
+        return true;
     }
 
     // Should only be called from work thread, so synchronization should not be needed

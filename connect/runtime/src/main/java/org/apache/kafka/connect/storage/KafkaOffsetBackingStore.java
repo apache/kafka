@@ -82,7 +82,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
      * @param keyConverter the worker's internal key converter that can be used to deserialize offset keys from the {@link KafkaBasedLog}
      * @return an offset store backed by the given topic and Kafka clients
      */
-    public static KafkaOffsetBackingStore forTask(
+    public static KafkaOffsetBackingStore readWriteStore(
             String topic,
             Producer<byte[], byte[]> producer,
             Consumer<byte[], byte[]> consumer,
@@ -115,7 +115,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
      * @param keyConverter the worker's internal key converter that can be used to deserialize offset keys from the {@link KafkaBasedLog}
      * @return a read-only offset store backed by the given topic and Kafka clients
      */
-    public static KafkaOffsetBackingStore forConnector(
+    public static KafkaOffsetBackingStore readOnlyStore(
             String topic,
             Consumer<byte[], byte[]> consumer,
             TopicAdmin topicAdmin,

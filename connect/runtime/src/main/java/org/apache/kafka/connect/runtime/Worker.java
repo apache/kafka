@@ -18,22 +18,29 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -57,8 +64,10 @@ import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -73,6 +82,7 @@ import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -80,6 +90,7 @@ import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -93,9 +104,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -115,6 +128,7 @@ public class Worker {
 
     public static final long CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
     public static final long EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
+    public static final long ALTER_OFFSETS_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
 
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
@@ -297,8 +311,8 @@ public class Worker {
 
                     // Set up the offset backing store for this connector instance
                     offsetStore = config.exactlyOnceSourceEnabled()
-                            ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector)
-                            : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector);
+                            ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector, null)
+                            : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector, null);
                     offsetStore.configure(config);
                     offsetReader = new OffsetStorageReaderImpl(offsetStore, connName, internalKeyConverter, internalValueConverter);
                 }
@@ -1208,8 +1222,8 @@ public class Worker {
                                         Callback<ConnectorOffsets> cb) {
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorConfig, config.topicCreationEnable());
         ConnectorOffsetBackingStore offsetStore = config.exactlyOnceSourceEnabled()
-                ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector)
-                : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector);
+                ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector, null)
+                : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector, null);
         CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetStore, connName, internalKeyConverter, internalValueConverter);
         sourceConnectorOffsets(connName, offsetStore, offsetReader, cb);
     }
@@ -1233,6 +1247,229 @@ public class Worker {
                 Utils.closeQuietly(offsetStore::stop, "Offset store for connector " + connName);
             }
         });
+    }
+
+    /**
+     * Alter a connector's offsets.
+     *
+     * @param connName the name of the connector whose offsets are to be altered
+     * @param offsets a mapping from partitions to offsets that need to be overwritten
+     * @param connectorConfig the connector's configurations
+     *
+     * @return true if the connector plugin has implemented {@link org.apache.kafka.connect.sink.SinkConnector#alterOffsets(Map, Map)}
+     * / {@link org.apache.kafka.connect.source.SourceConnector#alterOffsets(Map, Map)} and it returns true for the provided offsets,
+     * false otherwise
+     *
+     */
+    public boolean alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets,
+                                         Map<String, String> connectorConfig) {
+        String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
+        Connector connector;
+
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            connector = plugins.newConnector(connectorClassOrAlias);
+            if (ConnectUtils.isSinkConnector(connector)) {
+                log.debug("Altering consumer group offsets for sink connector: {}", connName);
+                return alterSinkConnectorOffsets(connName, connector, connectorConfig, offsets);
+            } else {
+                log.debug("Altering offsets for source connector: {}", connName);
+                return alterSourceConnectorOffsets(connName, connector, connectorConfig, offsets);
+            }
+        }
+    }
+
+    /**
+     * Alter a sink connector's consumer group offsets.
+     * @param connName the name of the sink connector whose offsets are to be altered
+     * @param connector an instance of the sink connector
+     * @param connectorConfig the sink connector's configuration
+     * @param offsets a mapping from topic partitions to offsets that need to be overwritten
+     * @return true if the sink connector has implemented {@link org.apache.kafka.connect.sink.SinkConnector#alterOffsets(Map, Map)}
+     * and it returns true for the provided offsets, false otherwise
+     */
+    private boolean alterSinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                              Map<Map<String, ?>, Map<String, ?>> offsets) {
+        return alterSinkConnectorOffsets(connName, connector, connectorConfig, offsets, Admin::create);
+    }
+
+    // Visible for testing; allows mocking the admin client for testing
+    boolean alterSinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                      Map<Map<String, ?>, Map<String, ?>> offsets, Function<Map<String, Object>, Admin> adminFactory) {
+
+        Map<TopicPartition, Long> parsedOffsets = SinkUtils.validateAndParseSinkConnectorOffsets(offsets);
+        Timer timer = time.timer(ALTER_OFFSETS_TIMEOUT_MS);
+        boolean alterOffsetsResult;
+        try {
+            alterOffsetsResult = ((SinkConnector) connector).alterOffsets(connectorConfig, parsedOffsets);
+        } catch (UnsupportedOperationException e) {
+            throw new ConnectException("Failed to alter offsets for connector " + connName + " because it doesn't support external " +
+                    "modification of offsets", e);
+        }
+        timer.update();
+
+        Class<? extends Connector> sinkConnectorClass = connector.getClass();
+        Map<String, Object> adminConfig = adminConfigs(
+                connName,
+                "connector-worker-adminclient-" + connName,
+                config,
+                new SinkConnectorConfig(plugins, connectorConfig),
+                sinkConnectorClass,
+                connectorClientConfigOverridePolicy,
+                kafkaClusterId,
+                ConnectorType.SINK);
+
+        try (Admin admin = adminFactory.apply(adminConfig)) {
+            SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, connectorConfig);
+            String groupId = (String) baseConsumerConfigs(
+                    connName, "connector-consumer-", config, sinkConnectorConfig,
+                    sinkConnectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
+
+            Map<TopicPartition, OffsetAndMetadata> offsetsToAlter = parsedOffsets.entrySet()
+                    .stream()
+                    .filter(entry -> entry.getValue() != null)
+                    .map(entry -> new AbstractMap.SimpleEntry<>(entry.getKey(), new OffsetAndMetadata(entry.getValue())))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            if (!offsetsToAlter.isEmpty()) {
+                AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = admin.alterConsumerGroupOffsets(groupId, offsetsToAlter);
+                try {
+                    log.debug("Committing the following consumer group topic partition offsets using an admin client for sink connector {}: {}.",
+                            connName, offsetsToAlter);
+                    alterConsumerGroupOffsetsResult.all().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+                } catch (ExecutionException e) {
+                    // When a consumer group is non-empty, only members can commit offsets. The attempt to alter offsets via the admin client will throw an
+                    // UnknownMemberIdException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped completely).
+                    if (e.getCause() instanceof UnknownMemberIdException) {
+                        throw new ConnectException("Failed to alter consumer group offsets for connector " + connName + " because its tasks haven't stopped " +
+                                "completely yet. This operation may be retried but if it doesn't eventually succeed, the Connect cluster may need to be " +
+                                "restarted to get rid of the zombie sink tasks.");
+                    }
+                    throw new ConnectException("Failed to alter consumer group offsets for topic partitions " + offsetsToAlter.keySet() + " for connector "
+                            + connName, e.getCause());
+                } catch (TimeoutException e) {
+                    throw new ConnectException("Timed out while attempting to alter consumer group offsets for topic partitions " + offsetsToAlter.keySet()
+                            + " for connector" + connName, e);
+                } catch (InterruptedException e) {
+                    throw new ConnectException("Unexpectedly interrupted while attempting to alter consumer group offsets for topic partitions " + offsetsToAlter.keySet()
+                            + " for connector" + connName, e);
+                }
+                timer.update();
+            }
+
+            Set<TopicPartition> partitionsToReset = parsedOffsets.entrySet()
+                    .stream()
+                    .filter(entry -> entry.getValue() == null)
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+
+            if (!partitionsToReset.isEmpty()) {
+                DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = admin.deleteConsumerGroupOffsets(groupId, partitionsToReset);
+                try {
+                    log.debug("Deleting the consumer group offsets for the following topic partitions using an admin client for sink connector {}: {}.",
+                            connName, partitionsToReset);
+                    deleteConsumerGroupOffsetsResult.all().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+                } catch (ExecutionException e) {
+                    // The attempt to delete offsets for certain topic partitions via the admin client will throw a GroupSubscribedToTopicException if the consumer
+                    // group is non-empty (i.e. if the sink tasks haven't stopped completely).
+                    if (e.getCause() instanceof GroupSubscribedToTopicException) {
+                        throw new ConnectException("Failed to alter consumer group offsets for connector " + connName + " because its tasks haven't stopped " +
+                                "completely yet. This operation may be retried but if it doesn't eventually succeed, the Connect cluster may need to be " +
+                                "restarted to get rid of the zombie sink tasks.");
+                    }
+                    throw new ConnectException("Failed to delete consumer group offsets for topic partitions " + partitionsToReset + " for connector "
+                            + connName, e.getCause());
+                } catch (TimeoutException e) {
+                    throw new ConnectException("Timed out while attempting to delete consumer group offsets for topic partitions " + partitionsToReset
+                            + " for connector" + connName, e);
+                } catch (InterruptedException e) {
+                    throw new ConnectException("Unexpectedly interrupted while attempting to delete consumer group offsets for topic partitions " + partitionsToReset
+                            + " for connector" + connName, e);
+                }
+            }
+            return alterOffsetsResult;
+        }
+    }
+
+    /**
+     * Alter a source connector's offsets.
+     * @param connName the name of the source connector whose offsets are to be altered
+     * @param connector an instance of the source connector
+     * @param connectorConfig the source connector's configuration
+     * @param offsets a mapping from partitions to offsets that need to be overwritten
+     * @return true if the source connector has implemented {@link org.apache.kafka.connect.source.SourceConnector#alterOffsets(Map, Map)}
+     * and it returns true for the provided offsets, false otherwise
+     */
+    private boolean alterSourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                                Map<Map<String, ?>, Map<String, ?>> offsets) {
+        SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorConfig, config.topicCreationEnable());
+        Map<String, Object> producerProps = config.exactlyOnceSourceEnabled()
+                ? exactlyOnceSourceTaskProducerConfigs(new ConnectorTaskId(connName, 0), config, sourceConfig,
+                connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId)
+                : baseProducerConfigs(connName, "connector-offset-producer-" + connName, config, sourceConfig,
+                connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId);
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+
+        ConnectorOffsetBackingStore offsetStore = config.exactlyOnceSourceEnabled()
+                ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector, producer)
+                : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector, producer);
+
+        OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, connName, internalKeyConverter, internalValueConverter);
+        return alterSourceConnectorOffsets(connName, connector, connectorConfig, offsets, offsetStore, producer, offsetWriter);
+    }
+
+    // Visible for testing
+    boolean alterSourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets,
+                                        ConnectorOffsetBackingStore offsetStore, KafkaProducer<byte[], byte[]> producer, OffsetStorageWriter offsetWriter) {
+        Timer timer = time.timer(ALTER_OFFSETS_TIMEOUT_MS);
+        boolean alterOffsetsResult;
+        try {
+            alterOffsetsResult = ((SourceConnector) connector).alterOffsets(connectorConfig, offsets);
+        } catch (UnsupportedOperationException e) {
+            throw new ConnectException("Failed to alter offsets for connector " + connName + " because it doesn't support external " +
+                    "modification of offsets", e);
+        }
+        timer.update();
+
+        offsetStore.configure(config);
+        // This reads to the end of the offsets topic and can be a potentially time-consuming operation
+        offsetStore.start();
+        timer.update();
+
+        // The alterSourceConnectorOffsets method should only be called after all the connector's tasks have been stopped, and it's
+        // safe to write offsets via an offset writer
+        offsets.forEach(offsetWriter::offset);
+
+        // We can call begin flush without a timeout because this newly created single-purpose offset writer can't do concurrent
+        // offset writes. We can also ignore the return value since it returns false if and only if there is no data to be flushed,
+        // and we've just put some data in the previous statement
+        offsetWriter.beginFlush();
+        timer.update();
+
+        try {
+            if (config.exactlyOnceSourceEnabled()) {
+                producer.initTransactions();
+                producer.beginTransaction();
+            }
+            log.debug("Committing the following partition offsets for source connector {}: {}", connName, offsets);
+            FutureCallback<Void> cb = new FutureCallback<>();
+            offsetWriter.doFlush(cb);
+            if (config.exactlyOnceSourceEnabled()) {
+                producer.commitTransaction();
+            }
+            timer.update();
+            cb.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            throw new ConnectException("Failed to alter offsets for source connector " + connName, e.getCause());
+        } catch (TimeoutException e) {
+            throw new ConnectException("Timed out while attempting to alter offsets for source connector " + connName, e);
+        } catch (InterruptedException e) {
+            throw new ConnectException("Unexpectedly interrupted while attempting to alter offsets for source connector " + connName, e);
+        } finally {
+            offsetStore.stop();
+        }
+
+        return alterOffsetsResult;
     }
 
     ConnectorStatusMetricsGroup connectorStatusMetricsGroup() {
@@ -1500,11 +1737,25 @@ public class Worker {
         }
     }
 
-    // Visible for testing
+    /**
+     * Builds and returns an offset backing store for a regular source connector (i.e. when exactly-once support for source connectors is disabled).
+     * The offset backing store will either be just the worker's global offset backing store (if the connector doesn't define a connector-specific
+     * offset topic via its configs), just the connector-specific offset backing store (if the connector defines a connector-specific offsets
+     * topic which happens to be the same as the worker's global offset topic) or a combination of both the worker's global offset backing store
+     * and a connector-specific offset backing store.
+     * <p>
+     * Visible for testing.
+     * @param sourceConfig the source connector's config
+     * @param connName the source connector's name
+     * @param connector the source connector
+     * @param producer the Kafka producer for the offset backing store; may be {@code null} if a read-only offset backing store is required
+     * @return An offset backing store for a regular source connector
+     */
     ConnectorOffsetBackingStore offsetStoreForRegularSourceConnector(
             SourceConnectorConfig sourceConfig,
             String connName,
-            Connector connector
+            Connector connector,
+            Producer<byte[], byte[]> producer
     ) {
         String connectorSpecificOffsetsTopic = sourceConfig.offsetsTopic();
 
@@ -1527,8 +1778,10 @@ public class Worker {
                     sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
 
             TopicAdmin admin = new TopicAdmin(adminOverrides);
-            KafkaOffsetBackingStore connectorStore =
-                    KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin, internalKeyConverter);
+
+            KafkaOffsetBackingStore connectorStore = producer == null
+                    ? KafkaOffsetBackingStore.readOnlyStore(connectorSpecificOffsetsTopic, consumer, admin, internalKeyConverter)
+                    : KafkaOffsetBackingStore.readWriteStore(connectorSpecificOffsetsTopic, producer, consumer, admin, internalKeyConverter);
 
             // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
             // an offset store that has a primary and a secondary store which both read from that same topic.
@@ -1564,11 +1817,24 @@ public class Worker {
         }
     }
 
-    // Visible for testing
+    /**
+     * Builds and returns an offset backing store for an exactly-once source connector. The offset backing store will either be just
+     * the connector-specific offset backing store (if the connector defines a connector-specific offsets topic which happens to be
+     * the same as the worker's global offset topic) or a combination of both the worker's global offset backing store and a
+     * connector-specific offset backing store.
+     * <p>
+     * Visible for testing.
+     * @param sourceConfig the source connector's config
+     * @param connName the source connector's name
+     * @param connector the source connector
+     * @param producer the Kafka producer for the offset backing store; may be {@code null} if a read-only offset backing store is required
+     * @return An offset backing store for an exactly-once source connector
+     */
     ConnectorOffsetBackingStore offsetStoreForExactlyOnceSourceConnector(
             SourceConnectorConfig sourceConfig,
             String connName,
-            Connector connector
+            Connector connector,
+            Producer<byte[], byte[]> producer
     ) {
         String connectorSpecificOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
 
@@ -1584,8 +1850,10 @@ public class Worker {
                 sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
 
         TopicAdmin admin = new TopicAdmin(adminOverrides);
-        KafkaOffsetBackingStore connectorStore =
-                KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin, internalKeyConverter);
+
+        KafkaOffsetBackingStore connectorStore = producer == null
+                ? KafkaOffsetBackingStore.readOnlyStore(connectorSpecificOffsetsTopic, consumer, admin, internalKeyConverter)
+                : KafkaOffsetBackingStore.readWriteStore(connectorSpecificOffsetsTopic, producer, consumer, admin, internalKeyConverter);
 
         // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
         // an offset store that has a primary and a secondary store which both read from that same topic.
@@ -1634,7 +1902,7 @@ public class Worker {
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             KafkaOffsetBackingStore connectorStore =
-                    KafkaOffsetBackingStore.forTask(sourceConfig.offsetsTopic(), producer, consumer, topicAdmin, internalKeyConverter);
+                    KafkaOffsetBackingStore.readWriteStore(sourceConfig.offsetsTopic(), producer, consumer, topicAdmin, internalKeyConverter);
 
             // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
             // an offset store that has a primary and a secondary store which both read from that same topic.
@@ -1689,7 +1957,7 @@ public class Worker {
         String connectorOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
 
         KafkaOffsetBackingStore connectorStore =
-                KafkaOffsetBackingStore.forTask(connectorOffsetsTopic, producer, consumer, topicAdmin, internalKeyConverter);
+                KafkaOffsetBackingStore.readWriteStore(connectorOffsetsTopic, producer, consumer, topicAdmin, internalKeyConverter);
 
         // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
         // an offset store that has a primary and a secondary store which both read from that same topic.

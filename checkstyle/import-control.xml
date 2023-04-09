@@ -512,6 +512,10 @@
       <subpackage name="distributed">
         <allow pkg="javax.ws.rs.core" />
       </subpackage>
+
+      <subpackage name="standalone">
+        <allow pkg="javax.ws.rs.core" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="cli">
@@ -544,6 +548,7 @@
         <allow class="javax.ws.rs.core.Response" />
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
+        <allow pkg="org.eclipse.jetty.client"/>
       </subpackage>
     </subpackage>
 

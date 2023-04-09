@@ -18,11 +18,14 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
@@ -67,7 +70,9 @@ import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
+import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
@@ -92,6 +97,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1286,7 +1292,7 @@ public class WorkerTest {
         connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, we should only use the worker-global offsets store
-        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
 
@@ -1294,7 +1300,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1302,7 +1308,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific offsets store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1310,7 +1316,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific offsets store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1318,7 +1324,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1326,7 +1332,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, even with an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should still only use the worker-global offsets store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
 
@@ -1361,7 +1367,7 @@ public class WorkerTest {
         connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, we should only use a connector-specific offsets store
-        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1369,7 +1375,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1377,7 +1383,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1385,7 +1391,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1393,7 +1399,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1401,7 +1407,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's,  we should use both a connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1886,6 +1892,208 @@ public class WorkerTest {
         verify(offsetStore).start();
         verify(offsetReader).close();
         verify(offsetStore).stop();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testAlterOffsetsSourceConnectorOffsetAlterNotSupported() {
+        mockKafkaClusterId();
+        String connectorClass = connectorProps.get(CONNECTOR_CLASS_CONFIG);
+        mockConnectorIsolation(connectorClass, sourceConnector);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.start();
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STOPPED, new FutureCallback<>());
+
+        when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenThrow(new UnsupportedOperationException("This connector doesn't " +
+                "support altering of offsets"));
+
+        ConnectException e = assertThrows(ConnectException.class, () -> worker.alterConnectorOffsets(CONNECTOR_ID, new HashMap<>(),
+                connectorProps));
+        assertEquals("Failed to alter offsets for connector " + CONNECTOR_ID + " because it doesn't support external modification of offsets",
+                e.getMessage());
+
+        verifyKafkaClusterId();
+        verifyGenericIsolation();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testAlterOffsetsSourceConnector() {
+        mockKafkaClusterId();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.start();
+        when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+        ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+        OffsetStorageWriter offsetWriter = mock(OffsetStorageWriter.class);
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        partitionOffsets.put(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue"));
+        partitionOffsets.put(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"));
+
+        when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
+            invocation.getArgument(0, Callback.class).onCompletion(null, null);
+            return null;
+        });
+
+        worker.alterSourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer, offsetWriter);
+
+        verify(offsetStore).configure(config);
+        verify(offsetStore).start();
+        partitionOffsets.forEach((partition, offset) -> verify(offsetWriter).offset(partition, offset));
+        verify(offsetWriter).beginFlush();
+        verify(offsetWriter).doFlush(any());
+        verify(offsetStore).stop();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnectorNoResets() throws Exception {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture = ArgumentCaptor.forClass(Map.class);
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 500));
+        Map<String, String> partition2 = new HashMap<>();
+        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
+        partitionOffsets.put(partition2, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 100));
+
+        // A null value for deleteOffsetsSetCapture indicates that we don't expect any call to Admin::deleteConsumerGroupOffsets
+        alterOffsetsSinkConnector(partitionOffsets, alterOffsetsMapCapture, null);
+
+        assertEquals(2, alterOffsetsMapCapture.getValue().size());
+        assertEquals(500, alterOffsetsMapCapture.getValue().get(new TopicPartition("test_topic", 10)).offset());
+        assertEquals(100, alterOffsetsMapCapture.getValue().get(new TopicPartition("test_topic", 20)).offset());
+    }
+
+    @Test
+    public void testAlterOffsetSinkConnectorOnlyResets() throws Exception {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture = ArgumentCaptor.forClass(Set.class);
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, null);
+        Map<String, String> partition2 = new HashMap<>();
+        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
+        partitionOffsets.put(partition2, null);
+
+        // A null value for alterOffsetsMapCapture indicates that we don't expect any call to Admin::alterConsumerGroupOffsets
+        alterOffsetsSinkConnector(partitionOffsets, null, deleteOffsetsSetCapture);
+
+        Set<TopicPartition> expectedTopicPartitionsForOffsetDelete = new HashSet<>();
+        expectedTopicPartitionsForOffsetDelete.add(new TopicPartition("test_topic", 10));
+        expectedTopicPartitionsForOffsetDelete.add(new TopicPartition("test_topic", 20));
+
+        assertEquals(2, deleteOffsetsSetCapture.getValue().size());
+
+        // Verify that contents are equal without caring about order
+        assertTrue(expectedTopicPartitionsForOffsetDelete.containsAll(deleteOffsetsSetCapture.getValue()));
+        assertTrue(deleteOffsetsSetCapture.getValue().containsAll(expectedTopicPartitionsForOffsetDelete));
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnectorAltersAndResets() throws Exception {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture = ArgumentCaptor.forClass(Map.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture = ArgumentCaptor.forClass(Set.class);
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
+        Map<String, String> partition2 = new HashMap<>();
+        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
+        partitionOffsets.put(partition2, null);
+
+        alterOffsetsSinkConnector(partitionOffsets, alterOffsetsMapCapture, deleteOffsetsSetCapture);
+
+        assertEquals(1, alterOffsetsMapCapture.getValue().size());
+        assertEquals(100, alterOffsetsMapCapture.getValue().get(new TopicPartition("test_topic", 10)).offset());
+
+        assertEquals(1, deleteOffsetsSetCapture.getValue().size());
+        assertEquals(new TopicPartition("test_topic", 20), deleteOffsetsSetCapture.getValue().iterator().next());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void alterOffsetsSinkConnector(Map<Map<String, ?>, Map<String, ?>> partitionOffsets,
+                                           ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture,
+                                           ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture) throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+
+        Admin admin = mock(Admin.class);
+
+        // If alterOffsetsMapCapture is null, then we won't stub any of the following methods resulting in test failures in case
+        // offsets for certain topic partitions are actually attempted to be altered.
+        if (alterOffsetsMapCapture != null) {
+            AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
+            when(admin.alterConsumerGroupOffsets(anyString(), alterOffsetsMapCapture.capture())).thenReturn(alterConsumerGroupOffsetsResult);
+            KafkaFuture<Void> alterFuture = mock(KafkaFuture.class);
+            when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
+            when(alterFuture.get(anyLong(), any(TimeUnit.class))).thenReturn(null);
+        }
+
+        // If deleteOffsetsSetCapture is null, then we won't stub any of the following methods resulting in test failures in case
+        // offsets for certain topic partitions are actually attempted to be deleted.
+        if (deleteOffsetsSetCapture != null) {
+            DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = mock(DeleteConsumerGroupOffsetsResult.class);
+            when(admin.deleteConsumerGroupOffsets(anyString(), deleteOffsetsSetCapture.capture())).thenReturn(deleteConsumerGroupOffsetsResult);
+            KafkaFuture<Void> deleteFuture = mock(KafkaFuture.class);
+            when(deleteConsumerGroupOffsetsResult.all()).thenReturn(deleteFuture);
+            when(deleteFuture.get(anyLong(), any(TimeUnit.class))).thenReturn(null);
+        }
+
+        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets, config -> admin);
+
+        verify(admin).close();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testAlterOffsetsSinkConnectorFailure() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+
+        Admin admin = mock(Admin.class);
+        AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
+        when(admin.alterConsumerGroupOffsets(anyString(), anyMap())).thenReturn(alterConsumerGroupOffsetsResult);
+        KafkaFuture<Void> alterFuture = mock(KafkaFuture.class);
+        when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
+        when(alterFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new ExecutionException(new ClusterAuthorizationException("Test exception")));
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition = new HashMap<>();
+        partition.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
+        assertThrows(ConnectException.class, () -> worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets, config -> admin));
+        verify(admin).close();
         verifyKafkaClusterId();
     }
 
