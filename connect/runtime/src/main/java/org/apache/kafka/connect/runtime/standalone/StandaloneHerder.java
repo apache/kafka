@@ -226,7 +226,12 @@ public class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(() -> {
-                    updateConnectorTasks(connName);
+                    try {
+                        updateConnectorTasks(connName);
+                    } catch (Throwable t) {
+                        callback.onCompletion(t, null);
+                        return;
+                    }
                     callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
                 });
             });
@@ -304,7 +309,12 @@ public class StandaloneHerder extends AbstractHerder {
 
         startConnector(connName, (error, targetState) -> {
             if (targetState == TargetState.STARTED) {
-                requestTaskReconfiguration(connName);
+                try {
+                    requestTaskReconfiguration(connName);
+                } catch (Throwable t) {
+                    cb.onCompletion(t, null);
+                    return;
+                }
             }
             cb.onCompletion(error, null);
         });
@@ -514,7 +524,13 @@ public class StandaloneHerder extends AbstractHerder {
                     }
 
                     if (newState == TargetState.STARTED) {
-                        requestExecutorService.submit(() -> updateConnectorTasks(connector));
+                        requestExecutorService.submit(() -> {
+                            try {
+                                updateConnectorTasks(connector);
+                            } catch (Throwable t) {
+                                log.error("Failed to update connector tasks after startup", t);
+                            }
+                        });
                     }
                 });
             }
