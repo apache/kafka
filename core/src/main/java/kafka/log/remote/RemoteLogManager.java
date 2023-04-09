@@ -166,7 +166,7 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    RemoteStorageManager createRemoteStorageManager() throws Exception {
+    RemoteStorageManager createRemoteStorageManager() {
         return AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
 
@@ -406,7 +406,6 @@ public class RemoteLogManager implements Closeable {
      *                    If end offset is 100, then it will remove the entries greater than or equal to 100.
      * @return the truncated leader epoch checkpoint
      */
-
     InMemoryLeaderEpochCheckpoint getLeaderEpochCheckpoint(UnifiedLog log, long startOffset, long endOffset) {
         InMemoryLeaderEpochCheckpoint checkpoint = new InMemoryLeaderEpochCheckpoint();
         if (log.leaderEpochCache().isDefined()) {
@@ -719,19 +718,6 @@ public class RemoteLogManager implements Closeable {
             });
 
             return threadPool;
-        }
-
-        public void resizePool(int size) {
-            LOGGER.info("Resizing pool from {} to {}", scheduledThreadPool.getCorePoolSize(), size);
-            scheduledThreadPool.setCorePoolSize(size);
-        }
-
-        public int poolSize() {
-            return scheduledThreadPool.getCorePoolSize();
-        }
-
-        public double getIdlePercent() {
-            return 1 - (double) scheduledThreadPool.getActiveCount() / scheduledThreadPool.getCorePoolSize();
         }
 
         public ScheduledFuture scheduleWithFixedDelay(Runnable runnable, long initialDelay, long delay, TimeUnit timeUnit) {

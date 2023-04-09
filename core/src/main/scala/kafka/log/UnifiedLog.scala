@@ -524,7 +524,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
   def updateHighestOffsetInRemoteStorage(offset: Long): Unit = {
     if (!remoteLogEnabled())
-      warn(s"Unable to update the highest offset with remote index as: $offset, the existing value: $highestOffsetInRemoteStorage since remote storage is not enabled.")
+      warn(s"Unable to update the highest offset in remote storage with offset $offset since remote storage is not enabled. The existing highest offset is $highestOffsetInRemoteStorage.")
     else if (offset > highestOffsetInRemoteStorage) highestOffsetInRemoteStorage = offset
   }
 
