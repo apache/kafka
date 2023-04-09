@@ -24,9 +24,9 @@ public class ByteBufferDeserializer implements Deserializer<ByteBuffer> {
 
     @Override
     public ByteBuffer deserialize(String topic, byte[] data) {
-        if (data == null) {
+        if (data == null)
             return null;
-        }
+
         return ByteBuffer.wrap(data);
     }
 

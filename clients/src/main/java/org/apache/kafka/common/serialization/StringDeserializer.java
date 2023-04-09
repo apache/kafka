@@ -30,26 +30,25 @@ import java.util.Map;
  *  value.deserializer.encoding or deserializer.encoding. The first two take precedence over the last.
  */
 public class StringDeserializer implements Deserializer<String> {
-
     private String encoding = StandardCharsets.UTF_8.name();
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        final String propertyName = isKey ? "key.deserializer.encoding" : "value.deserializer.encoding";
+        String propertyName = isKey ? "key.deserializer.encoding" : "value.deserializer.encoding";
         Object encodingValue = configs.get(propertyName);
-        if (encodingValue == null) {
+        if (encodingValue == null)
             encodingValue = configs.get("deserializer.encoding");
-        }
-
-        if (encodingValue instanceof String) {
+        if (encodingValue instanceof String)
             encoding = (String) encodingValue;
-        }
     }
 
     @Override
     public String deserialize(String topic, byte[] data) {
         try {
-            return data == null ? null : new String(data, encoding);
+            if (data == null)
+                return null;
+            else
+                return new String(data, encoding);
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when deserializing byte[] to string due to unsupported encoding " + encoding);
         }

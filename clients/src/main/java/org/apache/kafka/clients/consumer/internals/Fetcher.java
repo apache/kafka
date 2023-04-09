@@ -1414,28 +1414,19 @@ public class Fetcher<K, V> implements Closeable {
                                              RecordBatch batch,
                                              Record record) {
         try {
-            final long offset = record.offset();
-            final long timestamp = record.timestamp();
-            final Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
-            final TimestampType timestampType = batch.timestampType();
-            final Headers headers = new RecordHeaders(record.headers());
-            final ByteBuffer keyBytes = record.key();
-            final int keySize = keyBytes == null ? NULL_SIZE : keyBytes.remaining();
-            final K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
-            final ByteBuffer valueBytes = record.value();
-            final int valueSize = valueBytes == null ? NULL_SIZE : valueBytes.remaining();
-            final V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
-            return new ConsumerRecord<>(partition.topic(),
-                    partition.partition(),
-                    offset,
-                    timestamp,
-                    timestampType,
-                    keySize,
-                    valueSize,
-                    key,
-                    value,
-                    headers,
-                    leaderEpoch);
+            long offset = record.offset();
+            long timestamp = record.timestamp();
+            Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
+            TimestampType timestampType = batch.timestampType();
+            Headers headers = new RecordHeaders(record.headers());
+            ByteBuffer keyBytes = record.key();
+            int keySize = keyBytes == null ? NULL_SIZE : keyBytes.remaining();
+            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
+            ByteBuffer valueBytes = record.value();
+            int valueSize = valueBytes == null ? NULL_SIZE : valueBytes.remaining();
+            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
+            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, timestamp, timestampType,
+                    keySize, valueSize, key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
             throw new RecordDeserializationException(partition, record.offset(),
                 "Error deserializing key/value for partition " + partition +
