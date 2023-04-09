@@ -63,8 +63,8 @@ object KafkaMetricsReporterTest {
 }
 
 class KafkaMetricsReporterTest extends QuorumTestHarness {
-  var broker: KafkaBroker = null
-  var config: KafkaConfig = null
+  var broker: KafkaBroker = _
+  var config: KafkaConfig = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

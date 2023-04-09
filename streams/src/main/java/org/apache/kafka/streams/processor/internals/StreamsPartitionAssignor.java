@@ -54,6 +54,7 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -1355,7 +1356,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.info("Requested to schedule immediate rebalance for new tasks to be safely revoked from current owner.");
             nextScheduledRebalanceMs.set(0L);
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
-            log.info("Requested to schedule probing rebalance for {} ms.", encodedNextScheduledRebalanceMs);
+            log.info(
+                "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
+                Instant.ofEpochMilli(encodedNextScheduledRebalanceMs) // The Instant#toString format is more readable.
+            );
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {
             log.info("No followup rebalance was requested, resetting the rebalance schedule.");

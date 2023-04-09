@@ -66,7 +66,7 @@ public abstract class SslSelectorTest extends SelectorTest {
 
     @BeforeEach
     public void setUp() throws Exception {
-        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
 
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
         this.server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
@@ -249,7 +249,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         //the initial channel builder is for clients, we need a server one
         String tlsProtocol = "TLSv1.2";
-        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
         Map<String, Object> sslServerConfigs = new TestSslUtils.SslConfigsBuilder(Mode.SERVER)
                 .tlsProtocol(tlsProtocol)
                 .createNewTrustStore(trustStoreFile)

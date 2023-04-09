@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -72,6 +70,11 @@ public class DescribeQuorumResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static DescribeQuorumResponseData singletonErrorResponse(
         TopicPartition topicPartition,
         Errors error
@@ -85,23 +88,15 @@ public class DescribeQuorumResponse extends AbstractResponse {
     }
 
 
-    public static DescribeQuorumResponseData singletonResponse(TopicPartition topicPartition,
-                                                               int leaderId,
-                                                               int leaderEpoch,
-                                                               long highWatermark,
-                                                               List<ReplicaState> voterStates,
-                                                               List<ReplicaState> observerStates) {
+    public static DescribeQuorumResponseData singletonResponse(
+        TopicPartition topicPartition,
+        DescribeQuorumResponseData.PartitionData partitionData
+    ) {
         return new DescribeQuorumResponseData()
             .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
                 .setTopicName(topicPartition.topic())
-                .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
-                    .setPartitionIndex(topicPartition.partition())
-                    .setErrorCode(Errors.NONE.code())
-                    .setLeaderId(leaderId)
-                    .setLeaderEpoch(leaderEpoch)
-                    .setHighWatermark(highWatermark)
-                    .setCurrentVoters(voterStates)
-                    .setObservers(observerStates)))));
+                .setPartitions(Collections.singletonList(partitionData
+                    .setPartitionIndex(topicPartition.partition())))));
     }
 
     public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {

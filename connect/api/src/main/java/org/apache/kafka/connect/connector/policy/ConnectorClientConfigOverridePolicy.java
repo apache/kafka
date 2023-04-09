@@ -34,7 +34,7 @@ public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoC
     /**
      * Worker will invoke this while constructing the producer for the SourceConnectors,  DLQ for SinkConnectors and the consumer for the
      * SinkConnectors to validate if all of the overridden client configurations are allowed per the
-     * policy implementation. This would also be invoked during the validate of connector configs via the Rest API.
+     * policy implementation. This would also be invoked during the validation of connector configs via the Rest API.
      *
      * If there are any policy violations, the connector will not be started.
      *

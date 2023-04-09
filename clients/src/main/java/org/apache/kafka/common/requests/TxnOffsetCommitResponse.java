@@ -88,6 +88,11 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public Map<Errors, Integer> errorCounts() {
         return errorCounts(data.topics().stream().flatMap(topic ->
                 topic.partitions().stream().map(partition ->

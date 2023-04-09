@@ -51,10 +51,10 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   def generateConfigs =
     TestUtils.createBrokerConfigs(numServers, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
 
-  private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer2: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer3: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer4: KafkaProducer[Array[Byte], Array[Byte]] = null
+  private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer2: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer3: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer4: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"

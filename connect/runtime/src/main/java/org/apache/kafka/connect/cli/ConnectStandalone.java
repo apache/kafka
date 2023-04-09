@@ -32,7 +32,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
+import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,7 +79,7 @@ public class ConnectStandalone {
             plugins.compareAndSwapWithDelegatingLoader();
             StandaloneConfig config = new StandaloneConfig(workerProps);
 
-            String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+            String kafkaClusterId = config.kafkaClusterId();
             log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
             RestServer rest = new RestServer(config);
@@ -88,10 +88,13 @@ public class ConnectStandalone {
             URI advertisedUrl = rest.advertisedUrl();
             String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
+            OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore();
+            offsetBackingStore.configure(config);
+
             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
                 config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
                 config, ConnectorClientConfigOverridePolicy.class);
-            Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore(),
+            Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore,
                                        connectorClientConfigOverridePolicy);
 
             Herder herder = new StandaloneHerder(worker, kafkaClusterId, connectorClientConfigOverridePolicy);

@@ -49,11 +49,13 @@ import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
+import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unamedTopology;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.easymock.EasyMock.anyBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
@@ -81,25 +83,28 @@ class DefaultStateUpdaterTest {
     private final static TaskId TASK_0_2 = new TaskId(0, 2);
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
     private final static TaskId TASK_1_1 = new TaskId(1, 1);
+    private final static TaskId TASK_A_0_0 = new TaskId(0, 0, "A");
+    private final static TaskId TASK_B_0_0 = new TaskId(0, 0, "B");
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
-    private final StreamsConfig config = new StreamsConfig(configProps());
+    private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
-    private final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
+    private final TopologyMetadata topologyMetadata = unamedTopology().build();
+    private DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", config, changelogReader, topologyMetadata, time);
 
     @AfterEach
     public void tearDown() {
         stateUpdater.shutdown(Duration.ofMinutes(1));
     }
 
-    private Properties configProps() {
+    private Properties configProps(final int commitInterval) {
         return mkObjectProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL),
-            mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), COMMIT_INTERVAL)
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval),
+            mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), commitInterval)
         ));
     }
 
@@ -123,6 +128,78 @@ class DefaultStateUpdaterTest {
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
         verify(changelogReader, times(2)).clear();
+    }
+
+    @Test
+    public void shouldRemoveTasksFromAndClearInputQueueOnShutdown() throws Exception {
+        final StreamTask statelessTask = statelessTask(TASK_0_0).inState(State.RESTORING).build();
+        final StreamTask statefulTask = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
+        stateUpdater.add(statelessTask);
+        stateUpdater.add(statefulTask);
+        stateUpdater.remove(TASK_1_1);
+        stateUpdater.add(standbyTask);
+        verifyRemovedTasks();
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        verifyRemovedTasks(statelessTask, statefulTask, standbyTask);
+    }
+
+    @Test
+    public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
+        stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        stateUpdater = new DefaultStateUpdater("test-state-updater", new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, topologyMetadata, time);
+        final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(activeTask);
+        stateUpdater.add(standbyTask);
+        verifyUpdatingTasks(activeTask, standbyTask);
+        verifyRemovedTasks();
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        verifyRemovedTasks(activeTask, standbyTask);
+        verify(activeTask).maybeCheckpoint(true);
+        verify(standbyTask).maybeCheckpoint(true);
+    }
+
+    @Test
+    public void shouldRemovePausedTasksOnShutdown() throws Exception {
+        final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).inState(State.RUNNING).build();
+        stateUpdater.start();
+        stateUpdater.add(activeTask);
+        stateUpdater.add(standbyTask);
+        verifyUpdatingTasks(activeTask, standbyTask);
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+        verifyPausedTasks(activeTask, standbyTask);
+        verifyRemovedTasks();
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        verifyRemovedTasks(activeTask, standbyTask);
+    }
+
+    @Test
+    public void shouldRemovePausedAndUpdatingTasksOnShutdown() throws Exception {
+        final StreamTask activeTask = statefulTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        stateUpdater.start();
+        stateUpdater.add(activeTask);
+        stateUpdater.add(standbyTask);
+        verifyUpdatingTasks(activeTask, standbyTask);
+        when(topologyMetadata.isPaused("B")).thenReturn(true);
+        verifyPausedTasks(standbyTask);
+        verifyUpdatingTasks(activeTask);
+        verifyRemovedTasks();
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        verifyRemovedTasks(activeTask, standbyTask);
     }
 
     @Test
@@ -240,7 +317,9 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
-        verify(changelogReader, times(1)).enforceRestoreActive();
+        verify(changelogReader).register(task.changelogPartitions(), task.stateManager());
+        verify(changelogReader).unregister(task.changelogPartitions());
+        verify(changelogReader).enforceRestoreActive();
         verify(changelogReader, atLeast(3)).restore(anyMap());
         verify(changelogReader, never()).transitToUpdateStandby();
     }
@@ -272,9 +351,163 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
+        verify(changelogReader).register(task1.changelogPartitions(), task1.stateManager());
+        verify(changelogReader).register(task2.changelogPartitions(), task2.stateManager());
+        verify(changelogReader).register(task3.changelogPartitions(), task3.stateManager());
+        verify(changelogReader).unregister(task1.changelogPartitions());
+        verify(changelogReader).unregister(task2.changelogPartitions());
+        verify(changelogReader).unregister(task3.changelogPartitions());
         verify(changelogReader, times(3)).enforceRestoreActive();
         verify(changelogReader, atLeast(4)).restore(anyMap());
         verify(changelogReader, never()).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldReturnTrueForRestoreActiveTasksIfTaskAdded() {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RESTORING).build();
+        stateUpdater.add(task);
+
+        assertTrue(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldReturnTrueForRestoreActiveTasksIfTaskUpdating() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs())
+            .thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyRestoredActiveTasks();
+        verifyUpdatingTasks(task);
+        verifyExceptionsAndFailedTasks();
+        verifyRemovedTasks();
+        verifyPausedTasks();
+
+        assertTrue(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldReturnTrueForRestoreActiveTasksIfTaskRestored() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs())
+            .thenReturn(mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0));
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(true);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyRestoredActiveTasks(task);
+        verifyUpdatingTasks();
+        verifyExceptionsAndFailedTasks();
+        verifyRemovedTasks();
+        verifyPausedTasks();
+
+        assertTrue(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldReturnTrueForRestoreActiveTasksIfTaskRemoved() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs())
+            .thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        stateUpdater.remove(task.id());
+        verifyRestoredActiveTasks();
+        verifyUpdatingTasks();
+        verifyExceptionsAndFailedTasks();
+        verifyRemovedTasks(task);
+        verifyPausedTasks();
+
+        assertTrue(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldReturnTrueForRestoreActiveTasksIfTaskFailed() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs())
+            .thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(mkSet(task.id()));
+        doThrow(taskCorruptedException).when(changelogReader).restore(mkMap(mkEntry(TASK_0_0, task)));
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyRestoredActiveTasks();
+        verifyUpdatingTasks();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTasks(mkSet(task), taskCorruptedException));
+        verifyRemovedTasks();
+        verifyPausedTasks();
+
+        assertTrue(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldReturnFalseForRestoreActiveTasksIfTaskPaused() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs())
+            .thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+        verifyRestoredActiveTasks();
+        verifyUpdatingTasks();
+        verifyExceptionsAndFailedTasks();
+        verifyRemovedTasks();
+        verifyPausedTasks(task);
+
+        assertFalse(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldReturnFalseForRestoreActiveTasksIfTaskRemovedFromStateUpdater() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs())
+            .thenReturn(mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0));
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(true);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        stateUpdater.drainRestoredActiveTasks(Duration.ofMillis(VERIFICATION_TIMEOUT));
+        verifyRestoredActiveTasks();
+        verifyUpdatingTasks();
+        verifyExceptionsAndFailedTasks();
+        verifyRemovedTasks();
+        verifyPausedTasks();
+
+        assertFalse(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldReturnTrueForRestoreActiveTasksIfStandbyTask() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
+            .inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs())
+            .thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted())
+            .thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyRestoredActiveTasks();
+        verifyUpdatingTasks(task);
+        verifyExceptionsAndFailedTasks();
+        verifyRemovedTasks();
+        verifyPausedTasks();
+
+        assertFalse(stateUpdater.restoresActiveTasks());
     }
 
     @Test
@@ -326,7 +559,10 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
-        verify(changelogReader, times(1)).transitToUpdateStandby();
+        for (final StandbyTask task : tasks) {
+            verify(changelogReader).register(task.changelogPartitions(), task.stateManager());
+        }
+        verify(changelogReader).transitToUpdateStandby();
         verify(changelogReader, timeout(VERIFICATION_TIMEOUT).atLeast(1)).restore(anyMap());
         verify(changelogReader, never()).enforceRestoreActive();
     }
@@ -355,10 +591,14 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
+        verify(changelogReader).register(task1.changelogPartitions(), task1.stateManager());
+        verify(changelogReader).register(task2.changelogPartitions(), task2.stateManager());
+        verify(changelogReader).register(task3.changelogPartitions(), task3.stateManager());
+        verify(changelogReader).register(task4.changelogPartitions(), task4.stateManager());
         verify(changelogReader, atLeast(3)).restore(anyMap());
         final InOrder orderVerifier = inOrder(changelogReader, task1, task2);
         orderVerifier.verify(changelogReader, times(2)).enforceRestoreActive();
-        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+        orderVerifier.verify(changelogReader).transitToUpdateStandby();
     }
 
     @Test
@@ -416,7 +656,7 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
         final InOrder orderVerifier = inOrder(changelogReader);
         orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
-        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+        orderVerifier.verify(changelogReader).transitToUpdateStandby();
     }
 
     @Test
@@ -438,7 +678,24 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks(activeTask1, activeTask2);
         final InOrder orderVerifier = inOrder(changelogReader);
         orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
-        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+        orderVerifier.verify(changelogReader).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldNotSwitchTwiceToUpdatingStandbyTaskIfStandbyTaskIsRemoved() throws Exception {
+        final StandbyTask standbyTask1 = standbyTask(TASK_1_0, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
+        final StandbyTask standbyTask2 = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(standbyTask1);
+        stateUpdater.add(standbyTask2);
+        verifyUpdatingTasks(standbyTask1, standbyTask2);
+
+        stateUpdater.remove(standbyTask2.id());
+
+        verifyRemovedTasks(standbyTask2);
+        verify(changelogReader).transitToUpdateStandby();
     }
 
     @Test
@@ -478,10 +735,9 @@ class DefaultStateUpdaterTest {
         stateUpdater.start();
         stateUpdater.add(task1);
         stateUpdater.add(task2);
+        verifyUpdatingTasks(task1, task2);
 
-        stateUpdater.pause(task1.id());
-        stateUpdater.pause(task2.id());
-
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
         verifyPausedTasks(task1, task2);
         verifyRemovedTasks();
         verifyUpdatingTasks();
@@ -494,6 +750,8 @@ class DefaultStateUpdaterTest {
         verifyCheckpointTasks(true, task1, task2);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
+        verify(changelogReader).unregister(task1.changelogPartitions());
+        verify(changelogReader).unregister(task2.changelogPartitions());
     }
 
     @Test
@@ -584,14 +842,15 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldPauseActiveTaskAndTransitToUpdateStandby() throws Exception {
-        final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
-        final StandbyTask task2 = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+        final StreamTask task1 = statefulTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StandbyTask task2 = standbyTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
 
         stateUpdater.start();
         stateUpdater.add(task1);
         stateUpdater.add(task2);
+        verifyUpdatingTasks(task1, task2);
 
-        stateUpdater.pause(task1.id());
+        when(topologyMetadata.isPaused("A")).thenReturn(true);
 
         verifyPausedTasks(task1);
         verifyCheckpointTasks(true, task1);
@@ -606,8 +865,9 @@ class DefaultStateUpdaterTest {
     private void shouldPauseStatefulTask(final Task task) throws Exception {
         stateUpdater.start();
         stateUpdater.add(task);
+        verifyUpdatingTasks(task);
 
-        stateUpdater.pause(task.id());
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(task);
         verifyCheckpointTasks(true, task);
@@ -620,7 +880,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldNotPausingNonExistTasks() throws Exception {
         stateUpdater.start();
-        stateUpdater.pause(TASK_0_0);
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks();
         verifyRestoredActiveTasks();
@@ -633,15 +893,16 @@ class DefaultStateUpdaterTest {
     public void shouldNotPauseActiveStatefulTaskInRestoredActiveTasks() throws Exception {
         final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask controlTask = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+
         when(changelogReader.completedChangelogs()).thenReturn(Collections.singleton(TOPIC_PARTITION_A_0));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         stateUpdater.start();
         stateUpdater.add(task);
         stateUpdater.add(controlTask);
         verifyRestoredActiveTasks(task);
+        verifyUpdatingTasks(controlTask);
 
-        stateUpdater.pause(task.id());
-        stateUpdater.pause(controlTask.id());
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(controlTask);
         verifyRestoredActiveTasks(task);
@@ -663,6 +924,7 @@ class DefaultStateUpdaterTest {
 
     private void shouldNotPauseTaskInFailedTasks(final Task task) throws Exception {
         final StreamTask controlTask = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
@@ -679,9 +941,9 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(controlTask);
         final ExceptionAndTasks expectedExceptionAndTasks = new ExceptionAndTasks(mkSet(task), streamsException);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
+        verifyUpdatingTasks(controlTask);
 
-        stateUpdater.pause(task.id());
-        stateUpdater.pause(controlTask.id());
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(controlTask);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
@@ -715,9 +977,8 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(task.changelogPartitions());
 
-        stateUpdater.pause(task.id());
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyRemovedTasks(task);
         verifyUpdatingTasks();
@@ -741,13 +1002,14 @@ class DefaultStateUpdaterTest {
     private void shouldResumeStatefulTask(final Task task) throws Exception {
         stateUpdater.start();
         stateUpdater.add(task);
+        verifyUpdatingTasks(task);
 
-        stateUpdater.pause(task.id());
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(task);
         verifyUpdatingTasks();
 
-        stateUpdater.resume(task.id());
+        when(topologyMetadata.isPaused(null)).thenReturn(false);
 
         verifyPausedTasks();
         verifyUpdatingTasks(task);
@@ -756,7 +1018,6 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldNotResumeNonExistingTasks() throws Exception {
         stateUpdater.start();
-        stateUpdater.resume(TASK_0_0);
 
         verifyPausedTasks();
         verifyRestoredActiveTasks();
@@ -769,6 +1030,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotResumeActiveStatefulTaskInRestoredActiveTasks() throws Exception {
         final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask controlTask = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+
         when(changelogReader.completedChangelogs()).thenReturn(Collections.singleton(TOPIC_PARTITION_A_0));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         stateUpdater.start();
@@ -776,10 +1038,6 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(controlTask);
 
         verifyRestoredActiveTasks(task);
-
-        stateUpdater.resume(task.id());
-        stateUpdater.resume(controlTask.id());
-
         verifyPausedTasks();
         verifyRestoredActiveTasks(task);
         verifyUpdatingTasks(controlTask);
@@ -811,8 +1069,6 @@ class DefaultStateUpdaterTest {
 
         verifyRemovedTasks(task);
         verifyUpdatingTasks();
-
-        stateUpdater.resume(task.id());
 
         verifyUpdatingTasks();
     }
@@ -848,9 +1104,6 @@ class DefaultStateUpdaterTest {
         final ExceptionAndTasks expectedExceptionAndTasks = new ExceptionAndTasks(mkSet(task), streamsException);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
         verifyUpdatingTasks(controlTask);
-
-        stateUpdater.resume(task.id());
-        stateUpdater.resume(controlTask.id());
 
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
         verifyUpdatingTasks(controlTask);
@@ -1069,7 +1322,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
         // we need to use a non auto-ticking timer here to control how much time elapsed exactly
         final Time time = new MockTime();
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
+        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", config, changelogReader, topologyMetadata, time);
         try {
             final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
             final StreamTask task2 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1138,8 +1391,6 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
         verifyUpdatingTasks(activeTask1, activeTask2, standbyTask1, standbyTask2, standbyTask3);
-
-        final Set<Task> tasks = stateUpdater.getTasks();
 
         verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
     }
@@ -1226,9 +1477,9 @@ class DefaultStateUpdaterTest {
         stateUpdater.start();
         stateUpdater.add(activeTask);
         stateUpdater.add(standbyTask);
+        verifyUpdatingTasks(activeTask, standbyTask);
 
-        stateUpdater.pause(activeTask.id());
-        stateUpdater.pause(standbyTask.id());
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(activeTask, standbyTask);
 

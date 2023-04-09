@@ -2402,13 +2402,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         requestSignature.keyAlgorithm(),
                         keySignatureVerificationAlgorithms
                 ));
-            } else {
-                if (!requestSignature.isValid(sessionKey)) {
-                    requestValidationError = new ConnectRestException(
-                            Response.Status.FORBIDDEN,
-                            "Internal request contained invalid signature."
-                    );
-                }
+            } else if (sessionKey == null) {
+                requestValidationError = new ConnectRestException(
+                        Response.Status.SERVICE_UNAVAILABLE,
+                        "This worker is still starting up and has not been able to read a session key from the config topic yet"
+                );
+            } else if (!requestSignature.isValid(sessionKey)) {
+                requestValidationError = new ConnectRestException(
+                        Response.Status.FORBIDDEN,
+                        "Internal request contained invalid signature."
+                );
             }
             if (requestValidationError != null) {
                 callback.onCompletion(requestValidationError, null);

@@ -1917,7 +1917,7 @@ class SocketServerTest {
   }
 
   private def sslServerProps: Properties = {
-    val trustStoreFile = File.createTempFile("truststore", ".jks")
+    val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")

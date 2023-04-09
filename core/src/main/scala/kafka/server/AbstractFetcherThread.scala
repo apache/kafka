@@ -292,7 +292,7 @@ abstract class AbstractFetcherThread(name: String,
         markPartitionFailed(tp)
         false
       } else {
-        info(s"Partition $tp has an new epoch ($currentLeaderEpoch) than the current leader. retry the partition later")
+        info(s"Partition $tp has a newer epoch ($currentLeaderEpoch) than the current leader. Retry the partition later.")
         true
       }
     }

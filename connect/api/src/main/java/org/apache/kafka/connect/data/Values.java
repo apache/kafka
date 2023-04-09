@@ -100,7 +100,7 @@ public class Values {
 
     private static final Pattern TWO_BACKSLASHES = Pattern.compile("\\\\");
 
-    private static final Pattern DOUBLEQOUTE = Pattern.compile("\"");
+    private static final Pattern DOUBLE_QUOTE = Pattern.compile("\"");
 
     /**
      * Convert the specified value to an {@link Type#BOOLEAN} value. The supplied schema is required if the value is a logical
@@ -584,8 +584,7 @@ public class Values {
                 break;
             case STRUCT:
                 if (value instanceof Struct) {
-                    Struct struct = (Struct) value;
-                    return struct;
+                    return value;
                 }
         }
         throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
@@ -732,7 +731,7 @@ public class Values {
 
     protected static String escape(String value) {
         String replace1 = TWO_BACKSLASHES.matcher(value).replaceAll("\\\\\\\\");
-        return DOUBLEQOUTE.matcher(replace1).replaceAll("\\\\\"");
+        return DOUBLE_QUOTE.matcher(replace1).replaceAll("\\\\\"");
     }
 
     public static DateFormat dateFormatFor(java.util.Date value) {

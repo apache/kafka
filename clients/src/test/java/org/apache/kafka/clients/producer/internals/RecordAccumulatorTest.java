@@ -1105,7 +1105,7 @@ public class RecordAccumulatorTest {
             BuiltInPartitioner.mockRandom = () -> mockRandom.getAndAdd(1);
 
             long totalSize = 1024 * 1024;
-            int batchSize = 128;  // note that this is also a "sticky" limit for the partitioner
+            int batchSize = 1024;  // note that this is also a "sticky" limit for the partitioner
             RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize, CompressionType.NONE, 0);
 
             // Set up callbacks so that we know what partition is chosen.
@@ -1129,31 +1129,34 @@ public class RecordAccumulatorTest {
             assertEquals(1, mockRandom.get());
 
             // Produce large record, we should exceed "sticky" limit, but produce to this partition
-            // as we switch after the "sticky" limit is exceeded.  The partition is switched after
-            // we produce.
+            // as we try to switch after the "sticky" limit is exceeded.  The switch is disabled
+            // because of incomplete batch.
             byte[] largeValue = new byte[batchSize];
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition1, partition.get());
-            assertEquals(2, mockRandom.get());
+            assertEquals(1, mockRandom.get());
 
-            // Produce large record, we should switch to next partition.
+            // Produce large record, we should switch to next partition as we complete
+            // previous batch and exceeded sticky limit.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition2, partition.get());
-            assertEquals(3, mockRandom.get());
+            assertEquals(2, mockRandom.get());
 
-            // Produce large record, we should switch to next partition.
+            // Produce large record, we should switch to next partition as we complete
+            // previous batch and exceeded sticky limit.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition3, partition.get());
-            assertEquals(4, mockRandom.get());
+            assertEquals(3, mockRandom.get());
 
-            // Produce large record, we should switch to first partition again.
+            // Produce large record, we should switch to next partition as we complete
+            // previous batch and exceeded sticky limit.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition1, partition.get());
-            assertEquals(5, mockRandom.get());
+            assertEquals(4, mockRandom.get());
         } finally {
             BuiltInPartitioner.mockRandom = null;
         }
@@ -1245,6 +1248,37 @@ public class RecordAccumulatorTest {
             }
         } finally {
             BuiltInPartitioner.mockRandom = null;
+        }
+    }
+
+    @Test
+    public void testBuiltInPartitionerFractionalBatches() throws Exception {
+        // Test how we avoid creating fractional batches with high linger.ms (see
+        // BuiltInPartitioner.updatePartitionInfo).
+        long totalSize = 1024 * 1024;
+        int batchSize = 512;  // note that this is also a "sticky" limit for the partitioner
+        int valSize = 32;
+        RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize, CompressionType.NONE, 10);
+        byte[] value = new byte[valSize];
+
+        for (int c = 10; c-- > 0; ) {
+            // Produce about 2/3 of the batch size.
+            for (int recCount = batchSize * 2 / 3 / valSize; recCount-- > 0; ) {
+                accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0, null, value, Record.EMPTY_HEADERS,
+                    null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+            }
+
+            // Advance the time to make the batch ready.
+            time.sleep(10);
+
+            // We should have one batch ready.
+            Set<Node> nodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+            assertEquals(1, nodes.size(), "Should have 1 leader ready");
+            List<ProducerBatch> batches = accum.drain(cluster, nodes, Integer.MAX_VALUE, 0).entrySet().iterator().next().getValue();
+            assertEquals(1, batches.size(), "Should have 1 batch ready");
+            int actualBatchSize = batches.get(0).records().sizeInBytes();
+            assertTrue(actualBatchSize > batchSize / 2, "Batch must be greater than half batch.size");
+            assertTrue(actualBatchSize < batchSize, "Batch must be less than batch.size");
         }
     }
 

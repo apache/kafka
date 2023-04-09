@@ -223,8 +223,8 @@ public class BrokerRegistration {
                 map(n -> listeners.get(n).toString()).
                 collect(Collectors.joining(", ")));
         bld.append("], supportedFeatures={").append(
-            supportedFeatures.entrySet().stream().sorted().
-                map(e -> e.getKey() + ": " + e.getValue()).
+            supportedFeatures.keySet().stream().sorted().
+                map(k -> k + ": " + supportedFeatures.get(k)).
                 collect(Collectors.joining(", ")));
         bld.append("}");
         bld.append(", rack=").append(rack);

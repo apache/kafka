@@ -792,6 +792,18 @@ public class MetadataTest {
     }
 
     @Test
+    public void testNodeIfOnlineNonExistentTopicPartition() {
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
+
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        assertEquals(metadata.fetch().nodeById(0).id(), 0);
+        assertNull(metadata.fetch().partition(tp));
+        assertEquals(metadata.fetch().nodeIfOnline(tp, 0), Optional.empty());
+    }
+
+    @Test
     public void testLeaderMetadataInconsistentWithBrokerMetadata() {
         // Tests a reordering scenario which can lead to inconsistent leader state.
         // A partition initially has one broker offline. That broker comes online and

@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
@@ -261,8 +260,7 @@ object LeaderElectionCommandTest {
   }
 
   def tempTopicPartitionFile(partitions: Set[TopicPartition]): Path = {
-    val file = File.createTempFile("leader-election-command", ".json")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("leader-election-command", ".json")
 
     val jsonString = TestUtils.stringifyTopicPartitions(partitions)
 

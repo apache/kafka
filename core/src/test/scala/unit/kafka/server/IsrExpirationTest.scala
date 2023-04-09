@@ -52,8 +52,8 @@ class IsrExpirationTest {
   val time = new MockTime
   val metrics = new Metrics
 
-  var quotaManager: QuotaManagers = null
-  var replicaManager: ReplicaManager = null
+  var quotaManager: QuotaManagers = _
+  var replicaManager: ReplicaManager = _
 
   var alterIsrManager: MockAlterPartitionManager = _
 

@@ -126,6 +126,7 @@ abstract class WorkerTask implements Runnable {
      */
     public void cancel() {
         cancelled = true;
+        retryWithToleranceOperator.triggerStop();
     }
 
     /**

@@ -132,11 +132,11 @@ public class InternalRequestSignature {
         if (o == null || getClass() != o.getClass())
             return false;
         InternalRequestSignature that = (InternalRequestSignature) o;
-        return Arrays.equals(requestBody, that.requestBody)
+        return MessageDigest.isEqual(requestBody, that.requestBody)
             && mac.getAlgorithm().equals(that.mac.getAlgorithm())
             && mac.getMacLength() == that.mac.getMacLength()
             && mac.getProvider().equals(that.mac.getProvider())
-            && Arrays.equals(requestSignature, that.requestSignature);
+            && MessageDigest.isEqual(requestSignature, that.requestSignature);
     }
 
     @Override

@@ -456,7 +456,7 @@ class IncrementalFetchContext(private val time: Time,
   private class PartitionIterator(val iter: FetchSession.RESP_MAP_ITER,
                                   val updateFetchContextAndRemoveUnselected: Boolean)
     extends FetchSession.RESP_MAP_ITER {
-    var nextElement: util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData] = null
+    var nextElement: util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData] = _
 
     override def hasNext: Boolean = {
       while ((nextElement == null) && iter.hasNext) {

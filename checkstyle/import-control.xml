@@ -139,9 +139,7 @@
       </subpackage>
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
-        <subpackage name="secured">
-          <allow pkg="org.jose4j" />
-        </subpackage>
+        <allow pkg="org.jose4j" />
       </subpackage>
     </subpackage>
 
@@ -276,6 +274,9 @@
       <allow pkg="org.apache.kafka.common.resource" />
       <allow pkg="org.apache.kafka.controller" />
       <allow pkg="org.apache.kafka.metadata" />
+    </subpackage>
+    <subpackage name="bootstrap">
+      <allow pkg="org.apache.kafka.snapshot" />
     </subpackage>
     <subpackage name="fault">
       <allow pkg="org.apache.kafka.server.fault" />

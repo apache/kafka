@@ -153,7 +153,7 @@ public class Worker {
             ExecutorService executorService,
             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
     ) {
-        this.kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        this.kafkaClusterId = config.kafkaClusterId();
         this.metrics = new ConnectMetrics(workerId, config, time, kafkaClusterId);
         this.executor = executorService;
         this.workerId = workerId;
@@ -168,7 +168,6 @@ public class Worker {
         this.internalValueConverter = plugins.newInternalConverter(false, JsonConverter.class.getName(), internalConverterConfig);
 
         this.globalOffsetBackingStore = globalOffsetBackingStore;
-        this.globalOffsetBackingStore.configure(config);
 
         this.workerConfigTransformer = initConfigTransformer();
 
@@ -1249,8 +1248,7 @@ public class Worker {
             final Class<? extends Connector> connectorClass = plugins.connectorClass(
                     connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
             RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
-                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM);
-            retryWithToleranceOperator.metrics(errorHandlingMetrics);
+                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
             return doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,

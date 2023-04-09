@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package integration.kafka.server
+package kafka.server
 
 import java.time.Duration
 import java.util.Arrays.asList
 
-import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
 import org.apache.kafka.clients.producer.ProducerRecord

@@ -37,7 +37,7 @@ class ProducerCompressionTest extends QuorumTestHarness {
   private val topic = "topic"
   private val numRecords = 2000
 
-  private var broker: KafkaBroker = null
+  private var broker: KafkaBroker = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

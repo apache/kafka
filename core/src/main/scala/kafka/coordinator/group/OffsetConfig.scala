@@ -23,8 +23,12 @@ import kafka.message.{CompressionCodec, NoCompressionCodec}
  * Configuration settings for in-built offset management
  * @param maxMetadataSize The maximum allowed metadata for any offset commit.
  * @param loadBufferSize Batch size for reading from the offsets segments when loading offsets into the cache.
- * @param offsetsRetentionMs After a consumer group loses all its consumers (i.e. becomes empty) its offsets will be kept for this retention period before getting discarded.
- *                           For standalone consumers (using manual assignment), offsets will be expired after the time of last commit plus this retention period.
+ * @param offsetsRetentionMs For subscribed consumers, committed offset of a specific partition will be expired and discarded when
+ *                             1) this retention period has elapsed after the consumer group loses all its consumers (i.e. becomes empty);
+ *                             2) this retention period has elapsed since the last time an offset is committed for the partition AND the group is no longer subscribed to the corresponding topic.
+ *                           For standalone consumers (using manual assignment), offsets will be expired after this retention period has elapsed since the time of last commit.
+ *                           Note that when a group is deleted via the delete-group request, its committed offsets will also be deleted immediately;
+ *                           Also when a topic is deleted via the delete-topic request, upon propagated metadata update any group's committed offsets for that topic will also be deleted without extra retention period
  * @param offsetsRetentionCheckIntervalMs Frequency at which to check for expired offsets.
  * @param offsetsTopicNumPartitions The number of partitions for the offset commit topic (should not change after deployment).
  * @param offsetsTopicSegmentBytes The offsets topic segment bytes should be kept relatively small to facilitate faster

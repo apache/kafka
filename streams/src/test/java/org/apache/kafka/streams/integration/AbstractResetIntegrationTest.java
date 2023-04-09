@@ -394,7 +394,7 @@ public abstract class AbstractResetIntegrationTest {
                                    final String appID) throws Exception {
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
-                    "--bootstrap-servers", cluster.bootstrapServers(),
+                    "--bootstrap-server", cluster.bootstrapServers(),
                     "--input-topics", INPUT_TOPIC
             ));
         if (withIntermediateTopics) {

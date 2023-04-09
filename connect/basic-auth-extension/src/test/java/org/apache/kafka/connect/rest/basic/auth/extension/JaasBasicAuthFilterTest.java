@@ -25,6 +25,7 @@ import javax.ws.rs.core.UriInfo;
 
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -223,8 +224,7 @@ public class JaasBasicAuthFilterTest {
     }
 
     private File setupPropertyLoginFile(boolean includeUsers) throws IOException {
-        File credentialFile = File.createTempFile("credential", ".properties");
-        credentialFile.deleteOnExit();
+        File credentialFile = TestUtils.tempFile("credential", ".properties");
         if (includeUsers) {
             List<String> lines = new ArrayList<>();
             lines.add("user=password");

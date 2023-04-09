@@ -231,7 +231,7 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : zkBrokerApis()) {
+        for (ApiKeys key : clientApis()) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
@@ -271,15 +271,22 @@ public enum ApiKeys {
         return apisForListener(ApiMessageType.ListenerType.CONTROLLER);
     }
 
+    public static EnumSet<ApiKeys> clientApis() {
+        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
+            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.ZK_BROKER) || apiKey.inScope(ApiMessageType.ListenerType.BROKER))
+            .collect(Collectors.toList());
+        return EnumSet.copyOf(apis);
+    }
+
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {
         return APIS_BY_LISTENER.get(listener);
     }
 
     private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
-        List<ApiKeys> controllerApis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.messageType.listeners().contains(listener))
+        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
+            .filter(apiKey -> apiKey.inScope(listener))
             .collect(Collectors.toList());
-        return EnumSet.copyOf(controllerApis);
+        return EnumSet.copyOf(apis);
     }
 
 }

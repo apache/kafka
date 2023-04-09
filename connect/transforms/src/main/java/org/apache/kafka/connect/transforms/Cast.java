@@ -284,7 +284,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 case STRING:
                     return castToString(value);
                 default:
-                    throw new DataException(targetType.toString() + " is not supported in the Cast transformation.");
+                    throw new DataException(targetType + " is not supported in the Cast transformation.");
             }
         } catch (NumberFormatException e) {
             throw new DataException("Value (" + value.toString() + ") was out of range for requested data type", e);

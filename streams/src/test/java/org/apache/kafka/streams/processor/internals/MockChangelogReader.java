@@ -39,6 +39,13 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
+    public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) {
+        for (final TopicPartition changelogPartition : changelogPartitions) {
+            register(changelogPartition, stateManager);
+        }
+    }
+
+    @Override
     public void restore(final Map<TaskId, Task> tasks) {
         // do nothing
     }

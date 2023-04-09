@@ -48,7 +48,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   def brokerCount = 3
   override def logDirCount = 2
 
-  var testInfo: TestInfo = null
+  var testInfo: TestInfo = _
 
   var client: Admin = _
 

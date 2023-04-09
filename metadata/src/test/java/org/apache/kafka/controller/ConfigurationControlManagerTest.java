@@ -320,10 +320,32 @@ public class ConfigurationControlManagerTest {
                 true));
     }
 
+    private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
+        @Override
+        public void validate(RequestMetadata actual) throws PolicyViolationException {
+            actual.configs().forEach((key, value) -> {
+                if (value == null) {
+                    throw new PolicyViolationException("Legacy Alter Configs should not see null values");
+                }
+            });
+        }
+
+        @Override
+        public void close() throws Exception {
+            // empty
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // empty
+        }
+    }
+
     @Test
     public void testLegacyAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
+            setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
         List<ApiMessageAndVersion> expectedRecords1 = asList(
             new ApiMessageAndVersion(new ConfigRecord().

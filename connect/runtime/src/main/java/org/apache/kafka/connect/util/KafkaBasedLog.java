@@ -166,6 +166,8 @@ public class KafkaBasedLog<K, V> {
         this.readLogEndOffsetCallbacks = new ArrayDeque<>();
         this.time = time;
         this.initializer = initializer != null ? initializer : admin -> { };
+        // Initialize the producer Optional here to prevent NPEs later on
+        this.producer = Optional.empty();
 
         // If the consumer is configured with isolation.level = read_committed, then its end offsets method cannot be relied on
         // as it will not take records from currently-open transactions into account. We want to err on the side of caution in that

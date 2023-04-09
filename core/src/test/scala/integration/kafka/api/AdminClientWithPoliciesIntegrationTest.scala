@@ -43,7 +43,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   import AdminClientWithPoliciesIntegrationTest._
 
-  var client: Admin = null
+  var client: Admin = _
   val brokerCount = 3
 
   @BeforeEach
@@ -238,7 +238,7 @@ object AdminClientWithPoliciesIntegrationTest {
     def validate(requestMetadata: AlterConfigPolicy.RequestMetadata): Unit = {
       validations.append(requestMetadata)
       require(!closed, "Policy should not be closed")
-      require(!configs.isEmpty, "configure should have been called with non empty configs")
+      require(configs.nonEmpty, "configure should have been called with non empty configs")
       require(!requestMetadata.configs.isEmpty, "request configs should not be empty")
       require(requestMetadata.resource.name.nonEmpty, "resource name should not be empty")
       if (requestMetadata.configs.containsKey(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG))

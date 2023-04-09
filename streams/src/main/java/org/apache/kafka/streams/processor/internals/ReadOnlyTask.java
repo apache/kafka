@@ -217,4 +217,9 @@ public class ReadOnlyTask implements Task {
     public Optional<Long> timeCurrentIdlingStarted() {
         throw new UnsupportedOperationException("This task is read-only");
     }
+
+    @Override
+    public ProcessorStateManager stateManager() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
 }

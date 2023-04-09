@@ -52,10 +52,10 @@ object StateChangeLogMerger extends Logging {
   val dateRegex = new Regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}")
   val dateFormat = new SimpleDateFormat(dateFormatString)
   var files: List[String] = List()
-  var topic: String = null
+  var topic: String = _
   var partitions: List[Int] = List()
-  var startDate: Date = null
-  var endDate: Date = null
+  var startDate: Date = _
+  var endDate: Date = _
 
   def main(args: Array[String]): Unit = {
 

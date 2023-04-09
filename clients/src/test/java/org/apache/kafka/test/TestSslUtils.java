@@ -244,7 +244,7 @@ public class TestSslUtils {
 
         if (certChain != null) {
             if (ksPath == null) {
-                ksPath = File.createTempFile("keystore", ".pem").getPath();
+                ksPath = TestUtils.tempFile("keystore", ".pem").getPath();
                 sslProps.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, ksPath);
             }
             sslProps.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, PEM_TYPE);

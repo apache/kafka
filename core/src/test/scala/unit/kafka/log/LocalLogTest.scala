@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters._
 
 class LocalLogTest {
 
-  var config: KafkaConfig = null
+  var config: KafkaConfig = _
   val tmpDir: File = TestUtils.tempDir()
   val logDir: File = TestUtils.randomPartitionLogDir(tmpDir)
   val topicPartition = new TopicPartition("test_topic", 1)

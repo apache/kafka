@@ -164,7 +164,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         if (this.statusTopic == null || this.statusTopic.trim().length() == 0)
             throw new ConfigException("Must specify topic for connector status.");
 
-        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
+        String clusterId = config.kafkaClusterId();
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());

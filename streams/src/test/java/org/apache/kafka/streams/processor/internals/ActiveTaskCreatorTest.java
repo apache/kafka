@@ -504,8 +504,8 @@ public class ActiveTaskCreatorTest {
             mockClientSupplier,
             "clientId-StreamThread-0",
             uuid,
-            new LogContext().logger(ActiveTaskCreator.class)
-        );
+            new LogContext().logger(ActiveTaskCreator.class),
+            false);
 
         assertThat(
             activeTaskCreator.createTasks(

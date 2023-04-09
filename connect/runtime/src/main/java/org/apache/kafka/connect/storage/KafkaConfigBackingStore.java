@@ -272,7 +272,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private volatile SessionKey sessionKey;
 
     // Connector -> Map[ConnectorTaskId -> Configs]
-    private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
+    // visible for testing
+    final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
 
     final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
@@ -377,7 +378,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private Map<String, Object> baseProducerProps(WorkerConfig workerConfig) {
         Map<String, Object> producerProps = new HashMap<>(workerConfig.originals());
-        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(workerConfig);
+        String kafkaClusterId = workerConfig.kafkaClusterId();
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
@@ -664,7 +665,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         Map<String, Object> producerProps = new HashMap<>(baseProducerProps);
 
-        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
+        String clusterId = config.kafkaClusterId();
         Map<String, Object> originals = config.originals();
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
@@ -853,6 +854,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs.remove(connectorName);
                 connectorTaskCounts.remove(connectorName);
                 taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
+                deferredTaskUpdates.remove(connectorName);
                 removed = true;
             } else {
                 // Connector configs can be applied and callbacks invoked immediately

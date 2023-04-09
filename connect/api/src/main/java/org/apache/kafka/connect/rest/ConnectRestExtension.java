@@ -48,7 +48,7 @@ public interface ConnectRestExtension extends Configurable, Versioned, Closeable
     /**
      * ConnectRestExtension implementations can register custom JAX-RS resources via the {@link #register(ConnectRestExtensionContext)}
      * method. The Connect framework will invoke this method after registering the default Connect resources. If the implementations attempt
-     * to re-register any of the Connect resources, it will be be ignored and will be logged.
+     * to re-register any of the Connect resources, it will be ignored and will be logged.
      *
      * @param restPluginContext The context provides access to JAX-RS {@link javax.ws.rs.core.Configurable} and {@link
      *                          ConnectClusterState}.The custom JAX-RS resources can be registered via the {@link

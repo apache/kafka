@@ -12,11 +12,9 @@
   */
 package kafka.api
 
-import java.io.File
-
 import kafka.server.KafkaConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
-import kafka.utils.JaasTestUtils
+import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.jdk.CollectionConverters._
@@ -26,7 +24,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List("GSSAPI", "PLAIN")
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 

@@ -18,7 +18,6 @@
 
 package kafka.server
 
-import java.io.File
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
 
@@ -27,7 +26,6 @@ import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
-import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
@@ -53,7 +51,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
 
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
-  private val trustStoreFile = File.createTempFile("truststore", ".jks")
+  private val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
   private val servers = new ArrayBuffer[KafkaServer]
   private val producers = mutable.Map[ClientMetadata, KafkaProducer[Array[Byte], Array[Byte]]]()
   private val consumers = mutable.Map[ClientMetadata, KafkaConsumer[Array[Byte], Array[Byte]]]()
@@ -180,7 +178,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     props.put(s"${prefix}${KafkaConfig.SaslJaasConfigProp}", jaasConfig)
   }
 
-  case class ClientMetadata(val listenerName: ListenerName, val saslMechanism: String, topic: String) {
+  case class ClientMetadata(listenerName: ListenerName, saslMechanism: String, topic: String) {
     override def hashCode: Int = Objects.hash(listenerName, saslMechanism)
     override def equals(obj: Any): Boolean = obj match {
       case other: ClientMetadata => listenerName == other.listenerName && saslMechanism == other.saslMechanism && topic == other.topic

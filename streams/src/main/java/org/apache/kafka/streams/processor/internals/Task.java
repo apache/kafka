@@ -215,6 +215,8 @@ public interface Task {
 
     State state();
 
+    ProcessorStateManager stateManager();
+
     default boolean needsInitializationOrRestoration() {
         return state() == State.CREATED || state() == State.RESTORING;
     }

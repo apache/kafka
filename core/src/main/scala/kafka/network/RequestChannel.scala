@@ -543,7 +543,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   class ErrorMeter(name: String, error: Errors) {
     private val tags = Map("request" -> name, "error" -> error.name)
 
-    @volatile private var meter: Meter = null
+    @volatile private var meter: Meter = _
 
     def getOrCreateMeter(): Meter = {
       if (meter != null)

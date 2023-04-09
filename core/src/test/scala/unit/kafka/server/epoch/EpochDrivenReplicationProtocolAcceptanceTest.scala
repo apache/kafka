@@ -54,9 +54,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   val topic = "topic1"
   val msg = new Array[Byte](1000)
   val msgBigger = new Array[Byte](10000)
-  var brokers: Seq[KafkaServer] = null
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
-  var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
+  var brokers: Seq[KafkaServer] = _
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
+  var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

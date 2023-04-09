@@ -40,7 +40,7 @@ class GroupMetadataTest {
   private val rebalanceTimeoutMs = 60000
   private val sessionTimeoutMs = 10000
 
-  private var group: GroupMetadata = null
+  private var group: GroupMetadata = _
 
   @BeforeEach
   def setUp(): Unit = {

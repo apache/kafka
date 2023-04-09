@@ -17,8 +17,6 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.connector.Connector;
@@ -35,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
@@ -50,33 +47,6 @@ public final class ConnectUtils {
             return null;
         else
             throw new InvalidRecordException(String.format("Invalid record timestamp %d", timestamp));
-    }
-
-    public static String lookupKafkaClusterId(WorkerConfig config) {
-        log.info("Creating Kafka admin client");
-        try (Admin adminClient = Admin.create(config.originals())) {
-            return lookupKafkaClusterId(adminClient);
-        }
-    }
-
-    static String lookupKafkaClusterId(Admin adminClient) {
-        log.debug("Looking up Kafka cluster ID");
-        try {
-            KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();
-            if (clusterIdFuture == null) {
-                log.info("Kafka cluster version is too old to return cluster ID");
-                return null;
-            }
-            log.debug("Fetching Kafka cluster ID");
-            String kafkaClusterId = clusterIdFuture.get();
-            log.info("Kafka cluster ID: {}", kafkaClusterId);
-            return kafkaClusterId;
-        } catch (InterruptedException e) {
-            throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
-        } catch (ExecutionException e) {
-            throw new ConnectException("Failed to connect to and describe Kafka cluster. "
-                                       + "Check worker's broker connection and security properties.", e);
-        }
     }
 
     /**

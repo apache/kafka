@@ -44,20 +44,20 @@ class LogRecoveryTest extends QuorumTestHarness {
   overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchMinBytesProp, replicaFetchMinBytes.toString)
 
-  var configs: Seq[KafkaConfig] = null
+  var configs: Seq[KafkaConfig] = _
   val topic = "new-topic"
   val partitionId = 0
   val topicPartition = new TopicPartition(topic, partitionId)
 
-  var server1: KafkaServer = null
-  var server2: KafkaServer = null
+  var server1: KafkaServer = _
+  var server2: KafkaServer = _
 
   def configProps1 = configs.head
   def configProps2 = configs.last
 
   val message = "hello"
 
-  var producer: KafkaProducer[Integer, String] = null
+  var producer: KafkaProducer[Integer, String] = _
   def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename))
   def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename))
   var servers = Seq.empty[KafkaServer]

@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest}
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.EventQueue
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -96,11 +97,33 @@ class BrokerMetadataSnapshotterTest {
   def testCreateSnapshot(): Unit = {
     val writerBuilder = new MockSnapshotWriterBuilder()
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
+    
     try {
       val blockingEvent = new BlockingEvent()
+      val reasons = Set(SnapshotReason.UnknownReason)
+
       snapshotter.eventQueue.append(blockingEvent)
-      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1))
-      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2))
+      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
+      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, reasons))
+      blockingEvent.latch.countDown()
+      assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
+    } finally {
+      snapshotter.close()
+    }
+  }
+
+  @Test
+  def testCreateSnapshotMultipleReasons(): Unit = {
+    val writerBuilder = new MockSnapshotWriterBuilder()
+    val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
+    
+    try {
+      val blockingEvent = new BlockingEvent()
+      val reasons = Set(SnapshotReason.MaxBytesExceeded, SnapshotReason.MetadataVersionChanged)
+
+      snapshotter.eventQueue.append(blockingEvent)
+      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
+      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, reasons))
       blockingEvent.latch.countDown()
       assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
     } finally {

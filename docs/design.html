@@ -322,18 +322,33 @@
     Followers consume messages from the leader just as a normal Kafka consumer would and apply them to their own log. Having the followers pull from the leader has the nice property of allowing the follower to naturally
     batch together log entries they are applying to their log.
     <p>
-    As with most distributed systems automatically handling failures requires having a precise definition of what it means for a node to be "alive". For Kafka node liveness has two conditions
+    As with most distributed systems, automatically handling failures requires a precise definition of what it means for a node to be "alive." In Kafka, a special node
+    known as the "controller" is responsible for managing the registration of brokers in the cluster. Broker liveness has two conditions:
     <ol>
-        <li>A node must be able to maintain its session with ZooKeeper (via ZooKeeper's heartbeat mechanism)
-        <li>If it is a follower it must replicate the writes happening on the leader and not fall "too far" behind
+      <li>Brokers must maintain an active session with the controller in order to receive regular metadata updates.</li>
+      <li>Brokers acting as followers must replicate the writes from the leader and not fall "too far" behind.</li>
     </ol>
-    We refer to nodes satisfying these two conditions as being "in sync" to avoid the vagueness of "alive" or "failed". The leader keeps track of the set of "in sync" nodes. If a follower dies, gets stuck, or falls
-    behind, the leader will remove it from the list of in sync replicas. The determination of stuck and lagging replicas is controlled by the replica.lag.time.max.ms configuration.
+    <p>
+    What is meant by an "active session" depends on the cluster configuration. For KRaft clusters, an active session is maintained by 
+    sending periodic heartbeats to the controller. If the controller fails to receive a heartbeat before the timeout configured by 
+    <code>broker.session.timeout.ms</code> expires, then the node is considered offline.
+    <p>
+    For clusters using Zookeeper, liveness is determined indirectly through the existence of an ephemeral node which is created by the broker on
+    initialization of its Zookeeper session. If the broker loses its session after failing to send heartbeats to Zookeeper before expiration of
+    <code>zookeeper.session.timeout.ms</code>, then the node gets deleted. The controller would then notice the node deletion through a Zookeeper watch
+    and mark the broker offline.
+    <p>
+    We refer to nodes satisfying these two conditions as being "in sync" to avoid the vagueness of "alive" or "failed". The leader keeps track of the set of "in sync" replicas,
+    which is known as the ISR. If either of these conditions fail to be satisified, then the broker will be removed from the ISR. For example,
+    if a follower dies, then the controller will notice the failure through the loss of its session, and will remove the broker from the ISR.
+    On the other hand, if the follower lags too far behind the leader but still has an active session, then the leader can also remove it from the ISR.
+    The determination of lagging replicas is controlled through the <code>replica.lag.time.max.ms</code> configuration. 
+    Replicas that cannot catch up to the end of the log on the leader within the max time set by this configuration are removed from the ISR.
     <p>
     In distributed systems terminology we only attempt to handle a "fail/recover" model of failures where nodes suddenly cease working and then later recover (perhaps without knowing that they have died). Kafka does not
     handle so-called "Byzantine" failures in which nodes produce arbitrary or malicious responses (perhaps due to bugs or foul play).
     <p>
-    We can now more precisely define that a message is considered committed when all in sync replicas for that partition have applied it to their log.
+    We can now more precisely define that a message is considered committed when all replicas in the ISR for that partition have applied it to their log.
     Only committed messages are ever given out to the consumer. This means that the consumer need not worry about potentially seeing a message that could be lost if the leader fails. Producers, on the other hand,
     have the option of either waiting for the message to be committed or not, depending on their preference for tradeoff between latency and durability. This preference is controlled by the acks setting that the
     producer uses.
@@ -381,7 +396,7 @@
     expensive approach is not used for the data itself.
     <p>
     Kafka takes a slightly different approach to choosing its quorum set. Instead of majority vote, Kafka dynamically maintains a set of in-sync replicas (ISR) that are caught-up to the leader. Only members of this set
-    are eligible for election as leader. A write to a Kafka partition is not considered committed until <i>all</i> in-sync replicas have received the write. This ISR set is persisted to ZooKeeper whenever it changes.
+    are eligible for election as leader. A write to a Kafka partition is not considered committed until <i>all</i> in-sync replicas have received the write. This ISR set is persisted in the cluster metadata whenever it changes.
     Because of this, any replica in the ISR is eligible to be elected leader. This is an important factor for Kafka's usage model where there are many partitions and ensuring leadership balance is important.
     With this ISR model and <i>f+1</i> replicas, a Kafka topic can tolerate <i>f</i> failures without losing committed messages.
     <p>
@@ -442,9 +457,10 @@
     share of its partitions.
     <p>
     It is also important to optimize the leadership election process as that is the critical window of unavailability. A naive implementation of leader election would end up running an election per partition for all
-    partitions a node hosted when that node failed. Instead, we elect one of the brokers as the "controller". This controller detects failures at the broker level and is responsible for changing the leader of all
-    affected partitions in a failed broker. The result is that we are able to batch together many of the required leadership change notifications which makes the election process far cheaper and faster for a large number
-    of partitions. If the controller fails, one of the surviving brokers will become the new controller.
+    partitions a node hosted when that node failed. As discussed above in the section on <a href="#replication">replication</a>, Kafka clusters have a special role known as the "controller" which is
+    responsible for managing the registration of brokers. If the controller detects the failure of a broker, it is responsible for electing one of the remaining members of the ISR to serve as the new leader.
+    The result is that we are able to batch together many of the required leadership change notifications which makes the election process far cheaper and faster for a large number
+    of partitions. If the controller itself fails, then another controller will be elected.
 
     <h3 class="anchor-heading"><a id="compaction" class="anchor-link"></a><a href="#compaction">4.8 Log Compaction</a></h3>
 

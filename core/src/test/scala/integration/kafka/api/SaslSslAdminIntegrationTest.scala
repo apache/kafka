@@ -12,7 +12,6 @@
   */
 package kafka.api
 
-import java.io.File
 import java.util
 
 import kafka.log.LogConfig
@@ -51,7 +50,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
   override def generateConfigs: Seq[KafkaConfig] = {
     this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizationAdmin.authorizerClassName)

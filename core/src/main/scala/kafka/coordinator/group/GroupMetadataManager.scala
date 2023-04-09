@@ -994,11 +994,11 @@ class GroupMetadataManager(brokerId: Int,
     replicaManager.getMagic(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))
 
   /**
-   * Add the partition into the owned list
+   * Add a partition to the owned partition set.
    *
-   * NOTE: this is for test only
+   * NOTE: this is for test only.
    */
-  private[group] def addPartitionOwnership(partition: Int): Unit = {
+  private[group] def addOwnedPartition(partition: Int): Unit = {
     inLock(partitionLock) {
       ownedPartitions.add(partition)
     }

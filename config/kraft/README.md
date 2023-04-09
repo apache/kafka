@@ -1,10 +1,9 @@
-KRaft (aka KIP-500) mode Preview Release
+KRaft (aka KIP-500) mode
 =========================================================
 
 # Introduction
 It is now possible to run Apache Kafka without Apache ZooKeeper!  We call this the [Kafka Raft metadata mode](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum), typically shortened to `KRaft mode`.
-`KRaft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *PREVIEW AND SHOULD NOT BE USED IN PRODUCTION*, but it
-is available for testing in the Kafka 3.1 release.
+`KRaft` is intended to be pronounced like `craft` (as in `craftsmanship`).
 
 When the Kafka cluster is in KRaft mode, it does not store its metadata in ZooKeeper.  In fact, you do not have to run ZooKeeper at all, because it stores its metadata in a KRaft quorum of controller nodes.
 
@@ -12,10 +11,6 @@ KRaft mode has many benefits -- some obvious, and some not so obvious.  Clearly,
 Most important of all, KRaft mode is more scalable.  We expect to be able to [support many more topics and partitions](https://www.confluent.io/kafka-summit-san-francisco-2019/kafka-needs-no-keeper/) in this mode.
 
 # Quickstart
-
-## Warning
-KRaft mode in Kafka 3.1 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  
-There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the preview release of KRaft mode.
 
 ## Generate a cluster ID
 The first step is to generate an ID for your new cluster, using the kafka-storage tool:
@@ -110,18 +105,14 @@ This is particularly important for the metadata log maintained by the controller
 nothing in the log, which would cause all metadata to be lost.
 
 # Missing Features
-We don't support any kind of upgrade right now, either to or from KRaft mode.  This is an important gap that we are working on.
 
-Finally, the following Kafka features have not yet been fully implemented:
+The following features have not yet been fully implemented:
 
 * Configuring SCRAM users via the administrative API
 * Supporting JBOD configurations with multiple storage directories
 * Modifying certain dynamic configurations on the standalone KRaft controller
-* Support for some configurations, like enabling unclean leader election by default or dynamically changing broker endpoints
 * Delegation tokens
 * Upgrade from ZooKeeper mode
-
-We've tried to make it clear when a feature is not supported in the preview release, but you may encounter some rough edges. We will cover these feature gaps incrementally in the `trunk` branch.
 
 # Debugging
 If you encounter an issue, you might want to take a look at the metadata log.
