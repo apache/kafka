@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> implements CogroupedKStream<K, VOut> {
 
@@ -136,6 +137,8 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
                                         final NamedInternal named,
                                         final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        final boolean isOutputVersioned = materializedInternal != null
+            && materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier;
         return aggregateBuilder.build(
             groupPatterns,
             initializer,
@@ -143,6 +146,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
-            materializedInternal.queryableStoreName());
+            materializedInternal.queryableStoreName(),
+            isOutputVersioned);
     }
 }

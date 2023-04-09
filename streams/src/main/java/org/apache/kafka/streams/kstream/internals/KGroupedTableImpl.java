@@ -29,12 +29,14 @@ import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRep
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableAggregateNode;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 /**
  * The implementation class of {@link KGroupedTable}.
@@ -92,6 +94,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
             new ProcessorParameters<>(aggregateSupplier, funcName),
             new KeyValueStoreMaterializer<>(materialized).materialize()
         );
+        statefulProcessorNode.setOutputVersioned(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier);
 
         // now the repartition node must be the parent of the StateProcessorNode
         builder.addGraphNode(repartitionGraphNode, statefulProcessorNode);

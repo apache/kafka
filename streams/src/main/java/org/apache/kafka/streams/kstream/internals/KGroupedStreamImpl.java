@@ -37,6 +37,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedStream<K, V> {
 
@@ -236,13 +237,16 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, V, K, T> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        final boolean isOutputVersioned = materializedInternal != null
+            && materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier;
         return aggregateBuilder.build(
             new NamedInternal(functionName),
             new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
             aggregateSupplier,
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            isOutputVersioned);
     }
 
     @Override
