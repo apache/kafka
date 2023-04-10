@@ -79,7 +79,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
    *
    * The default implementation of this method is a no-op.
    */
-  def configureSecurityBeforeServersStart(): Unit = {}
+  def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {}
 
   /**
    * Override this in case Tokens or security credentials needs to be created after `servers` are started.
@@ -116,7 +116,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
       throw new KafkaException("Must supply at least one server config.")
 
     // default implementation is a no-op, it is overridden by subclasses if required
-    configureSecurityBeforeServersStart()
+    configureSecurityBeforeServersStart(testInfo)
 
     createBrokers(startup = true)
 

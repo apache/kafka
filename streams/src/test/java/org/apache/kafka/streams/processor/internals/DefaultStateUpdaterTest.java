@@ -1564,6 +1564,7 @@ class DefaultStateUpdaterTest {
         when(changelogReader.restore(tasks1234)).thenReturn(1L);
         when(changelogReader.restore(tasks13)).thenReturn(1L);
         when(changelogReader.isRestoringActive()).thenReturn(true);
+
         stateUpdater.start();
         stateUpdater.add(activeTask1);
         stateUpdater.add(activeTask2);

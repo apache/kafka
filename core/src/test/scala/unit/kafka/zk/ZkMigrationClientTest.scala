@@ -144,9 +144,9 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
     val leaderAndIsrs = Map(
       new TopicPartition("test", 0) -> LeaderIsrAndControllerEpoch(
-        new LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1),
+        LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1),
       new TopicPartition("test", 1) -> LeaderIsrAndControllerEpoch(
-        new LeaderAndIsr(1, 5, List(1, 2, 3), LeaderRecoveryState.RECOVERED, -1), 1)
+        LeaderAndIsr(1, 5, List(1, 2, 3), LeaderRecoveryState.RECOVERED, -1), 1)
     )
     zkClient.createTopicPartitionStatesRaw(leaderAndIsrs, 0)
 
@@ -433,7 +433,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   def migrateAclsAndVerify(authorizer: AclAuthorizer, acls: Seq[AclBinding]): Unit = {
     authorizer.createAcls(null, acls.asJava)
     val batches = new ArrayBuffer[mutable.Buffer[ApiMessageAndVersion]]()
-    migrationClient.migrateAcls(batch => batches.addOne(batch.asScala))
+    migrationClient.migrateAcls(batch => batches.append(batch.asScala))
     val records = batches.flatten.map(_.message().asInstanceOf[AccessControlEntryRecord])
     assertEquals(acls.size, records.size, "Expected one record for each ACLBinding")
   }
