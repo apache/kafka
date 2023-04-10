@@ -52,7 +52,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceConfigurationError;
@@ -64,7 +63,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
 
 /**
  * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
@@ -392,15 +390,19 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
 
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (Class<? extends T> plugin : plugins) {
-            if (PluginUtils.isConcrete(plugin)) {
-                try {
-                    result.add(pluginDesc(plugin, versionFor(plugin), loader));
-                } catch (ReflectiveOperationException | LinkageError e) {
-                    log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), plugin.getSimpleName(), reflectiveErrorDescription(e), e);
-                }
-            } else {
-                log.debug("Skipping {} as it is not concrete implementation", plugin);
+        for (Class<? extends T> pluginKlass : plugins) {
+            if (!PluginUtils.isConcrete(pluginKlass)) {
+                log.debug("Skipping {} as it is not concrete implementation", pluginKlass);
+                continue;
+            }
+            if (!isParentClassloader(pluginKlass.getClassLoader(), loader)) {
+                log.debug("Exclude {} that is from classloader {}", pluginKlass.getSimpleName(), pluginKlass.getClassLoader());
+                continue;
+            }
+            try {
+                result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), loader));
+            } catch (ReflectiveOperationException | LinkageError e) {
+                log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), pluginKlass.getSimpleName(), reflectiveErrorDescription(e), e);
             }
         }
         return result;
