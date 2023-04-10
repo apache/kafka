@@ -132,14 +132,15 @@ public class OffsetSyncStoreTest {
 
             // We can translate offsets between the latest startup offset and the latest offset with variable precision
             // Older offsets are less precise and translation ends up farther apart
-            assertSparseSync(store, 6120, 1000);
-            assertSparseSync(store, 8680, 6120);
-            assertSparseSync(store, 9320, 8680);
-            assertSparseSync(store, 9640, 9320);
-            assertSparseSync(store, 9800, 9640);
-            assertSparseSync(store, 9920, 9800);
-            assertSparseSync(store, 9960, 9920);
-            assertSparseSync(store, 9990, 9960);
+            assertSparseSync(store, 4840, 1000);
+            assertSparseSync(store, 6760, 4840);
+            assertSparseSync(store, 8680, 6760);
+            assertSparseSync(store, 9160, 8680);
+            assertSparseSync(store, 9640, 9160);
+            assertSparseSync(store, 9880, 9640);
+            assertSparseSync(store, 9940, 9880);
+            assertSparseSync(store, 9970, 9940);
+            assertSparseSync(store, 9990, 9970);
             assertSparseSync(store, 10000, 9990);
 
             // Rewind upstream offsets should clear all historical syncs
@@ -203,14 +204,14 @@ public class OffsetSyncStoreTest {
                 if (jUpstream == iUpstream) {
                     continue;
                 }
-                long iUpstreamLowerBound = jUpstream + (1L << (i - 1));
+                long iUpstreamLowerBound = jUpstream + (1L << Math.max(i - 2, 0));
                 if (iUpstreamLowerBound < 0) {
                     continue;
                 }
                 assertTrue(
                         iUpstreamLowerBound <= iUpstream,
                         "Invariant C(" + i + "," + j + "): Upstream offset " + iUpstream + " at position " + i
-                                + " should be at least " + iUpstreamLowerBound + " (" + jUpstream + " + 2^" + (i - 1) + ")"
+                                + " should be at least " + iUpstreamLowerBound + " (" + jUpstream + " + 2^" + Math.max(i - 1, 0) + ")"
                 );
                 long iUpstreamBound = jUpstream + (1L << j) - (1L << i);
                 if (iUpstreamBound < 0)

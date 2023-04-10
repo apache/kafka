@@ -283,7 +283,7 @@ class OffsetSyncStore implements AutoCloseable {
     }
 
     private boolean invariantC(OffsetSync iSync, OffsetSync jSync, int i, int j) {
-        long bound = jSync.upstreamOffset() + (1L << (i - 2));
+        long bound = jSync.upstreamOffset() + (1L << Math.max(i - 2, 0));
         return iSync == jSync || bound < 0 || bound <= iSync.upstreamOffset();
     }
 
