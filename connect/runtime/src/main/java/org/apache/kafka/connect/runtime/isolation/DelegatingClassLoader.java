@@ -360,8 +360,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         builder.useParallelExecutor();
         Reflections reflections = new InternalReflections(builder);
 
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
-        try {
+        try (LoaderSwap loaderSwap = LoaderSwap.use(loader)) {
             return new PluginScanResult(
                     getPluginDesc(reflections, SinkConnector.class, loader),
                     getPluginDesc(reflections, SourceConnector.class, loader),
@@ -373,8 +372,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                     getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
                     getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
             );
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
         }
     }
 

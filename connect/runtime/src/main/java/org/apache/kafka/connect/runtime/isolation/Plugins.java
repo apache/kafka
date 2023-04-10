@@ -127,22 +127,6 @@ public class Plugins {
         return pluginClass(delegatingLoader, classOrAlias, Object.class);
     }
 
-    public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
-        ClassLoader current = Thread.currentThread().getContextClassLoader();
-        if (!current.equals(loader)) {
-            Thread.currentThread().setContextClassLoader(loader);
-        }
-        return current;
-    }
-
-    public ClassLoader compareAndSwapWithDelegatingLoader() {
-        ClassLoader current = Thread.currentThread().getContextClassLoader();
-        if (!current.equals(delegatingLoader)) {
-            Thread.currentThread().setContextClassLoader(delegatingLoader);
-        }
-        return current;
-    }
-
     /**
      * Perform the following operations with a specified thread context classloader.
      * <p>
@@ -159,13 +143,7 @@ public class Plugins {
      * @return A {@link LoaderSwap} handle which restores the prior classloader on {@link LoaderSwap#close()}.
      */
     public LoaderSwap withClassLoader(ClassLoader loader) {
-        ClassLoader savedLoader = compareAndSwapLoaders(loader);
-        try {
-            return new LoaderSwap(savedLoader);
-        } catch (Throwable t) {
-            compareAndSwapLoaders(savedLoader);
-            throw t;
-        }
+        return LoaderSwap.use(loader);
     }
 
     /**

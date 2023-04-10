@@ -24,6 +24,7 @@ import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerInfo;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -119,36 +120,37 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
 
         log.info("Scanning for plugin classes. This might take a moment ...");
         Plugins plugins = new Plugins(workerProps);
-        plugins.compareAndSwapWithDelegatingLoader();
-        T config = createConfig(workerProps);
-        log.debug("Kafka cluster ID: {}", config.kafkaClusterId());
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(plugins.delegatingLoader())) {
+            T config = createConfig(workerProps);
+            log.debug("Kafka cluster ID: {}", config.kafkaClusterId());
 
-        RestClient restClient = new RestClient(config);
+            RestClient restClient = new RestClient(config);
 
-        ConnectRestServer restServer = new ConnectRestServer(config.rebalanceTimeout(), restClient, workerProps);
-        restServer.initializeServer();
+            ConnectRestServer restServer = new ConnectRestServer(config.rebalanceTimeout(), restClient, workerProps);
+            restServer.initializeServer();
 
-        URI advertisedUrl = restServer.advertisedUrl();
-        String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+            URI advertisedUrl = restServer.advertisedUrl();
+            String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
-        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
-                config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
-                config, ConnectorClientConfigOverridePolicy.class);
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
+                    config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
+                    config, ConnectorClientConfigOverridePolicy.class);
 
-        Herder herder = createHerder(config, workerId, plugins, connectorClientConfigOverridePolicy, restServer, restClient);
+            Herder herder = createHerder(config, workerId, plugins, connectorClientConfigOverridePolicy, restServer, restClient);
 
-        final Connect connect = new Connect(herder, restServer);
-        log.info("Kafka Connect worker initialization took {}ms", time.hiResClockMs() - initStart);
-        try {
-            connect.start();
-        } catch (Exception e) {
-            log.error("Failed to start Connect", e);
-            connect.stop();
-            Exit.exit(3);
+            final Connect connect = new Connect(herder, restServer);
+            log.info("Kafka Connect worker initialization took {}ms", time.hiResClockMs() - initStart);
+            try {
+                connect.start();
+            } catch (Exception e) {
+                log.error("Failed to start Connect", e);
+                connect.stop();
+                Exit.exit(3);
+            }
+
+            processExtraArgs(herder, connect, extraArgs);
+
+            return connect;
         }
-
-        processExtraArgs(herder, connect, extraArgs);
-
-        return connect;
     }
 }
