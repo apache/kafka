@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.image;
+package org.apache.kafka.metadata;
 
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;

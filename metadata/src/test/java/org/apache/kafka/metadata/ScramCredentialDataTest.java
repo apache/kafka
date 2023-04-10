@@ -19,7 +19,6 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
-import org.apache.kafka.image.ScramCredentialData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.util.MockRandom;
 import org.junit.jupiter.api.Test;

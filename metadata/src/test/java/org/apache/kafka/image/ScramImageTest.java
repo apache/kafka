@@ -25,6 +25,7 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
