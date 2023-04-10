@@ -165,17 +165,7 @@ class ReplicaManagerConcurrencyTest {
       time = time
     )
 
-    new ReplicaManager(
-      metrics = metrics,
-      config = config,
-      time = time,
-      scheduler = time.scheduler,
-      logManager = logManager,
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
-      metadataCache = metadataCache,
-      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterPartitionManager = new MockAlterPartitionManager(channel)
-    ) {
+    new ReplicaManager(config = config, metrics = metrics, time = time, scheduler = time.scheduler, logManager = logManager, quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""), metadataCache = metadataCache, logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size), alterPartitionManager = new MockAlterPartitionManager(channel), delayedRemoteFetchPurgatory = None) {
       override def createReplicaFetcherManager(
         metrics: Metrics,
         time: Time,

@@ -62,16 +62,7 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(
-      metrics = metrics,
-      config = configs.head,
-      time = time,
-      scheduler = scheduler,
-      logManager = logManagers.head,
-      quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
-      logDirFailureChannel = logDirFailureChannels.head,
-      alterPartitionManager = alterIsrManager)
+    val replicaManager = new ReplicaManager(config = configs.head, metrics = metrics, time = time, scheduler = scheduler, logManager = logManagers.head, quotaManagers = quotaManager, metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion), logDirFailureChannel = logDirFailureChannels.head, alterPartitionManager = alterIsrManager, delayedRemoteFetchPurgatory = None)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -120,16 +111,7 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(
-      metrics = metrics,
-      config = configs.head,
-      time = time,
-      scheduler = scheduler,
-      logManager = logManagers.head,
-      quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
-      logDirFailureChannel = logDirFailureChannels.head,
-      alterPartitionManager = alterIsrManager)
+    val replicaManager = new ReplicaManager(config = configs.head, metrics = metrics, time = time, scheduler = scheduler, logManager = logManagers.head, quotaManagers = quotaManager, metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion), logDirFailureChannel = logDirFailureChannels.head, alterPartitionManager = alterIsrManager, delayedRemoteFetchPurgatory = None)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

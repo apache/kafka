@@ -75,6 +75,7 @@ import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -122,7 +123,7 @@ public class RemoteLogManager implements Closeable {
     private final RemoteLogMetadataManager remoteLogMetadataManager;
 
     private final RemoteIndexCache indexCache;
-
+    private final RemoteStorageReaderThreadPool remoteStorageReaderThreadPool;
     private final RLMScheduledThreadPool rlmScheduledThreadPool;
 
     private final long delayInMs;
@@ -160,6 +161,8 @@ public class RemoteLogManager implements Closeable {
         indexCache = new RemoteIndexCache(1024, remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
+        remoteStorageReaderThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads(),
+                rlmConfig.remoteLogReaderMaxPendingTasks(), time);
     }
 
     private <T> T createDelegate(ClassLoader classLoader, String className) {
@@ -613,10 +616,6 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    /*
- WARNING: Not all code-paths through the below function have been covered by unit tests.
- Ensure that if you modify something you add tests!
- */
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
         int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes;
         TopicPartition tp = remoteStorageFetchInfo.topicPartition;
@@ -804,6 +803,49 @@ public class RemoteLogManager implements Closeable {
         }
 
         return offset.orElse(-1L);
+    }
+
+    /**
+     * A remote log read task returned by asyncRead(). The caller of asyncRead() can use this object to cancel a
+     * pending task or check if the task is done.
+     */
+    public class AsyncReadTask {
+
+        private final Future<Void> future;
+
+        AsyncReadTask(Future<Void> future) {
+            this.future = future;
+        }
+
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            boolean cancelled = future.cancel(mayInterruptIfRunning);
+            if (cancelled) {
+                // Removed the cancelled task from task queue
+                remoteStorageReaderThreadPool.purge();
+            }
+
+            return cancelled;
+        }
+
+        public boolean isCancelled() {
+            return future.isCancelled();
+        }
+
+        public boolean isDone() {
+            return future.isDone();
+        }
+    }
+
+    /**
+     * Submit a remote log read task.
+     *
+     * This method returns immediately. The read operation is executed in a thread pool.
+     * The callback will be called when the task is done.
+     *
+     * @throws java.util.concurrent.RejectedExecutionException if the task cannot be accepted for execution (task queue is full)
+     */
+    public Future<Void> asyncRead(RemoteStorageFetchInfo fetchInfo, Consumer<RemoteLogReadResult> callback) {
+        return remoteStorageReaderThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback));
     }
 
     void doHandleLeaderOrFollowerPartitions(TopicIdPartition topicPartition,

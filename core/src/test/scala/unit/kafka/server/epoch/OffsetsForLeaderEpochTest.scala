@@ -65,16 +65,7 @@ class OffsetsForLeaderEpochTest {
     when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     // create a replica manager with 1 partition that has 1 replica
-    replicaManager = new ReplicaManager(
-      metrics = metrics,
-      config = config,
-      time = time,
-      scheduler = null,
-      logManager = logManager,
-      quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
-      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterPartitionManager = alterIsrManager)
+    replicaManager = new ReplicaManager(config = config, metrics = metrics, time = time, scheduler = null, logManager = logManager, quotaManagers = quotaManager, metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion), logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size), alterPartitionManager = alterIsrManager, delayedRemoteFetchPurgatory = None)
     val partition = replicaManager.createPartition(tp)
     partition.setLog(mockLog, isFutureLog = false)
     partition.leaderReplicaIdOpt = Some(config.brokerId)
@@ -94,16 +85,7 @@ class OffsetsForLeaderEpochTest {
     when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     //create a replica manager with 1 partition that has 0 replica
-    replicaManager = new ReplicaManager(
-      metrics = metrics,
-      config = config,
-      time = time,
-      scheduler = null,
-      logManager = logManager,
-      quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
-      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterPartitionManager = alterIsrManager)
+    replicaManager = new ReplicaManager(config = config, metrics = metrics, time = time, scheduler = null, logManager = logManager, quotaManagers = quotaManager, metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion), logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size), alterPartitionManager = alterIsrManager, delayedRemoteFetchPurgatory = None)
     replicaManager.createPartition(tp)
 
     //Given
@@ -125,16 +107,7 @@ class OffsetsForLeaderEpochTest {
     when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     //create a replica manager with 0 partition
-    replicaManager = new ReplicaManager(
-      metrics = metrics,
-      config = config,
-      time = time,
-      scheduler = null,
-      logManager = logManager,
-      quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
-      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterPartitionManager = alterIsrManager)
+    replicaManager = new ReplicaManager(config = config, metrics = metrics, time = time, scheduler = null, logManager = logManager, quotaManagers = quotaManager, metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion), logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size), alterPartitionManager = alterIsrManager, delayedRemoteFetchPurgatory = None)
 
     //Given
     val epochRequested: Integer = 5

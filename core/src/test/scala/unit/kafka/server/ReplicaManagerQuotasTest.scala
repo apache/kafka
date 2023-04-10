@@ -297,16 +297,7 @@ class ReplicaManagerQuotasTest {
 
     val leaderBrokerId = configs.head.brokerId
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(
-      metrics = metrics,
-      config = configs.head,
-      time = time,
-      scheduler = scheduler,
-      logManager = logManager,
-      quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId, configs.head.interBrokerProtocolVersion),
-      logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
-      alterPartitionManager = alterIsrManager)
+    replicaManager = new ReplicaManager(config = configs.head, metrics = metrics, time = time, scheduler = scheduler, logManager = logManager, quotaManagers = quotaManager, metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId, configs.head.interBrokerProtocolVersion), logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size), alterPartitionManager = alterIsrManager, delayedRemoteFetchPurgatory = None)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
