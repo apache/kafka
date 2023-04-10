@@ -1109,8 +1109,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         return null;
                     }
 
-                    // TODO: We may want to add a new ConfigBackingStore method for stopping a connector so that
-                    //       these operations can be performed in a single (possibly-atomic) call
                     // We write the task configs first since, if we fail between then and writing the target state, the
                     // cluster is still kept in a healthy state. A RUNNING connector with zero tasks is acceptable (although,
                     // if the connector is reassigned during the ensuing rebalance, it is likely that it will immediately generate
