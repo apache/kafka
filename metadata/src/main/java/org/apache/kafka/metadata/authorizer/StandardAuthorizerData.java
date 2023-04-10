@@ -33,9 +33,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
-import org.pcollections.HashPMap;
-import org.pcollections.HashTreePMap;
-import org.pcollections.TreePSet;
+import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.server.immutable.ImmutableNavigableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -198,14 +197,14 @@ public class StandardAuthorizerData {
                 throw new RuntimeException("An ACL with ID " + id + " already exists.");
             }
 
-            HashPMap<Uuid, StandardAcl> aclsById = aclCacheSnapshot.aclsById.plus(id, acl);
+            ImmutableMap<Uuid, StandardAcl> aclsById = aclCacheSnapshot.aclsById.updated(id, acl);
 
             if (aclCacheSnapshot.aclsByResource.contains(acl)) {
                 throw new RuntimeException("Unable to add the ACL with ID " + id +
                     " to aclsByResource");
             }
 
-            TreePSet<StandardAcl> aclsByResource = aclCacheSnapshot.aclsByResource.plus(acl);
+            ImmutableNavigableSet<StandardAcl> aclsByResource = aclCacheSnapshot.aclsByResource.added(acl);
             aclCache = new AclCache(aclsByResource, aclsById);
             log.trace("Added ACL {}: {}", id, acl);
         } catch (Throwable e) {
@@ -221,14 +220,14 @@ public class StandardAuthorizerData {
             if (acl == null) {
                 throw new RuntimeException("ID " + id + " not found in aclsById.");
             }
-            HashPMap<Uuid, StandardAcl> aclsById = aclCacheSnapshot.aclsById.minus(id);
+            ImmutableMap<Uuid, StandardAcl> aclsById = aclCacheSnapshot.aclsById.removed(id);
 
             if (!aclCacheSnapshot.aclsByResource.contains(acl)) {
                 throw new RuntimeException("Unable to remove the ACL with ID " + id +
                     " from aclsByResource");
             }
 
-            TreePSet<StandardAcl> aclsByResource = aclCacheSnapshot.aclsByResource.minus(acl);
+            ImmutableNavigableSet<StandardAcl> aclsByResource = aclCacheSnapshot.aclsByResource.removed(acl);
 
             aclCache = new AclCache(aclsByResource, aclsById);
             log.trace("Removed ACL {}: {}", id, acl);
@@ -667,18 +666,18 @@ public class StandardAuthorizerData {
         /**
          * Contains all of the current ACLs sorted by (resource type, resource name).
          */
-        private final TreePSet<StandardAcl> aclsByResource;
+        private final ImmutableNavigableSet<StandardAcl> aclsByResource;
 
         /**
          * Contains all of the current ACLs indexed by UUID.
          */
-        private final HashPMap<Uuid, StandardAcl> aclsById;
+        private final ImmutableMap<Uuid, StandardAcl> aclsById;
 
         private AclCache() {
-            this(TreePSet.empty(), HashTreePMap.empty());
+            this(ImmutableNavigableSet.empty(), ImmutableMap.empty());
         }
 
-        private AclCache(final TreePSet<StandardAcl> aclsByResource, final HashPMap<Uuid, StandardAcl> aclsById) {
+        private AclCache(final ImmutableNavigableSet<StandardAcl> aclsByResource, final ImmutableMap<Uuid, StandardAcl> aclsById) {
             this.aclsByResource = aclsByResource;
             this.aclsById = aclsById;
         }
