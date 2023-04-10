@@ -799,6 +799,8 @@ class TransactionStateManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any()
     )
 
