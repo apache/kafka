@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
@@ -76,9 +77,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         topicFilter = config.topicFilter();
         groupFilter = config.groupFilter();
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
-        scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("checkpoint-source-admin"));
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
@@ -109,14 +110,15 @@ public class MirrorCheckpointConnector extends SourceConnector {
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         // if the replication is disabled, known consumer group is empty, or checkpoint emission is
         // disabled by setting 'emit.checkpoints.enabled' to false, the interval of checkpoint emission
-        // will be negative and no 'MirrorHeartbeatTask' will be created
+        // will be negative and no 'MirrorCheckpointTask' will be created
         if (!config.enabled() || knownConsumerGroups.isEmpty()
                 || config.emitCheckpointsInterval().isNegative()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
-        return ConnectorUtils.groupPartitions(knownConsumerGroups, numTasks).stream()
-                .map(config::taskConfigForConsumerGroups)
+        List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(knownConsumerGroups, numTasks);
+        return IntStream.range(0, numTasks)
+                .mapToObj(i -> config.taskConfigForConsumerGroups(groupsPartitioned.get(i), i))
                 .collect(Collectors.toList());
     }
 

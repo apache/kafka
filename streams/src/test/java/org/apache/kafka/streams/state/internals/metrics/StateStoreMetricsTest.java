@@ -301,32 +301,6 @@ public class StateStoreMetricsTest {
     }
 
     @Test
-    public void shouldGetExpiredWindowRecordDropSensor() {
-        final String metricName = "expired-window-record-drop";
-        final String descriptionOfRate = "The average number of dropped records due to an expired window per second";
-        final String descriptionOfCount = "The total number of dropped records due to an expired window";
-        when(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.INFO))
-            .thenReturn(expectedSensor);
-        when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
-
-        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor =
-                StateStoreMetrics.expiredWindowRecordDropSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                    expectedSensor,
-                    "stream-" + STORE_TYPE + "-metrics",
-                    storeTagMap,
-                    metricName,
-                    descriptionOfRate,
-                    descriptionOfCount
-                )
-            );
-            assertThat(sensor, is(expectedSensor));
-        }
-    }
-
-    @Test
     public void shouldGetRecordE2ELatencySensor() {
         final String metricName = "record-e2e-latency";
         final String e2eLatencyDescription =

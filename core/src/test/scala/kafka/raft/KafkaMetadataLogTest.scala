@@ -1041,6 +1041,7 @@ object KafkaMetadataLogTest {
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,
+      new ByteArraySerde,
       time,
       time.scheduler,
       metadataLogConfig

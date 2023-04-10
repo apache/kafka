@@ -21,14 +21,18 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.List;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -102,9 +106,33 @@ public class LogicalKeyValueSegmentsTest {
     }
 
     @Test
+    public void shouldCreateReservedSegments() {
+        final LogicalKeyValueSegment reservedSegment1 = segments.createReservedSegment(-1, "reserved-1");
+        final LogicalKeyValueSegment reservedSegment2 = segments.createReservedSegment(-2, "reserved-2");
+
+        final File rocksdbDir = new File(new File(context.stateDir(), DB_FILE_DIR), STORE_NAME);
+        assertTrue(rocksdbDir.isDirectory());
+
+        assertTrue(reservedSegment1.isOpen());
+        assertTrue(reservedSegment2.isOpen());
+    }
+
+    @Test
+    public void shouldNotCreateReservedSegmentWithNonNegativeId() {
+        assertThrows(IllegalArgumentException.class, () -> segments.createReservedSegment(0, "reserved"));
+        assertThrows(IllegalArgumentException.class, () -> segments.createReservedSegment(1, "reserved"));
+    }
+
+    @Test
+    public void shouldNotCreateReservedSegmentFromRegularMethod() {
+        assertThrows(IllegalArgumentException.class, () -> segments.getOrCreateSegmentIfLive(-1, context, 0));
+        assertThrows(IllegalArgumentException.class, () -> segments.getOrCreateSegment(-1, context));
+    }
+
+    @Test
     public void shouldCleanupSegmentsThatHaveExpired() {
         final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0);
-        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(0, context, SEGMENT_INTERVAL * 2L);
+        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
         final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(3, context, SEGMENT_INTERVAL * 3L);
         final LogicalKeyValueSegment segment4 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
 
@@ -114,6 +142,20 @@ public class LogicalKeyValueSegmentsTest {
         assertEquals(2, allSegments.size());
         assertEquals(segment3, allSegments.get(0));
         assertEquals(segment4, allSegments.get(1));
+    }
+
+    @Test
+    public void shouldNotCleanUpReservedSegments() {
+        final LogicalKeyValueSegment reservedSegment = segments.createReservedSegment(-1, "reserved");
+        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
+        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
+
+        segments.cleanupExpiredSegments(SEGMENT_INTERVAL * 6L);
+
+        final List<LogicalKeyValueSegment> allSegments = segments.allSegments(true);
+        assertEquals(1, allSegments.size());
+        assertEquals(segment2, allSegments.get(0));
+        assertEquals(reservedSegment, segments.getReservedSegment(-1));
     }
 
     @Test
@@ -129,6 +171,9 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldGetSegmentsWithinTimeRange() {
+        // presence of reserved segment changes nothing (reserved segments are not returned from segments())
+        segments.createReservedSegment(-1, "reserved");
+
         final long streamTime = updateStreamTimeAndCreateSegment(4);
         segments.getOrCreateSegmentIfLive(0, context, streamTime);
         segments.getOrCreateSegmentIfLive(2, context, streamTime);
@@ -145,6 +190,9 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldGetSegmentsWithinBackwardTimeRange() {
+        // presence of reserved segment changes nothing (reserved segments are not returned from segments())
+        segments.createReservedSegment(-1, "reserved");
+
         final long streamTime = updateStreamTimeAndCreateSegment(4);
         segments.getOrCreateSegmentIfLive(0, context, streamTime);
         segments.getOrCreateSegmentIfLive(2, context, streamTime);
@@ -161,9 +209,24 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldClearSegmentsOnClose() {
-        segments.getOrCreateSegmentIfLive(0, context, 0L);
+        final LogicalKeyValueSegment segment = segments.getOrCreateSegmentIfLive(0, context, 0L);
+        final LogicalKeyValueSegment reservedSegment = segments.createReservedSegment(-1, "reserved");
+
+        // add data and open some iterators to verify that they are properly closed later
+        segment.put(new Bytes("k".getBytes()), "v".getBytes());
+        reservedSegment.put(new Bytes("k".getBytes()), "v".getBytes());
+        final KeyValueIterator<Bytes, byte[]> all1 = segment.all();
+        final KeyValueIterator<Bytes, byte[]> all2 = reservedSegment.all();
+        assertTrue(all1.hasNext());
+        assertTrue(all2.hasNext());
+
         segments.close();
+
         assertThat(segments.getSegmentForTimestamp(0), is(nullValue()));
+        assertThat(segments.getReservedSegment(-1), is(nullValue()));
+        // verify iterators closed as well
+        assertThrows(InvalidStateStoreException.class, all1::hasNext);
+        assertThrows(InvalidStateStoreException.class, all2::hasNext);
     }
 
     private long updateStreamTimeAndCreateSegment(final int segment) {
