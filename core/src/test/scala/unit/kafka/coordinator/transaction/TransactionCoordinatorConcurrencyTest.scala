@@ -498,7 +498,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   abstract class TxnOperation[R] extends Operation {
     @volatile var result: Option[R] = None
+    @volatile var results: Map[TopicPartition, R] = _
+
     def resultCallback(r: R): Unit = this.result = Some(r)
+    
   }
 
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {

@@ -17,15 +17,16 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -103,20 +104,23 @@ public interface MigrationClient {
         ZkMigrationLeadershipState state
     );
 
+    ZkMigrationLeadershipState removeDeletedAcls(
+        ResourcePattern resourcePattern,
+        List<AccessControlEntry> deletedAcls,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeAddedAcls(
+        ResourcePattern resourcePattern,
+        List<AccessControlEntry> addedAcls,
+        ZkMigrationLeadershipState state
+    );
+
+    void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer);
+
     void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer);
 
     Set<Integer> readBrokerIds();
 
     Set<Integer> readBrokerIdsFromTopicAssignments();
-
-    /**
-     * Convert the Metadata delta to Zookeeper writes and persist the changes. On successful
-     * write, update the migration state with new metadata offset and epoch.
-     * @param delta Changes in the cluster metadata
-     * @param image New metadata after the changes in `delta` are applied
-     * @param state Current migration state before writing to Zookeeper.
-     */
-    ZkMigrationLeadershipState writeMetadataDeltaToZookeeper(MetadataDelta delta,
-                                                             MetadataImage image,
-                                                             ZkMigrationLeadershipState state);
 }

@@ -279,6 +279,7 @@ class ReplicaAlterLogDirsThreadTest {
     val expectedFetchParams = new FetchParams(
       ApiKeys.FETCH.latestVersion,
       FetchRequest.FUTURE_LOCAL_REPLICA_ID,
+      -1,
       0L,
       0,
       config.replicaFetchResponseMaxBytes,

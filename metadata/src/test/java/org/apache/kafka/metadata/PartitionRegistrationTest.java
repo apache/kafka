@@ -129,7 +129,6 @@ public class PartitionRegistrationTest {
             setReplicas(Arrays.asList(1, 2, 4)));
         assertEquals(new PartitionRegistration(new int[] {1, 2, 4},
             new int[] {1, 2, 4}, Replicas.NONE, Replicas.NONE, 1, LeaderRecoveryState.RECOVERED, 100, 202), partition2);
-        assertFalse(partition2.isReassigning());
     }
 
     @Property
