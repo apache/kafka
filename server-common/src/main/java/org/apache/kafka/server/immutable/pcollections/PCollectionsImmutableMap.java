@@ -38,11 +38,6 @@ public class PCollectionsImmutableMap<K, V> implements ImmutableMap<K, V> {
     }
 
     @Override
-    public HashPMap<K, V> underlying() {
-        return underlying;
-    }
-
-    @Override
     public ImmutableMap<K, V> updated(K key, V value) {
         return new PCollectionsImmutableMap<>(underlying().plus(key, value));
     }
@@ -199,5 +194,9 @@ public class PCollectionsImmutableMap<K, V> implements ImmutableMap<K, V> {
             "underlying=" + underlying() +
             '}';
     }
-    
+
+    // package-private for testing
+    HashPMap<K, V> underlying() {
+        return underlying;
+    }
 }

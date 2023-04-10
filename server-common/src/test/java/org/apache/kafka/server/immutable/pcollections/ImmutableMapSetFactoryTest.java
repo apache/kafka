@@ -27,21 +27,21 @@ public class ImmutableMapSetFactoryTest {
 
     @Test
     public void testEmptyMap() {
-        Assertions.assertEquals(HashTreePMap.empty(), FACTORY.emptyMap().underlying());
+        Assertions.assertEquals(HashTreePMap.empty(), ((PCollectionsImmutableMap<?, ?>)FACTORY.emptyMap()).underlying());
     }
 
     @Test
     public void testSingletonMap() {
-        Assertions.assertEquals(HashTreePMap.singleton(1, 2), FACTORY.singletonMap(1, 2).underlying());
+        Assertions.assertEquals(HashTreePMap.singleton(1, 2), ((PCollectionsImmutableMap<?, ?>)FACTORY.singletonMap(1, 2)).underlying());
     }
 
     @Test
     public void testEmptySet() {
-        Assertions.assertEquals(HashTreePSet.empty(), FACTORY.emptySet().underlying());
+        Assertions.assertEquals(HashTreePSet.empty(), ((PCollectionsImmutableSet<?>)FACTORY.emptySet()).underlying());
     }
 
     @Test
     public void testSingletonSet() {
-        Assertions.assertEquals(HashTreePSet.singleton(1), FACTORY.singletonSet(1).underlying());
+        Assertions.assertEquals(HashTreePSet.singleton(1), ((PCollectionsImmutableSet<?>)FACTORY.singletonSet(1)).underlying());
     }
 }

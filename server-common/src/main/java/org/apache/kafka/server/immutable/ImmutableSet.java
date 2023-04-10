@@ -27,11 +27,6 @@ import java.util.Set;
  */
 public interface ImmutableSet<E> extends Set<E> {
     /**
-     * @return the underlying persistent set
-     */
-    Object underlying();
-
-    /**
      * @param e the element
      * @return a wrapped persistent set that differs from this one in that the given element is added (if necessary)
      */

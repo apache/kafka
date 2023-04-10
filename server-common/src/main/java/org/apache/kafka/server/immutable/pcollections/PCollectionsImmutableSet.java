@@ -32,16 +32,10 @@ import java.util.stream.Stream;
 public class PCollectionsImmutableSet<E> implements ImmutableSet<E> {
     private final MapPSet<E> underlying;
 
-
     public PCollectionsImmutableSet(MapPSet<E> set) {
         this.underlying = Objects.requireNonNull(set);
     }
 
-    @Override
-    public MapPSet<E> underlying() {
-        return this.underlying;
-    }
-    
     @Override
     public ImmutableSet<E> added(E e) {
         return new PCollectionsImmutableSet<>(underlying().plus(e));
@@ -167,5 +161,10 @@ public class PCollectionsImmutableSet<E> implements ImmutableSet<E> {
         return "PCollectionsImmutableSet{" +
             "underlying=" + underlying() +
             '}';
+    }
+
+    // package-private for testing
+    MapPSet<E> underlying() {
+        return this.underlying;
     }
 }

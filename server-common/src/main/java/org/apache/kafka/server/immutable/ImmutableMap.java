@@ -28,11 +28,6 @@ import java.util.Map;
  */
 public interface ImmutableMap<K, V> extends Map<K, V> {
     /**
-     * @return the underlying persistent map
-     */
-    Object underlying();
-
-    /**
      * @param key the key
      * @param value the value
      * @return a wrapped persistent map that differs from this one in that the given mapping is added (if necessary)
