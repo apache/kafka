@@ -42,7 +42,7 @@ object KafkaRequestHandler {
   private val threadCurrentRequest = new ThreadLocal[RequestChannel.Request]
 
   // For testing
-  private var bypassThreadCheck = false
+  @volatile private var bypassThreadCheck = false
   def setBypassThreadCheck(bypassCheck: Boolean): Unit = {
     bypassThreadCheck = bypassCheck
   }
@@ -153,7 +153,9 @@ class KafkaRequestHandler(id: Int,
             request.releaseBuffer()
           }
 
-        case RequestChannel.WakeupRequest => // We should handle this in receiveRequest by polling callbackQueue.
+        case RequestChannel.WakeupRequest => 
+          // We should handle this in receiveRequest by polling callbackQueue.
+          warn("Received a wakeup request outside of typical usage.")
 
         case null => // continue
       }

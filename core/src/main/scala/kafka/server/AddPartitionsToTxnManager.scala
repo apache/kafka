@@ -44,7 +44,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
   
   def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
     nodesToTransactions.synchronized {
-      // Check if we have already (either node or individual transaction). Add the Node if it isn't there.
+      // Check if we have already have either node or individual transaction. Add the Node if it isn't there.
       val currentNodeAndTransactionData = nodesToTransactions.getOrElseUpdate(node,
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
@@ -83,27 +83,27 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
         error(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with an " +
           "authentication exception.", response.authenticationException)
         transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-          callback(buildErrorMap(txnId, transactionDataAndCallbacks.transactionData, Errors.forException(response.authenticationException()).code()))
+          callback(buildErrorMap(txnId, Errors.forException(response.authenticationException()).code()))
         }
       } else if (response.versionMismatch != null) {
         // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it. 
         // In this case, skip verification.
-        error(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with invalid version exception. This suggests verification is not supported." +
+        warn(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with invalid version exception. This suggests verification is not supported." +
               s"Continuing handling the produce request.")
         transactionDataAndCallbacks.callbacks.values.foreach(_(Map.empty))
       } else {
         val addPartitionsToTxnResponseData = response.responseBody.asInstanceOf[AddPartitionsToTxnResponse].data
         if (addPartitionsToTxnResponseData.errorCode != 0) {
-          error(s"AddPartitionsToTxnRequest for broker ${config.brokerId}  returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
-          // The client should not be exposed to CLUSTER_AUTHORIZATION_FAILED so modify the error to invalid record -- to signify the verification did not complete.
-          // Older clients return with INVALID_RECORD
+          error(s"AddPartitionsToTxnRequest for broker ${config.brokerId} returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
+          // The client should not be exposed to CLUSTER_AUTHORIZATION_FAILED so modify the error to signify the verification did not complete.
+          // Older clients return with INVALID_RECORD and newer ones can return with INVALID_TXN_STATE.
           val finalError = if (addPartitionsToTxnResponseData.errorCode() == Errors.CLUSTER_AUTHORIZATION_FAILED.code)
             Errors.INVALID_RECORD.code
           else 
             addPartitionsToTxnResponseData.errorCode()
           
           transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-            callback(buildErrorMap(txnId, transactionDataAndCallbacks.transactionData, finalError))
+            callback(buildErrorMap(txnId, finalError))
           }
         } else {
           addPartitionsToTxnResponseData.resultsByTransaction().forEach { transactionResult =>
@@ -133,7 +133,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       wakeup()
     }
     
-    private def buildErrorMap(transactionalId: String, addPartitionsToTxnCollection: AddPartitionsToTxnTransactionCollection, errorCode: Short): Map[TopicPartition, Errors] = {
+    private def buildErrorMap(transactionalId: String, errorCode: Short): Map[TopicPartition, Errors] = {
       val errors = new mutable.HashMap[TopicPartition, Errors]()
       val transactionData = transactionDataAndCallbacks.transactionData.find(transactionalId)
       transactionData.topics.forEach { topic =>
