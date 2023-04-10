@@ -29,7 +29,7 @@ import java.util.Map;
 public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, Void, T> {
 
     private static final int NEW_OLD_FLAG_SIZE = 1;
-    private static final int UINT32_SIZE = 4;
+    private static final int MAX_VARINT_LENGTH = 5;
     private Serializer<T> inner;
     private boolean isUpgrade;
 
@@ -113,9 +113,9 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
                 throw new StreamsException("Both old and new values are not null (" + data.oldValue
                         + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
             } else {
-                final int capacity = UINT32_SIZE + newDataLength + oldDataLength + NEW_OLD_FLAG_SIZE;
+                final int capacity = MAX_VARINT_LENGTH + newDataLength + oldDataLength + NEW_OLD_FLAG_SIZE;
                 buf = ByteBuffer.allocate(capacity);
-                ByteUtils.writeUnsignedInt(buf, newDataLength);
+                ByteUtils.writeVarint(newDataLength, buf);
                 buf.put(newData).put(oldData).put((byte) 2);
             }
         } else if (newValueIsNotNull) {
@@ -130,7 +130,11 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
             throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
         }
 
-        return buf.array();
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        return serialized;
     }
 
     @Override

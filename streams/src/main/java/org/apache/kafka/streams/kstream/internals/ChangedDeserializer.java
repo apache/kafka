@@ -75,13 +75,12 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             buffer.get(newData);
             isLatest = true;
         } else if (newOldFlag == (byte) 2) {
-            final int newDataLength = Math.toIntExact(ByteUtils.readUnsignedInt(buffer));
+            final int newDataLength = ByteUtils.readVarint(buffer);
             newData = new byte[newDataLength];
-
-            final int oldDataLength = data.length - Integer.BYTES - newDataLength - NEW_OLD_FLAG_SIZE;
-            oldData = new byte[oldDataLength];
-
             buffer.get(newData);
+
+            final int oldDataLength = buffer.capacity() - buffer.position() - NEW_OLD_FLAG_SIZE;
+            oldData = new byte[oldDataLength];
             buffer.get(oldData);
             isLatest = true;
         } else if (newOldFlag == (byte) 3) {
