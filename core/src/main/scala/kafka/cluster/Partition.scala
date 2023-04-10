@@ -576,10 +576,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def hasOngoingTransaction(producerId: Long): Boolean = {
-    leaderLogIfLocal match {
-      case Some(leaderLog) => leaderLog.hasOngoingTransaction(producerId)
-      case _ => false
-    }
+    leaderLogIfLocal.exists(leaderLog => leaderLog.hasOngoingTransaction(producerId))
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition

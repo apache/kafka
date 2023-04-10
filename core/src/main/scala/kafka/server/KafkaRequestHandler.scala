@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.network._
 import kafka.utils._
-import kafka.server.KafkaRequestHandler.{currentRequest, threadRequestChannel}
+import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChannel}
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -39,7 +39,7 @@ trait ApiRequestHandler {
 object KafkaRequestHandler {
   // Support for scheduling callbacks on a request thread.
   private val threadRequestChannel = new ThreadLocal[RequestChannel]
-  private val currentRequest = new ThreadLocal[RequestChannel.Request]
+  private val threadCurrentRequest = new ThreadLocal[RequestChannel.Request]
 
   // For testing
   private var bypassThreadCheck = false
@@ -48,7 +48,7 @@ object KafkaRequestHandler {
   }
   
   def currentRequestOnThread(): RequestChannel.Request = {
-    currentRequest.get()
+    threadCurrentRequest.get()
   }
 
   /**
@@ -57,9 +57,10 @@ object KafkaRequestHandler {
    * @param fun Callback function to execute
    * @return Wrapped callback that would execute `fun` on a request thread
    */
-  def wrap[T](fun: T => Unit)(request: RequestChannel.Request): T => Unit = {
+  def wrap[T](fun: T => Unit): T => Unit = {
     val requestChannel = threadRequestChannel.get()
-    if (requestChannel == null) {
+    val currentRequest = threadCurrentRequest.get()
+    if (requestChannel == null || currentRequest == null) {
       if (!bypassThreadCheck)
         throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
       T => fun(T)
@@ -67,7 +68,7 @@ object KafkaRequestHandler {
       T => {
         // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
         // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), request))
+        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
       }
     }
   }
@@ -123,7 +124,7 @@ class KafkaRequestHandler(id: Int,
               originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds())
             }
             
-            currentRequest.set(originalRequest)
+            threadCurrentRequest.set(originalRequest)
             callback.fun()
             if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
               originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
@@ -133,14 +134,14 @@ class KafkaRequestHandler(id: Int,
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
-            currentRequest.remove()
+            threadCurrentRequest.remove()
           }
 
         case request: RequestChannel.Request =>
           try {
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
-            currentRequest.set(request)
+            threadCurrentRequest.set(request)
             apis.handle(request, requestLocal)
           } catch {
             case e: FatalExitError =>
@@ -148,7 +149,7 @@ class KafkaRequestHandler(id: Int,
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
-            currentRequest.remove()
+            threadCurrentRequest.remove()
             request.releaseBuffer()
           }
 

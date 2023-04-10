@@ -66,7 +66,7 @@ class KafkaRequestHandlerTest {
 
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       time.sleep(2)
-      KafkaRequestHandler.wrap(callback(_: Int))(request)(1)
+      KafkaRequestHandler.wrap(callback(_: Int))(1)
       request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
 

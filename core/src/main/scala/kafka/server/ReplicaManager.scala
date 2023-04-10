@@ -740,7 +740,7 @@ class ReplicaManager(val config: KafkaConfig,
           .setVerifyOnly(true)
           .setTopics(topicCollection)
 
-        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))(KafkaRequestHandler.currentRequestOnThread())))
+        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
