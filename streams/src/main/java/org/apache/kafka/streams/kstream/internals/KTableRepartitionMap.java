@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -25,6 +26,8 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
+import java.util.Map;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -76,6 +79,48 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
     private class KTableMapProcessor extends ContextualProcessor<K, Change<V>, K1, Change<V1>> {
 
+        private boolean isNotUpgrade;
+
+        @SuppressWarnings("checkstyle:cyclomaticComplexity")
+        private boolean isNotUpgrade(final Map<String, ?> configs) {
+            final Object upgradeFrom = configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+            if (upgradeFrom == null) {
+                return true;
+            }
+
+            switch ((String) upgradeFrom) {
+                case StreamsConfig.UPGRADE_FROM_0100:
+                case StreamsConfig.UPGRADE_FROM_0101:
+                case StreamsConfig.UPGRADE_FROM_0102:
+                case StreamsConfig.UPGRADE_FROM_0110:
+                case StreamsConfig.UPGRADE_FROM_10:
+                case StreamsConfig.UPGRADE_FROM_11:
+                case StreamsConfig.UPGRADE_FROM_20:
+                case StreamsConfig.UPGRADE_FROM_21:
+                case StreamsConfig.UPGRADE_FROM_22:
+                case StreamsConfig.UPGRADE_FROM_23:
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                case StreamsConfig.UPGRADE_FROM_33:
+                case StreamsConfig.UPGRADE_FROM_34:
+                    return false;
+                default:
+                    return true;
+            }
+        }
+
+        @Override
+        public void init(final ProcessorContext<K1, Change<V1>> context) {
+            super.init(context);
+            isNotUpgrade = isNotUpgrade(context().appConfigs());
+        }
+
         /**
          * @throws StreamsException if key is null
          */
@@ -94,12 +139,18 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
-            if (oldPair != null && oldPair.key != null && oldPair.value != null) {
-                context().forward(record.withKey(oldPair.key).withValue(new Change<>(null, oldPair.value)));
-            }
+            final boolean oldPairNotNull = oldPair != null && oldPair.key != null && oldPair.value != null;
+            final boolean newPairNotNull = newPair != null && newPair.key != null && newPair.value != null;
+            if (isNotUpgrade && oldPairNotNull && newPairNotNull && oldPair.key.equals(newPair.key)) {
+                context().forward(record.withKey(oldPair.key).withValue(new Change<>(newPair.value, oldPair.value)));
+            } else {
+                if (oldPairNotNull) {
+                    context().forward(record.withKey(oldPair.key).withValue(new Change<>(null, oldPair.value)));
+                }
 
-            if (newPair != null && newPair.key != null && newPair.value != null) {
-                context().forward(record.withKey(newPair.key).withValue(new Change<>(newPair.value, null)));
+                if (newPairNotNull) {
+                    context().forward(record.withKey(newPair.key).withValue(new Change<>(newPair.value, null)));
+                }
             }
 
         }
