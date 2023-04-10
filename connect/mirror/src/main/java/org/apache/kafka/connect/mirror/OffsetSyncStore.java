@@ -44,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *     <li>Invariant A: syncs[0] is the latest offset sync from the syncs topic</li>
  *     <li>Invariant B: For each i,j, i < j, syncs[i] != syncs[j]: syncs[i].upstream <= syncs[j].upstream + 2^j - 2^i</li>
  *     <li>Invariant C: For each i,j, i < j, syncs[i] != syncs[j]: syncs[j].upstream + 2^(i-2) <= syncs[i].upstream</li>
+ *     <li>Invariant D: syncs[63] is the earliest offset sync from the syncs topic which was not eligible for compaction</li>
  * </ul>
  * <p>The above invariants ensure that the store is kept updated upon receipt of each sync, and that distinct
  * offset syncs are separated by approximately exponential space. They can be checked locally (by comparing all adjacent

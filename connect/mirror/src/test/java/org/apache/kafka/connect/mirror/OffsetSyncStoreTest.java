@@ -127,6 +127,7 @@ public class OffsetSyncStoreTest {
             }
 
             // After seeing new offsets, we still cannot translate earlier than the latest startup offset
+            // Invariant D: the last sync from the initial read-to-end is still stored
             assertSparseSync(store, 1000, -1);
 
             // We can translate offsets between the latest startup offset and the latest offset with variable precision
@@ -163,6 +164,10 @@ public class OffsetSyncStoreTest {
                 store.start();
                 for (long offset = 0; offset <= iterations; offset += step) {
                     store.sync(tp, offset, offset);
+                    // Invariant A: the latest sync is present
+                    assertEquals(offset, store.syncFor(tp, 0).upstreamOffset());
+                    // Invariant D: the earliest sync is present
+                    assertEquals(0L, store.syncFor(tp, 63).upstreamOffset());
                     int count = countDistinctStoredSyncs(store, tp);
                     int diff = count - lastCount;
                     assertTrue(diff >= -1,
