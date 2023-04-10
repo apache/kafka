@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
@@ -45,8 +44,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
+import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.slf4j.Logger;
@@ -54,26 +52,22 @@ import org.slf4j.LoggerFactory;
 import scala.Option;
 import scala.collection.JavaConverters;
 
-import java.io.BufferedWriter;
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStreamWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -135,13 +129,12 @@ public class RemoteLogManager implements Closeable {
      * @param logDir    directory of Kafka log segments.
      * @param time      Time instance.
      * @param fetchLog  function to get UnifiedLog instance for a given topic.
-     * @throws Exception
      */
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,
                             String logDir,
                             Time time,
-                            Function<TopicPartition, Optional<UnifiedLog>> fetchLog) throws Exception {
+                            Function<TopicPartition, Optional<UnifiedLog>> fetchLog) {
 
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
@@ -504,14 +497,16 @@ public class RemoteLogManager implements Closeable {
                         logger.debug("No segments found to be copied for partition {} with copiedOffset: {} and active segment's base-offset: {}",
                                 topicIdPartition, copiedOffset, activeSegBaseOffset);
                     } else {
-                        for (LogSegment segment : sortedSegments.subList(0, activeSegIndex)) {
+                        ListIterator<LogSegment> logSegmentsIter = sortedSegments.subList(0, activeSegIndex).listIterator();
+                        while (logSegmentsIter.hasNext()) {
+                            LogSegment segment = logSegmentsIter.next();
                             if (isCancelled() || !isLeader()) {
                                 logger.info("Skipping copying log segments as the current task state is changed, cancelled: {} leader:{}",
                                         isCancelled(), isLeader());
                                 return;
                             }
 
-                            copyLogSegment(log, segment);
+                            copyLogSegment(log, segment, getNextSegmentBaseOffset(activeSegBaseOffset, logSegmentsIter));
                         }
                     }
                 } else {
@@ -526,18 +521,29 @@ public class RemoteLogManager implements Closeable {
             }
         }
 
-        private void copyLogSegment(UnifiedLog log, LogSegment segment) throws InterruptedException, ExecutionException, RemoteStorageException, IOException {
+        private long getNextSegmentBaseOffset(long activeSegBaseOffset, ListIterator<LogSegment> logSegmentsIter) {
+            long nextSegmentBaseOffset;
+            if (logSegmentsIter.hasNext()) {
+                nextSegmentBaseOffset = logSegmentsIter.next().baseOffset();
+                logSegmentsIter.previous();
+            } else {
+                nextSegmentBaseOffset = activeSegBaseOffset;
+            }
+
+            return nextSegmentBaseOffset;
+        }
+
+        private void copyLogSegment(UnifiedLog log, LogSegment segment, long nextSegmentBaseOffset) throws InterruptedException, ExecutionException, RemoteStorageException, IOException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
 
             logger.info("Copying {} to remote storage.", logFileName);
             RemoteLogSegmentId id = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
 
-            long nextOffset = segment.readNextOffset();
-            long endOffset = nextOffset - 1;
-            File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextOffset).orElse(null);
+            long endOffset = nextSegmentBaseOffset - 1;
+            File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextSegmentBaseOffset).orElse(null);
 
-            List<EpochEntry> epochEntries = getLeaderEpochCheckpoint(log, segment.baseOffset(), nextOffset).read();
+            List<EpochEntry> epochEntries = getLeaderEpochCheckpoint(log, segment.baseOffset(), nextSegmentBaseOffset).read();
             Map<Integer, Long> segmentLeaderEpochs = new HashMap<>(epochEntries.size());
             epochEntries.forEach(entry -> segmentLeaderEpochs.put(entry.epoch, entry.startOffset));
 
@@ -547,7 +553,7 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
 
-            ByteBuffer leaderEpochsIndex = getLeaderEpochCheckpoint(log, -1, nextOffset).readAsByteBuffer();
+            ByteBuffer leaderEpochsIndex = getLeaderEpochCheckpoint(log, -1, nextSegmentBaseOffset).readAsByteBuffer();
             LogSegmentData segmentData = new LogSegmentData(logFile.toPath(), toPathIfExists(segment.lazyOffsetIndex().get().file()),
                     toPathIfExists(segment.lazyTimeIndex().get().file()), Optional.ofNullable(toPathIfExists(segment.txnIndex().file())),
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
@@ -647,29 +653,6 @@ public class RemoteLogManager implements Closeable {
             }
         }
 
-    }
-
-    static class InMemoryLeaderEpochCheckpoint implements LeaderEpochCheckpoint {
-        private List<EpochEntry> epochs = Collections.emptyList();
-
-        public void write(Collection<EpochEntry> epochs) {
-            this.epochs = new ArrayList<>(epochs);
-        }
-
-        public List<EpochEntry> read() {
-            return Collections.unmodifiableList(epochs);
-        }
-
-        public ByteBuffer readAsByteBuffer() throws IOException {
-            ByteArrayOutputStream stream = new ByteArrayOutputStream();
-            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8));) {
-                CheckpointFile.CheckpointWriteBuffer<EpochEntry> writeBuffer = new CheckpointFile.CheckpointWriteBuffer<>(writer, 0, LeaderEpochCheckpointFile.FORMATTER);
-                writeBuffer.write(epochs);
-                writer.flush();
-            }
-
-            return ByteBuffer.wrap(stream.toByteArray());
-        }
     }
 
     /**

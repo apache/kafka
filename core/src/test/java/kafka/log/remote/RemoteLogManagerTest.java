@@ -43,6 +43,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
+import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.EpochEntry;
@@ -151,10 +152,10 @@ public class RemoteLogManagerTest {
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
-        RemoteLogManager.InMemoryLeaderEpochCheckpoint inMemoryCheckpoint = remoteLogManager.getLeaderEpochCheckpoint(mockLog, 0, 300);
+        InMemoryLeaderEpochCheckpoint inMemoryCheckpoint = remoteLogManager.getLeaderEpochCheckpoint(mockLog, 0, 300);
         assertEquals(totalEpochEntries, inMemoryCheckpoint.read());
 
-        RemoteLogManager.InMemoryLeaderEpochCheckpoint inMemoryCheckpoint2 = remoteLogManager.getLeaderEpochCheckpoint(mockLog, 100, 200);
+        InMemoryLeaderEpochCheckpoint inMemoryCheckpoint2 = remoteLogManager.getLeaderEpochCheckpoint(mockLog, 100, 200);
         List<EpochEntry> epochEntries = inMemoryCheckpoint2.read();
         assertEquals(1, epochEntries.size());
         assertEquals(epochEntry1, epochEntries.get(0));
@@ -364,7 +365,7 @@ public class RemoteLogManagerTest {
         assertEquals(tempFile.getAbsolutePath(), logSegmentData.logSegment().toAbsolutePath().toString());
         assertEquals(mockProducerSnapshotIndex.getAbsolutePath(), logSegmentData.producerSnapshotIndex().toAbsolutePath().toString());
 
-        RemoteLogManager.InMemoryLeaderEpochCheckpoint inMemoryLeaderEpochCheckpoint = new RemoteLogManager.InMemoryLeaderEpochCheckpoint();
+        InMemoryLeaderEpochCheckpoint inMemoryLeaderEpochCheckpoint = new InMemoryLeaderEpochCheckpoint();
         inMemoryLeaderEpochCheckpoint.write(expectedLeaderEpoch);
         assertEquals(inMemoryLeaderEpochCheckpoint.readAsByteBuffer(), logSegmentData.leaderEpochIndex());
     }
