@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -213,6 +214,10 @@ public class Plugins {
 
     public Set<PluginDesc<Predicate<?>>> predicates() {
         return delegatingLoader.predicates();
+    }
+
+    public Set<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies() {
+        return delegatingLoader.connectorClientConfigPolicies();
     }
 
     public Object newPlugin(String classOrAlias) throws ClassNotFoundException {
