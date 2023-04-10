@@ -30,6 +30,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
+import kafka.zookeeper.StateChangeHandler
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Topic
@@ -205,6 +206,26 @@ class KafkaServer(
   @volatile var brokerEpochManager: ZkBrokerEpochManager = _
 
   def brokerEpochSupplier(): Long = Option(brokerEpochManager).map(_.get()).getOrElse(-1)
+
+    private class BrokerInfoCheckHandler(info: BrokerInfo, id: Int) extends StateChangeHandler {
+     var brokerInfo: BrokerInfo = info
+     var brokerId: Int = id
+
+    override val name: String = brokerInfo.path
+
+    override def afterInitializingSession(): Unit = {
+      zkClient.getBroker(brokerId) match {
+        case Some(newBroker) =>
+          if (newBroker.endPoints != brokerInfo.broker.endPoints) {
+            fatal("endpoint from zookeeper: " + newBroker.endPoints + " is different from endpoint from local disk: " + brokerInfo.broker.endPoints)
+          }
+        case None =>
+          error("failed to get broker info for broker: " + brokerId)
+      }
+
+    }
+
+  }
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -405,6 +426,7 @@ class KafkaServer(
 
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
+        zkClient.registerStateChangeHandler(new BrokerInfoCheckHandler(brokerInfo, config.brokerId))
 
         /* start token manager */
         tokenManager = new DelegationTokenManagerZk(config, tokenCache, time , zkClient)
