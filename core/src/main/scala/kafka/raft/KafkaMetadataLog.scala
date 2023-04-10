@@ -16,20 +16,23 @@
  */
 package kafka.raft
 
-import kafka.log.{LogOffsetSnapshot, SnapshotGenerated, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
 import kafka.server.{BrokerTopicStats, KafkaConfig, RequestLocal}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Records}
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
+import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter,
+RecordsSnapshotReader, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig}
 
 import java.io.File
 import java.nio.file.{Files, NoSuchFileException, Path}
@@ -40,6 +43,7 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   val log: UnifiedLog,
+  recordSerde: RecordSerde[_],
   time: Time,
   scheduler: Scheduler,
   // Access to this object needs to be synchronized because it is used by the snapshotting thread to notify the
@@ -202,7 +206,7 @@ final class KafkaMetadataLog private (
   }
 
   override def highWatermark: LogOffsetMetadata = {
-    val LogOffsetSnapshot(_, _, hwm, _) = log.fetchOffsetSnapshot
+    val hwm = log.fetchOffsetSnapshot.highWatermark
     val segmentPosition: Optional[OffsetMetadata] = if (hwm.messageOffsetOnly) {
       Optional.of(SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
     } else {
@@ -214,10 +218,6 @@ final class KafkaMetadataLog private (
 
   override def flush(forceFlushActiveSegment: Boolean): Unit = {
     log.flush(forceFlushActiveSegment)
-  }
-
-  override def lastFlushedOffset(): Long = {
-    log.recoveryPoint
   }
 
   /**
@@ -341,7 +341,7 @@ final class KafkaMetadataLog private (
           snapshots.contains(snapshotId) &&
           startOffset < snapshotId.offset &&
           snapshotId.offset <= latestSnapshotId.offset &&
-          log.maybeIncrementLogStartOffset(snapshotId.offset, SnapshotGenerated) =>
+          log.maybeIncrementLogStartOffset(snapshotId.offset, LogStartOffsetIncrementReason.SnapshotGenerated) =>
             // Delete all segments that have a "last offset" less than the log start offset
             log.deleteOldSegments()
             // Remove older snapshots from the snapshots cache
@@ -367,17 +367,19 @@ final class KafkaMetadataLog private (
    * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
    */
   private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
-    readSnapshot(snapshotId).asScala.flatMap { reader =>
-      val batchIterator = reader.records().batchIterator()
+    readSnapshot(snapshotId).asScala.map { reader =>
+      val recordsSnapshotReader = RecordsSnapshotReader.of(
+        reader,
+        recordSerde,
+        new GrowableBufferSupplier(),
+        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+        true
+      )
 
-      val firstBatch = batchIterator.next()
-      val records = firstBatch.streamingIterator(new BufferSupplier.GrowableBufferSupplier())
-      if (firstBatch.isControlBatch) {
-        val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next())
-        Some(header.lastContainedLogTimestamp())
-      } else {
-        warn("Did not find control record at beginning of snapshot")
-        None
+      try {
+        recordsSnapshotReader.lastContainedLogTimestamp
+      } finally {
+        recordsSnapshotReader.close()
       }
     }
   }
@@ -552,6 +554,7 @@ object KafkaMetadataLog extends Logging {
     topicPartition: TopicPartition,
     topicId: Uuid,
     dataDir: File,
+    recordSerde: RecordSerde[_],
     time: Time,
     scheduler: Scheduler,
     config: MetadataLogConfig
@@ -601,6 +604,7 @@ object KafkaMetadataLog extends Logging {
 
     val metadataLog = new KafkaMetadataLog(
       log,
+      recordSerde,
       time,
       scheduler,
       recoverSnapshots(log),

@@ -69,7 +69,7 @@ public class CheckpointFile<T> {
             // Ignore if file already exists.
         }
         absolutePath = file.toPath().toAbsolutePath();
-        tempPath = Paths.get(absolutePath.toString() + ".tmp");
+        tempPath = Paths.get(absolutePath + ".tmp");
     }
 
     public void write(Collection<T> entries) throws IOException {
@@ -104,6 +104,33 @@ public class CheckpointFile<T> {
             try (BufferedReader reader = Files.newBufferedReader(absolutePath)) {
                 CheckpointReadBuffer<T> checkpointBuffer = new CheckpointReadBuffer<>(absolutePath.toString(), reader, version, formatter);
                 return checkpointBuffer.read();
+            }
+        }
+    }
+
+    public static class CheckpointWriteBuffer<T> {
+        private BufferedWriter writer;
+        private int version;
+        private EntryFormatter<T> formatter;
+
+        public CheckpointWriteBuffer(BufferedWriter writer,
+                                     int version,
+                                     EntryFormatter<T> formatter) {
+            this.version = version;
+            this.writer = writer;
+            this.formatter = formatter;
+        }
+
+        public void write(List<T> entries) throws IOException {
+            writer.write(String.valueOf(version));
+            writer.newLine();
+
+            writer.write(String.valueOf(entries.size()));
+            writer.newLine();
+
+            for (T entry : entries) {
+                writer.write(formatter.toString(entry));
+                writer.newLine();
             }
         }
     }

@@ -96,12 +96,12 @@ public class MirrorCheckpointTask extends SourceTask {
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
         offsetSyncStore = new OffsetSyncStore(config);
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("checkpoint-source-admin"));
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
         metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
-        scheduler = new Scheduler(MirrorCheckpointTask.class, config.adminTimeout());
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(() -> {
             offsetSyncStore.start();
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
@@ -109,6 +109,8 @@ public class MirrorCheckpointTask extends SourceTask {
             scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
                     "sync idle consumer group offset from source to target");
         }, "starting offset sync store");
+        log.info("{} checkpointing {} consumer groups {}->{}: {}.", Thread.currentThread().getName(),
+                consumerGroups.size(), sourceClusterAlias, config.targetClusterAlias(), consumerGroups);
     }
 
     @Override
@@ -178,7 +180,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     private List<Checkpoint> checkpointsForGroup(String group) throws ExecutionException, InterruptedException {
         return listConsumerGroupOffsets(group).entrySet().stream()
-            .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
+            .filter(x -> shouldCheckpointTopic(x.getKey().topic())) // Only perform relevant checkpoints filtered by "topic filter"
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
             .flatMap(o -> o.map(Stream::of).orElseGet(Stream::empty)) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately

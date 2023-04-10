@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import kafka.cluster.Partition;
-import kafka.log.LeaderOffsetIncremented$;
 import kafka.log.UnifiedLog;
 import kafka.log.remote.RemoteLogManager;
 import org.apache.kafka.common.KafkaException;
@@ -54,6 +53,8 @@ import org.slf4j.LoggerFactory;
 
 import scala.Option;
 import scala.collection.JavaConverters;
+
+import static org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason.LeaderOffsetIncremented;
 
 /**
  The replica fetcher tier state machine follows a state machine progression.
@@ -229,7 +230,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 partition.truncateFullyAndStartAt(nextOffset, false);
 
                 // Build leader epoch cache.
-                unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented$.MODULE$);
+                unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
                 List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
                 if (unifiedLog.leaderEpochCache().isDefined()) {
                     unifiedLog.leaderEpochCache().get().assign(epochs);

@@ -21,7 +21,6 @@ import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
@@ -35,6 +34,7 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
@@ -133,7 +133,9 @@ class TransactionMarkerChannelManager(
   txnStateManager: TransactionStateManager,
   time: Time
 ) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, config.requestTimeoutMs, time)
-  with Logging with KafkaMetricsGroup {
+  with Logging {
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
 
@@ -151,8 +153,8 @@ class TransactionMarkerChannelManager(
     if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 1
     else 0
 
-  newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
-  newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
+  metricsGroup.newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
+  metricsGroup.newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
 
   override def shutdown(): Unit = {
     super.shutdown()
