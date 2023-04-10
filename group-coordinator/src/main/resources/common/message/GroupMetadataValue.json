@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Version 4 is the first flexible version.
 // KIP-915: bumping the version will no longer make this record backward compatible.
 {
   "type": "data",
