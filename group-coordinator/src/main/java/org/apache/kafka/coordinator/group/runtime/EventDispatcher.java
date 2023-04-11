@@ -31,7 +31,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A concurrent event queue which group events per key and ensure that only one
+ * A concurrent event dispatcher which group events per key and ensure that only one
  * event with a given key can't be processed concurrently.
  *
  * This class is threadsafe.
@@ -203,8 +203,6 @@ public class EventDispatcher<K, T extends EventDispatcher.Event<K>> implements A
 
     /**
      * Returns the size of the queue.
-     *
-     * @return The size.
      */
     public int size() {
         lock.lock();

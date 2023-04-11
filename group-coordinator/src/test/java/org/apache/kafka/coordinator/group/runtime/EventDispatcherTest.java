@@ -195,7 +195,7 @@ public class EventDispatcherTest {
         // Processing of event1 is done.
         dispatcher.done(event1);
 
-        // One future should be completed with event1.
+        // One future should be completed with event2.
         assertEquals(event2, CompletableFuture
             .anyOf(futures.toArray(new CompletableFuture[0]))
             .get(5, TimeUnit.SECONDS));
