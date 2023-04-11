@@ -544,16 +544,20 @@ public class MetadataLoaderTest {
     public void testReloadSnapshot() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
         List<MockPublisher> publishers = asList(new MockPublisher("a"));
-        AtomicReference<OptionalLong> highWaterMark = new AtomicReference<>(OptionalLong.empty());
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
                 build()) {
+            loadTestSnapshot(loader, 100);
             loader.installPublishers(publishers).get();
+            loader.waitForAllEventsToBeHandled();
+            assertTrue(publishers.get(0).firstPublish.isDone());
+            assertTrue(publishers.get(0).latestDelta.image().isEmpty());
+            assertEquals(100L, publishers.get(0).latestImage.provenance().lastContainedOffset());
 
             loadTestSnapshot(loader, 200);
             assertEquals(200L, loader.lastAppliedOffset());
-            assertTrue(publishers.get(0).firstPublish.isDone());
+            assertFalse(publishers.get(0).latestDelta.image().isEmpty());
 
             loadTestSnapshot2(loader, 400);
             assertEquals(400L, loader.lastAppliedOffset());
