@@ -520,4 +520,48 @@ public class MetadataLoaderTest {
                 )));
         loader.waitForAllEventsToBeHandled();
     }
+
+    private void loadTestSnapshot2(
+        MetadataLoader loader,
+        long offset
+    ) throws Exception {
+        loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+                new MetadataProvenance(offset, 100, 4000), asList(
+                        asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                                setName(MetadataVersion.FEATURE_NAME).
+                                setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0)),
+                        asList(new ApiMessageAndVersion(new TopicRecord().
+                                setName("bar").
+                                setTopicId(Uuid.fromString("VcL2Mw-cT4aL6XV9VujzoQ")), (short) 0))
+                )));
+        loader.waitForAllEventsToBeHandled();
+    }
+
+    /**
+     * Test that loading a snapshot clears the previous state.
+     */
+    @Test
+    public void testReloadSnapshot() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
+        List<MockPublisher> publishers = asList(new MockPublisher("a"));
+        AtomicReference<OptionalLong> highWaterMark = new AtomicReference<>(OptionalLong.empty());
+        try (MetadataLoader loader = new MetadataLoader.Builder().
+                setFaultHandler(faultHandler).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
+                build()) {
+            loader.installPublishers(publishers).get();
+
+            loadTestSnapshot(loader, 200);
+            assertEquals(200L, loader.lastAppliedOffset());
+            assertTrue(publishers.get(0).firstPublish.isDone());
+
+            loadTestSnapshot2(loader, 400);
+            assertEquals(400L, loader.lastAppliedOffset());
+
+            // Make sure the topic in the initial snapshot was overwritten by loading the new snapshot.
+            assertFalse(publishers.get(0).latestImage.topics().topicsByName().containsKey("foo"));
+            assertTrue(publishers.get(0).latestImage.topics().topicsByName().containsKey("bar"));
+        }
+        faultHandler.maybeRethrowFirstException();
+    }
 }

@@ -484,6 +484,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 snapshotIndex++;
             }
         }
+        delta.finishSnapshot();
         MetadataProvenance provenance = new MetadataProvenance(reader.lastContainedLogOffset(),
                 reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp());
         return new SnapshotManifest(provenance,
