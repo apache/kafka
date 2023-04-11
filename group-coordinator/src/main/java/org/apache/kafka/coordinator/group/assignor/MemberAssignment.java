@@ -27,17 +27,17 @@ import java.util.Set;
  */
 public class MemberAssignment {
     /**
-     * The target partitions assigned to this member grouped by topicId.
+     * The target partitions assigned to this member keyed by topicId.
      */
-    private final Map<Uuid, Set<Integer>> topicIdPartitionsMap;
+    private final Map<Uuid, Set<Integer>> assignedTopicIdPartitions;
 
     public MemberAssignment(Map<Uuid, Set<Integer>> topicIdPartitionsForAssignment) {
         Objects.requireNonNull(topicIdPartitionsForAssignment);
-        this.topicIdPartitionsMap = topicIdPartitionsForAssignment;
+        this.assignedTopicIdPartitions = topicIdPartitionsForAssignment;
     }
 
-    public Map<Uuid, Set<Integer>> getTopicIdPartitionsMap() {
-        return this.topicIdPartitionsMap;
+    public Map<Uuid, Set<Integer>> assignedTopicIdPartitions() {
+        return this.assignedTopicIdPartitions;
     }
 
     @Override
@@ -47,16 +47,16 @@ public class MemberAssignment {
 
         MemberAssignment that = (MemberAssignment) o;
 
-        return topicIdPartitionsMap.equals(that.topicIdPartitionsMap);
+        return assignedTopicIdPartitions.equals(that.assignedTopicIdPartitions);
     }
 
     @Override
     public int hashCode() {
-        return topicIdPartitionsMap.hashCode();
+        return assignedTopicIdPartitions.hashCode();
     }
 
     @Override
     public String toString() {
-        return "MemberAssignment ( Assignment per topic Id = " + topicIdPartitionsMap + ')';
+        return "MemberAssignment (Assignment per topic Id = " + assignedTopicIdPartitions + ')';
     }
 }

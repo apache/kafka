@@ -31,38 +31,53 @@ public class AssignmentMemberSpec {
     /**
      * The instance ID if provided.
      */
-    final Optional<String> instanceId;
+    private final Optional<String> instanceId;
 
     /**
      * The rack ID if provided.
      */
-    final Optional<String> rackId;
+    private final Optional<String> rackId;
 
     /**
      * The topicIds of topics that the member is subscribed to.
      */
-    final Collection<Uuid> subscribedTopics;
+    private final Collection<Uuid> subscribedTopics;
 
     /**
-     * Partitions assigned for this member grouped by topicId
+     * Partitions assigned for this member keyed by topicId
      */
-    final Map<Uuid, Set<Integer>> currentAssignmentTopicIdPartitions;
+    private final Map<Uuid, Set<Integer>> assignedTopicIdPartitions;
+
+    public Optional<String> instanceId() {
+        return instanceId;
+    }
+
+    public Optional<String> rackId() {
+        return rackId;
+    }
+
+    public Collection<Uuid> subscribedTopics() {
+        return subscribedTopics;
+    }
+
+    public Map<Uuid, Set<Integer>> assignmentTopicIdPartitions() {
+        return assignedTopicIdPartitions;
+    }
 
     public AssignmentMemberSpec(
-
         Optional<String> instanceId,
         Optional<String> rackId,
         Collection<Uuid> subscribedTopics,
-        Map<Uuid, Set<Integer>> currentAssignmentTopicIdPartitions
+        Map<Uuid, Set<Integer>> assignedTopicIdPartitions
     ) {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
         Objects.requireNonNull(subscribedTopics);
-        Objects.requireNonNull(currentAssignmentTopicIdPartitions);
+        Objects.requireNonNull(assignedTopicIdPartitions);
         this.instanceId = instanceId;
         this.rackId = rackId;
         this.subscribedTopics = subscribedTopics;
-        this.currentAssignmentTopicIdPartitions = currentAssignmentTopicIdPartitions;
+        this.assignedTopicIdPartitions = assignedTopicIdPartitions;
     }
 
     @Override
@@ -75,7 +90,7 @@ public class AssignmentMemberSpec {
         if (!instanceId.equals(that.instanceId)) return false;
         if (!rackId.equals(that.rackId)) return false;
         if (!subscribedTopics.equals(that.subscribedTopics)) return false;
-        return currentAssignmentTopicIdPartitions.equals(that.currentAssignmentTopicIdPartitions);
+        return assignedTopicIdPartitions.equals(that.assignedTopicIdPartitions);
     }
 
     @Override
@@ -83,7 +98,7 @@ public class AssignmentMemberSpec {
         int result = instanceId.hashCode();
         result = 31 * result + rackId.hashCode();
         result = 31 * result + subscribedTopics.hashCode();
-        result = 31 * result + currentAssignmentTopicIdPartitions.hashCode();
+        result = 31 * result + assignedTopicIdPartitions.hashCode();
         return result;
     }
 
@@ -92,7 +107,7 @@ public class AssignmentMemberSpec {
         return "AssignmentMemberSpec(instanceId=" + instanceId +
             ", rackId=" + rackId +
             ", subscribedTopics=" + subscribedTopics +
-            ", targetPartitions=" + currentAssignmentTopicIdPartitions +
+            ", assignedTopicIdPartitions=" + assignedTopicIdPartitions +
             ')';
     }
 }

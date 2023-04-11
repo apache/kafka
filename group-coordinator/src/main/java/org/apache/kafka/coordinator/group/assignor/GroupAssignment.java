@@ -26,13 +26,17 @@ public class GroupAssignment {
     /**
      * The member assignments keyed by member id.
      */
-    final Map<String, MemberAssignment> members;
+    private final Map<String, MemberAssignment> members;
 
     public GroupAssignment(
         Map<String, MemberAssignment> members
     ) {
         Objects.requireNonNull(members);
         this.members = members;
+    }
+
+    public Map<String, MemberAssignment> members() {
+        return members;
     }
 
     @Override

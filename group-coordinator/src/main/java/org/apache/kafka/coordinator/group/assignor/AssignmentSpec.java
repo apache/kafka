@@ -28,12 +28,12 @@ public class AssignmentSpec {
     /**
      * The members keyed by member id.
      */
-    final Map<String, AssignmentMemberSpec> members;
+    private final Map<String, AssignmentMemberSpec> members;
 
     /**
      * The topics' metadata keyed by topic id
      */
-    final Map<Uuid, AssignmentTopicMetadata> topics;
+    private final Map<Uuid, AssignmentTopicMetadata> topics;
 
     public AssignmentSpec(
         Map<String, AssignmentMemberSpec> members,
@@ -43,6 +43,14 @@ public class AssignmentSpec {
         Objects.requireNonNull(topics);
         this.members = members;
         this.topics = topics;
+    }
+
+    public Map<String, AssignmentMemberSpec> members() {
+        return members;
+    }
+
+    public Map<Uuid, AssignmentTopicMetadata> topics() {
+        return topics;
     }
 
     @Override

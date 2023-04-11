@@ -28,9 +28,9 @@ public class TopicIdToPartition {
     private final Optional<List<String>> rackIds;
 
     public TopicIdToPartition(Uuid topicId, Integer topicPartition, Optional<List<String>> rackIds) {
-        this.topicId = Objects.requireNonNull(topicId, "topicId can not be null");
-        this.partition = Objects.requireNonNull(topicPartition, "topicPartition can not be null");
-        this.rackIds = rackIds;
+        this.topicId = Objects.requireNonNull(topicId, "topicId cannot be null");
+        this.partition = Objects.requireNonNull(topicPartition, "topicPartition cannot be null");
+        this.rackIds = Objects.requireNonNull(rackIds, "rackId cannot be null");
     }
 
     /**

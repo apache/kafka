@@ -25,12 +25,12 @@ public class AssignmentTopicMetadata {
     /**
      * The topic name.
      */
-    final String topicName;
+    private final String topicName;
 
     /**
      * The number of partitions.
      */
-    final int numPartitions;
+    private final int numPartitions;
 
     public AssignmentTopicMetadata(
         String topicName,
@@ -39,6 +39,14 @@ public class AssignmentTopicMetadata {
         Objects.requireNonNull(topicName);
         this.topicName = topicName;
         this.numPartitions = numPartitions;
+    }
+
+    public String topicName() {
+        return topicName;
+    }
+
+    public int numPartitions() {
+        return numPartitions;
     }
 
     @Override
