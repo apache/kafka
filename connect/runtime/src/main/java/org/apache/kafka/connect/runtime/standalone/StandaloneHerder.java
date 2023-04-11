@@ -386,7 +386,7 @@ public class StandaloneHerder extends AbstractHerder {
         }
 
         try {
-            if (worker.alterConnectorOffsets(connName, offsets, configState.connectorConfig(connName))) {
+            if (worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets)) {
                 cb.onCompletion(null, new Message("The offsets for this connector have been altered successfully"));
             } else {
                 cb.onCompletion(null, new Message("The Connect framework managed offsets for this connector have been " +

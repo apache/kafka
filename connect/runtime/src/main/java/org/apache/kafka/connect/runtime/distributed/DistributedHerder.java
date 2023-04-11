@@ -1567,7 +1567,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
             // The alter offsets request needs to be processed synchronously for the same reason that it needs to be done on the
             // leader - to ensure that no new tasks are spun up before the offsets are altered.
-            if (worker.alterConnectorOffsets(connName, offsets, configState.connectorConfig(connName))) {
+            if (worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets)) {
                 callback.onCompletion(null, new Message("The offsets for this connector have been altered successfully"));
             } else {
                 callback.onCompletion(null, new Message("The Connect framework managed offsets for this connector have been " +

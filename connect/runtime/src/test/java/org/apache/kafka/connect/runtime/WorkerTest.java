@@ -1908,8 +1908,8 @@ public class WorkerTest {
         when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenThrow(new UnsupportedOperationException("This connector doesn't " +
                 "support altering of offsets"));
 
-        ConnectException e = assertThrows(ConnectException.class, () -> worker.alterConnectorOffsets(CONNECTOR_ID, new HashMap<>(),
-                connectorProps));
+        ConnectException e = assertThrows(ConnectException.class, () -> worker.alterConnectorOffsets(CONNECTOR_ID, connectorProps, new HashMap<>()
+        ));
         assertEquals("Failed to alter offsets for connector " + CONNECTOR_ID + " because it doesn't support external modification of offsets",
                 e.getMessage());
 

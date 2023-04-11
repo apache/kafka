@@ -1164,6 +1164,7 @@ public class Worker {
      * Get the current consumer group offsets for a sink connector.
      * <p>
      * Visible for testing.
+     *
      * @param connName the name of the sink connector whose offsets are to be retrieved
      * @param connector the sink connector
      * @param connectorConfig the sink connector's configurations
@@ -1206,6 +1207,7 @@ public class Worker {
 
     /**
      * Get the current offsets for a source connector.
+     *
      * @param connName the name of the source connector whose offsets are to be retrieved
      * @param connector the source connector
      * @param connectorConfig the source connector's configurations
@@ -1245,17 +1247,17 @@ public class Worker {
     /**
      * Alter a connector's offsets.
      *
-     * @param connName the name of the connector whose offsets are to be altered
-     * @param offsets a mapping from partitions to offsets that need to be overwritten
+     * @param connName        the name of the connector whose offsets are to be altered
      * @param connectorConfig the connector's configurations
+     * @param offsets         a mapping from partitions to offsets that need to be overwritten
      *
      * @return true if the connector plugin has implemented {@link org.apache.kafka.connect.sink.SinkConnector#alterOffsets(Map, Map)}
      * / {@link org.apache.kafka.connect.source.SourceConnector#alterOffsets(Map, Map)} and it returns true for the provided offsets,
      * false otherwise
      *
      */
-    public boolean alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets,
-                                         Map<String, String> connectorConfig) {
+    public boolean alterConnectorOffsets(String connName, Map<String, String> connectorConfig,
+                                         Map<Map<String, ?>, Map<String, ?>> offsets) {
         String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
         Connector connector;
@@ -1276,10 +1278,12 @@ public class Worker {
      * Alter a sink connector's consumer group offsets.
      * <p>
      * Visible for testing.
+     *
      * @param connName the name of the sink connector whose offsets are to be altered
      * @param connector an instance of the sink connector
      * @param connectorConfig the sink connector's configuration
      * @param offsets a mapping from topic partitions to offsets that need to be overwritten
+     *
      * @return true if the sink connector has implemented {@link org.apache.kafka.connect.sink.SinkConnector#alterOffsets(Map, Map)}
      * and it returns true for the provided offsets, false otherwise
      */
@@ -1381,10 +1385,12 @@ public class Worker {
 
     /**
      * Alter a source connector's offsets.
+     *
      * @param connName the name of the source connector whose offsets are to be altered
      * @param connector an instance of the source connector
      * @param connectorConfig the source connector's configuration
      * @param offsets a mapping from partitions to offsets that need to be overwritten
+     *
      * @return true if the source connector has implemented {@link org.apache.kafka.connect.source.SourceConnector#alterOffsets(Map, Map)}
      * and it returns true for the provided offsets, false otherwise
      */

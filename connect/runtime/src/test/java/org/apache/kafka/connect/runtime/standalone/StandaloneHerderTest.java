@@ -1022,7 +1022,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testAlterConnectorOffsets() throws Exception {
-        EasyMock.expect(worker.alterConnectorOffsets(eq(CONNECTOR_NAME), anyObject(Map.class), eq(connectorConfig(SourceSink.SOURCE))))
+        EasyMock.expect(worker.alterConnectorOffsets(eq(CONNECTOR_NAME), eq(connectorConfig(SourceSink.SOURCE)), anyObject(Map.class)))
                 .andReturn(true);
         PowerMock.replayAll();
 
