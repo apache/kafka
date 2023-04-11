@@ -296,15 +296,13 @@ class CompletedFetch<K, V> {
             long timestamp = record.timestamp();
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
-            byte[] keyByteArray = keyBytes == null ? null : org.apache.kafka.common.utils.Utils.toArray(keyBytes);
-            K key = keyBytes == null ? null : fetchConfig.keyDeserializer.deserialize(partition.topic(), headers, keyByteArray);
+            K key = keyBytes == null ? null : fetchConfig.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
             ByteBuffer valueBytes = record.value();
-            byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
-            V value = valueBytes == null ? null : fetchConfig.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
+            V value = valueBytes == null ? null : fetchConfig.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
                     timestamp, timestampType,
-                    keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
-                    valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
+                    keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
+                    valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
                     key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
             throw new RecordDeserializationException(partition, record.offset(),
