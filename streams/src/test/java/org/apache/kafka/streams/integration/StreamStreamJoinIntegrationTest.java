@@ -528,7 +528,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     public void testMultiInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-multi-inner");
 
-        @SuppressWarnings("RedundantTypeArguments (explicit type arguments speedup compilation and analysis time)") final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
             null,
             null,
