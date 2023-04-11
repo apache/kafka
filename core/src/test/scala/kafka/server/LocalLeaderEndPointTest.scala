@@ -59,7 +59,16 @@ class LocalLeaderEndPointTest {
     val alterPartitionManager = mock(classOf[AlterPartitionManager])
     val metrics = new Metrics
     val quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
-    replicaManager = new ReplicaManager(config = config, metrics = metrics, time = time, scheduler = new MockScheduler(time), logManager = mockLogMgr, quotaManagers = quotaManager, metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion), logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size), alterPartitionManager = alterPartitionManager, delayedRemoteFetchPurgatory = None)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
     val partition = replicaManager.createPartition(topicPartition)
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
       new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
