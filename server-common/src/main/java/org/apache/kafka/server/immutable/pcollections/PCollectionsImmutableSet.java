@@ -18,6 +18,7 @@
 package org.apache.kafka.server.immutable.pcollections;
 
 import org.apache.kafka.server.immutable.ImmutableSet;
+import org.pcollections.HashTreePSet;
 import org.pcollections.MapPSet;
 
 import java.util.Collection;
@@ -31,6 +32,23 @@ import java.util.stream.Stream;
 @SuppressWarnings("deprecation")
 public class PCollectionsImmutableSet<E> implements ImmutableSet<E> {
     private final MapPSet<E> underlying;
+
+    /**
+     * @return a wrapped hash-based persistent set that is empty
+     * @param <E> the element type
+     */
+    public static <E> PCollectionsImmutableSet<E> empty() {
+        return new PCollectionsImmutableSet<>(HashTreePSet.empty());
+    }
+
+    /**
+     * @param e the element
+     * @return a wrapped hash-based persistent set that has a single element
+     * @param <E> the element type
+     */
+    public static <E> PCollectionsImmutableSet<E> singleton(E e) {
+        return new PCollectionsImmutableSet<>(HashTreePSet.singleton(e));
+    }
 
     public PCollectionsImmutableSet(MapPSet<E> set) {
         this.underlying = Objects.requireNonNull(set);

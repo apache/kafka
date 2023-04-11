@@ -22,7 +22,6 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.immutable.ImmutableMap;
-import org.apache.kafka.server.immutable.ImmutableMapSetFactory;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Map;
@@ -35,9 +34,7 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class TopicsImage {
-    private static final ImmutableMapSetFactory FACTORY = ImmutableMapSetFactory.PCOLLECTIONS_FACTORY;
-
-    public static final TopicsImage EMPTY =  new TopicsImage(FACTORY.emptyMap(), FACTORY.emptyMap());
+    public static final TopicsImage EMPTY =  new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
 
     final ImmutableMap<Uuid, TopicImage> topicsById;
     final ImmutableMap<String, TopicImage> topicsByName;

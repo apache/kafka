@@ -17,6 +17,8 @@
 
 package org.apache.kafka.server.immutable;
 
+import org.apache.kafka.server.immutable.pcollections.PCollectionsImmutableSet;
+
 import java.util.Set;
 
 /**
@@ -26,6 +28,24 @@ import java.util.Set;
  * @param <E> the element type
  */
 public interface ImmutableSet<E> extends Set<E> {
+
+    /**
+     * @return a wrapped hash-based persistent set that is empty
+     * @param <E> the element type
+     */
+    static <E> ImmutableSet<E> empty() {
+        return PCollectionsImmutableSet.empty();
+    }
+
+    /**
+     * @param e the element
+     * @return a wrapped hash-based persistent set that has a single element
+     * @param <E> the element type
+     */
+    static <E> ImmutableSet<E> singleton(E e) {
+        return PCollectionsImmutableSet.singleton(e);
+    }
+
     /**
      * @param e the element
      * @return a wrapped persistent set that differs from this one in that the given element is added (if necessary)

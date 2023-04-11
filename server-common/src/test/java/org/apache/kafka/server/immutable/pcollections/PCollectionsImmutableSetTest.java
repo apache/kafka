@@ -18,6 +18,8 @@
 package org.apache.kafka.server.immutable.pcollections;
 
 import org.apache.kafka.server.immutable.DelegationChecker;
+import org.apache.kafka.server.immutable.ImmutableSet;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -51,6 +53,16 @@ public class PCollectionsImmutableSetTest {
         public MapPSet<Object> unwrap(PCollectionsImmutableSet<Object> wrapper) {
             return wrapper.underlying();
         }
+    }
+
+    @Test
+    public void testEmptySet() {
+        Assertions.assertEquals(HashTreePSet.empty(), ((PCollectionsImmutableSet<?>) ImmutableSet.empty()).underlying());
+    }
+
+    @Test
+    public void testSingletonSet() {
+        Assertions.assertEquals(HashTreePSet.singleton(1), ((PCollectionsImmutableSet<?>) ImmutableSet.singleton(1)).underlying());
     }
 
     @Test

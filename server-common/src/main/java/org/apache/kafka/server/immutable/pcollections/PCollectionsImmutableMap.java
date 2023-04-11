@@ -19,6 +19,7 @@ package org.apache.kafka.server.immutable.pcollections;
 
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.pcollections.HashPMap;
+import org.pcollections.HashTreePMap;
 
 import java.util.Collection;
 import java.util.Map;
@@ -32,6 +33,26 @@ import java.util.function.Function;
 public class PCollectionsImmutableMap<K, V> implements ImmutableMap<K, V> {
 
     private final HashPMap<K, V> underlying;
+
+    /**
+     * @return a wrapped hash-based persistent map that is empty
+     * @param <K> the key type
+     * @param <V> the value type
+     */
+    public static <K, V> PCollectionsImmutableMap<K, V> empty() {
+        return new PCollectionsImmutableMap<>(HashTreePMap.empty());
+    }
+
+    /**
+     * @param key the key
+     * @param value the value
+     * @return a wrapped hash-based persistent map that has a single mapping
+     * @param <K> the key type
+     * @param <V> the value type
+     */
+    public static <K, V> PCollectionsImmutableMap<K, V> singleton(K key, V value) {
+        return new PCollectionsImmutableMap<>(HashTreePMap.singleton(key, value));
+    }
 
     public PCollectionsImmutableMap(HashPMap<K, V> map) {
         this.underlying = Objects.requireNonNull(map);
