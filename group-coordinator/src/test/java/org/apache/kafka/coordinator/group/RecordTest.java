@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +29,7 @@ public class RecordTest {
     @Test
     public void testAttributes() {
         ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
-        ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMemberMetadataValue(), (short) 0);
+        ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMetadataValue(), (short) 0);
         Record record = new Record(key, value);
         assertEquals(key, record.key());
         assertEquals(value, record.value());
@@ -51,7 +51,7 @@ public class RecordTest {
     @Test
     public void testEquals() {
         ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
-        ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMemberMetadataValue(), (short) 0);
+        ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMetadataValue(), (short) 0);
         Record record1 = new Record(key, value);
         Record record2 = new Record(key, value);
         assertEquals(record1, record2);
