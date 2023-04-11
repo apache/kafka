@@ -318,6 +318,16 @@
     <suppress checks="AvoidStarImport"
               files="MetadataVersionTest.java"/>
 
+    <!-- group coordinator -->
+    <suppress checks="CyclomaticComplexity"
+              files="(GroupMetadataManager|ConsumerGroupMember).java"/>
+    <suppress checks="MethodLength"
+              files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
+    <suppress checks="NPathComplexity"
+              files="(GroupMetadataManager|ConsumerGroupMember).java"/>
+    <suppress checks="ParameterNumber"
+              files="(ConsumerGroupMember).java"/>
+
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
               files="(LogValidator|RemoteLogManagerConfig).java"/>
