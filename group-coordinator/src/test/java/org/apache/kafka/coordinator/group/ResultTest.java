@@ -32,7 +32,7 @@ public class ResultTest {
     }
 
     @Test
-    public void testAttributesCanNotBeNull() {
+    public void testAttributesCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new Result<>(Collections.emptyList(), null));
         assertThrows(NullPointerException.class, () -> new Result<>(null, "response"));
     }

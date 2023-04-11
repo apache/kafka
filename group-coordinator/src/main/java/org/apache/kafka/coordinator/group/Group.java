@@ -37,22 +37,16 @@ public interface Group {
     }
 
     /**
-     * Returns the group type.
-     *
      * @return The {{@link GroupType}}.
      */
     GroupType type();
 
     /**
-     * Returns the group type as String.
-     *
      * @return The {{@link GroupType}}'s String representation.
      */
     String stateAsString();
 
     /**
-     * Returns the group id.
-     *
      * @return The group id.
      */
     String groupId();

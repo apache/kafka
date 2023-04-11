@@ -22,7 +22,8 @@ import java.util.Objects;
 
 /**
  * A Record which contains an {{@link ApiMessageAndVersion}} as key and
- * an {{@link ApiMessageAndVersion}} as value. The value could be null.
+ * an {{@link ApiMessageAndVersion}} as value. The value could be null to
+ * represent a tombstone.
  *
  * This class is immutable.
  */
@@ -53,8 +54,6 @@ public class Record {
     }
 
     /**
-     * Returns the key.
-     *
      * @return The key.
      */
     public ApiMessageAndVersion key() {
@@ -62,8 +61,6 @@ public class Record {
     }
 
     /**
-     * Returns the value.
-     *
      * @return The value or null.
      */
     public ApiMessageAndVersion value() {
@@ -83,7 +80,7 @@ public class Record {
 
     @Override
     public int hashCode() {
-        int result = key != null ? key.hashCode() : 0;
+        int result = key.hashCode();
         result = 31 * result + (value != null ? value.hashCode() : 0);
         return result;
     }

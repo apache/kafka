@@ -51,8 +51,6 @@ class Result<T> {
     }
 
     /**
-     * Returns the records.
-     *
      * @return The list of records.
      */
     public List<Record> records() {
@@ -60,8 +58,6 @@ class Result<T> {
     }
 
     /**
-     * Returns the response.
-     *
      * @return The response.
      */
     public T response() {
