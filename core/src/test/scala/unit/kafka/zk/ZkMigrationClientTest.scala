@@ -446,37 +446,35 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     assertEquals(acls.size, records.size, "Expected one record for each ACLBinding")
   }
 
-  def writeAclAndReadWithAuthorizer(
+  def replaceAclsAndReadWithAuthorizer(
     authorizer: AclAuthorizer,
     resourcePattern: ResourcePattern,
-    ace: AccessControlEntry,
+    aces: Seq[AccessControlEntry],
     pred: Seq[AclBinding] => Boolean
   ): Seq[AclBinding] = {
     val resourceFilter = new AclBindingFilter(
       new ResourcePatternFilter(resourcePattern.resourceType(), resourcePattern.name(), resourcePattern.patternType()),
       AclBindingFilter.ANY.entryFilter()
     )
-    migrationState = migrationClient.aclClient().writeAddedAcls(resourcePattern, List(ace).asJava, migrationState)
+    migrationState = migrationClient.aclClient().writeResourceAcls(resourcePattern, aces.asJava, migrationState)
     val (acls, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSeq)(pred)
     assertTrue(ok)
     acls
   }
 
-  def deleteAclAndReadWithAuthorizer(
+  def deleteResourceAndReadWithAuthorizer(
     authorizer: AclAuthorizer,
-    resourcePattern: ResourcePattern,
-    ace: AccessControlEntry,
-    pred: Seq[AclBinding] => Boolean
-  ): Seq[AclBinding] = {
+    resourcePattern: ResourcePattern
+  ): Unit = {
     val resourceFilter = new AclBindingFilter(
       new ResourcePatternFilter(resourcePattern.resourceType(), resourcePattern.name(), resourcePattern.patternType()),
       AclBindingFilter.ANY.entryFilter()
     )
-    migrationState = migrationClient.aclClient().removeDeletedAcls(resourcePattern, List(ace).asJava, migrationState)
-    val (acls, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSeq)(pred)
+    migrationState = migrationClient.aclClient().deleteResource(resourcePattern, migrationState)
+    val (_, ok) = TestUtils.computeUntilTrue(authorizer.acls(resourceFilter).asScala.toSeq)(_.isEmpty)
     assertTrue(ok)
-    acls
   }
+
 
   @Test
   def testAclsMigrateAndDualWrite(): Unit = {
@@ -501,21 +499,21 @@ class ZkMigrationClientTest extends QuorumTestHarness {
       // Migrate ACLs
       migrateAclsAndVerify(authorizer, Seq(acl1, acl2, acl3, acl4))
 
-      // Delete one of resource1's ACLs
-      var resource1Acls = deleteAclAndReadWithAuthorizer(authorizer, resource1, ace2, acls => acls.size == 1)
+      // Remove one of resource1's ACLs
+      var resource1Acls = replaceAclsAndReadWithAuthorizer(authorizer, resource1, Seq(ace1), acls => acls.size == 1)
       assertEquals(acl1, resource1Acls.head)
 
       // Delete the other ACL from resource1
-      deleteAclAndReadWithAuthorizer(authorizer, resource1, ace1, acls => acls.isEmpty)
+      deleteResourceAndReadWithAuthorizer(authorizer, resource1)
 
       // Add a new ACL for resource1
       val newAce1 = new AccessControlEntry(principal.toString, "10.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
-      resource1Acls = writeAclAndReadWithAuthorizer(authorizer, resource1, newAce1, acls => acls.size == 1)
+      resource1Acls = replaceAclsAndReadWithAuthorizer(authorizer, resource1, Seq(newAce1), acls => acls.size == 1)
       assertEquals(newAce1, resource1Acls.head.entry())
 
       // Add a new ACL for resource2
       val newAce2 = new AccessControlEntry(principal.toString, "10.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
-      val resource2Acls = writeAclAndReadWithAuthorizer(authorizer, resource2, newAce2, acls => acls.size == 2)
+      val resource2Acls = replaceAclsAndReadWithAuthorizer(authorizer, resource2, Seq(acl3.entry(), newAce2), acls => acls.size == 2)
       assertEquals(acl3, resource2Acls.head)
       assertEquals(newAce2, resource2Acls.last.entry())
     } finally {

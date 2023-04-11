@@ -69,40 +69,26 @@ class ZkAclMigrationClient(
     }
   }
 
-  override def writeAddedAcls(
+  override def writeResourceAcls(
     resourcePattern: ResourcePattern,
-    addedAcls: util.List[AccessControlEntry],
+    aclsToWrite: util.Collection[AccessControlEntry],
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = {
-    val existingAcls = AclAuthorizer.getAclsFromZk(zkClient, resourcePattern)
-    val addedAclsSet = addedAcls.asScala.map(new AclEntry(_)).toSet
-    val updatedAcls = existingAcls.acls ++ addedAclsSet
-
-    tryWriteAcls(resourcePattern, updatedAcls, create = false, state) match {
+    val acls = aclsToWrite.asScala.map(new AclEntry(_)).toSet
+    tryWriteAcls(resourcePattern, acls, create = false, state) match {
       case Some(newState) => newState
-      case None => tryWriteAcls(resourcePattern, updatedAcls, create = true, state) match {
+      case None => tryWriteAcls(resourcePattern, acls, create = true, state) match {
         case Some(newState) => newState
         case None => throw new MigrationClientException(s"Could not write ACLs for resource pattern $resourcePattern")
       }
     }
   }
 
-  override def removeDeletedAcls(
+  override def deleteResource(
     resourcePattern: ResourcePattern,
-    deletedAcls: util.List[AccessControlEntry],
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = {
-    val existingAcls = AclAuthorizer.getAclsFromZk(zkClient, resourcePattern)
-    val removedAcls = deletedAcls.asScala.map(new AclEntry(_)).toSet
-    val remainingAcls = existingAcls.acls -- removedAcls
-
-    val request = if (remainingAcls.isEmpty) {
-      DeleteRequest(ResourceZNode.path(resourcePattern), ZkVersion.MatchAnyVersion)
-    } else {
-      val aclData = ResourceZNode.encode(remainingAcls)
-      SetDataRequest(ResourceZNode.path(resourcePattern), aclData, ZkVersion.MatchAnyVersion)
-    }
-
+    val request = DeleteRequest(ResourceZNode.path(resourcePattern), ZkVersion.MatchAnyVersion)
     val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(Seq(request), state)
     if (responses.head.resultCode.equals(Code.OK) || responses.head.resultCode.equals(Code.NONODE)) {
       // Write the ACL notification outside of a metadata multi-op

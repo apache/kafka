@@ -44,8 +44,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class KRaftMigrationZkWriter {
     private final MigrationClient migrationClient;
@@ -65,11 +68,12 @@ public class KRaftMigrationZkWriter {
         handleClientQuotasSnapshot(image.clientQuotas());
         operationConsumer.accept("Setting next producer ID", migrationState ->
             migrationClient.writeProducerId(image.producerIds().highestSeenProducerId(), migrationState));
+        handleAclsSnapshot(image.acls());
     }
 
-    public void handleDelta(MetadataImage image, MetadataDelta delta) {
+    public void handleDelta(MetadataImage previousImage, MetadataImage image, MetadataDelta delta) {
         if (delta.topicsDelta() != null) {
-            handleTopicsDelta(delta.topicsDelta());
+            handleTopicsDelta(previousImage.topics().topicIdToNameView()::get, delta.topicsDelta());
         }
         if (delta.configsDelta() != null) {
             handleConfigsDelta(image.configs(), delta.configsDelta());
@@ -80,6 +84,9 @@ public class KRaftMigrationZkWriter {
         if (delta.producerIdsDelta() != null) {
             operationConsumer.accept("Updating next producer ID", migrationState ->
                 migrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
+        }
+        if (delta.aclsDelta() != null) {
+            handleAclsDelta(image.acls(), delta.aclsDelta());
         }
     }
 
@@ -137,10 +144,9 @@ public class KRaftMigrationZkWriter {
                 "Delete Topic " + topicName + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().deleteTopic(topicName, migrationState)
             );
-            TopicImage topic = topicsImage.getTopic(topicId);
-            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic.name());
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
             operationConsumer.accept(
-                "Updating Configs for Topic " + topic.name() + ", ID " + topicId,
+                "Updating Configs for Topic " + topicName + ", ID " + topicId,
                 migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState)
             );
         });
@@ -155,7 +161,13 @@ public class KRaftMigrationZkWriter {
         });
     }
 
-    void handleTopicsDelta(TopicsDelta topicsDelta) {
+    void handleTopicsDelta(Function<Uuid, String> deletedTopicNameResolver, TopicsDelta topicsDelta) {
+        topicsDelta.deletedTopicIds().forEach(topicId -> {
+            String name = deletedTopicNameResolver.apply(topicId);
+            operationConsumer.accept("Deleting topic " + name + ", ID " + topicId,
+                migrationState -> migrationClient.topicClient().deleteTopic(name, migrationState));
+        });
+
         topicsDelta.changedTopics().forEach((topicId, topicDelta) -> {
             if (topicsDelta.createdTopicIds().contains(topicId)) {
                 operationConsumer.accept(
@@ -238,36 +250,84 @@ public class KRaftMigrationZkWriter {
         });
     }
 
-    private void addStandardAclToMap(Map<ResourcePattern, List<AccessControlEntry>> aclMap, StandardAcl acl) {
-        ResourcePattern resource = new ResourcePattern(acl.resourceType(), acl.resourceName(), acl.patternType());
-        aclMap.computeIfAbsent(resource, __ -> new ArrayList<>()).add(
-            new AccessControlEntry(acl.principal(), acl.host(), acl.operation(), acl.permissionType())
-        );
+    private ResourcePattern resourcePatternFromAcl(StandardAcl acl) {
+        return new ResourcePattern(acl.resourceType(), acl.resourceName(), acl.patternType());
+    }
+
+    void handleAclsSnapshot(AclsImage image) {
+        // Need to compare contents of image with all ACLs in ZK and issue updates
+        Map<ResourcePattern, Set<AccessControlEntry>> allAclsInSnapshot = new HashMap<>();
+
+        image.acls().values().forEach(standardAcl -> {
+            ResourcePattern resourcePattern = resourcePatternFromAcl(standardAcl);
+            allAclsInSnapshot.computeIfAbsent(resourcePattern, __ -> new HashSet<>()).add(
+                new AccessControlEntry(standardAcl.principal(), standardAcl.host(), standardAcl.operation(), standardAcl.permissionType())
+            );
+        });
+
+        Set<ResourcePattern> resourcesToDelete = new HashSet<>();
+        Map<ResourcePattern, Set<AccessControlEntry>> changedResources = new HashMap<>();
+        migrationClient.aclClient().iterateAcls((resourcePattern, accessControlEntries) -> {
+            if (!allAclsInSnapshot.containsKey(resourcePattern)) {
+                resourcesToDelete.add(resourcePattern);
+            } else {
+                Set<AccessControlEntry> snapshotEntries = allAclsInSnapshot.get(resourcePattern);
+                if (!snapshotEntries.equals(accessControlEntries)) {
+                    changedResources.put(resourcePattern, snapshotEntries);
+                }
+            }
+        });
+
+        resourcesToDelete.forEach(deletedResource -> {
+            String name = "Deleting resource " + deletedResource + " which has no ACLs in snapshot";
+            operationConsumer.accept(name, migrationState ->
+                migrationClient.aclClient().deleteResource(deletedResource, migrationState));
+        });
+
+        changedResources.forEach((resourcePattern, accessControlEntries) -> {
+            String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
+            operationConsumer.accept(name, migrationState ->
+                migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
+        });
     }
 
     void handleAclsDelta(AclsImage image, AclsDelta delta) {
-        Map<ResourcePattern, List<AccessControlEntry>> deletedAcls = new HashMap<>();
-        Map<ResourcePattern, List<AccessControlEntry>> addedAcls = new HashMap<>();
-        delta.changes().forEach((uuid, standardAclOpt) -> {
-            if (standardAclOpt.isPresent()) {
-                StandardAcl acl = standardAclOpt.get();
-                addStandardAclToMap(addedAcls, acl);
+        // Compute the resource patterns that were changed
+        Set<ResourcePattern> resourcesWithChangedAcls = delta.changes().values()
+            .stream()
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .map(this::resourcePatternFromAcl)
+            .collect(Collectors.toSet());
+
+        Set<ResourcePattern> resourcesWithDeletedAcls = delta.deleted()
+            .stream()
+            .map(this::resourcePatternFromAcl)
+            .collect(Collectors.toSet());
+
+        // Need to collect all ACLs for any changed resource pattern
+        Map<ResourcePattern, List<AccessControlEntry>> aclsToWrite = new HashMap<>();
+        image.acls().forEach((uuid, standardAcl) -> {
+            ResourcePattern resourcePattern = resourcePatternFromAcl(standardAcl);
+            boolean removed = resourcesWithDeletedAcls.remove(resourcePattern);
+            // If a resource pattern is present in the delta as a changed or deleted acl, need to include it
+            if (resourcesWithChangedAcls.contains(resourcePattern) || removed) {
+                aclsToWrite.computeIfAbsent(resourcePattern, __ -> new ArrayList<>()).add(
+                    new AccessControlEntry(standardAcl.principal(), standardAcl.host(), standardAcl.operation(), standardAcl.permissionType())
+                );
             }
         });
-        delta.deleted().forEach(acl -> addStandardAclToMap(deletedAcls, acl));
 
-        deletedAcls.forEach((resourcePattern, accessControlEntries) -> {
-            String name = "Deleting " + accessControlEntries.size() + " for resource " + resourcePattern;
+        resourcesWithDeletedAcls.forEach(deletedResource -> {
+            String name = "Deleting resource " + deletedResource + " which has no more ACLs";
             operationConsumer.accept(name, migrationState ->
-                migrationClient.aclClient().removeDeletedAcls(resourcePattern, accessControlEntries, migrationState));
+                migrationClient.aclClient().deleteResource(deletedResource, migrationState));
         });
 
-        addedAcls.forEach((resourcePattern, accessControlEntries) -> {
-            String name = "Adding " + accessControlEntries.size() + " for resource " + resourcePattern;
+        aclsToWrite.forEach((resourcePattern, accessControlEntries) -> {
+            String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
             operationConsumer.accept(name, migrationState ->
-                migrationClient.aclClient().writeAddedAcls(resourcePattern, accessControlEntries, migrationState));
+                migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
-
-        
     }
 }

@@ -17,28 +17,67 @@
 
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 class CapturingMigrationClient implements MigrationClient {
 
+    static Builder newBuilder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        Set<Integer> brokersInZk = Collections.emptySet();
+        TopicMigrationClient topicMigrationClient = new CapturingTopicMigrationClient();
+        ConfigMigrationClient configMigrationClient = new CapturingConfigMigrationClient();
+        AclMigrationClient aclMigrationClient = new CapturingAclMigrationClient();
+
+        public Builder setBrokersInZk(int... brokerIds) {
+            brokersInZk = IntStream.of(brokerIds).boxed().collect(Collectors.toSet());
+            return this;
+        }
+
+        public Builder setTopicMigrationClient(TopicMigrationClient topicMigrationClient) {
+            this.topicMigrationClient = topicMigrationClient;
+            return this;
+        }
+
+        public Builder setConfigMigrationClient(ConfigMigrationClient configMigrationClient) {
+            this.configMigrationClient = configMigrationClient;
+            return this;
+        }
+
+        public CapturingMigrationClient build() {
+            return new CapturingMigrationClient(
+                brokersInZk,
+                topicMigrationClient,
+                configMigrationClient,
+                aclMigrationClient
+            );
+        }
+    }
+
     private final Set<Integer> brokerIds;
     private final TopicMigrationClient topicMigrationClient;
+    private final ConfigMigrationClient configMigrationClient;
+    private final AclMigrationClient aclMigrationClient;
 
-    public final Map<ConfigResource, Map<String, String>> capturedConfigs = new HashMap<>();
-
-    public CapturingMigrationClient(
+    CapturingMigrationClient(
         Set<Integer> brokerIdsInZk,
-        TopicMigrationClient topicMigrationClient
+        TopicMigrationClient topicMigrationClient,
+        ConfigMigrationClient configMigrationClient,
+        AclMigrationClient aclMigrationClient
     ) {
         this.brokerIds = brokerIdsInZk;
         this.topicMigrationClient = topicMigrationClient;
+        this.configMigrationClient = configMigrationClient;
+        this.aclMigrationClient = aclMigrationClient;
     }
 
     @Override
@@ -69,26 +108,26 @@ class CapturingMigrationClient implements MigrationClient {
 
     @Override
     public ConfigMigrationClient configClient() {
-        return null;
+        return configMigrationClient;
     }
 
     @Override
     public AclMigrationClient aclClient() {
-        return null;
+        return aclMigrationClient;
     }
 
     @Override
     public ZkMigrationLeadershipState writeProducerId(
-            long nextProducerId,
-            ZkMigrationLeadershipState state
+        long nextProducerId,
+        ZkMigrationLeadershipState state
     ) {
         return state;
     }
 
     @Override
     public void readAllMetadata(
-            Consumer<List<ApiMessageAndVersion>> batchConsumer,
-            Consumer<Integer> brokerIdConsumer
+        Consumer<List<ApiMessageAndVersion>> batchConsumer,
+        Consumer<Integer> brokerIdConsumer
     ) {
 
     }

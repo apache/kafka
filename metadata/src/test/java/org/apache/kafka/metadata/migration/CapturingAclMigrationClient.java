@@ -20,21 +20,37 @@ package org.apache.kafka.metadata.migration;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.resource.ResourcePattern;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
-public interface AclMigrationClient {
-    ZkMigrationLeadershipState deleteResource(
-        ResourcePattern resourcePattern,
-        ZkMigrationLeadershipState state
-    );
+public class CapturingAclMigrationClient implements AclMigrationClient {
 
-    ZkMigrationLeadershipState writeResourceAcls(
-        ResourcePattern resourcePattern,
-        Collection<AccessControlEntry> aclsToWrite,
-        ZkMigrationLeadershipState state
-    );
+    public List<ResourcePattern> deletedResources = new ArrayList<>();
+    public LinkedHashMap<ResourcePattern, Collection<AccessControlEntry>> updatedResources = new LinkedHashMap<>();
 
-    void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer);
+    public void reset() {
+        deletedResources.clear();
+        updatedResources.clear();
+    }
+
+    @Override
+    public ZkMigrationLeadershipState deleteResource(ResourcePattern resourcePattern, ZkMigrationLeadershipState state) {
+        deletedResources.add(resourcePattern);
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState writeResourceAcls(ResourcePattern resourcePattern, Collection<AccessControlEntry> aclsToWrite, ZkMigrationLeadershipState state) {
+        updatedResources.put(resourcePattern, aclsToWrite);
+        return state;
+    }
+
+    @Override
+    public void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer) {
+
+    }
 }

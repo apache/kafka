@@ -20,7 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.common.MetadataVersion;

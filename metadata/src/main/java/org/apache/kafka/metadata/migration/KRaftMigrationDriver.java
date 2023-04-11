@@ -163,7 +163,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         );
 
         if (imageDoesNotContainAllBrokers(image, zkBrokersWithAssignments)) {
-            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokersWithAssignments);
+            log.info("Still waiting for ZK brokers {} found in metadata to register with KRaft.", zkBrokersWithAssignments);
             return false;
         }
 
@@ -534,6 +534,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
+            MetadataImage prevImage = KRaftMigrationDriver.this.image;
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
@@ -555,7 +556,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image);
             } else {
-                zkMetadataWriter.handleDelta(image, delta);
+                zkMetadataWriter.handleDelta(prevImage, image, delta);
             }
 
             // TODO: Unhappy path: Probably relinquish leadership and let new controller

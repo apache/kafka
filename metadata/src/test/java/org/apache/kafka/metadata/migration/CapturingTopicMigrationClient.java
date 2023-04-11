@@ -32,8 +32,9 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
     public List<String> createdTopics = new ArrayList<>();
     public LinkedHashMap<String, Set<Integer>> updatedTopicPartitions = new LinkedHashMap<>();
 
-
     public void reset() {
+        createdTopics.clear();
+        updatedTopicPartitions.clear();
         deletedTopics.clear();
     }
 
