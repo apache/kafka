@@ -373,6 +373,7 @@ public class StandaloneHerder extends AbstractHerder {
         super.connectorOffsets(connName, cb);
     }
 
+    @Override
     public synchronized void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
         if (!configState.contains(connName)) {
             cb.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
