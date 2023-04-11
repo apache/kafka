@@ -22,16 +22,29 @@
   "fields": [
     { "name": "MemberEpoch", "versions": "0+", "type": "int32",
       "about": "The member epoch." },
+    { "name": "PreviousMemberEpoch", "versions": "0+", "type": "int32",
+      "about": "The previous member epoch." },
+    { "name": "TargetMemberEpoch", "versions": "0+", "type": "int32",
+      "about": "The target member epoch." },
+    { "name": "Assigned", "versions": "0+", "type": "[]TopicPartitions",
+      "about": "The partitions assigned to this member." },
+    { "name": "Revoking", "versions": "0+", "type": "[]TopicPartitions",
+      "about": "The partitions being revoked by this member." },
+    { "name": "Assigning", "versions": "0+", "type": "[]TopicPartitions",
+      "about": "The partitions being assigned to this member." },
     { "name": "Error", "versions": "0+", "type": "int8",
       "about": "The error reported by the assignor." },
-    { "name": "TopicPartitions", "versions": "0+", "type": "[]TopicPartition",
-      "about": "The partitions assigned to this member.", "fields": [
-      { "name": "TopicId", "versions": "0+", "type": "uuid" },
-      { "name": "Partitions", "versions": "0+", "type": "[]int32" }
-    ]},
     { "name": "MetadataVersion", "versions": "0+", "type": "int16",
       "about": "The version of the metadata bytes." },
     { "name": "MetadataBytes", "versions": "0+", "type": "bytes",
       "about": "The metadata bytes." }
+  ],
+  "commonStructs": [
+    { "name": "TopicPartitions", "versions": "0+", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The topic ID." },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "The partitions." }
+    ]}
   ]
 }
