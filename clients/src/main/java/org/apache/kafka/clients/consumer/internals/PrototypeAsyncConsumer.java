@@ -88,7 +88,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
-
     private final LogContext logContext;
     private final EventHandler eventHandler;
     private final Time time;
@@ -368,7 +367,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (ExecutionException e) {
             throw new KafkaException(e);
         } catch (InterruptedException e) {
-            throw new InterruptException(e.getMessage());
+            throw new InterruptException(e);
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } catch (WakeupException e) {
@@ -485,8 +484,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
         try {
-            if (!closed) {
-                close(timeout, false);
+            synchronized (this) {
+                if (!closed) {
+                    close(timeout, false);
+                }
             }
         } finally {
             closed = true;
@@ -559,7 +560,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (ExecutionException e) {
             throw new KafkaException(e);
         } catch (InterruptedException e) {
-            throw new InterruptException(e.getMessage());
+            throw new InterruptException(e);
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } catch (WakeupException e) {
