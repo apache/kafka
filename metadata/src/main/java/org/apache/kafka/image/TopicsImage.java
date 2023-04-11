@@ -36,8 +36,8 @@ import java.util.stream.Collectors;
 public final class TopicsImage {
     public static final TopicsImage EMPTY =  new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
 
-    final ImmutableMap<Uuid, TopicImage> topicsById;
-    final ImmutableMap<String, TopicImage> topicsByName;
+    private final ImmutableMap<Uuid, TopicImage> topicsById;
+    private final ImmutableMap<String, TopicImage> topicsByName;
 
     public TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById,
                        ImmutableMap<String, TopicImage> topicsByName) {

@@ -76,7 +76,7 @@ public class TopicsImageTest {
     }
 
     private static ImmutableMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
-        ImmutableMap<Uuid, TopicImage> map = TopicsImage.EMPTY.topicsById;
+        ImmutableMap<Uuid, TopicImage> map = TopicsImage.EMPTY.topicsById();
         for (TopicImage topic : topics) {
             map = map.updated(topic.id(), topic);
         }
@@ -84,7 +84,7 @@ public class TopicsImageTest {
     }
 
     private static ImmutableMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        ImmutableMap<String, TopicImage> map = TopicsImage.EMPTY.topicsByName;
+        ImmutableMap<String, TopicImage> map = TopicsImage.EMPTY.topicsByName();
         for (TopicImage topic : topics) {
             map = map.updated(topic.name(), topic);
         }

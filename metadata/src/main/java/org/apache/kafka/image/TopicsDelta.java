@@ -126,12 +126,12 @@ public final class TopicsDelta {
     }
 
     public TopicsImage apply() {
-        ImmutableMap<Uuid, TopicImage> newTopicsById = image.topicsById;
-        ImmutableMap<String, TopicImage> newTopicsByName = image.topicsByName;
+        ImmutableMap<Uuid, TopicImage> newTopicsById = image.topicsById();
+        ImmutableMap<String, TopicImage> newTopicsByName = image.topicsByName();
         // apply all the deletes
         for (Uuid topicId: deletedTopicIds) {
             // it was deleted, so we have to remove it from the maps
-            TopicImage originalTopicToBeDeleted = image.topicsById.get(topicId);
+            TopicImage originalTopicToBeDeleted = image.topicsById().get(topicId);
             if (originalTopicToBeDeleted == null) {
                 throw new IllegalStateException("Missing topic id " + topicId);
             } else {
