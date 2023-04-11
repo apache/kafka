@@ -48,7 +48,7 @@ class KafkaRequestHandlerTest {
     // Make unsupported API versions request to avoid having to parse a real request
     val requestHeader = mock(classOf[RequestHeader])
     when(requestHeader.apiKey()).thenReturn(ApiKeys.API_VERSIONS)
-    when(requestHeader.apiVersion()).thenReturn(0)
+    when(requestHeader.apiVersion()).thenReturn(0.toShort)
 
     val context = new RequestContext(requestHeader, "0", mock(classOf[InetAddress]), new KafkaPrincipal("", ""),
       new ListenerName(""), SecurityProtocol.PLAINTEXT, mock(classOf[ClientInformation]), false)

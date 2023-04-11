@@ -2120,16 +2120,15 @@ class ReplicaManagerTest {
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback.capture())
 
       // Confirm we did not write to the log and instead returned error.
-      val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
+      val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
       callback(Map(tp -> Errors.INVALID_RECORD).toMap)
       assertEquals(Errors.INVALID_RECORD, result.assertFired.error)
-      
-      
+
       // If we don't supply a transaction coordinator partition, we do not verify, so counter stays the same.
       val transactionalRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, transactionalRecords2)
-      verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback])
+      verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
     } finally {
       replicaManager.shutdown()
     }

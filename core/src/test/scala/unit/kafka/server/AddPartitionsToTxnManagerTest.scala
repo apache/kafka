@@ -75,7 +75,9 @@ class AddPartitionsToTxnManagerTest {
   }
 
   def setErrors(errors: mutable.Map[TopicPartition, Errors])(callbackErrors: Map[TopicPartition, Errors]): Unit = {
-    errors.addAll(callbackErrors)
+    callbackErrors.foreach {
+      case (tp, error) => errors.put(tp, error)
+    }
   }
 
   @Test
