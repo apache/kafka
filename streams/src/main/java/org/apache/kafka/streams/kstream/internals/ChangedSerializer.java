@@ -18,16 +18,20 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, Void, T> {
 
-    private static final int NEWFLAG_SIZE = 1;
-
+    private static final int NEW_OLD_FLAG_SIZE = 1;
+    private static final int UINT32_SIZE = 4;
     private Serializer<T> inner;
+    private boolean isUpgrade;
 
     public ChangedSerializer(final Serializer<T> inner) {
         this.inner = inner;
@@ -45,33 +49,86 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
         }
     }
 
+    @SuppressWarnings("checkstyle:cyclomaticComplexity")
+    private static boolean isUpgrade(final Map<String, ?> configs) {
+        final Object upgradeFrom = configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (upgradeFrom == null) {
+            return false;
+        }
+
+        switch ((String) upgradeFrom) {
+            case StreamsConfig.UPGRADE_FROM_0100:
+            case StreamsConfig.UPGRADE_FROM_0101:
+            case StreamsConfig.UPGRADE_FROM_0102:
+            case StreamsConfig.UPGRADE_FROM_0110:
+            case StreamsConfig.UPGRADE_FROM_10:
+            case StreamsConfig.UPGRADE_FROM_11:
+            case StreamsConfig.UPGRADE_FROM_20:
+            case StreamsConfig.UPGRADE_FROM_21:
+            case StreamsConfig.UPGRADE_FROM_22:
+            case StreamsConfig.UPGRADE_FROM_23:
+            case StreamsConfig.UPGRADE_FROM_24:
+            case StreamsConfig.UPGRADE_FROM_25:
+            case StreamsConfig.UPGRADE_FROM_26:
+            case StreamsConfig.UPGRADE_FROM_27:
+            case StreamsConfig.UPGRADE_FROM_28:
+            case StreamsConfig.UPGRADE_FROM_30:
+            case StreamsConfig.UPGRADE_FROM_31:
+            case StreamsConfig.UPGRADE_FROM_32:
+            case StreamsConfig.UPGRADE_FROM_33:
+            case StreamsConfig.UPGRADE_FROM_34:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    @Override
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
+        this.isUpgrade = isUpgrade(configs);
+    }
+
     /**
      * @throws StreamsException if both old and new values of data are null, or if
-     * both values are not null
+     * both values are not null and is upgrading from a version less than 3.4
      */
     @Override
     public byte[] serialize(final String topic, final Headers headers, final Change<T> data) {
-        final byte[] serializedKey;
+        final boolean oldValueIsNotNull = data.oldValue != null;
+        final boolean newValueIsNotNull = data.newValue != null;
 
-        // only one of the old / new values would be not null
-        if (data.newValue != null) {
-            if (data.oldValue != null) {
+        final byte[] newData = inner.serialize(topic, headers, data.newValue);
+        final byte[] oldData = inner.serialize(topic, headers, data.oldValue);
+
+        final int newDataLength = newValueIsNotNull ? newData.length : 0;
+        final int oldDataLength = oldValueIsNotNull ? oldData.length : 0;
+
+        // The serialization format is:
+        // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
+        // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
+        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
+        final ByteBuffer buf;
+        if (newValueIsNotNull && oldValueIsNotNull) {
+            if (isUpgrade) {
                 throw new StreamsException("Both old and new values are not null (" + data.oldValue
-                    + " : " + data.newValue + ") in ChangeSerializer, which is not allowed.");
+                        + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
+            } else {
+                final int capacity = UINT32_SIZE + newDataLength + oldDataLength + NEW_OLD_FLAG_SIZE;
+                buf = ByteBuffer.allocate(capacity);
+                ByteUtils.writeUnsignedInt(buf, newDataLength);
+                buf.put(newData).put(oldData).put((byte) 2);
             }
-
-            serializedKey = inner.serialize(topic, headers, data.newValue);
+        } else if (newValueIsNotNull) {
+            final int capacity = newDataLength + NEW_OLD_FLAG_SIZE;
+            buf = ByteBuffer.allocate(capacity);
+            buf.put(newData).put((byte) 1);
+        } else if (oldValueIsNotNull) {
+            final int capacity = oldDataLength + NEW_OLD_FLAG_SIZE;
+            buf = ByteBuffer.allocate(capacity);
+            buf.put(oldData).put((byte) 0);
         } else {
-            if (data.oldValue == null) {
-                throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
-            }
-
-            serializedKey = inner.serialize(topic, headers, data.oldValue);
+            throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
         }
-
-        final ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);
-        buf.put(serializedKey);
-        buf.put((byte) (data.newValue != null ? 1 : 0));
 
         return buf.array();
     }
