@@ -15,13 +15,18 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 import java.util.regex.Pattern
 import java.util.{Locale, Optional, Properties}
-import kafka.log.LogConfig
+
+import kafka.server.{KafkaServer, QuotaType}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
@@ -30,19 +35,12 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
-import kafka.server.QuotaType
-import kafka.server.KafkaServer
-import org.apache.kafka.clients.admin.NewPartitions
-import org.apache.kafka.clients.admin.NewTopic
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
 import scala.collection.mutable
+import scala.collection.mutable.Buffer
+import scala.jdk.CollectionConverters._
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -637,7 +635,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0L, consumer.position(tp), "position() on a partition that we are subscribed to should reset the offset")
     consumer.commitSync()
     assertEquals(0L, consumer.committed(Set(tp).asJava).get(tp).offset)
-    
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 0, startingTimestamp = startingTimestamp)
     assertEquals(5L, consumer.position(tp), "After consuming 5 records, position should be 5")
     consumer.commitSync()
@@ -673,7 +670,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testFetchInvalidOffset(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
-    val consumer = createConsumer()
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
 
     // produce one record
     val totalRecords = 2
@@ -693,6 +690,53 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNotNull(outOfRangePartitions)
     assertEquals(1, outOfRangePartitions.size)
     assertEquals(outOfRangePos.toLong, outOfRangePartitions.get(tp))
+  }
+
+  @Test
+  def testFetchOutOfRangeOffsetResetConfigEarliest(): Unit = {
+    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    // ensure no in-flight fetch request so that the offset can be reset immediately
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
+    val totalRecords = 10L
+
+    val producer = createProducer()
+    val startingTimestamp = 0
+    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset =0)
+    // seek to out of range position
+    val outOfRangePos = totalRecords + 1
+    consumer.seek(tp, outOfRangePos)
+    // assert that poll resets to the beginning position
+    consumeAndVerifyRecords(consumer = consumer, numRecords = 1, startingOffset = 0)
+  }
+
+
+  @Test
+  def testFetchOutOfRangeOffsetResetConfigLatest(): Unit = {
+    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    // ensure no in-flight fetch request so that the offset can be reset immediately
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
+    val totalRecords = 10L
+
+    val producer = createProducer()
+    val startingTimestamp = 0
+    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
+    consumer.seek(tp, 0)
+    // consume some, but not all of the records
+    consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt/2, startingOffset = 0)
+    // seek to out of range position
+    val outOfRangePos = totalRecords + 17 // arbitrary, much higher offset
+    consumer.seek(tp, outOfRangePos)
+    // assert that poll resets to the ending position
+    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
+    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
+    val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
+    // ensure the seek went to the last known record at the time of the previous poll
+    assertEquals(totalRecords, nextRecord.offset())
   }
 
   @Test
@@ -949,7 +993,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // subscribe all consumers to all topics and validate the assignment
 
-    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1070,7 +1114,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     createTopic(topic1, 3)
     createTopic(topic2, 3)
 
-    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1259,7 +1303,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testConsumeMessagesWithLogAppendTime(): Unit = {
     val topicName = "testConsumeMessagesWithLogAppendTime"
     val topicProps = new Properties()
-    topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "LogAppendTime")
+    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
     createTopic(topicName, 2, 2, topicProps)
 
     val startTime = System.currentTimeMillis()
@@ -1642,12 +1686,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
     servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
     servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
-
-    def assertNoExemptRequestMetric(broker: KafkaServer): Unit = {
-        val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
-        assertNull(broker.metrics.metric(metricName), "Metric should not have been created " + metricName)
-    }
-    servers.foreach(assertNoExemptRequestMetric)
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
@@ -1696,7 +1734,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     * @param topicsToSubscribe topics to which consumers will subscribe to
     * @return collection of consumer pollers
     */
-  def subscribeConsumers(consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+  def subscribeConsumers(consumerGroup: mutable.Buffer[Consumer[Array[Byte], Array[Byte]]],
                          topicsToSubscribe: List[String]): mutable.Buffer[ConsumerAssignmentPoller] = {
     val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
     for (consumer <- consumerGroup)
@@ -1717,9 +1755,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     */
   def createConsumerGroupAndWaitForAssignment(consumerCount: Int,
                                               topicsToSubscribe: List[String],
-                                              subscriptions: Set[TopicPartition]): (Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
+                                              subscriptions: Set[TopicPartition]): (Buffer[Consumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerCount <= subscriptions.size)
-    val consumerGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumerGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     for (_ <- 0 until consumerCount)
       consumerGroup += createConsumer()
 
@@ -1910,4 +1948,3 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer2.close()
   }
 }
-

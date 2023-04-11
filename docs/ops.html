@@ -1197,7 +1197,7 @@ $ bin/kafka-acls.sh \
   </p>
 
   <p>
-  <strong>Client quotas:</strong> Kafka supports different types of (per-user principal) client quotas. Because a client's quotas apply irrespective of which topics the client is writing to or reading from, they are a convenient and effective tool to allocate resources in a multi-tenant cluster. <a href="#design_quotascpu">Request rate quotas</a>, for example, help to limit a user's impact on broker CPU usage by limiting the time a broker spends on the <a href="/protocol.html">request handling path</a> for that user, after which throttling kicks in. In many situations, isolating users with request rate quotas has a bigger impact in multi-tenant clusters than setting incoming/outgoing network bandwidth quotas, because excessive broker CPU usage for processing requests reduces the effective bandwidth the broker can serve. Furthermore, administrators can also define quotas on topic operations—such as create, delete, and alter—to prevent Kafka clusters from being overwhelmed by highly concurrent topic operations (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-599%3A+Throttle+Create+Topic%2C+Create+Partition+and+Delete+Topic+Operations">KIP-599</a> and the quota type <code>controller_mutations_rate</code>).
+  <strong>Client quotas:</strong> Kafka supports different types of (per-user principal) client quotas. Because a client's quotas apply irrespective of which topics the client is writing to or reading from, they are a convenient and effective tool to allocate resources in a multi-tenant cluster. <a href="#design_quotascpu">Request rate quotas</a>, for example, help to limit a user's impact on broker CPU usage by limiting the time a broker spends on the <a href="/protocol.html">request handling path</a> for that user, after which throttling kicks in. In many situations, isolating users with request rate quotas has a bigger impact in multi-tenant clusters than setting incoming/outgoing network bandwidth quotas, because excessive broker CPU usage for processing requests reduces the effective bandwidth the broker can serve. Furthermore, administrators can also define quotas on topic operations—such as create, delete, and alter—to prevent Kafka clusters from being overwhelmed by highly concurrent topic operations (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-599%3A+Throttle+Create+Topic%2C+Create+Partition+and+Delete+Topic+Operations">KIP-599</a> and the quota type <code>controller_mutation_rate</code>).
   </p>
 
   <p>
@@ -1605,6 +1605,11 @@ $ bin/kafka-acls.sh \
         <td>0</td>
       </tr>
       <tr>
+        <td>Producer Id counts</td>
+        <td>kafka.server:type=ReplicaManager,name=ProducerIdCount</td>
+        <td>Count of all producer ids created by transactional and idempotent producers in each replica on the broker</td>
+      </tr>
+      <tr>
         <td>Partition counts</td>
         <td>kafka.server:type=ReplicaManager,name=PartitionCount</td>
         <td>mostly even across brokers</td>
@@ -1890,7 +1895,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <tr>
     <td>Append Records Rate</td>
     <td>The average number of records appended per sec by the leader of the raft quorum.</td>
-    <td>kafka.server:type=raft-metrics,name=append-records-raft</td>
+    <td>kafka.server:type=raft-metrics,name=append-records-rate</td>
   </tr>
   <tr>
     <td>Average Poll Idle Ratio</td>
@@ -1929,7 +1934,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Active Broker Count</td>
-    <td>The number of fenced brokers as observed by this Controller.</td>
+    <td>The number of active brokers as observed by this Controller.</td>
     <td>kafka.controller:type=KafkaController,name=ActiveBrokerCount</td>
   </tr>
   <tr>
@@ -2333,6 +2338,36 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>The total time an appender waits for space allocation in nanoseconds.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>flush-time-ns-total</td>
+        <td>The total time the Producer spent in Producer.flush in nanoseconds.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-init-time-ns-total</td>
+        <td>The total time the Producer spent initializing transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-begin-time-ns-total</td>
+        <td>The total time the Producer spent in beginTransaction in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-send-offsets-time-ns-total</td>
+        <td>The total time the Producer spent sending offsets to transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-commit-time-ns-total</td>
+        <td>The total time the Producer spent committing transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-abort-time-ns-total</td>
+        <td>The total time the Producer spent aborting transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
 
   </tbody></table>
 
@@ -2341,7 +2376,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <!--#include virtual="generated/producer_metrics.html" -->
 
 
-  <h4 class="anchor-heading"><a id="consumer_monitoring" class="anchor-link"></a><a href="#consumer_monitoring">consumer monitoring</a></h4>
+  <h4 class="anchor-heading"><a id="consumer_monitoring" class="anchor-link"></a><a href="#consumer_monitoring">Consumer monitoring</a></h4>
 
   The following metrics are available on consumer instances.
 
@@ -2370,6 +2405,16 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
       <tr>
         <td>poll-idle-ratio-avg</td>
         <td>The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>commited-time-ns-total</td>
+        <td>The total time the Consumer spent in committed in nanoseconds.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>commit-sync-time-ns-total</td>
+        <td>The total time the Consumer spent committing offsets in nanoseconds (for AOS).</td>
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
@@ -2718,6 +2763,16 @@ All of the following metrics have a recording level of <code>info</code>:
       <tr>
         <td>task-closed-total</td>
         <td>The total number of tasks closed.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>blocked-time-ns-total</td>
+        <td>The total time the thread spent blocked on kafka.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>thread-start-time</td>
+        <td>The time that the thread was started.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
  </tbody>
@@ -3504,7 +3559,7 @@ foo
     <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 servers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addresses in a future release of Kafka.</li>
     <li>The Kafka controllers store all of the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
 
-  <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Missing Features</a></h4>
+  <h4 class="anchor-heading"><a id="kraft_missing" class="anchor-link"></a><a href="#kraft_missing">Missing Features</a></h4>
 
   <p>The following features are not fullying implemented in KRaft mode:</p>
 

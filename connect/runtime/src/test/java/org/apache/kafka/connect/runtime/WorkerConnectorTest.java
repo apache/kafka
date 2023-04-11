@@ -103,7 +103,7 @@ public class WorkerConnectorTest {
         assertFailedMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(listener).onFailure(CONNECTOR, exception);
@@ -127,7 +127,7 @@ public class WorkerConnectorTest {
         assertFailedMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(listener).onFailure(CONNECTOR, exception);
@@ -153,7 +153,7 @@ public class WorkerConnectorTest {
         assertRunningMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(connector).start(CONFIG);
@@ -181,7 +181,7 @@ public class WorkerConnectorTest {
         assertPausedMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(connector).start(CONFIG);
@@ -192,6 +192,37 @@ public class WorkerConnectorTest {
         InOrder inOrder = inOrder(onStateChange);
         inOrder.verify(onStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
         inOrder.verify(onStateChange).onCompletion(isNull(), eq(TargetState.PAUSED));
+        verifyNoMoreInteractions(onStateChange);
+    }
+
+    @Test
+    public void testStartupAndStop() {
+        connector = sinkConnector;
+        when(connector.version()).thenReturn(VERSION);
+
+        Callback<TargetState> onStateChange = mockCallback();
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, null, null, classLoader);
+
+        workerConnector.initialize();
+        assertInitializedSinkMetric(workerConnector);
+
+        workerConnector.doTransitionTo(TargetState.STARTED, onStateChange);
+        assertRunningMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STOPPED, onStateChange);
+        assertStoppedMetric(workerConnector);
+        workerConnector.shutdown();
+        workerConnector.doShutdown();
+        assertDestroyedMetric(workerConnector);
+
+        verifyInitialize();
+        verify(connector).start(CONFIG);
+        verify(listener).onStartup(CONNECTOR);
+        verify(listener).onStop(CONNECTOR);
+        verifyCleanShutdown(true);
+
+        InOrder inOrder = inOrder(onStateChange);
+        inOrder.verify(onStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
+        inOrder.verify(onStateChange).onCompletion(isNull(), eq(TargetState.STOPPED));
         verifyNoMoreInteractions(onStateChange);
     }
 
@@ -213,7 +244,7 @@ public class WorkerConnectorTest {
         assertRunningMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(listener).onPause(CONNECTOR);
@@ -241,7 +272,7 @@ public class WorkerConnectorTest {
         assertPausedMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         // connector never gets started
@@ -249,6 +280,31 @@ public class WorkerConnectorTest {
         verifyCleanShutdown(false);
 
         verify(onStateChange).onCompletion(isNull(), eq(TargetState.PAUSED));
+        verifyNoMoreInteractions(onStateChange);
+    }
+
+    @Test
+    public void testStartupStopped() {
+        connector = sinkConnector;
+        when(connector.version()).thenReturn(VERSION);
+
+        Callback<TargetState> onStateChange = mockCallback();
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, null, null, classLoader);
+
+        workerConnector.initialize();
+        assertInitializedSinkMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STOPPED, onStateChange);
+        assertStoppedMetric(workerConnector);
+        workerConnector.shutdown();
+        workerConnector.doShutdown();
+        assertDestroyedMetric(workerConnector);
+
+        verifyInitialize();
+        // connector never gets started
+        verify(listener).onStop(CONNECTOR);
+        verifyCleanShutdown(false);
+
+        verify(onStateChange).onCompletion(isNull(), eq(TargetState.STOPPED));
         verifyNoMoreInteractions(onStateChange);
     }
 
@@ -269,7 +325,7 @@ public class WorkerConnectorTest {
         assertFailedMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(connector).start(CONFIG);
@@ -278,6 +334,49 @@ public class WorkerConnectorTest {
 
         verify(onStateChange).onCompletion(any(Exception.class), isNull());
         verifyNoMoreInteractions(onStateChange);
+    }
+
+    @Test
+    public void testStopFailure() {
+        RuntimeException exception = new RuntimeException();
+        connector = sourceConnector;
+
+        when(connector.version()).thenReturn(VERSION);
+
+        // Fail during the first call to stop, then succeed for the next attempt
+        doThrow(exception).doNothing().when(connector).stop();
+
+        Callback<TargetState> onFirstStateChange = mockCallback();
+        Callback<TargetState> onSecondStateChange = mockCallback();
+        Callback<TargetState> onThirdStateChange = mockCallback();
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+
+        workerConnector.initialize();
+        assertInitializedSourceMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STARTED, onFirstStateChange);
+        assertRunningMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STOPPED, onSecondStateChange);
+        assertStoppedMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STARTED, onThirdStateChange);
+        assertRunningMetric(workerConnector);
+        workerConnector.shutdown();
+        workerConnector.doShutdown();
+        assertDestroyedMetric(workerConnector);
+
+        verifyInitialize();
+        verify(connector, times(2)).start(CONFIG);
+        verify(listener).onStartup(CONNECTOR);
+        verify(listener).onResume(CONNECTOR);
+        verify(listener).onStop(CONNECTOR);
+        verify(onFirstStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
+        verifyNoMoreInteractions(onFirstStateChange);
+        // We swallow failures when transitioning to the STOPPED state
+        verify(onSecondStateChange).onCompletion(isNull(), eq(TargetState.STOPPED));
+        verifyNoMoreInteractions(onSecondStateChange);
+        verify(onThirdStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
+        verifyNoMoreInteractions(onThirdStateChange);
+        verifyShutdown(2, true, true);
+        verifyNoMoreInteractions(listener);
     }
 
     @Test
@@ -327,7 +426,7 @@ public class WorkerConnectorTest {
         assertRunningMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(connector).start(CONFIG);
@@ -356,7 +455,7 @@ public class WorkerConnectorTest {
         assertPausedMetric(workerConnector);
         workerConnector.shutdown();
         workerConnector.doShutdown();
-        assertStoppedMetric(workerConnector);
+        assertDestroyedMetric(workerConnector);
 
         verifyInitialize();
         verify(connector).start(CONFIG);
@@ -367,6 +466,38 @@ public class WorkerConnectorTest {
         InOrder inOrder = inOrder(onStateChange);
         inOrder.verify(onStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
         inOrder.verify(onStateChange, times(2)).onCompletion(isNull(), eq(TargetState.PAUSED));
+        verifyNoMoreInteractions(onStateChange);
+    }
+
+    @Test
+    public void testTransitionStoppedToStopped() {
+        connector = sourceConnector;
+        when(connector.version()).thenReturn(VERSION);
+
+        Callback<TargetState> onStateChange = mockCallback();
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+
+        workerConnector.initialize();
+        assertInitializedSourceMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STARTED, onStateChange);
+        assertRunningMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STOPPED, onStateChange);
+        assertStoppedMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STOPPED, onStateChange);
+        assertStoppedMetric(workerConnector);
+        workerConnector.shutdown();
+        workerConnector.doShutdown();
+        assertDestroyedMetric(workerConnector);
+
+        verifyInitialize();
+        verify(connector).start(CONFIG);
+        verify(listener).onStartup(CONNECTOR);
+        verify(listener).onStop(CONNECTOR);
+        verifyCleanShutdown(true);
+
+        InOrder inOrder = inOrder(onStateChange);
+        inOrder.verify(onStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
+        inOrder.verify(onStateChange, times(2)).onCompletion(isNull(), eq(TargetState.STOPPED));
         verifyNoMoreInteractions(onStateChange);
     }
 
@@ -389,13 +520,23 @@ public class WorkerConnectorTest {
     protected void assertFailedMetric(WorkerConnector workerConnector) {
         assertFalse(workerConnector.metrics().isUnassigned());
         assertTrue(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isStopped());
         assertFalse(workerConnector.metrics().isPaused());
+        assertFalse(workerConnector.metrics().isRunning());
+    }
+
+    protected void assertStoppedMetric(WorkerConnector workerConnector) {
+        assertFalse(workerConnector.metrics().isUnassigned());
+        assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isPaused());
+        assertTrue(workerConnector.metrics().isStopped());
         assertFalse(workerConnector.metrics().isRunning());
     }
 
     protected void assertPausedMetric(WorkerConnector workerConnector) {
         assertFalse(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isStopped());
         assertTrue(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
     }
@@ -403,13 +544,15 @@ public class WorkerConnectorTest {
     protected void assertRunningMetric(WorkerConnector workerConnector) {
         assertFalse(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isStopped());
         assertFalse(workerConnector.metrics().isPaused());
         assertTrue(workerConnector.metrics().isRunning());
     }
 
-    protected void assertStoppedMetric(WorkerConnector workerConnector) {
+    protected void assertDestroyedMetric(WorkerConnector workerConnector) {
         assertTrue(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isStopped());
         assertFalse(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
     }
@@ -425,6 +568,7 @@ public class WorkerConnectorTest {
     protected void assertInitializedMetric(WorkerConnector workerConnector, String expectedType) {
         assertTrue(workerConnector.metrics().isUnassigned());
         assertFalse(workerConnector.metrics().isFailed());
+        assertFalse(workerConnector.metrics().isStopped());
         assertFalse(workerConnector.metrics().isPaused());
         assertFalse(workerConnector.metrics().isRunning());
         MetricGroup metricGroup = workerConnector.metrics().metricGroup();
@@ -457,6 +601,10 @@ public class WorkerConnectorTest {
     }
 
     private void verifyShutdown(boolean clean, boolean started) {
+        verifyShutdown(1, clean, started);
+    }
+
+    private void verifyShutdown(int connectorStops, boolean clean, boolean started) {
         verify(ctx).close();
         if (connector instanceof SourceConnector) {
             verify(offsetStorageReader).close();
@@ -466,7 +614,7 @@ public class WorkerConnectorTest {
             verify(listener).onShutdown(CONNECTOR);
         }
         if (started) {
-            verify(connector).stop();
+            verify(connector, times(connectorStops)).stop();
         }
     }
 

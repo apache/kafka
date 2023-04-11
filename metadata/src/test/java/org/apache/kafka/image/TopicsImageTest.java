@@ -23,6 +23,8 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
@@ -46,6 +48,7 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_R
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -378,10 +381,10 @@ public class TopicsImageTest {
     }
 
     private void testToImageAndBack(TopicsImage image) throws Throwable {
-        MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer);
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().build());
         TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
-        RecordTestUtils.replayAllBatches(delta, writer.batches());
+        RecordTestUtils.replayAll(delta, writer.records());
         TopicsImage nextImage = delta.apply();
         assertEquals(image, nextImage);
     }
@@ -394,7 +397,7 @@ public class TopicsImageTest {
         assertTrue(map.containsKey("bar"));
         assertEquals(BAR_UUID, map.get("bar"));
         assertFalse(map.containsKey("baz"));
-        assertEquals(null, map.get("baz"));
+        assertNull(map.get("baz"));
         HashSet<Uuid> uuids = new HashSet<>();
         map.values().iterator().forEachRemaining(u -> uuids.add(u));
         HashSet<Uuid> expectedUuids = new HashSet<>(Arrays.asList(
@@ -413,7 +416,7 @@ public class TopicsImageTest {
         assertTrue(map.containsKey(BAR_UUID));
         assertEquals("bar", map.get(BAR_UUID));
         assertFalse(map.containsKey(BAZ_UUID));
-        assertEquals(null, map.get(BAZ_UUID));
+        assertNull(map.get(BAZ_UUID));
         HashSet<String> names = new HashSet<>();
         map.values().iterator().forEachRemaining(n -> names.add(n));
         HashSet<String> expectedNames = new HashSet<>(Arrays.asList("foo", "bar"));

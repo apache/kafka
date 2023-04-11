@@ -17,7 +17,14 @@
 
 package org.apache.kafka.controller;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -25,14 +32,6 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.Function;
-
-import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -73,7 +72,7 @@ public class PartitionChangeBuilder {
     private final PartitionRegistration partition;
     private final Uuid topicId;
     private final int partitionId;
-    private final Function<Integer, Boolean> isAcceptableLeader;
+    private final IntPredicate isAcceptableLeader;
     private final boolean isLeaderRecoverySupported;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
@@ -85,7 +84,7 @@ public class PartitionChangeBuilder {
     public PartitionChangeBuilder(PartitionRegistration partition,
                                   Uuid topicId,
                                   int partitionId,
-                                  Function<Integer, Boolean> isAcceptableLeader,
+                                  IntPredicate isAcceptableLeader,
                                   boolean isLeaderRecoverySupported) {
         this.partition = partition;
         this.topicId = topicId;
@@ -101,6 +100,12 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetIsr(List<Integer> targetIsr) {
         this.targetIsr = targetIsr;
+        return this;
+    }
+
+    public PartitionChangeBuilder setTargetIsrWithBrokerStates(List<BrokerState> targetIsrWithEpoch) {
+        this.targetIsr = targetIsrWithEpoch.stream()
+            .map(brokerState -> brokerState.brokerId()).collect(Collectors.toList());
         return this;
     }
 
@@ -198,7 +203,7 @@ public class PartitionChangeBuilder {
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
-                .filter(replica -> isAcceptableLeader.apply(replica))
+                .filter(replica -> isAcceptableLeader.test(replica))
                 .findFirst();
             if (uncleanLeader.isPresent()) {
                 return new ElectionResult(uncleanLeader.get(), true);
@@ -209,7 +214,7 @@ public class PartitionChangeBuilder {
     }
 
     private boolean isValidNewLeader(int replica) {
-        return targetIsr.contains(replica) && isAcceptableLeader.apply(replica);
+        return targetIsr.contains(replica) && isAcceptableLeader.test(replica);
     }
 
     private void tryElection(PartitionChangeRecord record) {
@@ -266,32 +271,22 @@ public class PartitionChangeBuilder {
     }
 
     private void completeReassignmentIfNeeded() {
-        // Check if there is a reassignment to complete.
-        if (targetRemoving.isEmpty() && targetAdding.isEmpty()) return;
+        PartitionReassignmentReplicas reassignmentReplicas =
+            new PartitionReassignmentReplicas(
+                targetRemoving,
+                targetAdding,
+                targetReplicas);
 
-        List<Integer> newTargetIsr = targetIsr;
-        List<Integer> newTargetReplicas = targetReplicas;
-        if (!targetRemoving.isEmpty()) {
-            newTargetIsr = new ArrayList<>(targetIsr.size());
-            for (int replica : targetIsr) {
-                if (!targetRemoving.contains(replica)) {
-                    newTargetIsr.add(replica);
-                }
-            }
-            if (newTargetIsr.isEmpty()) return;
-            newTargetReplicas = new ArrayList<>(targetReplicas.size());
-            for (int replica : targetReplicas) {
-                if (!targetRemoving.contains(replica)) {
-                    newTargetReplicas.add(replica);
-                }
-            }
-            if (newTargetReplicas.isEmpty()) return;
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> completedReassignmentOpt =
+            reassignmentReplicas.maybeCompleteReassignment(targetIsr);
+        if (!completedReassignmentOpt.isPresent()) {
+            return;
         }
-        for (int replica : targetAdding) {
-            if (!newTargetIsr.contains(replica)) return;
-        }
-        targetIsr = newTargetIsr;
-        targetReplicas = newTargetReplicas;
+
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = completedReassignmentOpt.get();
+
+        targetIsr = completedReassignment.isr;
+        targetReplicas = completedReassignment.replicas;
         targetRemoving = Collections.emptyList();
         targetAdding = Collections.emptyList();
     }
@@ -311,6 +306,21 @@ public class PartitionChangeBuilder {
             // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
             record.setIsr(targetIsr);
         }
+
+        setAssignmentChanges(record);
+
+        if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
+            record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
+        }
+
+        if (changeRecordIsNoOp(record)) {
+            return Optional.empty();
+        } else {
+            return Optional.of(new ApiMessageAndVersion(record, (short) 0));
+        }
+    }
+
+    private void setAssignmentChanges(PartitionChangeRecord record) {
         if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
             record.setReplicas(targetReplicas);
         }
@@ -319,16 +329,6 @@ public class PartitionChangeBuilder {
         }
         if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
             record.setAddingReplicas(targetAdding);
-        }
-        if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
-            record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
-        }
-
-        if (changeRecordIsNoOp(record)) {
-            return Optional.empty();
-        } else {
-            return Optional.of(new ApiMessageAndVersion(record,
-                PARTITION_CHANGE_RECORD.highestSupportedVersion()));
         }
     }
 

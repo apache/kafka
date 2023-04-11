@@ -26,8 +26,8 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +76,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
     private class KTableSourceProcessor implements Processor<KIn, VIn, KIn, Change<VIn>> {
 
         private ProcessorContext<KIn, Change<VIn>> context;
-        private TimestampedKeyValueStore<KIn, VIn> store;
+        private KeyValueStoreWrapper<KIn, VIn> store;
         private TimestampedTupleForwarder<KIn, VIn> tupleForwarder;
         private Sensor droppedRecordsSensor;
 
@@ -88,9 +88,9 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(),
                 context.taskId().toString(), metrics);
             if (queryableName != null) {
-                store = context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.getStore(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -146,7 +146,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 } else {
                     oldValue = null;
                 }
-                store.put(record.key(), ValueAndTimestamp.make(record.value(), record.timestamp()));
+                store.put(record.key(), record.value(), record.timestamp());
                 tupleForwarder.maybeForward(record.withValue(new Change<>(record.value(), oldValue)));
             } else {
                 context.forward(record.withValue(new Change<>(record.value(), null)));

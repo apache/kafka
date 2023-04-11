@@ -45,6 +45,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.util.Optional;
+import java.util.Collections;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -78,8 +80,8 @@ public class KStreamRepartitionTest {
         @SuppressWarnings("unchecked")
         final StreamPartitioner<Integer, String> streamPartitionerMock = mock(StreamPartitioner.class);
 
-        when(streamPartitionerMock.partition(anyString(), eq(0), eq("X0"), anyInt())).thenReturn(1);
-        when(streamPartitionerMock.partition(anyString(), eq(1), eq("X1"), anyInt())).thenReturn(1);
+        when(streamPartitionerMock.partitions(anyString(), eq(0), eq("X0"), anyInt())).thenReturn(Optional.of(Collections.singleton(1)));
+        when(streamPartitionerMock.partitions(anyString(), eq(1), eq("X1"), anyInt())).thenReturn(Optional.of(Collections.singleton(1)));
 
         final String repartitionOperationName = "test";
         final Repartitioned<Integer, String> repartitioned = Repartitioned
@@ -111,8 +113,8 @@ public class KStreamRepartitionTest {
             assertTrue(testOutputTopic.readRecordsToList().isEmpty());
         }
 
-        verify(streamPartitionerMock).partition(anyString(), eq(0), eq("X0"), anyInt());
-        verify(streamPartitionerMock).partition(anyString(), eq(1), eq("X1"), anyInt());
+        verify(streamPartitionerMock).partitions(anyString(), eq(0), eq("X0"), anyInt());
+        verify(streamPartitionerMock).partitions(anyString(), eq(1), eq("X1"), anyInt());
     }
 
     @Test

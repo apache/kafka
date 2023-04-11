@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -69,19 +70,19 @@ import java.util.function.Supplier;
  * of connector and task status information. When a state change is observed,
  * the new state is written to the compacted topic. The new state will not be
  * visible until it has been read back from the topic.
- *
- * In spite of their names, the putSafe() methods cannot guarantee the safety
+ * <p>
+ * In spite of their names, the {@link #putSafe} methods cannot guarantee the safety
  * of the write (since Kafka itself cannot provide such guarantees currently),
- * but it can avoid specific unsafe conditions. In particular, we putSafe()
+ * but it can avoid specific unsafe conditions. In particular, {@link #putSafe}
  * allows writes in the following conditions:
- *
- * 1) It is (probably) safe to overwrite the state if there is no previous
- *    value.
- * 2) It is (probably) safe to overwrite the state if the previous value was
- *    set by a worker with the same workerId.
- * 3) It is (probably) safe to overwrite the previous state if the current
- *    generation is higher than the previous .
- *
+ * <ol>
+ *   <li>It is (probably) safe to overwrite the state if there is no previous
+ *   value.
+ *   <li>It is (probably) safe to overwrite the state if the previous value was
+ *   set by a worker with the same workerId.
+ *   <li>It is (probably) safe to overwrite the previous state if the current
+ *   generation is higher than the previous .
+ * </ol>
  * Basically all these conditions do is reduce the window for conflicts. They
  * obviously cannot take into account in-flight requests.
  *
@@ -131,6 +132,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     protected final Map<String, CacheEntry<ConnectorStatus>> connectors;
     protected final ConcurrentMap<String, ConcurrentMap<String, TopicStatus>> topics;
     private final Supplier<TopicAdmin> topicAdminSupplier;
+    private final String clientId;
 
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
@@ -139,16 +141,17 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     @Deprecated
     public KafkaStatusBackingStore(Time time, Converter converter) {
-        this(time, converter, null);
+        this(time, converter, null, "connect-distributed-");
     }
 
-    public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier) {
+    public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier, String clientIdBase) {
         this.time = time;
         this.converter = converter;
         this.tasks = new Table<>();
         this.connectors = new HashMap<>();
         this.topics = new ConcurrentHashMap<>();
         this.topicAdminSupplier = topicAdminSupplier;
+        this.clientId = Objects.requireNonNull(clientIdBase) + "statuses";
     }
 
     // visible for testing
@@ -176,14 +179,17 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
         // gets approved and scheduled for release.
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false"); // disable idempotence since retries is force to 0
+        producerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
 
         Map<String, Object> adminProps = new HashMap<>(originals);
+        adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         Supplier<TopicAdmin> adminSupplier;
         if (topicAdminSupplier != null) {
@@ -208,7 +214,8 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, adminSupplier);
     }
 
-    private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
+    // Visible for testing
+    protected KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<String, byte[]>> consumedCallback,
                                                               final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {

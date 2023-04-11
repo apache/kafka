@@ -39,8 +39,8 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -1650,22 +1650,7 @@ public class KStreamSlidingWindowAggregateTest {
         final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
 
         if (emitFinal) {
-            expected.put(0L, ValueAndTimestamp.make("ARSTU", 10L));
-            expected.put(3L, ValueAndTimestamp.make("ASTU", 10L));
-            expected.put(4L, ValueAndTimestamp.make("ATU", 10L));
-            expected.put(5L, ValueAndTimestamp.make("ABTU", 15L));
-            expected.put(6L, ValueAndTimestamp.make("ABCU", 16L));
-            expected.put(8L, ValueAndTimestamp.make("ABCDU", 18L));
-            expected.put(9L, ValueAndTimestamp.make("ABCD", 18L));
-            expected.put(11L, ValueAndTimestamp.make("BCD", 18L));
-            expected.put(16L, ValueAndTimestamp.make("CD", 18L));
-            expected.put(17L, ValueAndTimestamp.make("D", 18L));
-            expected.put(20L, ValueAndTimestamp.make("E", 30L));
-            expected.put(30L, ValueAndTimestamp.make("EF", 40L));
-            expected.put(31L, ValueAndTimestamp.make("F", 40L));
-            expected.put(45L, ValueAndTimestamp.make("G", 55L));
-            expected.put(46L, ValueAndTimestamp.make("GH", 56L));
-            expected.put(48L, ValueAndTimestamp.make("GHIJ", 58L));
+            // only non-expired records
             expected.put(52L, ValueAndTimestamp.make("GHIJK", 62L));
             expected.put(53L, ValueAndTimestamp.make("GHIJKLMN", 63L));
             expected.put(56L, ValueAndTimestamp.make("HIJKLMN", 63L));
@@ -1675,6 +1660,7 @@ public class KStreamSlidingWindowAggregateTest {
             expected.put(66L, ValueAndTimestamp.make("O", 76L));
             expected.put(67L, ValueAndTimestamp.make("OP", 77L));
             expected.put(70L, ValueAndTimestamp.make("OPQ", 80L));
+
         } else {
             expected.put(0L, ValueAndTimestamp.make("ARSTU", 10L));
             expected.put(3L, ValueAndTimestamp.make("ASTU", 10L));

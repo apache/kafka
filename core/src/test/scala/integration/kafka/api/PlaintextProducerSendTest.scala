@@ -19,16 +19,19 @@ package kafka.api
 
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
-import kafka.log.LogConfig
-import kafka.server.Defaults
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import java.nio.charset.StandardCharsets
 
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
@@ -53,6 +56,30 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       deliveryTimeoutMs = Int.MaxValue,
       batchSize = 0)
     sendAndVerify(producer)
+  }
+
+  @Timeout(value = 15, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBatchSizeZeroNoPartitionNoRecordKey(quorum: String): Unit = {
+    val producer = createProducer(batchSize = 0)
+    val numRecords = 10;
+    try {
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2)
+      val futures = for (i <- 1 to numRecords) yield {
+        val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, s"value$i".getBytes(StandardCharsets.UTF_8))
+        producer.send(record)
+      }
+      producer.flush()
+      val lastOffset = futures.foldLeft(0) { (offset, future) =>
+        val recordMetadata = future.get
+        assertEquals(topic, recordMetadata.topic)
+        offset + 1
+      }
+      assertEquals(numRecords, lastOffset)
+    } finally {
+      producer.close()
+    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -97,7 +124,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendWithInvalidCreateTime(quorum: String): Unit = {
     val topicProps = new Properties()
-    topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
+    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
     TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
@@ -191,7 +218,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val valueLengthSize = 3
     val overhead = Records.LOG_OVERHEAD + DefaultRecordBatch.RECORD_BATCH_OVERHEAD + DefaultRecord.MAX_RECORD_OVERHEAD +
       keyLengthSize + headerLengthSize + valueLengthSize
-    val valueSize = Defaults.MessageMaxBytes - overhead
+    val valueSize = LogConfig.DEFAULT_MAX_MESSAGE_BYTES - overhead
 
     val record0 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize))
     assertEquals(record0.value.length, producer.send(record0).get.serializedValueSize)

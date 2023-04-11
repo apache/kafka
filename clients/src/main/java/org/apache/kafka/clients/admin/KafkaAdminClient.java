@@ -273,8 +273,8 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_NAME;
-import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_PARTITION;
+import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_NAME;
+import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -4375,7 +4375,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             DescribeQuorumRequest.Builder createRequest(int timeoutMs) {
                 return new Builder(DescribeQuorumRequest.singletonRequest(
-                        new TopicPartition(METADATA_TOPIC_NAME, METADATA_TOPIC_PARTITION.partition())));
+                        new TopicPartition(CLUSTER_METADATA_TOPIC_NAME, CLUSTER_METADATA_TOPIC_PARTITION.partition())));
             }
 
             @Override
@@ -4391,9 +4391,9 @@ public class KafkaAdminClient extends AdminClient {
                     throw new UnknownServerException(msg);
                 }
                 DescribeQuorumResponseData.TopicData topic = quorumResponse.data().topics().get(0);
-                if (!topic.topicName().equals(METADATA_TOPIC_NAME)) {
+                if (!topic.topicName().equals(CLUSTER_METADATA_TOPIC_NAME)) {
                     String msg = String.format("DescribeMetadataQuorum received a topic with name %s when %s was expected",
-                            topic.topicName(), METADATA_TOPIC_NAME);
+                            topic.topicName(), CLUSTER_METADATA_TOPIC_NAME);
                     log.debug(msg);
                     throw new UnknownServerException(msg);
                 }
@@ -4404,9 +4404,9 @@ public class KafkaAdminClient extends AdminClient {
                     throw new UnknownServerException(msg);
                 }
                 DescribeQuorumResponseData.PartitionData partition = topic.partitions().get(0);
-                if (partition.partitionIndex() != METADATA_TOPIC_PARTITION.partition()) {
+                if (partition.partitionIndex() != CLUSTER_METADATA_TOPIC_PARTITION.partition()) {
                     String msg = String.format("DescribeMetadataQuorum received a single partition with index %d when %d was expected",
-                            partition.partitionIndex(), METADATA_TOPIC_PARTITION.partition());
+                            partition.partitionIndex(), CLUSTER_METADATA_TOPIC_PARTITION.partition());
                     log.debug(msg);
                     throw new UnknownServerException(msg);
                 }

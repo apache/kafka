@@ -22,7 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -47,12 +46,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
-import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
@@ -115,27 +111,6 @@ public final class StreamsTestUtils {
 
     public static Properties getStreamsConfig() {
         return getStreamsConfig(UUID.randomUUID().toString());
-    }
-
-    public static void startKafkaStreamsAndWaitForRunningState(final KafkaStreams kafkaStreams) throws InterruptedException {
-        startKafkaStreamsAndWaitForRunningState(kafkaStreams, DEFAULT_MAX_WAIT_MS);
-    }
-
-    public static void startKafkaStreamsAndWaitForRunningState(final KafkaStreams kafkaStreams,
-                                                               final long timeoutMs) throws InterruptedException {
-        final CountDownLatch countDownLatch = new CountDownLatch(1);
-        kafkaStreams.setStateListener((newState, oldState) -> {
-            if (newState == KafkaStreams.State.RUNNING) {
-                countDownLatch.countDown();
-            }
-        });
-
-        kafkaStreams.start();
-        assertThat(
-            "KafkaStreams did not transit to RUNNING state within " + timeoutMs + " milli seconds.",
-            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS),
-            equalTo(true)
-        );
     }
 
     public static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
@@ -345,7 +320,7 @@ public final class StreamsTestUtils {
             this.topologyMetadata = topologyMetadata;
         }
 
-        public static TopologyMetadataBuilder unamedTopology() {
+        public static TopologyMetadataBuilder unnamedTopology() {
             final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
             when(topologyMetadata.isPaused(null)).thenReturn(false);
             return new TopologyMetadataBuilder(topologyMetadata);

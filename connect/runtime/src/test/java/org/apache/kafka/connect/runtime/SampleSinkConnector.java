@@ -58,4 +58,10 @@ public class SampleSinkConnector extends SinkConnector {
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
                 .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
     }
+
+    public ConfigDef configWithCommon() {
+        return new ConfigDef(SinkConnectorConfig.configDef())
+                .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
+                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
+    }
 }

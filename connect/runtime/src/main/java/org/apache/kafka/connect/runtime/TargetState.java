@@ -22,8 +22,11 @@ package org.apache.kafka.connect.runtime;
  * target state is "STARTED." This does not mean it has actually started, just that
  * the Connect framework will attempt to start it after its tasks have been assigned.
  * After the connector has been paused, the target state will change to PAUSED,
- * and all the tasks will stop doing work.
- *
+ * and all the tasks will stop doing work. A target state of STOPPED is similar to
+ * PAUSED, but is also accompanied by a full shutdown of the connector's tasks,
+ * including deallocation of any Kafka clients, SMTs, and other resources brought
+ * up for or by that task.
+ * <p>
  * Target states are persisted in the config topic, which is read by all of the
  * workers in the group. When a worker sees a new target state for a connector which
  * is running, it will transition any tasks which it owns (i.e. which have been
@@ -33,4 +36,5 @@ package org.apache.kafka.connect.runtime;
 public enum TargetState {
     STARTED,
     PAUSED,
+    STOPPED,
 }

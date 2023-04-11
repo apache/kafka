@@ -887,6 +887,40 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
+    @Test
+    public void serializeNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":\"default\"}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void serializeNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":null}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void deserializeNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        String value = "{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":null}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        assertEquals("default", sav.value());
+    }
+
+    @Test
+    public void deserializeNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        String value = "{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":null}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        assertNull(sav.value());
+    }
+
 
     private JsonNode parse(byte[] json) {
         try {

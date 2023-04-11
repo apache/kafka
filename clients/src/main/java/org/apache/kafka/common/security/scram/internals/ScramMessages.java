@@ -154,7 +154,7 @@ public class ScramMessages {
                 if (this.iterations <= 0)
                     throw new SaslException("Invalid SCRAM server first message format: invalid iterations " + iterations);
             } catch (NumberFormatException e) {
-                throw new SaslException("Invalid SCRAM server first message format: invalid iterations");
+                throw new SaslException("Invalid SCRAM server first message format: invalid iterations", e);
             }
             this.nonce = matcher.group("nonce");
             String salt = matcher.group("salt");

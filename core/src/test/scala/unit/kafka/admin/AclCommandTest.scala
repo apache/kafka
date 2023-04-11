@@ -175,7 +175,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   private def assertOutputContains(prefix: String, resources: Set[ResourcePattern], resourceCmd: Array[String], output: String): Unit = {
     resources.foreach { resource =>
       val resourceType = resource.resourceType.toString
-      (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filter(!_.startsWith("--"))).foreach { name =>
+      (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filterNot(_.startsWith("--"))).foreach { name =>
         val expected = s"$prefix for resource `ResourcePattern(resourceType=$resourceType, name=$name, patternType=LITERAL)`:"
         assertTrue(output.contains(expected), s"Substring $expected not in output:\n$output")
       }

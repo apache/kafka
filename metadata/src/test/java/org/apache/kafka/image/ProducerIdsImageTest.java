@@ -18,6 +18,8 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
@@ -79,10 +81,10 @@ public class ProducerIdsImageTest {
     }
 
     private void testToImageAndBack(ProducerIdsImage image) throws Throwable {
-        MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer);
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().build());
         ProducerIdsDelta delta = new ProducerIdsDelta(ProducerIdsImage.EMPTY);
-        RecordTestUtils.replayAllBatches(delta, writer.batches());
+        RecordTestUtils.replayAll(delta, writer.records());
         ProducerIdsImage nextImage = delta.apply();
         assertEquals(image, nextImage);
     }

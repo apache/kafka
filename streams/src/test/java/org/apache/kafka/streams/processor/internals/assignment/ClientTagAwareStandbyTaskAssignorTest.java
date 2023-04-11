@@ -656,6 +656,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         return new AssignmentConfigs(0L,
                                      1,
                                      numStandbyReplicas,
+                                     false,
+                                     1L,
                                      60000L,
                                      asList(rackAwareAssignmentTags));
     }

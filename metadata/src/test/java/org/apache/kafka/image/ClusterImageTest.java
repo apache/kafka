@@ -24,14 +24,17 @@ import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ClusterImageTest {
+    private static final Logger log = LoggerFactory.getLogger(ClusterImageTest.class);
+
     public final static ClusterImage IMAGE1;
 
     static final List<ApiMessageAndVersion> DELTA1_RECORDS;
@@ -142,10 +147,10 @@ public class ClusterImageTest {
     }
 
     private void testToImageAndBack(ClusterImage image) throws Throwable {
-        MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer, MetadataVersion.latest());
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().build());
         ClusterDelta delta = new ClusterDelta(ClusterImage.EMPTY);
-        RecordTestUtils.replayAllBatches(delta, writer.batches());
+        RecordTestUtils.replayAll(delta, writer.records());
         ClusterImage nextImage = delta.apply();
         assertEquals(image, nextImage);
     }

@@ -477,10 +477,6 @@ public class RemoteLogSegmentLifecycleTest {
             tearDown();
         }
 
-        @Override
-        public int brokerCount() {
-            return 3;
-        }
     }
 
     /**
@@ -498,13 +494,12 @@ public class RemoteLogSegmentLifecycleTest {
         }
 
         @Override
-        public Optional<Long> highestOffsetForEpoch(int epoch) throws RemoteStorageException {
+        public Optional<Long> highestOffsetForEpoch(int epoch) {
             return metadataCache.highestOffsetForEpoch(epoch);
         }
 
         @Override
-        public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch,
-                                                                           long offset) throws RemoteStorageException {
+        public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch, long offset) {
             return metadataCache.remoteLogSegmentMetadata(leaderEpoch, offset);
         }
 
@@ -519,7 +514,7 @@ public class RemoteLogSegmentLifecycleTest {
         }
 
         @Override
-        public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
+        public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) {
             metadataCache.addCopyInProgressSegment(segmentMetadata);
         }
     }

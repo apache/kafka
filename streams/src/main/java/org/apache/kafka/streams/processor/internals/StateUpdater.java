@@ -95,6 +95,11 @@ public interface StateUpdater {
     void remove(final TaskId taskId);
 
     /**
+     * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.
+     */
+    void signalResume();
+
+    /**
      * Drains the restored active tasks from the state updater.
      *
      * The returned active tasks are removed from the state updater.
@@ -121,6 +126,14 @@ public interface StateUpdater {
     Set<Task> drainRemovedTasks();
 
     /**
+     * Checks if the state updater has any tasks that should be removed and returned to the StreamThread
+     * using `drainRemovedTasks`.
+     *
+     * @return true if a subsequent call to `drainRemovedTasks` would return a non-empty collection.
+     */
+    boolean hasRemovedTasks();
+
+    /**
      * Drains the failed tasks and the corresponding exceptions.
      *
      * The returned failed tasks are removed from the state updater
@@ -128,6 +141,14 @@ public interface StateUpdater {
      * @return list of failed tasks and the corresponding exceptions
      */
     List<ExceptionAndTasks> drainExceptionsAndFailedTasks();
+
+    /**
+     * Checks if the state updater has any failed tasks that should be returned to the StreamThread
+     * using `drainExceptionsAndFailedTasks`.
+     *
+     * @return true if a subsequent call to `drainExceptionsAndFailedTasks` would return a non-empty collection.
+     */
+    boolean hasExceptionsAndFailedTasks();
 
     /**
      * Gets all tasks that are managed by the state updater.

@@ -118,6 +118,11 @@ public class OffsetCommitRequest extends AbstractRequest {
                 .setThrottleTimeMs(throttleTimeMs));
     }
 
+    @Override
+    public OffsetCommitResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
+    }
+
     public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new OffsetCommitRequest(new OffsetCommitRequestData(new ByteBufferAccessor(buffer), version), version);
     }

@@ -66,6 +66,45 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
+    public void testSelfJoin() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-selfJoin");
+        STREAMS_CONFIG.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-A", null, 2L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-A", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-B", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-B", null, 3L)),
+            null,
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-A", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-B", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-C", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-C", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-C", null, 5L)),
+            null,
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-A", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-B", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-C", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-D", null, 7L))
+        );
+
+        leftStream.join(
+            leftStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
+
+        runSelfJoinTestWithDriver(expectedResult);
+    }
+
+    @Test
     public void testInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 

@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -161,14 +162,15 @@ public final class MessageUtil {
     }
 
     public static byte[] jsonNodeToBinary(JsonNode node, String about) {
-        if (!node.isBinary()) {
-            throw new RuntimeException(about + ": expected Base64-encoded binary data.");
-        }
         try {
             byte[] value = node.binaryValue();
+            if (value == null) {
+                throw new IllegalArgumentException(about + ": expected Base64-encoded binary data.");
+            }
+
             return value;
         } catch (IOException e) {
-            throw new RuntimeException(about + ": unable to retrieve Base64-encoded binary data", e);
+            throw new UncheckedIOException(about + ": unable to retrieve Base64-encoded binary data", e);
         }
     }
 

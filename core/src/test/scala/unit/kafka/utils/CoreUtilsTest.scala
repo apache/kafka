@@ -132,24 +132,6 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReplaceSuffix(): Unit = {
-    assertEquals("blah.foo.text", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
-    assertEquals("blah.foo", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ""))
-    assertEquals("txt.txt", CoreUtils.replaceSuffix("txt.txt.txt", ".txt", ""))
-    assertEquals("foo.txt", CoreUtils.replaceSuffix("foo", "", ".txt"))
-  }
-
-  @Test
-  def testReadInt(): Unit = {
-    val values = Array(0, 1, -1, Byte.MaxValue, Short.MaxValue, 2 * Short.MaxValue, Int.MaxValue/2, Int.MinValue/2, Int.MaxValue, Int.MinValue, Int.MaxValue)
-    val buffer = ByteBuffer.allocate(4 * values.size)
-    for(i <- 0 until values.length) {
-      buffer.putInt(i*4, values(i))
-      assertEquals(values(i), CoreUtils.readInt(buffer.array, i*4), "Written value should match read value.")
-    }
-  }
-
-  @Test
   def testCsvList(): Unit = {
     val emptyString:String = ""
     val nullString:String = null
