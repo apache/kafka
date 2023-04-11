@@ -193,6 +193,8 @@ public class PauseResumeIntegrationTest {
 
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
+        waitUntilStreamsHasPolled(kafkaStreams, 2);
+
         assertTopicSize(OUTPUT_STREAM_1, 0);
 
         kafkaStreams.resume();
