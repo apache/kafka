@@ -20,6 +20,8 @@ package org.apache.kafka.controller;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -50,7 +52,7 @@ public class ControllerPurgatoryTest {
 
     @Test
     public void testCompleteEvents() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        ControllerPurgatory purgatory = new ControllerPurgatory(new LogContext());
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
@@ -71,7 +73,7 @@ public class ControllerPurgatoryTest {
 
     @Test
     public void testFailOnIncorrectOrdering() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        ControllerPurgatory purgatory = new ControllerPurgatory(new LogContext());
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         purgatory.add(2, event1);
@@ -80,7 +82,7 @@ public class ControllerPurgatoryTest {
 
     @Test
     public void testFailEvents() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        ControllerPurgatory purgatory = new ControllerPurgatory(new LogContext());
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
