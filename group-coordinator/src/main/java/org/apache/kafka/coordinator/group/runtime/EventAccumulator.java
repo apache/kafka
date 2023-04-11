@@ -31,7 +31,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A concurrent event dispatcher which group events per key and ensure that only one
+ * A concurrent event accumulator which group events per key and ensure that only one
  * event with a given key can't be processed concurrently.
  *
  * This class is threadsafe.
@@ -41,7 +41,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * There are a few examples about how to use it in the unit tests.
  */
-public class EventDispatcher<K, T extends EventDispatcher.Event<K>> implements AutoCloseable {
+public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements AutoCloseable {
 
     /**
      * The interface which must be implemented by all events.
@@ -93,11 +93,11 @@ public class EventDispatcher<K, T extends EventDispatcher.Event<K>> implements A
      */
     private boolean closed;
 
-    public EventDispatcher() {
+    public EventAccumulator() {
         this(new Random());
     }
 
-    public EventDispatcher(
+    public EventAccumulator(
         Random random
     ) {
         this.random = random;
