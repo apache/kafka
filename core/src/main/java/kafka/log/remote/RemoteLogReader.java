@@ -17,17 +17,18 @@
 package kafka.log.remote;
 
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
-public class RemoteLogReader extends RemoteStorageTask<Void> {
+public class RemoteLogReader implements Callable<Void> {
 
-    private static final Logger logger = LoggerFactory.getLogger(RemoteLogReader.class);
+    private final Logger logger;
     private final RemoteStorageFetchInfo fetchInfo;
     private final RemoteLogManager rlm;
     private final Consumer<RemoteLogReadResult> callback;
@@ -38,11 +39,18 @@ public class RemoteLogReader extends RemoteStorageTask<Void> {
         this.fetchInfo = fetchInfo;
         this.rlm = rlm;
         this.callback = callback;
+        LogContext logContext = new LogContext() {
+            @Override
+            public String logPrefix() {
+                return "[" + Thread.currentThread().getName() + "]";
+            }
+        };
+        logger = logContext.logger(RemoteLogReader.class);
     }
 
     @Override
-    protected Void execute() {
-        RemoteLogReadResult result = null;
+    public Void call() {
+        RemoteLogReadResult result;
         try {
             logger.debug("Reading remote bytes for {}:{}", fetchInfo.topicPartition.topic(), fetchInfo.topicPartition.partition());
 

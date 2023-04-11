@@ -1341,7 +1341,6 @@ class ReplicaManager(val config: KafkaConfig,
                  _: FencedLeaderEpochException |
                  _: ReplicaNotAvailableException |
                  _: KafkaStorageException |
-                 _: OffsetOutOfRangeException |
                  _: InconsistentTopicIdException) =>
           createLogReadResult(e)
         case e: OffsetOutOfRangeException =>
@@ -1352,23 +1351,21 @@ class ReplicaManager(val config: KafkaConfig,
           // from the remote store.
           if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
             // Check that the fetch offset is with in the offset range with in the remote storage layer.
-            log.logStartOffset <= offset && offset < log.localLogStartOffset) {
+            log.logStartOffset <= offset && offset < log.localLogStartOffset()) {
             // For follower fetch requests, throw an error saying that this offset is moved to tiered storage.
             val highWatermark = log.highWatermark
             val leaderLogStartOffset = log.logStartOffset
             val leaderLogEndOffset = log.logEndOffset
             if (params.isFromFollower) {
               createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
-                new OffsetMovedToTieredStorageException("Given offset is moved to tiered storage"))
+                new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
             } else {
-              val fetchTimeMs = time.milliseconds
-              val lastStableOffset = Some(log.lastStableOffset)
-              // create a dummy FetchDataInfo with the remote storage fetch information
-              // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
+              // Create a dummy FetchDataInfo with the remote storage fetch information.
+              // For the first topic-partition that needs remote data, we will use this information to read the data in another thread.
               // For the following topic-partitions, we return an empty record set
               val fetchDataInfo =
                 new FetchDataInfo(new LogOffsetMetadata(fetchInfo.fetchOffset), MemoryRecords.EMPTY, false, Optional.empty(),
-                  util.Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(), fetchInfo, params.isolation)))
+                  Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(), fetchInfo, params.isolation)))
 
               LogReadResult(checkFetchDataInfo(partition, fetchDataInfo),
                 divergingEpoch = None,
@@ -1376,8 +1373,8 @@ class ReplicaManager(val config: KafkaConfig,
                 leaderLogStartOffset,
                 leaderLogEndOffset,
                 followerLogStartOffset,
-                fetchTimeMs,
-                lastStableOffset,
+                time.milliseconds,
+                Some(log.lastStableOffset),
                 exception = None)
             }
           } else {

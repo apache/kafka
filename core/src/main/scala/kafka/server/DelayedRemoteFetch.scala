@@ -93,12 +93,8 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
    */
   override def onComplete():Unit = {
 
-    def toOptionalLong(value: Option[Long]): OptionalLong = {
-      if (value.isDefined) OptionalLong.of(value.get) else OptionalLong.empty();
-    }
-
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
-      if (tp.equals(remoteFetchInfo.topicPartition) && remoteFetchResult.isDone
+      if (tp.topicPartition().equals(remoteFetchInfo.topicPartition) && remoteFetchResult.isDone
         && result.exception.isEmpty && result.info.delayedRemoteStorageFetch.isPresent) {
         if (remoteFetchResult.get.error.isPresent) {
           tp -> replicaManager.createLogReadResult(remoteFetchResult.get.error.get).toFetchPartitionData(false)
