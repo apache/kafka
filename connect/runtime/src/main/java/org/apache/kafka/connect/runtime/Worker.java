@@ -152,6 +152,7 @@ public class Worker {
     private Optional<SourceTaskOffsetCommitter> sourceTaskOffsetCommitter;
     private final WorkerConfigTransformer workerConfigTransformer;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    private final Function<Map<String, Object>, Admin> adminFactory;
 
     public Worker(
         String workerId,
@@ -160,7 +161,7 @@ public class Worker {
         WorkerConfig config,
         OffsetBackingStore globalOffsetBackingStore,
         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        this(workerId, time, plugins, config, globalOffsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy);
+        this(workerId, time, plugins, config, globalOffsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy, Admin::create);
     }
 
     Worker(
@@ -170,7 +171,8 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore globalOffsetBackingStore,
             ExecutorService executorService,
-            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            Function<Map<String, Object>, Admin> adminFactory
     ) {
         this.kafkaClusterId = config.kafkaClusterId();
         this.metrics = new ConnectMetrics(workerId, config, time, kafkaClusterId);
@@ -189,7 +191,7 @@ public class Worker {
         this.globalOffsetBackingStore = globalOffsetBackingStore;
 
         this.workerConfigTransformer = initConfigTransformer();
-
+        this.adminFactory = adminFactory;
     }
 
     private WorkerConfigTransformer initConfigTransformer() {
@@ -682,11 +684,6 @@ public class Worker {
      * @return a {@link KafkaFuture} that will complete when the producers have all been fenced out, or the attempt has failed
      */
     public KafkaFuture<Void> fenceZombies(String connName, int numTasks, Map<String, String> connProps) {
-        return fenceZombies(connName, numTasks, connProps, Admin::create);
-    }
-
-    // Allows us to mock out the Admin client for testing
-    KafkaFuture<Void> fenceZombies(String connName, int numTasks, Map<String, String> connProps, Function<Map<String, Object>, Admin> adminFactory) {
         log.debug("Fencing out {} task producers for source connector {}", numTasks, connName);
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
@@ -1165,19 +1162,15 @@ public class Worker {
 
     /**
      * Get the current consumer group offsets for a sink connector.
+     * <p>
+     * Visible for testing.
      * @param connName the name of the sink connector whose offsets are to be retrieved
      * @param connector the sink connector
      * @param connectorConfig the sink connector's configurations
      * @param cb callback to invoke upon completion of the request
      */
-    private void sinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                      Callback<ConnectorOffsets> cb) {
-        sinkConnectorOffsets(connName, connector, connectorConfig, cb, Admin::create);
-    }
-
-    // Visible for testing; allows us to mock out the Admin client for testing
     void sinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                              Callback<ConnectorOffsets> cb, Function<Map<String, Object>, Admin> adminFactory) {
+                              Callback<ConnectorOffsets> cb) {
         Map<String, Object> adminConfig = adminConfigs(
                 connName,
                 "connector-worker-adminclient-" + connName,
@@ -1281,6 +1274,8 @@ public class Worker {
 
     /**
      * Alter a sink connector's consumer group offsets.
+     * <p>
+     * Visible for testing.
      * @param connName the name of the sink connector whose offsets are to be altered
      * @param connector an instance of the sink connector
      * @param connectorConfig the sink connector's configuration
@@ -1288,15 +1283,8 @@ public class Worker {
      * @return true if the sink connector has implemented {@link org.apache.kafka.connect.sink.SinkConnector#alterOffsets(Map, Map)}
      * and it returns true for the provided offsets, false otherwise
      */
-    private boolean alterSinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                              Map<Map<String, ?>, Map<String, ?>> offsets) {
-        return alterSinkConnectorOffsets(connName, connector, connectorConfig, offsets, Admin::create);
-    }
-
-    // Visible for testing; allows mocking the admin client for testing
     boolean alterSinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                      Map<Map<String, ?>, Map<String, ?>> offsets, Function<Map<String, Object>, Admin> adminFactory) {
-
+                                      Map<Map<String, ?>, Map<String, ?>> offsets) {
         Map<TopicPartition, Long> parsedOffsets = SinkUtils.validateAndParseSinkConnectorOffsets(offsets);
         Timer timer = time.timer(ALTER_OFFSETS_TIMEOUT_MS);
         boolean alterOffsetsResult;

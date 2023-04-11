@@ -512,10 +512,6 @@
       <subpackage name="distributed">
         <allow pkg="javax.ws.rs.core" />
       </subpackage>
-
-      <subpackage name="standalone">
-        <allow pkg="javax.ws.rs.core" />
-      </subpackage>
     </subpackage>
 
     <subpackage name="cli">
