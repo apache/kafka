@@ -186,6 +186,14 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         }
 
         @Override
+        public boolean isVersioned() {
+            // even though we can derive a proper versioned result (assuming both parent value
+            // getters are versioned), we choose not to since the output of a join of two
+            // versioned tables today is not considered versioned (cf KIP-914)
+            return false;
+        }
+
+        @Override
         public void close() {
             valueGetter1.close();
             valueGetter2.close();

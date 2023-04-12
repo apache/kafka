@@ -147,6 +147,16 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
         public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
         }
+
+        @Override
+        public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
+            return store.get(key, asOfTimestamp);
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return store.isVersionedStore();
+        }
     }
 }
 

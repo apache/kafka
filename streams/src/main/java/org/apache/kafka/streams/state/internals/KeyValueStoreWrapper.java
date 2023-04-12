@@ -81,6 +81,14 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
+    public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
+        if (!isVersionedStore()) {
+            throw new UnsupportedOperationException("get(key, timestamp) is only supported for versioned stores");
+        }
+        final VersionedRecord<V> versionedRecord = versionedStore.get(key, asOfTimestamp);
+        return versionedRecord == null ? null : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
+    }
+
     public void put(final K key, final V value, final long timestamp) {
         if (timestampedStore != null) {
             timestampedStore.put(key, ValueAndTimestamp.make(value, timestamp));
@@ -95,6 +103,10 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
 
     public StateStore getStore() {
         return store;
+    }
+
+    public boolean isVersionedStore() {
+        return versionedStore != null;
     }
 
     @Override

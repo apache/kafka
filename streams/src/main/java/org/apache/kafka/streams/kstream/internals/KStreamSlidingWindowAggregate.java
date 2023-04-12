@@ -499,5 +499,10 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
         @Override
         public void close() {}
+
+        @Override
+        public boolean isVersioned() {
+            return false;
+        }
     }
 }
