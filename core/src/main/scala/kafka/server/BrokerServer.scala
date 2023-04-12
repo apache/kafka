@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
+import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.{Map, Seq}
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 
@@ -513,7 +514,8 @@ class BrokerServer(
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
       }
 
-      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
+      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head, time,
+        (tp: TopicPartition) => logManager.getLog(tp).asJava));
     } else {
       None
     }

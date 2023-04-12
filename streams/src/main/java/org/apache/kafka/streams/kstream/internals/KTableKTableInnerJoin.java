@@ -157,7 +157,8 @@ class KTableKTableInnerJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
             final V1 value1 = getValueOrNull(valueAndTimestamp1);
 
             if (value1 != null) {
-                final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(keyValueMapper.apply(key, value1));
+                final ValueAndTimestamp<V2> valueAndTimestamp2
+                    = valueGetter2.get(keyValueMapper.apply(key, value1));
                 final V2 value2 = getValueOrNull(valueAndTimestamp2);
 
                 if (value2 != null) {
@@ -170,6 +171,14 @@ class KTableKTableInnerJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
             } else {
                 return null;
             }
+        }
+
+        @Override
+        public boolean isVersioned() {
+            // even though we can derive a proper versioned result (assuming both parent value
+            // getters are versioned), we choose not to since the output of a join of two
+            // versioned tables today is not considered versioned (cf KIP-914)
+            return false;
         }
 
         @Override

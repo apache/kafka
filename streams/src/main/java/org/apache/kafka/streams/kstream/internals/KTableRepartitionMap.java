@@ -172,16 +172,29 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
         @Override
         public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key) {
-            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
-            return ValueAndTimestamp.make(
-                mapper.apply(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp()
-            );
+            return mapValue(key, parentGetter.get(key));
+        }
+
+        @Override
+        public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key, final long asOfTimestamp) {
+            return mapValue(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
         }
 
         @Override
         public void close() {
             parentGetter.close();
+        }
+
+        private ValueAndTimestamp<KeyValue<K1, V1>> mapValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
+            return ValueAndTimestamp.make(
+                mapper.apply(key, getValueOrNull(valueAndTimestamp)),
+                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp()
+            );
         }
     }
 
