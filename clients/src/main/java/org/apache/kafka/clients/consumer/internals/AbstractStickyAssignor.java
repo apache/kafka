@@ -129,7 +129,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     private boolean allSubscriptionsEqual(final Map<String, Subscription> subscriptions) {
         Set<String> subscribedTopics = new HashSet<>();
         return subscriptions.entrySet().stream().noneMatch(s -> {
-            // find any subscription that does not match the first subscription
+            // returns immediately when it finds any different subscription
             Subscription subscription = s.getValue();
             if (subscribedTopics.isEmpty()) {
                 subscribedTopics.addAll(subscription.topics());
