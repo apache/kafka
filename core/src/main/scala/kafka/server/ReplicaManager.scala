@@ -1350,8 +1350,8 @@ class ReplicaManager(val config: KafkaConfig,
           // In case of offset out of range errors, check for remote log manager for non-compacted topics
           // to fetch from remote storage. `log` instance should not be null here as that would have caught earlier with
           // NotLeaderForPartitionException or ReplicaNotAvailableException.
-          // If it is from a follower then send the offset metadata but not the records data as that can be fetched
-          // from the remote store.
+          // If it is from a follower then send the offset metadata only as the data is already available in remote
+          // storage.
           if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
             // Check that the fetch offset is with in the offset range with in the remote storage layer.
             log.logStartOffset <= offset && offset < log.localLogStartOffset()) {

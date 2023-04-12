@@ -649,7 +649,7 @@ public class RemoteLogManager implements Closeable {
         if (!rlsMetadata.isPresent()) {
             String epochStr = (epoch.isPresent()) ? Integer.toString(epoch.getAsInt()) : "NOT AVAILABLE";
             throw new OffsetOutOfRangeException("Received request for offset " + offset + " for leader epoch "
-                    + epochStr + " and partition " + tp + " which does not exist in remote tier. Try again later.");
+                    + epochStr + " and partition " + tp + " which does not exist in remote tier.");
         }
 
         int startPos = lookupPositionForOffset(rlsMetadata.get(), offset);
@@ -809,37 +809,6 @@ public class RemoteLogManager implements Closeable {
         }
 
         return offset.orElse(-1L);
-    }
-
-    /**
-     * A remote log read task returned by asyncRead(). The caller of asyncRead() can use this object to cancel a
-     * pending task or check if the task is done.
-     */
-    public class AsyncReadTask {
-
-        private final Future<Void> future;
-
-        AsyncReadTask(Future<Void> future) {
-            this.future = future;
-        }
-
-        public boolean cancel(boolean mayInterruptIfRunning) {
-            boolean cancelled = future.cancel(mayInterruptIfRunning);
-            if (cancelled) {
-                // Removed the cancelled task from task queue
-                remoteStorageReaderThreadPool.purge();
-            }
-
-            return cancelled;
-        }
-
-        public boolean isCancelled() {
-            return future.isCancelled();
-        }
-
-        public boolean isDone() {
-            return future.isDone();
-        }
     }
 
     /**

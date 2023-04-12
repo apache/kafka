@@ -51,7 +51,7 @@ public class RemoteLogReader implements Callable<Void> {
     public Void call() {
         RemoteLogReadResult result;
         try {
-            logger.debug("Reading remote bytes for {}", fetchInfo.topicPartition);
+            logger.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
 
             FetchDataInfo fetchDataInfo = rlm.read(fetchInfo);
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
@@ -62,7 +62,7 @@ public class RemoteLogReader implements Callable<Void> {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
 
-        logger.debug("Finished reading remote bytes for {}", fetchInfo.topicPartition);
+        logger.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
         callback.accept(result);
 
         return null;
