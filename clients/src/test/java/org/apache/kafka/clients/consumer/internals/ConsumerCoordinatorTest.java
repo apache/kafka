@@ -3893,14 +3893,8 @@ public abstract class ConsumerCoordinatorTest {
     public void testSubscriptionRackId() {
 
         String rackId = "rack-a";
-
-        metrics = new Metrics(time);
         RackAwareAssignor assignor = new RackAwareAssignor(protocol);
         createRackAwareCoordinator(rackId, assignor);
-
-        coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
-                Collections.singletonList(assignor), metadata, subscriptions,
-                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId);
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
         client.updateMetadata(metadataResponse);
