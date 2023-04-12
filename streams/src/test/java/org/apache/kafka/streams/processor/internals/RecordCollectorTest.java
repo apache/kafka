@@ -1393,14 +1393,7 @@ public class RecordCollectorTest {
     @Test
     public void testCollectorFlush_ThrowsStreamsExceptionUsingDefaultExceptionHandler() {
         final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            streamsProducer,
-            new DefaultProductionExceptionHandler(),
-            streamsMetrics,
-            topology
-        );
+        final RecordCollector collector = newRecordCollector(new DefaultProductionExceptionHandler());
         collector.initialize();
         collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context);
         assertThrows(StreamsException.class, collector::flush);
@@ -1409,17 +1402,21 @@ public class RecordCollectorTest {
     @Test
     public void testCollectorFlush_DoesNotThrowStreamsExceptionUsingAlwaysContinueExceptionHandler() {
         final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            streamsProducer,
-            new AlwaysContinueProductionExceptionHandler(),
-            streamsMetrics,
-            topology
-        );
+        final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
         collector.initialize();
         collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
         assertDoesNotThrow(collector::flush);
+    }
+
+    private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {
+        return new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamsProducer,
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
     }
 
     private static class ErrorStringSerializer extends StringSerializer {

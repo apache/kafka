@@ -224,11 +224,12 @@ public class RecordCollectorImpl implements RecordCollector {
             }
 
             if (response == ProductionExceptionHandlerResponse.FAIL) {
+                log.error("Fatal handling serialization exception on record {}", record, exception);
                 recordSendError(topic, exception, null);
                 return;
             }
 
-            log.info("Unable to serialize {}. Continue processing. " +
+            log.warn("Unable to serialize {}. Continue processing. " +
                     "ProducerRecord(key=[{}], value=[{}], topic=[{}], partition=[{}], timestamp=[{}])",
                 keyBytes == null ? "key" : "value",
                 key,
