@@ -30,8 +30,10 @@ import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of OffsetBackingStore that saves data locally to a file. To ensure this behaves
@@ -41,9 +43,12 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(FileOffsetBackingStore.class);
 
     private File file;
+    private final Map<String, Set<Map<String, Object>>> connectorPartitions;
+    private final Converter keyConverter;
 
-    public FileOffsetBackingStore() {
-
+    public FileOffsetBackingStore(Converter keyConverter) {
+        connectorPartitions = new HashMap<>();
+        this.keyConverter = keyConverter;
     }
 
     @Override
@@ -87,6 +92,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
             ByteBuffer key = (mapEntry.getKey() != null) ? ByteBuffer.wrap(mapEntry.getKey()) : null;
             ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
             data.put(key, value);
+            OffsetUtils.processPartitionKey(mapEntry.getKey(), mapEntry.getValue(), keyConverter, connectorPartitions);
         }
     }
 
@@ -97,6 +103,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
             byte[] key = (mapEntry.getKey() != null) ? mapEntry.getKey().array() : null;
             byte[] value = (mapEntry.getValue() != null) ? mapEntry.getValue().array() : null;
             raw.put(key, value);
+            OffsetUtils.processPartitionKey(key, value, keyConverter, connectorPartitions);
         }
 
         try (ObjectOutputStream os = new ObjectOutputStream(Files.newOutputStream(file.toPath()))) {
@@ -104,5 +111,10 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
         } catch (IOException e) {
             throw new ConnectException(e);
         }
+    }
+
+    @Override
+    public Set<Map<String, Object>> connectorPartitions(String connectorName) {
+        return connectorPartitions.getOrDefault(connectorName, Collections.emptySet());
     }
 }

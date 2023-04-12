@@ -95,6 +95,7 @@ import java.util.stream.Collectors;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
 import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -168,11 +169,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     private RocksDBStore getRocksDBStoreWithRocksDBMetricsRecorder() {
-        return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
+        return new RocksDBStore(DB_NAME, DB_FILE_DIR, metricsRecorder);
     }
 
     private RocksDBStore getRocksDBStoreWithCustomManagedIterators() {
-        return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder, false);
+        return new RocksDBStore(DB_NAME, DB_FILE_DIR, metricsRecorder, false);
     }
 
     private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {

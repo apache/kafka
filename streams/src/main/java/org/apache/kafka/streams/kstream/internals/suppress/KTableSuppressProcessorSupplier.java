@@ -90,6 +90,11 @@ public class KTableSuppressProcessorSupplier<K, V> implements
                     }
 
                     @Override
+                    public boolean isVersioned() {
+                        return false;
+                    }
+
+                    @Override
                     public void close() {
                         // the main processor is responsible for the buffer's lifecycle
                         parentGetter.close();

@@ -178,6 +178,16 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
         }
 
         @Override
+        public ValueAndTimestamp<VIn> get(final KIn key, final long asOfTimestamp) {
+            return computeValue(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
+        }
+
+        @Override
         public void close() {
             parentGetter.close();
         }

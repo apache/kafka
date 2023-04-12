@@ -23,6 +23,8 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -391,6 +393,22 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Stop an existing connector.
+     *
+     * @param connName name of the connector to be paused
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public void stopConnector(String connName) {
+        String url = endpointForResource(String.format("connectors/%s/stop", connName));
+        Response response = requestPut(url, "");
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not execute PUT request. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
      * Pause an existing connector.
      *
      * @param connName name of the connector to be paused
@@ -554,6 +572,54 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Get the info of a connector running in this cluster (retrieved via the <code>GET /connectors/{connector}</code> endpoint).
+
+     * @param connectorName name of the connector
+     * @return an instance of {@link ConnectorInfo} populated with state information of the connector and its tasks.
+     */
+    public ConnectorInfo connectorInfo(String connectorName) {
+        ObjectMapper mapper = new ObjectMapper();
+        String url = endpointForResource(String.format("connectors/%s", connectorName));
+        Response response = requestGet(url);
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                return mapper.readValue(responseToString(response), ConnectorInfo.class);
+            }
+        } catch (IOException e) {
+            log.error("Could not read connector info from response: {}",
+                    responseToString(response), e);
+            throw new ConnectException("Could not not parse connector info", e);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not read connector info. Error response: " + responseToString(response));
+    }
+
+    /**
+     * Get the task configs of a connector running in this cluster.
+
+     * @param connectorName name of the connector
+     * @return a map from task ID (connector name + "-" + task number) to task config
+     */
+    public Map<String, Map<String, String>> taskConfigs(String connectorName) {
+        ObjectMapper mapper = new ObjectMapper();
+        String url = endpointForResource(String.format("connectors/%s/tasks-config", connectorName));
+        Response response = requestGet(url);
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                // We use String instead of ConnectorTaskId as the key here since the latter can't be automatically
+                // deserialized by Jackson when used as a JSON object key (i.e., when it's serialized as a JSON string)
+                return mapper.readValue(responseToString(response), new TypeReference<Map<String, Map<String, String>>>() { });
+            }
+        } catch (IOException e) {
+            log.error("Could not read task configs from response: {}",
+                    responseToString(response), e);
+            throw new ConnectException("Could not not parse task configs", e);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not read task configs. Error response: " + responseToString(response));
+    }
+
+    /**
      * Reset the set of active topics of a connector running in this cluster.
      *
      * @param connectorName name of the connector
@@ -568,6 +634,27 @@ public class EmbeddedConnectCluster {
                     "Resetting active topics for connector " + connectorName + " failed. "
                     + "Error response: " + responseToString(response));
         }
+    }
+
+    /**
+     * Get the offsets for a connector via the <strong><em>GET /connectors/{connector}/offsets</em></strong> endpoint
+     * @param connectorName name of the connector
+     * @return the connector's offsets
+     */
+    public ConnectorOffsets connectorOffsets(String connectorName) {
+        String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
+        Response response = requestGet(url);
+        ObjectMapper mapper = new ObjectMapper();
+
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                return mapper.readerFor(ConnectorOffsets.class).readValue(responseToString(response));
+            }
+        } catch (IOException e) {
+            throw new ConnectException("Could not not parse connector offsets", e);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not fetch connector offsets. Error response: " + responseToString(response));
     }
 
     /**

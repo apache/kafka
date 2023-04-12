@@ -751,6 +751,55 @@ class TransactionStateManagerTest {
     assertEquals(allTransactionalIds, expiredTransactionalIds)
   }
 
+  @Test
+  def testTransactionExpirationShouldNotFailWithUninitializedTransactionMetadata(): Unit = {
+    val partitionIds = 0 until numPartitions
+    val maxBatchSize = 512
+    val transactionalId = "id"
+    val allTransactionalIds = Set(transactionalId)
+
+    loadTransactionsForPartitions(partitionIds)
+
+    // When TransactionMetadata is intialized for the first time, it has the following
+    // shape. Then, the producer id and producer epoch are initialized and we try to
+    // write the change. If the write fails (e.g. under min isr), the TransactionMetadata
+    // is left at it is. If the transactional id is never reused, the TransactionMetadata
+    // will be expired and it should succeed.
+    val txnMetadata = TransactionMetadata(
+      transactionalId = transactionalId,
+      producerId = 1,
+      producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs = transactionTimeoutMs,
+      state = Empty,
+      timestamp = time.milliseconds()
+    )
+    transactionManager.putTransactionStateIfNotExists(txnMetadata)
+
+    time.sleep(txnConfig.transactionalIdExpirationMs + 1)
+
+    reset(replicaManager)
+    expectLogConfig(partitionIds, maxBatchSize)
+
+    val appendedRecords = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
+    expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
+
+    transactionManager.removeExpiredTransactionalIds()
+    verify(replicaManager, atLeastOnce()).appendRecords(
+      anyLong(),
+      ArgumentMatchers.eq((-1).toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any()
+    )
+
+    val expiredTransactionalIds = collectTransactionalIdsFromTombstones(appendedRecords)
+    assertEquals(allTransactionalIds, expiredTransactionalIds)
+  }
+
   private def collectTransactionalIdsFromTombstones(
     appendedRecords: mutable.Map[TopicPartition, mutable.Buffer[MemoryRecords]]
   ): Set[String] = {
