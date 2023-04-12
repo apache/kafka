@@ -34,7 +34,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -62,19 +61,19 @@ public final class ListOffsetsHandlerTest {
 
     private final Node node = new Node(1, "host", 1234);
 
-    private final Map<TopicPartition, OffsetSpec> offsetSpecsByPartition = new HashMap<TopicPartition, OffsetSpec>() {
+    private final Map<TopicPartition, Long> offsetTimestampsByPartition = new HashMap<TopicPartition, Long>() {
         {
-            put(t0p0, OffsetSpec.latest());
-            put(t0p1, OffsetSpec.earliest());
-            put(t1p0, OffsetSpec.forTimestamp(123L));
-            put(t1p1, OffsetSpec.maxTimestamp());
+            put(t0p0, ListOffsetsRequest.LATEST_TIMESTAMP);
+            put(t0p1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+            put(t1p0, 123L);
+            put(t1p1, ListOffsetsRequest.MAX_TIMESTAMP);
         }
     };
 
     @Test
     public void testBuildRequestSimple() {
         ListOffsetsHandler handler =
-            new ListOffsetsHandler(offsetSpecsByPartition, new ListOffsetsOptions(), logContext);
+            new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext);
         ListOffsetsRequest request = handler.buildBatchedRequest(node.id(), mkSet(t0p0, t0p1)).build();
         List<ListOffsetsTopic> topics = request.topics();
         assertEquals(1, topics.size());
@@ -91,9 +90,9 @@ public final class ListOffsetsHandlerTest {
     public void testBuildRequestMultipleTopicsWithReadCommitted() {
         ListOffsetsHandler handler =
             new ListOffsetsHandler(
-                offsetSpecsByPartition, new ListOffsetsOptions(IsolationLevel.READ_COMMITTED), logContext);
+                offsetTimestampsByPartition, new ListOffsetsOptions(IsolationLevel.READ_COMMITTED), logContext);
         ListOffsetsRequest request =
-            handler.buildBatchedRequest(node.id(), offsetSpecsByPartition.keySet()).build();
+            handler.buildBatchedRequest(node.id(), offsetTimestampsByPartition.keySet()).build();
         List<ListOffsetsTopic> topics = request.topics();
         assertEquals(2, topics.size());
         Map<TopicPartition, ListOffsetsPartition> partitions = new HashMap<>();
@@ -112,14 +111,14 @@ public final class ListOffsetsHandlerTest {
     @Test
     public void testBuildRequestAllowedVersions() {
         ListOffsetsHandler defaultOptionsHandler =
-            new ListOffsetsHandler(offsetSpecsByPartition, new ListOffsetsOptions(), logContext);
+            new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext);
         ListOffsetsRequest.Builder builder =
             defaultOptionsHandler.buildBatchedRequest(node.id(), mkSet(t0p0, t0p1, t1p0));
         assertEquals(1, builder.oldestAllowedVersion());
 
         ListOffsetsHandler readCommittedHandler =
             new ListOffsetsHandler(
-                offsetSpecsByPartition, new ListOffsetsOptions(IsolationLevel.READ_COMMITTED), logContext);
+                offsetTimestampsByPartition, new ListOffsetsOptions(IsolationLevel.READ_COMMITTED), logContext);
         builder = readCommittedHandler.buildBatchedRequest(node.id(), mkSet(t0p0, t0p1, t1p0));
         assertEquals(2, builder.oldestAllowedVersion());
 
@@ -132,7 +131,7 @@ public final class ListOffsetsHandlerTest {
         ApiResult<TopicPartition, ListOffsetsResultInfo> result =
             handleResponse(createResponse(emptyMap()));
 
-        assertResult(result, offsetSpecsByPartition.keySet(), emptyMap(), emptyList(), emptySet());
+        assertResult(result, offsetTimestampsByPartition.keySet(), emptyMap(), emptyList(), emptySet());
     }
 
     @Test
@@ -147,7 +146,7 @@ public final class ListOffsetsHandlerTest {
         // Timeouts should be retried within the fulfillment stage as they are a common type of
         // retriable error.
         Set<TopicPartition> retriable = singleton(errorPartition);
-        Set<TopicPartition> completed = new HashSet<>(offsetSpecsByPartition.keySet());
+        Set<TopicPartition> completed = new HashSet<>(offsetTimestampsByPartition.keySet());
         completed.removeAll(retriable);
         assertResult(result, completed, emptyMap(), emptyList(), retriable);
     }
@@ -166,7 +165,7 @@ public final class ListOffsetsHandlerTest {
         // mappings should be recalculated.
         List<TopicPartition> unmapped = new ArrayList<>();
         unmapped.add(errorPartition);
-        Set<TopicPartition> completed = new HashSet<>(offsetSpecsByPartition.keySet());
+        Set<TopicPartition> completed = new HashSet<>(offsetTimestampsByPartition.keySet());
         completed.removeAll(unmapped);
         assertResult(result, completed, emptyMap(), unmapped, emptySet());
     }
@@ -183,7 +182,7 @@ public final class ListOffsetsHandlerTest {
 
         Map<TopicPartition, Throwable> failed = new HashMap<>();
         failed.put(errorPartition, error.exception());
-        Set<TopicPartition> completed = new HashSet<>(offsetSpecsByPartition.keySet());
+        Set<TopicPartition> completed = new HashSet<>(offsetTimestampsByPartition.keySet());
         completed.removeAll(failed.keySet());
         assertResult(result, completed, failed, emptyList(), emptySet());
     }
@@ -191,13 +190,13 @@ public final class ListOffsetsHandlerTest {
     @Test
     public void testHandleResponseSanityCheck() {
         TopicPartition errorPartition = t0p0;
-        Map<TopicPartition, OffsetSpec> specsByPartition = new HashMap<>(offsetSpecsByPartition);
+        Map<TopicPartition, Long> specsByPartition = new HashMap<>(offsetTimestampsByPartition);
         specsByPartition.remove(errorPartition);
 
         ApiResult<TopicPartition, ListOffsetsResultInfo> result =
             handleResponse(createResponse(emptyMap(), specsByPartition));
 
-        assertEquals(offsetSpecsByPartition.size() - 1, result.completedKeys.size());
+        assertEquals(offsetTimestampsByPartition.size() - 1, result.completedKeys.size());
         assertEquals(1, result.failedKeys.size());
         assertEquals(errorPartition, result.failedKeys.keySet().iterator().next());
         String sanityCheckMessage = result.failedKeys.get(errorPartition).getMessage();
@@ -212,36 +211,30 @@ public final class ListOffsetsHandlerTest {
         maxTimestampPartitions.put(t1p1, OffsetSpec.maxTimestamp());
 
         ListOffsetsHandler handler =
-            new ListOffsetsHandler(offsetSpecsByPartition, new ListOffsetsOptions(), logContext);
-        // Unsupported version exception currently cannot be handled if not in the fulfillment stage...
-        Set<TopicPartition> keysToTest = offsetSpecsByPartition.keySet();
+            new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext);
+
+        final Map<TopicPartition, Long> nonMaxTimestampPartitions = new HashMap<>(offsetTimestampsByPartition);
+        maxTimestampPartitions.forEach((k, v) -> nonMaxTimestampPartitions.remove(k));
+        // Unsupported version exceptions currently cannot be handled if there's no partition with a
+        // MAX_TIMESTAMP spec...
+        Set<TopicPartition> keysToTest = nonMaxTimestampPartitions.keySet();
         Set<TopicPartition> expectedFailures = keysToTest;
         assertEquals(
             mapToError(expectedFailures, uve),
-            handler.handleUnsupportedVersionException(uve, keysToTest, false));
-
-        final Map<TopicPartition, OffsetSpec> nonMaxTimestampPartitions =
-            new HashMap<>(offsetSpecsByPartition);
-        maxTimestampPartitions.forEach((k, v) -> nonMaxTimestampPartitions.remove(k));
-        // ...it also cannot be handled if there's no partition with a MAX_TIMESTAMP spec...
-        keysToTest = nonMaxTimestampPartitions.keySet();
-        expectedFailures = keysToTest;
-        assertEquals(
-            mapToError(expectedFailures, uve),
-            handler.handleUnsupportedVersionException(uve, keysToTest, true));
+            handler.handleUnsupportedVersionException(uve, keysToTest));
 
         // ...or if there are only partitions with MAX_TIMESTAMP specs...
         keysToTest = maxTimestampPartitions.keySet();
         expectedFailures = keysToTest;
         assertEquals(
             mapToError(expectedFailures, uve),
-            handler.handleUnsupportedVersionException(uve, keysToTest, true));
+            handler.handleUnsupportedVersionException(uve, keysToTest));
 
-        keysToTest = offsetSpecsByPartition.keySet();
+        keysToTest = offsetTimestampsByPartition.keySet();
         expectedFailures = maxTimestampPartitions.keySet();
         assertEquals(
             mapToError(expectedFailures, uve),
-            handler.handleUnsupportedVersionException(uve, keysToTest, true));
+            handler.handleUnsupportedVersionException(uve, keysToTest));
     }
 
     private static Map<TopicPartition, Throwable> mapToError(Set<TopicPartition> keys, Throwable t) {
@@ -249,21 +242,20 @@ public final class ListOffsetsHandlerTest {
     }
 
     private void assertExpectedTimestamp(TopicPartition topicPartition, long actualTimestamp) {
-        OffsetSpec expectedTimestampSpec = offsetSpecsByPartition.get(topicPartition);
-        long expectedTimestamp = ListOffsetsHandler.getOffsetFromSpec(expectedTimestampSpec);
+        Long expectedTimestamp = offsetTimestampsByPartition.get(topicPartition);
         assertEquals(expectedTimestamp, actualTimestamp);
     }
 
     private ListOffsetsResponse createResponse(Map<TopicPartition, Short> errorsByPartition) {
-        return createResponse(errorsByPartition, offsetSpecsByPartition);
+        return createResponse(errorsByPartition, offsetTimestampsByPartition);
     }
 
     private static ListOffsetsResponse createResponse(
         Map<TopicPartition, Short> errorsByPartition,
-        Map<TopicPartition, OffsetSpec> specsByPartition
+        Map<TopicPartition, Long> specsByPartition
     ) {
         Map<String, ListOffsetsTopicResponse> responsesByTopic = new HashMap<>();
-        for (Map.Entry<TopicPartition, OffsetSpec> offsetSpecEntry : specsByPartition.entrySet()) {
+        for (Map.Entry<TopicPartition, Long> offsetSpecEntry : specsByPartition.entrySet()) {
             TopicPartition topicPartition = offsetSpecEntry.getKey();
             ListOffsetsTopicResponse topicResponse = responsesByTopic.computeIfAbsent(
                 topicPartition.topic(), t -> new ListOffsetsTopicResponse());
@@ -281,8 +273,8 @@ public final class ListOffsetsHandlerTest {
 
     private ApiResult<TopicPartition, ListOffsetsResultInfo> handleResponse(ListOffsetsResponse response) {
         ListOffsetsHandler handler =
-            new ListOffsetsHandler(offsetSpecsByPartition, new ListOffsetsOptions(), logContext);
-        return handler.handleResponse(node, offsetSpecsByPartition.keySet(), response);
+            new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext);
+        return handler.handleResponse(node, offsetTimestampsByPartition.keySet(), response);
     }
 
     private void assertResult(
@@ -295,20 +287,20 @@ public final class ListOffsetsHandlerTest {
         assertEquals(expectedCompleted, result.completedKeys.keySet());
         assertEquals(expectedFailed, result.failedKeys);
         assertEquals(expectedUnmapped, result.unmappedKeys);
-        Set<TopicPartition> actualRetriable = new HashSet<>(offsetSpecsByPartition.keySet());
+        Set<TopicPartition> actualRetriable = new HashSet<>(offsetTimestampsByPartition.keySet());
         actualRetriable.removeAll(result.completedKeys.keySet());
         actualRetriable.removeAll(result.failedKeys.keySet());
         actualRetriable.removeAll(new HashSet<>(result.unmappedKeys));
         assertEquals(expectedRetriable, actualRetriable);
     }
 
-    private static long getOffset(TopicPartition topicPartition, OffsetSpec offsetSpec) {
+    private static long getOffset(TopicPartition topicPartition, Long offsetQuery) {
         long base = 1 << 10;
-        if (offsetSpec instanceof OffsetSpec.EarliestSpec) {
+        if (offsetQuery == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
             return topicPartition.hashCode() & (base - 1);
-        } else if (offsetSpec instanceof TimestampSpec) {
+        } else if (offsetQuery >= 0L) {
             return base;
-        } else if (offsetSpec instanceof OffsetSpec.LatestSpec) {
+        } else if (offsetQuery == ListOffsetsRequest.LATEST_TIMESTAMP) {
             return base + 1 + (topicPartition.hashCode() & (base - 1));
         }
         return 2 * base + 1;

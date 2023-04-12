@@ -27,8 +27,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
@@ -51,17 +49,17 @@ import org.slf4j.Logger;
 
 public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffsetsResultInfo> {
 
-    private final Map<TopicPartition, OffsetSpec> offsetSpecsByPartition;
+    private final Map<TopicPartition, Long> offsetTimestampsByPartition;
     private final ListOffsetsOptions options;
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
 
     public ListOffsetsHandler(
-        Map<TopicPartition, OffsetSpec> offsetSpecsByPartition,
+        Map<TopicPartition, Long> offsetTimestampsByPartition,
         ListOffsetsOptions options,
         LogContext logContext
     ) {
-        this.offsetSpecsByPartition = offsetSpecsByPartition;
+        this.offsetTimestampsByPartition = offsetTimestampsByPartition;
         this.options = options;
         this.log = logContext.logger(ListOffsetsHandler.class);
         this.lookupStrategy = new PartitionLeaderStrategy(logContext);
@@ -84,16 +82,15 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             topicName -> new ListOffsetsTopic().setName(topicName),
             (listOffsetsTopic, partitionId) -> {
                 TopicPartition topicPartition = new TopicPartition(listOffsetsTopic.name(), partitionId);
-                OffsetSpec offsetSpec = offsetSpecsByPartition.get(topicPartition);
-                long offsetQuery = getOffsetFromSpec(offsetSpec);
+                long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
                 listOffsetsTopic.partitions().add(
                     new ListOffsetsPartition()
                         .setPartitionIndex(partitionId)
-                        .setTimestamp(offsetQuery));
+                        .setTimestamp(offsetTimestamp));
             });
         boolean supportsMaxTimestamp = keys
             .stream()
-            .anyMatch(key -> getOffsetFromSpec(offsetSpecsByPartition.get(key)) == ListOffsetsRequest.MAX_TIMESTAMP);
+            .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);
 
         return ListOffsetsRequest.Builder
             .forConsumer(true, options.isolationLevel(), supportsMaxTimestamp)
@@ -116,8 +113,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             for (ListOffsetsPartitionResponse partition : topic.partitions()) {
                 TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
                 Errors error = Errors.forCode(partition.errorCode());
-                OffsetSpec offsetRequestSpec = offsetSpecsByPartition.get(topicPartition);
-                if (offsetRequestSpec == null) {
+                if (!offsetTimestampsByPartition.containsKey(topicPartition)) {
                     log.warn("ListOffsets response includes unknown topic partition {}", topicPartition);
                 } else if (error == Errors.NONE) {
                     Optional<Integer> leaderEpoch = (partition.leaderEpoch() == ListOffsetsResponse.UNKNOWN_EPOCH)
@@ -184,17 +180,13 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
     @Override
     public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
-        UnsupportedVersionException exception, Set<TopicPartition> keys, boolean isFulfillmentStage
+        UnsupportedVersionException exception, Set<TopicPartition> keys
     ) {
-        // An UnsupportedVersionException can be addressed only in the fulfillment stage...
-        if (!isFulfillmentStage) {
-            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
-        }
         Map<TopicPartition, Throwable> maxTimestampPartitions = new HashMap<>();
         boolean containsNonMaxTimestampSpec = false;
         for (TopicPartition topicPartition : keys) {
-            OffsetSpec offsetSpec = offsetSpecsByPartition.get(topicPartition);
-            if (getOffsetFromSpec(offsetSpec) == ListOffsetsRequest.MAX_TIMESTAMP) {
+            Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
+            if (offsetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                 maxTimestampPartitions.put(topicPartition, exception);
             } else {
                 containsNonMaxTimestampSpec = true;
@@ -213,17 +205,5 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         Collection<TopicPartition> topicPartitions
     ) {
         return AdminApiFuture.forKeys(new HashSet<>(topicPartitions));
-    }
-
-    // Visible for testing
-    static long getOffsetFromSpec(OffsetSpec offsetSpec) {
-        if (offsetSpec instanceof TimestampSpec) {
-            return ((TimestampSpec) offsetSpec).timestamp();
-        } else if (offsetSpec instanceof OffsetSpec.EarliestSpec) {
-            return ListOffsetsRequest.EARLIEST_TIMESTAMP;
-        } else if (offsetSpec instanceof OffsetSpec.MaxTimestampSpec) {
-            return ListOffsetsRequest.MAX_TIMESTAMP;
-        }
-        return ListOffsetsRequest.LATEST_TIMESTAMP;
     }
 }

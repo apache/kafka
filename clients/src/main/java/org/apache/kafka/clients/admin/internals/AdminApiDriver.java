@@ -262,12 +262,23 @@ public class AdminApiDriver<K, V> {
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
         } else if (t instanceof UnsupportedVersionException) {
-            Map<K, Throwable> unrecoverableFailures =
-                handler.handleUnsupportedVersionException(
-                    (UnsupportedVersionException) t,
-                    spec.keys,
-                    spec.scope instanceof FulfillmentScope);
-            completeExceptionally(unrecoverableFailures);
+            if (spec.scope instanceof FulfillmentScope) {
+                Map<K, Throwable> unrecoverableFailures =
+                    handler.handleUnsupportedVersionException(
+                        (UnsupportedVersionException) t,
+                        spec.keys);
+                completeExceptionally(unrecoverableFailures);
+            } else {
+                Map<K, Throwable> unrecoverableLookupFailures =
+                    handler.lookupStrategy().handleUnsupportedVersionException(
+                        (UnsupportedVersionException) t,
+                        spec.keys);
+                completeLookupExceptionally(unrecoverableLookupFailures);
+                Set<K> keysToUnmap = spec.keys.stream()
+                    .filter(k -> !unrecoverableLookupFailures.containsKey(k))
+                    .collect(Collectors.toSet());
+                retryLookup(keysToUnmap);
+            }
         } else {
             Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
                 Function.identity(),
