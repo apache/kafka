@@ -131,6 +131,21 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_350" href="#streams_api_changes_350">Streams API changes in 3.5.0</a></h3>
+    <p>
+      A new state store type, versioned key-value stores, was introduced in
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889%3A+Versioned+State+Stores">KIP-889</a>.
+      Rather than storing a single record version (value and timestamp) per key,
+      versioned state stores may store multiple record versions per key. This
+      allows versioned state stores to support timestamped retrieval operations
+      to return the latest record (per key) as of a specified timestamp.
+      For more information, including how to upgrade from a non-versioned key-value
+      store to a versioned store in an existing application, see the
+      <a href="/{{version}}/documentation/streams/developer-guide/processor-api.html#versioned-state-stores">Developer Guide</a> section.
+      Versioned key-value stores are opt-in only; existing applications will not be
+      affected upon upgrading to 3.5 without explicit code changes.
+    </p>
+
     <h3><a id="streams_api_changes_310" href="#streams_api_changes_310">Streams API changes in 3.1.0</a></h3>
     <p>
       The semantics of left/outer stream-stream join got improved via
