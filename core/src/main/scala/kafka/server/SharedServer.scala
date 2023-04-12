@@ -248,12 +248,13 @@ class SharedServer(
         )
         raftManager.startup()
 
+        val client = raftManager.client
         val loaderBuilder = new MetadataLoader.Builder().
           setNodeId(metaProps.nodeId).
           setTime(time).
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
-          setHighWaterMarkAccessor(() => raftManager.client.highWatermark())
+          setHighWaterMarkAccessor(() => client.highWatermark())
         if (brokerMetrics != null) {
           loaderBuilder.setMetadataLoaderMetrics(brokerMetrics)
         }
