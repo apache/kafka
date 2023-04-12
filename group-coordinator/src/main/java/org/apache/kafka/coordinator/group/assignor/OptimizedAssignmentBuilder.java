@@ -137,8 +137,6 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
                 for (Integer partition : currentAssignmentList) {
                     validCurrentAssignmentList.add(new TopicIdToPartition(topicId, partition, null));
                 }
-            } else {
-                assignmentMemberSpec.currentAssignmentPerTopic.remove(topicId);
             }
         }
         return validCurrentAssignmentList;
