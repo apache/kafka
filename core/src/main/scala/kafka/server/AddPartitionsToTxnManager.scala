@@ -80,7 +80,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       // Note: Synchronization is not needed on inflightNodes since it is always accessed from this thread.
       inflightNodes.remove(node)
       if (response.authenticationException() != null) {
-        error(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with an " +
+        error(s"AddPartitionsToTxnRequest failed for node ${response.destination()} with an " +
           "authentication exception.", response.authenticationException)
         transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
           callback(buildErrorMap(txnId, Errors.forException(response.authenticationException()).code()))
@@ -88,18 +88,18 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       } else if (response.versionMismatch != null) {
         // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it. 
         // In this case, skip verification.
-        warn(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with invalid version exception. This suggests verification is not supported." +
+        warn(s"AddPartitionsToTxnRequest failed for node ${response.destination()} with invalid version exception. This suggests verification is not supported." +
           s"Continuing handling the produce request.")
         transactionDataAndCallbacks.callbacks.values.foreach(_(Map.empty))
       } else if (response.wasDisconnected() || response.wasTimedOut()) {
-        warn(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with a network exception.")
+        warn(s"AddPartitionsToTxnRequest failed for node ${response.destination()} with a network exception.")
         transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
           callback(buildErrorMap(txnId, Errors.NETWORK_EXCEPTION.code()))
         }
       } else {
         val addPartitionsToTxnResponseData = response.responseBody.asInstanceOf[AddPartitionsToTxnResponse].data
         if (addPartitionsToTxnResponseData.errorCode != 0) {
-          error(s"AddPartitionsToTxnRequest for broker ${config.brokerId} returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
+          error(s"AddPartitionsToTxnRequest for node ${response.destination()} returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
           // The client should not be exposed to CLUSTER_AUTHORIZATION_FAILED so modify the error to signify the verification did not complete.
           // Older clients return with INVALID_RECORD and newer ones can return with INVALID_TXN_STATE.
           val finalError = if (addPartitionsToTxnResponseData.errorCode() == Errors.CLUSTER_AUTHORIZATION_FAILED.code)
