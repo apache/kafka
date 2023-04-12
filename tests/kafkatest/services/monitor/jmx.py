@@ -68,8 +68,7 @@ class JmxMixin(object):
 
         wait_until(check_jmx_port_listening, timeout_sec=30, backoff_sec=.1,
                    err_msg="%s: Never saw JMX port for %s start listening" % (node.account, self))
-        use_jmxtool_version = self.jmxtool_version(node)
-        cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version), self.jmx_class_name(use_jmxtool_version))
+        cmd = "%s " % (self.path.script("kafka-jmx.sh", self.jmxtool_version(node)))
         cmd += "--reporting-interval %d --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % (self.jmx_poll_ms, self.jmx_port)
         cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
