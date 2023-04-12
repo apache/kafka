@@ -38,7 +38,12 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
                                    Time time) {
         super(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(maxPendingTasks),
                 new RemoteStorageThreadFactory(threadNamePrefix));
-        logger = new LogContext("[" + name + "]").logger(RemoteStorageThreadPool.class);
+        logger = new LogContext() {
+            @Override
+            public String logPrefix() {
+                return "[" + Thread.currentThread().getName() + "]";
+            }
+        }.logger(RemoteStorageThreadPool.class);
     }
 
     @Override

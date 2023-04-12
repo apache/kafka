@@ -39,20 +39,19 @@ public class RemoteLogReader implements Callable<Void> {
         this.fetchInfo = fetchInfo;
         this.rlm = rlm;
         this.callback = callback;
-        LogContext logContext = new LogContext() {
+        logger = new LogContext() {
             @Override
             public String logPrefix() {
                 return "[" + Thread.currentThread().getName() + "]";
             }
-        };
-        logger = logContext.logger(RemoteLogReader.class);
+        }.logger(RemoteLogReader.class);
     }
 
     @Override
     public Void call() {
         RemoteLogReadResult result;
         try {
-            logger.debug("Reading remote bytes for {}:{}", fetchInfo.topicPartition.topic(), fetchInfo.topicPartition.partition());
+            logger.debug("Reading remote bytes for {}", fetchInfo.topicPartition);
 
             FetchDataInfo fetchDataInfo = rlm.read(fetchInfo);
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
@@ -63,7 +62,7 @@ public class RemoteLogReader implements Callable<Void> {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
 
-        logger.debug("Finished reading remote bytes for {}:{}", fetchInfo.topicPartition.topic(), fetchInfo.topicPartition.partition());
+        logger.debug("Finished reading remote bytes for {}", fetchInfo.topicPartition);
         callback.accept(result);
 
         return null;

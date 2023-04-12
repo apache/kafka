@@ -111,6 +111,8 @@ import java.util.stream.Stream;
 public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
+    private static final String REMOTE_LOG_READER_THREAD_POOL_NAME = "Remote Log Reader Thread Pool";
+    private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
 
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
@@ -123,7 +125,7 @@ public class RemoteLogManager implements Closeable {
     private final RemoteLogMetadataManager remoteLogMetadataManager;
 
     private final RemoteIndexCache indexCache;
-    private final RemoteStorageReaderThreadPool remoteStorageReaderThreadPool;
+    private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
     private final RLMScheduledThreadPool rlmScheduledThreadPool;
 
     private final long delayInMs;
@@ -161,8 +163,12 @@ public class RemoteLogManager implements Closeable {
         indexCache = new RemoteIndexCache(1024, remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
-        remoteStorageReaderThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads(),
-                rlmConfig.remoteLogReaderMaxPendingTasks(), time);
+        remoteStorageReaderThreadPool = new RemoteStorageThreadPool(
+                REMOTE_LOG_READER_THREAD_POOL_NAME,
+                REMOTE_LOG_READER_THREAD_NAME_PREFIX,
+                rlmConfig.remoteLogReaderThreads(),
+                rlmConfig.remoteLogReaderMaxPendingTasks(),
+                time);
     }
 
     private <T> T createDelegate(ClassLoader classLoader, String className) {
@@ -687,11 +693,11 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+    private int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
         return indexCache.lookupOffset(remoteLogSegmentMetadata, offset);
     }
 
-    FetchDataInfo addAbortedTransactions(long startOffset,
+    private FetchDataInfo addAbortedTransactions(long startOffset,
                                          RemoteLogSegmentMetadata segmentMetadata,
                                          FetchDataInfo fetchInfo) throws RemoteStorageException {
         int fetchSize = fetchInfo.records.sizeInBytes();
@@ -716,7 +722,7 @@ public class RemoteLogManager implements Closeable {
                 Optional.of(abortedTransactions));
     }
 
-    void collectAbortedTransactions(long startOffset,
+    private void collectAbortedTransactions(long startOffset,
                                     long upperBoundOffset,
                                     RemoteLogSegmentMetadata segmentMetadata,
                                     Consumer<List<AbortedTxn>> accumulator) throws RemoteStorageException {
@@ -752,7 +758,7 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
+    private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
         TopicPartition topicPartition = segmentMetadata.topicIdPartition().topicPartition();
         long nextSegmentBaseOffset = segmentMetadata.endOffset() + 1;
         OptionalInt epoch = OptionalInt.of(segmentMetadata.segmentLeaderEpochs().lastEntry().getKey());

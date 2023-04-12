@@ -22,11 +22,11 @@ import java.util.Optional;
 
 public class RemoteLogReadResult {
 
-    public final Optional<FetchDataInfo> info;
+    public final Optional<FetchDataInfo> fetchDataInfo;
     public final Optional<Throwable> error;
 
-    RemoteLogReadResult(Optional<FetchDataInfo> info, Optional<Throwable> error) {
-        this.info = info;
+    RemoteLogReadResult(Optional<FetchDataInfo> fetchDataInfo, Optional<Throwable> error) {
+        this.fetchDataInfo = fetchDataInfo;
         this.error = error;
     }
 
