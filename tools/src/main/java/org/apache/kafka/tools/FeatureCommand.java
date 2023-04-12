@@ -23,9 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
@@ -99,33 +97,23 @@ public class FeatureCommand {
             throw new TerseException("Please specify --bootstrap-server.");
         }
 
-        switch (command) {
-            case "describe": {
-                try (Admin adminClient = Admin.create(properties)) {
+        try (Admin adminClient = Admin.create(properties)) {
+            switch (command) {
+                case "describe":
                     handleDescribe(adminClient);
-                }
-                break;
-            }
-            case "upgrade": {
-                try (Admin adminClient = Admin.create(properties)) {
+                    break;
+                case "upgrade":
                     handleUpgrade(namespace, adminClient);
-                }
-                break;
-            }
-            case "downgrade": {
-                try (Admin adminClient = Admin.create(properties)) {
+                    break;
+                case "downgrade":
                     handleDowngrade(namespace, adminClient);
-                }
-                break;
-            }
-            case "disable": {
-                try (Admin adminClient = Admin.create(properties)) {
+                    break;
+                case "disable":
                     handleDisable(namespace, adminClient);
-                }
-                break;
+                    break;
+                default:
+                    throw new TerseException("Unknown command " + command);
             }
-            default:
-                throw new TerseException("Unknown command " + command);
         }
     }
 
@@ -193,8 +181,7 @@ public class FeatureCommand {
 
     static void handleDescribe(Admin adminClient) throws ExecutionException, InterruptedException {
         FeatureMetadata featureMetadata = adminClient.describeFeatures().featureMetadata().get();
-        TreeSet<String> featureList = new java.util.TreeSet<>(featureMetadata.supportedFeatures().keySet());
-        featureList.forEach(feature -> {
+        featureMetadata.supportedFeatures().keySet().forEach(feature -> {
             short finalizedLevel = (featureMetadata.finalizedFeatures().get(feature) == null) ? 0 : featureMetadata.finalizedFeatures().get(feature).maxVersionLevel();
             SupportedVersionRange range = featureMetadata.supportedFeatures().get(feature);
             System.out.printf("Feature: %s\tSupportedMinVersion: %s\tSupportedMaxVersion: %s\tFinalizedVersionLevel: %s\tEpoch: %s%n",
@@ -307,25 +294,24 @@ public class FeatureCommand {
             }
         });
 
-        AtomicInteger numFailures = new AtomicInteger();
-        errors.keySet().forEach(feature -> {
-            short level = updates.get(feature).maxVersionLevel();
-            Optional<Throwable> maybeThrowable = errors.get(feature);
+        int numFailures = 0;
+        for (Map.Entry<String, Optional<Throwable>> entry : errors.entrySet()) {
+            short level = updates.get(entry.getKey()).maxVersionLevel();
+            Optional<Throwable> maybeThrowable = errors.get(entry.getKey());
             if (maybeThrowable != null && maybeThrowable.isPresent()) {
                 String helper = dryRun ? "Can not " : "Could not ";
-                String suffix = (op.equals("disable")) ? "disable " + feature : op + " " + feature + " to " + level;
+                String suffix = (op.equals("disable")) ? "disable " + entry.getKey() : op + " " + entry.getKey() + " to " + level;
                 System.out.println(helper + suffix + ". " + maybeThrowable.get().getMessage());
-                numFailures.getAndIncrement();
+                numFailures++;
             } else {
                 String verb = dryRun ? " can be " : " was ";
                 String obj = (op.equals("disable")) ? "disabled." : op + "d to " + level + ".";
-                System.out.println(feature + verb + obj);
+                System.out.println(entry.getKey() + verb + obj);
             }
+        }
 
-        });
-
-        if (numFailures.get() > 0) {
-            throw new TerseException(numFailures.get() + " out of " + updates.size() + " operation(s) failed.");
+        if (numFailures > 0) {
+            throw new TerseException(numFailures + " out of " + updates.size() + " operation(s) failed.");
         }
     }
 }
