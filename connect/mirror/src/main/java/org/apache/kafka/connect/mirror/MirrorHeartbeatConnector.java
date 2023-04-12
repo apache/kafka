@@ -51,8 +51,8 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     public void start(Map<String, String> props) {
         config = new MirrorHeartbeatConfig(props);
         this.backgroundResources = new BackgroundResources();
-        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig(), "target admin client");
-        scheduler = new Scheduler(MirrorHeartbeatConnector.class, config.adminTimeout());
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig("heartbeats-target-admin"), "target admin client");
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }
 

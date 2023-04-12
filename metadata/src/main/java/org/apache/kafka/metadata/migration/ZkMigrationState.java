@@ -19,32 +19,39 @@ package org.apache.kafka.metadata.migration;
 import java.util.Optional;
 
 /**
+ * The cluster-wide ZooKeeper migration state.
+ *
  * An enumeration of the possible states of the ZkMigrationState field in ZkMigrationStateRecord.
+ * This information is persisted in the metadata log and image.
  *
  * @see org.apache.kafka.common.metadata.ZkMigrationStateRecord
  */
 public enum ZkMigrationState {
     /**
-     * No migration has been started by the controller. The controller is in regular KRaft mode
+     * The cluster was created in KRaft mode. A cluster that was created in ZK mode can never attain
+     * this state; the endpoint of migration is POST_MIGRATION, instead.
      */
     NONE((byte) 0),
 
     /**
      * A KRaft controller has been elected with "zookeeper.metadata.migration.enable" set to "true".
-     * The controller is now awaiting the pre-conditions for starting the migration.
+     * The controller is now awaiting the preconditions for starting the migration to KRaft. In this
+     * state, the metadata log does not yet contain the cluster's data. There is a metadata quorum,
+     * but it is not doing anything useful yet.
      */
     PRE_MIGRATION((byte) 1),
 
     /**
-     * The ZK data has been migrated and the KRaft controller is now writing metadata to both ZK and the
-     * metadata log. The controller will remain in this state until all of the brokers have been restarted
-     * in KRaft mode
+     * The ZK data has been migrated, and the KRaft controller is now writing metadata to both ZK
+     * and the metadata log. The controller will remain in this state until all of the brokers have
+     * been restarted in KRaft mode.
      */
     MIGRATION((byte) 2),
 
     /**
-     * The migration has been fully completed. The cluster is running in KRaft mode. This state will persist
-     * indefinitely after the migration.
+     * The migration from ZK has been fully completed. The cluster is running in KRaft mode. This state
+     * will persist indefinitely after the migration. In operational terms, this is the same as the NONE
+     * state.
      */
     POST_MIGRATION((byte) 3);
 

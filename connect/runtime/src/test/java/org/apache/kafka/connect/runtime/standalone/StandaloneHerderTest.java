@@ -21,8 +21,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -41,6 +39,7 @@ import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerConnector;
+import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
@@ -87,6 +86,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -119,10 +119,8 @@ public class StandaloneHerderTest {
     private LoaderSwap loaderSwap;
     protected FutureCallback<Herder.Created<ConnectorInfo>> createCallback;
     @Mock protected StatusBackingStore statusBackingStore;
-
-    private final ConnectorClientConfigOverridePolicy
-        noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
-
+    private final SampleConnectorClientConfigOverridePolicy
+        noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
     @Before
     public void setup() {
@@ -736,6 +734,7 @@ public class StandaloneHerderTest {
         expectStop();
 
         statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
+        EasyMock.expectLastCall();
 
         statusBackingStore.stop();
         EasyMock.expectLastCall();
@@ -749,6 +748,7 @@ public class StandaloneHerderTest {
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         herder.stop();
+        assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
 
         PowerMock.verifyAll();
     }
@@ -939,6 +939,50 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testTargetStates() throws Exception {
+        connector = PowerMock.createMock(BogusSourceConnector.class);
+        expectAdd(SourceSink.SOURCE);
+
+        Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
+        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
+        expectConfigValidation(connectorMock, true, connectorConfig);
+
+        // We pause, then stop, the connector
+        expectTargetState(CONNECTOR_NAME, TargetState.PAUSED);
+        expectTargetState(CONNECTOR_NAME, TargetState.STOPPED);
+
+        // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
+        expectStop();
+
+        statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
+        EasyMock.expectLastCall();
+
+        statusBackingStore.stop();
+        EasyMock.expectLastCall();
+        worker.stop();
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        FutureCallback<Void> stopCallback = new FutureCallback<>();
+        FutureCallback<List<TaskInfo>> taskConfigsCallback = new FutureCallback<>();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
+        assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
+        herder.pauseConnector(CONNECTOR_NAME);
+        herder.stopConnector(CONNECTOR_NAME, stopCallback);
+        stopCallback.get(10L, TimeUnit.SECONDS);
+        herder.taskConfigs(CONNECTOR_NAME, taskConfigsCallback);
+        assertEquals(Collections.emptyList(), taskConfigsCallback.get(1, TimeUnit.SECONDS));
+
+        herder.stop();
+        assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
+
+        PowerMock.verifyAll();
+    }
+
     private void expectAdd(SourceSink sourceSink) {
         Map<String, String> connectorProps = connectorConfig(sourceSink);
         ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?
@@ -996,6 +1040,15 @@ public class StandaloneHerderTest {
             });
         worker.isSinkConnector(CONNECTOR_NAME);
         PowerMock.expectLastCall().andReturn(sourceSink == SourceSink.SINK).anyTimes();
+    }
+
+    private void expectTargetState(String connector, TargetState state) {
+        Capture<Callback<TargetState>> stateChangeCallback = Capture.newInstance();
+        worker.setTargetState(eq(connector), eq(state), capture(stateChangeCallback));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            stateChangeCallback.getValue().onCompletion(null, state);
+            return null;
+        });
     }
 
     private ConnectorInfo createdInfo(SourceSink sourceSink) {

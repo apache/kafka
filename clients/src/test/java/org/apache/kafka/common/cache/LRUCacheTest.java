@@ -19,7 +19,9 @@ package org.apache.kafka.common.cache;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LRUCacheTest {
 
@@ -49,20 +51,20 @@ public class LRUCacheTest {
         cache.put("e", "f");
         assertEquals(3, cache.size());
 
-        assertEquals(true, cache.remove("a"));
+        assertTrue(cache.remove("a"));
         assertEquals(2, cache.size());
         assertNull(cache.get("a"));
         assertEquals("d", cache.get("c"));
         assertEquals("f", cache.get("e"));
 
-        assertEquals(false, cache.remove("key-does-not-exist"));
+        assertFalse(cache.remove("key-does-not-exist"));
 
-        assertEquals(true, cache.remove("c"));
+        assertTrue(cache.remove("c"));
         assertEquals(1, cache.size());
         assertNull(cache.get("c"));
         assertEquals("f", cache.get("e"));
 
-        assertEquals(true, cache.remove("e"));
+        assertTrue(cache.remove("e"));
         assertEquals(0, cache.size());
         assertNull(cache.get("e"));
     }

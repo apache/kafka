@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
     private final String storeName;
@@ -37,16 +37,26 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueG
     }
 
     private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
-        private TimestampedKeyValueStore<K, V> store;
+        private KeyValueStoreWrapper<K, V> store;
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            store = context.getStateStore(storeName);
+            store = new KeyValueStoreWrapper<>(context, storeName);
         }
 
         @Override
         public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
+            return store.get(key, asOfTimestamp);
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return store.isVersionedStore();
         }
     }
 }

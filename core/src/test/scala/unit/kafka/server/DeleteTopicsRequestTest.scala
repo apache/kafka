@@ -221,7 +221,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
    * Instead, the request is forwarded.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "zkMigration"))
   def testNotController(quorum: String): Unit = {
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
@@ -229,8 +229,9 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
           .setTimeoutMs(1000)).build()
     val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
+    val expectedError = if (isZkMigrationTest()) Errors.NONE else Errors.NOT_CONTROLLER
     val error = response.data.responses.find("not-controller").errorCode()
-    assertEquals(Errors.NOT_CONTROLLER.code,  error, "Expected controller error when routed incorrectly")
+    assertEquals(expectedError.code(),  error)
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {

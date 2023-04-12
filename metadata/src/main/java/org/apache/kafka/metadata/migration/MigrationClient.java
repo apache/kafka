@@ -17,12 +17,16 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -82,6 +86,37 @@ public interface MigrationClient {
         Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
         ZkMigrationLeadershipState state
     );
+
+    ZkMigrationLeadershipState writeConfigs(
+        ConfigResource configResource,
+        Map<String, String> configMap,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeClientQuotas(
+        Map<String, String> clientQuotaEntity,
+        Map<String, Double> quotas,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeProducerId(
+        long nextProducerId,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState removeDeletedAcls(
+        ResourcePattern resourcePattern,
+        List<AccessControlEntry> deletedAcls,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeAddedAcls(
+        ResourcePattern resourcePattern,
+        List<AccessControlEntry> addedAcls,
+        ZkMigrationLeadershipState state
+    );
+
+    void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer);
 
     void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer);
 

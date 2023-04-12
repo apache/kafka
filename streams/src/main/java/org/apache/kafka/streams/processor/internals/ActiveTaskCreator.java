@@ -226,7 +226,7 @@ class ActiveTaskCreator {
         }
 
         standbyTask.prepareRecycle();
-        standbyTask.stateMgr.transitionTaskType(Task.TaskType.ACTIVE);
+        standbyTask.stateMgr.transitionTaskType(Task.TaskType.ACTIVE, getLogContext(standbyTask.id));
 
         final RecordCollector recordCollector = createRecordCollector(standbyTask.id, getLogContext(standbyTask.id), standbyTask.topology);
         final StreamTask task = new StreamTask(
@@ -324,7 +324,7 @@ class ActiveTaskCreator {
 
     private LogContext getLogContext(final TaskId taskId) {
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
+        final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "stream-task", taskId);
         return new LogContext(logPrefix);
     }
 

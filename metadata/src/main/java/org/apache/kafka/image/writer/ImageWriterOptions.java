@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image.writer;
 
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.function.Consumer;
@@ -27,10 +28,18 @@ import java.util.function.Consumer;
  */
 public final class ImageWriterOptions {
     public static class Builder {
-        private MetadataVersion metadataVersion = MetadataVersion.latest();
+        private MetadataVersion metadataVersion;
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
+
+        public Builder() {
+            this.metadataVersion = MetadataVersion.latest();
+        }
+
+        public Builder(MetadataImage image) {
+            this.metadataVersion = image.features().metadataVersion();
+        }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
             if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
@@ -43,10 +52,14 @@ public final class ImageWriterOptions {
             return this;
         }
 
-        // Package-private for testing
+        // Visible for testing
         public Builder setRawMetadataVersion(MetadataVersion metadataVersion) {
             this.metadataVersion = metadataVersion;
             return this;
+        }
+
+        public MetadataVersion metadataVersion() {
+            return metadataVersion;
         }
 
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {

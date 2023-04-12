@@ -36,7 +36,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -88,11 +87,6 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
         store.init((StateStoreContext) context, null);
-    }
-
-    @After
-    public void after() {
-        super.after();
     }
 
     @SuppressWarnings("unchecked")

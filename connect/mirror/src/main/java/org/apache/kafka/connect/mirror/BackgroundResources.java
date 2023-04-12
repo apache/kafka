@@ -17,12 +17,15 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.util.TopicAdmin;
 
 import java.time.Duration;
 import java.util.IdentityHashMap;
@@ -78,11 +81,22 @@ public class BackgroundResources implements AutoCloseable {
     }
 
     public OffsetSyncStore offsetSyncStore(MirrorCheckpointTaskConfig config, String name) {
-        return open(new OffsetSyncStore(config), name);
+        Consumer<byte[], byte[]> consumer = null;
+        TopicAdmin admin;
+        try {
+            consumer = consumer(config.offsetSyncsTopicConsumerConfig(), "offset syncs consumer");
+            admin = new TopicAdmin(
+                    config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    admin(config, config.offsetSyncsTopicAdminConfig(), "offset syncs admin"));
+        } catch (Throwable t) {
+            Utils.closeQuietly(consumer, "consumer for offset syncs");
+            throw t;
+        }
+        return open(new OffsetSyncStore(config, consumer, admin), name);
     }
 
-    public Scheduler scheduler(Class<?> clazz, Duration timeout, String name) {
-        return open(new Scheduler(clazz, timeout), name);
+    public Scheduler scheduler(Class<?> clazz, String role, Duration timeout, String name) {
+        return open(new Scheduler(clazz, role, timeout), name);
     }
 
     public ConfigPropertyFilter configPropertyFilter(MirrorSourceConfig config, String name) {

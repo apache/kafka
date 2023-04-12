@@ -215,11 +215,9 @@ public class AclControlManagerTest {
 
         // Verify that the ACLs stored in the AclControlManager match the ones we expect.
         Set<ApiMessageAndVersion> foundAcls = new HashSet<>();
-        for (Iterator<List<ApiMessageAndVersion>> iterator = manager.iterator(Long.MAX_VALUE);
-                 iterator.hasNext(); ) {
-            for (ApiMessageAndVersion apiMessageAndVersion : iterator.next()) {
-                assertTrue(foundAcls.add(apiMessageAndVersion));
-            }
+        for (Map.Entry<Uuid, StandardAcl> entry : manager.idToAcl().entrySet()) {
+            foundAcls.add(new ApiMessageAndVersion(
+                    new StandardAclWithId(entry.getKey(), entry.getValue()).toRecord(), (short) 0));
         }
         assertEquals(loadedAcls, foundAcls);
 
@@ -233,7 +231,7 @@ public class AclControlManagerTest {
         // a cluster metadata authorizer.
         snapshotRegistry.revertToSnapshot(0);
         authorizer.loadSnapshot(manager.idToAcl());
-        assertFalse(manager.iterator(Long.MAX_VALUE).hasNext());
+        assertTrue(manager.idToAcl().isEmpty());
     }
 
     @Test
@@ -243,11 +241,9 @@ public class AclControlManagerTest {
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
         manager.replay(StandardAclWithIdTest.TEST_ACLS.get(0).toRecord(), Optional.empty());
-        assertEquals(new ApiMessageAndVersion(TEST_ACLS.get(0).toRecord(), (short) 0),
-            manager.iterator(Long.MAX_VALUE).next().get(0));
         manager.replay(new RemoveAccessControlEntryRecord().
             setId(TEST_ACLS.get(0).id()), Optional.empty());
-        assertFalse(manager.iterator(Long.MAX_VALUE).hasNext());
+        assertTrue(manager.idToAcl().isEmpty());
     }
 
     @Test
@@ -284,7 +280,7 @@ public class AclControlManagerTest {
             }
         }
         RecordTestUtils.replayAll(manager, createResult.records());
-        assertTrue(manager.iterator(Long.MAX_VALUE).hasNext());
+        assertFalse(manager.idToAcl().isEmpty());
 
         ControllerResult<List<AclDeleteResult>> deleteResult =
             manager.deleteAcls(Arrays.asList(
@@ -308,12 +304,8 @@ public class AclControlManagerTest {
             deleteResult.response().get(1).exception().get().getClass());
         RecordTestUtils.replayAll(manager, deleteResult.records());
 
-        Iterator<List<ApiMessageAndVersion>> iterator = manager.iterator(Long.MAX_VALUE);
-        assertTrue(iterator.hasNext());
-        List<ApiMessageAndVersion> list = iterator.next();
-        assertEquals(1, list.size());
-        assertEquals(TEST_ACLS.get(1).toBinding(), StandardAcl.fromRecord(
-            (AccessControlEntryRecord) list.get(0).message()).toBinding());
+        Iterator<Map.Entry<Uuid, StandardAcl>> iterator = manager.idToAcl().entrySet().iterator();
+        assertEquals(TEST_ACLS.get(1).acl(), iterator.next().getValue());
         assertFalse(iterator.hasNext());
     }
 

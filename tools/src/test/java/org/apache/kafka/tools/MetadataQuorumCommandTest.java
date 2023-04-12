@@ -22,10 +22,14 @@ import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
@@ -53,12 +57,12 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 3)
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 2)
     })
     public void testDescribeQuorumReplicationSuccessful() throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -94,12 +98,12 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 3)
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 2)
     })
     public void testDescribeQuorumStatusSuccessful() throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -141,7 +145,17 @@ class MetadataQuorumCommandTest {
         assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[2]);
     }
 
-    @ClusterTest(clusterType = Type.ZK, brokers = 3)
+    @ClusterTests({
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
+    })
+    public void testCommandConfig() throws IOException {
+        // specifying a --command-config containing properties that would prevent login must fail
+        File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
+        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
+    }
+
+    @ClusterTest(clusterType = Type.ZK, brokers = 1)
     public void testDescribeQuorumInZkMode() {
         assertTrue(
             assertThrows(

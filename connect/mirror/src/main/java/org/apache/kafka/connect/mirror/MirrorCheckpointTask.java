@@ -98,16 +98,21 @@ public class MirrorCheckpointTask extends SourceTask {
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
         offsetSyncStore = backgroundResources.offsetSyncStore(config, "offset sync store");
-        sourceAdminClient = backgroundResources.admin(config, config.sourceAdminConfig(), "source admin client");
-        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig(), "target admin client");
+        sourceAdminClient = backgroundResources.admin(config, config.sourceAdminConfig("checkpoint-source-admin"), "source admin client");
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig("checkpoint-target-admin"), "target admin client");
         metrics = backgroundResources.checkpointMetrics(config, "checkpoint metrics");
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
-        scheduler = backgroundResources.scheduler(MirrorCheckpointTask.class, config.adminTimeout(), "scheduler");
-        scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
-                                    "refreshing idle consumers group offsets at target cluster");
-        scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
-                                          "sync idle consumer group offset from source to target");
+        scheduler = backgroundResources.scheduler(getClass(), config.entityLabel(), config.adminTimeout(), "scheduler");
+        scheduler.execute(() -> {
+            offsetSyncStore.start();
+            scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
+                    "refreshing idle consumers group offsets at target cluster");
+            scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
+                    "sync idle consumer group offset from source to target");
+        }, "starting offset sync store");
+        log.info("{} checkpointing {} consumer groups {}->{}: {}.", Thread.currentThread().getName(),
+                consumerGroups.size(), sourceClusterAlias, config.targetClusterAlias(), consumerGroups);
     }
 
     @Override
@@ -133,7 +138,11 @@ public class MirrorCheckpointTask extends SourceTask {
         try {
             long deadline = System.currentTimeMillis() + interval.toMillis();
             while (!stopping && System.currentTimeMillis() < deadline) {
-                offsetSyncStore.update(pollTimeout);
+                Thread.sleep(pollTimeout.toMillis());
+            }
+            if (stopping) {
+                // we are stopping, return early.
+                return null;
             }
             List<SourceRecord> records = new ArrayList<>();
             for (String group : consumerGroups) {
@@ -168,7 +177,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     private List<Checkpoint> checkpointsForGroup(String group) throws ExecutionException, InterruptedException {
         return listConsumerGroupOffsets(group).entrySet().stream()
-            .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
+            .filter(x -> shouldCheckpointTopic(x.getKey().topic())) // Only perform relevant checkpoints filtered by "topic filter"
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
             .flatMap(o -> o.map(Stream::of).orElseGet(Stream::empty)) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
@@ -186,14 +195,16 @@ public class MirrorCheckpointTask extends SourceTask {
 
     Optional<Checkpoint> checkpoint(String group, TopicPartition topicPartition,
                                     OffsetAndMetadata offsetAndMetadata) {
-        long upstreamOffset = offsetAndMetadata.offset();
-        OptionalLong downstreamOffset = offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
-        if (downstreamOffset.isPresent()) {
-            return Optional.of(new Checkpoint(group, renameTopicPartition(topicPartition),
+        if (offsetAndMetadata != null) {
+            long upstreamOffset = offsetAndMetadata.offset();
+            OptionalLong downstreamOffset =
+                offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
+            if (downstreamOffset.isPresent()) {
+                return Optional.of(new Checkpoint(group, renameTopicPartition(topicPartition),
                     upstreamOffset, downstreamOffset.getAsLong(), offsetAndMetadata.metadata()));
-        } else {
-            return Optional.empty();
+            }
         }
+        return Optional.empty();
     }
 
     SourceRecord checkpointRecord(Checkpoint checkpoint, long timestamp) {

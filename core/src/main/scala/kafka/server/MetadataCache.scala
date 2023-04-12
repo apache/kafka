@@ -32,6 +32,17 @@ case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) 
   }
 }
 
+/**
+ * Used to represent the controller id cached in the metadata cache of the broker. This trait is
+ * extended to represent if the controller is KRaft controller or Zk controller.
+ */
+sealed trait CachedControllerId {
+  val id: Int
+}
+
+case class ZkCachedControllerId(id: Int) extends CachedControllerId
+case class KRaftCachedControllerId(id: Int) extends CachedControllerId
+
 trait MetadataCache {
 
   /**
@@ -92,7 +103,7 @@ trait MetadataCache {
 
   def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node]
 
-  def getControllerId: Option[Int]
+  def getControllerId: Option[CachedControllerId]
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 
@@ -103,13 +114,17 @@ trait MetadataCache {
   def metadataVersion(): MetadataVersion
 
   def features(): FinalizedFeaturesAndEpoch
+
+  def getRandomAliveBrokerId: Option[Int]
 }
 
 object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
-                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty()): ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures)
+                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
+                      kraftControllerNodes: collection.Seq[Node] = collection.Seq.empty[Node])
+  : ZkMetadataCache = {
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, kraftControllerNodes)
   }
 
   def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {

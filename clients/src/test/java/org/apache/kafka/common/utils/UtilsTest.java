@@ -34,7 +34,6 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -44,6 +43,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
@@ -71,6 +71,7 @@ import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -895,7 +896,7 @@ public class UtilsTest {
         if (a == null) {
             assertNotNull(b);
         } else {
-            assertFalse(a.equals(b));
+            assertNotEquals(a, b);
         }
         assertFalse(Utils.isEqualConstantTime(first, second));
         assertFalse(Utils.isEqualConstantTime(second, first));
@@ -907,7 +908,7 @@ public class UtilsTest {
         if (a == null) {
             assertNull(b);
         } else {
-            assertTrue(a.equals(b));
+            assertEquals(a, b);
         }
         assertTrue(Utils.isEqualConstantTime(first, second));
         assertTrue(Utils.isEqualConstantTime(second, first));
@@ -915,15 +916,40 @@ public class UtilsTest {
 
     @Test
     public void testToLogDateTimeFormat() {
-        DateTimeFormatter offsetFormatter = DateTimeFormatter.ofPattern("XXX");
-        ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(Instant.now());
-        
-        String requiredOffsetFormat = offsetFormatter.format(offset);
-
         final LocalDateTime timestampWithMilliSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 5, 123000000);
         final LocalDateTime timestampWithSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 5);
-        
+
+        DateTimeFormatter offsetFormatter = DateTimeFormatter.ofPattern("XXX");
+        ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(timestampWithSeconds);
+        String requiredOffsetFormat = offsetFormatter.format(offset);
+
         assertEquals(String.format("2020-11-09 12:34:05,123 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithMilliSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
         assertEquals(String.format("2020-11-09 12:34:05,000 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
     }
+
+    @Test
+    public void testReplaceSuffix() {
+        assertEquals("blah.foo.text", Utils.replaceSuffix("blah.foo.txt", ".txt", ".text"));
+        assertEquals("blah.foo", Utils.replaceSuffix("blah.foo.txt", ".txt", ""));
+        assertEquals("txt.txt", Utils.replaceSuffix("txt.txt.txt", ".txt", ""));
+        assertEquals("foo.txt", Utils.replaceSuffix("foo", "", ".txt"));
+    }
+
+    @Test
+    public void testEntriesWithPrefix() {
+        Map<String, Object> props = new HashMap<>();
+        props.put("foo.bar", "abc");
+        props.put("setting", "def");
+
+        // With stripping
+        Map<String, Object> expected = Collections.singletonMap("bar", "abc");
+        Map<String, Object> actual = Utils.entriesWithPrefix(props, "foo.");
+        assertEquals(expected, actual);
+
+        // Without stripping
+        expected = Collections.singletonMap("foo.bar", "abc");
+        actual = Utils.entriesWithPrefix(props, "foo.", false);
+        assertEquals(expected, actual);
+    }
+
 }

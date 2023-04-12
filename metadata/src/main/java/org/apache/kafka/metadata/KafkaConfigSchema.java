@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import org.apache.kafka.server.config.ConfigSynonym;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
@@ -158,10 +159,10 @@ public class KafkaConfigSchema {
     }
 
     public Map<String, ConfigEntry> resolveEffectiveTopicConfigs(
-            Map<String, ? extends Object> staticNodeConfig,
-            Map<String, ? extends Object> dynamicClusterConfigs,
-            Map<String, ? extends Object> dynamicNodeConfigs,
-            Map<String, ? extends Object> dynamicTopicConfigs) {
+            Map<String, ?> staticNodeConfig,
+            Map<String, ?> dynamicClusterConfigs,
+            Map<String, ?> dynamicNodeConfigs,
+            Map<String, ?> dynamicTopicConfigs) {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
         HashMap<String, ConfigEntry> effectiveConfigs = new HashMap<>();
         for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
@@ -173,10 +174,10 @@ public class KafkaConfigSchema {
     }
 
     private ConfigEntry resolveEffectiveTopicConfig(ConfigDef.ConfigKey configKey,
-            Map<String, ? extends Object> staticNodeConfig,
-            Map<String, ? extends Object> dynamicClusterConfigs,
-            Map<String, ? extends Object> dynamicNodeConfigs,
-            Map<String, ? extends Object> dynamicTopicConfigs) {
+            Map<String, ?> staticNodeConfig,
+            Map<String, ?> dynamicClusterConfigs,
+            Map<String, ?> dynamicNodeConfigs,
+            Map<String, ?> dynamicTopicConfigs) {
         if (dynamicTopicConfigs.containsKey(configKey.name)) {
             return toConfigEntry(configKey,
                 dynamicTopicConfigs.get(configKey.name),

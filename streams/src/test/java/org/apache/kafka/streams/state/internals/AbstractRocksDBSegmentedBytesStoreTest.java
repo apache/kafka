@@ -480,6 +480,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertEquals(2, writeBatchMap.size());
         for (final WriteBatch batch : writeBatchMap.values()) {
             assertEquals(1, batch.count());
+            batch.close();
         }
     }
 

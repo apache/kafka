@@ -20,21 +20,19 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import kafka.common.LogSegmentOffsetOverflowException
-import kafka.log.UnifiedLog.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
-import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
-import kafka.server.epoch.LeaderEpochFileCache
-import kafka.utils.{CoreUtils, Logging, Scheduler}
+import kafka.log.UnifiedLog.{CleanedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{CorruptIndexException, LoadedLogOffsets, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, ProducerStateManager}
 
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import scala.collection.{Set, mutable}
-
-case class LoadedLogOffsets(logStartOffset: Long,
-                            recoveryPoint: Long,
-                            nextOffsetMetadata: LogOffsetMetadata)
+import scala.jdk.CollectionConverters._
 
 object LogLoader extends Logging {
 
@@ -109,7 +107,7 @@ class LogLoader(
     // We store segments that require renaming in this code block, and do the actual renaming later.
     var minSwapFileOffset = Long.MaxValue
     var maxSwapFileOffset = Long.MinValue
-    swapFiles.filter(f => UnifiedLog.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
+    swapFiles.filter(f => UnifiedLog.isLogFile(new File(Utils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
       val baseOffset = offsetFromFile(f)
       val segment = LogSegment.open(f.getParentFile,
         baseOffset = baseOffset,
@@ -144,7 +142,7 @@ class LogLoader(
     for (file <- dir.listFiles if file.isFile) {
       if (file.getName.endsWith(SwapFileSuffix)) {
         info(s"Recovering file ${file.getName} by renaming from ${UnifiedLog.SwapFileSuffix} files.")
-        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.SwapFileSuffix, "")))
+        file.renameTo(new File(Utils.replaceSuffix(file.getPath, UnifiedLog.SwapFileSuffix, "")))
       }
     }
 
@@ -194,7 +192,7 @@ class LogLoader(
     // Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used
     // during log recovery may have deleted some files without the LogLoader.producerStateManager instance witnessing the
     // deletion.
-    producerStateManager.removeStraySnapshots(segments.baseOffsets.toSeq)
+    producerStateManager.removeStraySnapshots(segments.baseOffsets.map(x => Long.box(x)).asJavaCollection)
     UnifiedLog.rebuildProducerState(
       producerStateManager,
       segments,
@@ -205,10 +203,10 @@ class LogLoader(
       reloadFromCleanShutdown = hadCleanShutdown,
       logIdent)
     val activeSegment = segments.lastSegment.get
-    LoadedLogOffsets(
+    new LoadedLogOffsets(
       newLogStartOffset,
       newRecoveryPoint,
-      LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size))
+      new LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size))
   }
 
   /**
@@ -232,7 +230,7 @@ class LogLoader(
 
       // Delete stray files marked for deletion, but skip KRaft snapshots.
       // These are handled in the recovery logic in `KafkaMetadataLog`.
-      if (filename.endsWith(DeletedFileSuffix) && !filename.endsWith(Snapshots.DELETE_SUFFIX)) {
+      if (filename.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) && !filename.endsWith(Snapshots.DELETE_SUFFIX)) {
         debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
       } else if (filename.endsWith(CleanedFileSuffix)) {
@@ -357,8 +355,8 @@ class LogLoader(
     val producerStateManager = new ProducerStateManager(
       topicPartition,
       dir,
-      this.producerStateManager.maxTransactionTimeoutMs,
-      this.producerStateManager.producerStateManagerConfig,
+      this.producerStateManager.maxTransactionTimeoutMs(),
+      this.producerStateManager.producerStateManagerConfig(),
       time)
     UnifiedLog.rebuildProducerState(
       producerStateManager,

@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -392,6 +393,18 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_32 = "3.2";
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.3.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_33 = "3.3";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.4.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_34 = "3.4";
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -578,7 +591,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
     private static final String MAX_WARMUP_REPLICAS_DOC = "The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping " +
                                                               " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
-                                                              " traffic and cluster state can be used for high availability. Must be at least 1.";
+                                                              " traffic and cluster state can be used for high availability. Must be at least 1." +
+                                                              "Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup replica can only be promoted to an active task " +
+                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the `probing.rebalance.interval.ms` config). This means " +
+                                                              "that the maximum rate at which active tasks can be migrated from one Kafka Streams Instance to another instance can be determined by " +
+                                                              "(`max.warmup.replicas` / `probing.rebalance.interval.ms`).";
 
     /** {@code metadata.max.age.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -738,12 +755,17 @@ public class StreamsConfig extends AbstractConfig {
         UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
         UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
         UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
-        UPGRADE_FROM_32 + "\" (for upgrading from the corresponding old version).";
+        UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
+
+    /** {@code default.client.supplier} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_CLIENT_SUPPLIER_CONFIG = "default.client.supplier";
+    public static final String DEFAULT_CLIENT_SUPPLIER_DOC = "Client supplier class that implements the <code>org.apache.kafka.streams.KafkaClientSupplier</code> interface.";
 
     /**
      * {@code topology.optimization}
@@ -953,6 +975,11 @@ public class StreamsConfig extends AbstractConfig {
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
+            .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
+                    Type.CLASS,
+                    DefaultKafkaClientSupplier.class.getName(),
+                    Importance.LOW,
+                    DEFAULT_CLIENT_SUPPLIER_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     5 * 60 * 1000L,
@@ -1082,7 +1109,9 @@ public class StreamsConfig extends AbstractConfig {
                        UPGRADE_FROM_28,
                        UPGRADE_FROM_30,
                        UPGRADE_FROM_31,
-                       UPGRADE_FROM_32),
+                       UPGRADE_FROM_32,
+                       UPGRADE_FROM_33,
+                       UPGRADE_FROM_34),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOWED_INNER_CLASS_SERDE,
@@ -1750,6 +1779,15 @@ public class StreamsConfig extends AbstractConfig {
             verifiedConfigs.addAll(configs);
         }
         return verifiedConfigs;
+    }
+
+    /**
+     * Return configured KafkaClientSupplier
+     * @return Configured KafkaClientSupplier
+     */
+    public KafkaClientSupplier getKafkaClientSupplier() {
+        return getConfiguredInstance(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG,
+            KafkaClientSupplier.class);
     }
 
     /**

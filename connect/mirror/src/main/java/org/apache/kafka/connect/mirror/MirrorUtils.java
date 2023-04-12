@@ -118,6 +118,7 @@ final class MirrorUtils {
             Throwable cause = e.getCause();
             if (cause instanceof TopicExistsException) {
                 log.debug("Unable to create topic '{}' since it already exists.", topicName);
+                return;
             }
             if (cause instanceof UnsupportedVersionException) {
                 log.debug("Unable to create topic '{}' since the brokers do not support the CreateTopics API." +

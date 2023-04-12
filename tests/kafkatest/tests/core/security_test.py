@@ -132,7 +132,7 @@ class SecurityTest(EndToEndTest):
         self.consumer.start()
 
     @cluster(num_nodes=2)
-    @matrix(metadata_quorum=[quorum.zk, quorum.remote_kraft])
+    @matrix(metadata_quorum=[quorum.zk, quorum.isolated_kraft])
     def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk):
         """
         Test that invalid hostname in ZooKeeper or KRaft Controller results in broker inability to start.
@@ -165,7 +165,7 @@ class SecurityTest(EndToEndTest):
         if quorum.for_test(self.test_context) == quorum.zk:
             self.kafka.zk.restart_cluster()
         else:
-            self.kafka.remote_controller_quorum.restart_cluster()
+            self.kafka.isolated_controller_quorum.restart_cluster()
 
         try:
             self.kafka.start_node(self.kafka.nodes[0], timeout_sec=30)
