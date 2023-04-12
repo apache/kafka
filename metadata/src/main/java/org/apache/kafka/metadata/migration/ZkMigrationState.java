@@ -20,7 +20,7 @@ import java.util.Optional;
 
 /**
  * The cluster-wide ZooKeeper migration state.
- *
+ * </p>
  * An enumeration of the possible states of the ZkMigrationState field in ZkMigrationStateRecord.
  * This information is persisted in the metadata log and image.
  *
@@ -28,14 +28,9 @@ import java.util.Optional;
  */
 public enum ZkMigrationState {
     /**
-     * This is a synthetic value used internally by the controller to indicate that no decision has
-     * been made about the state of a ZK migration. This value should _not_ be written into the log.
-     */
-    UNINITIALIZED((byte) -1),
-
-    /**
      * The cluster was created in KRaft mode. A cluster that was created in ZK mode can never attain
-     * this state; the endpoint of migration is POST_MIGRATION, instead.
+     * this state; the endpoint of migration is POST_MIGRATION, instead. This value is also used as
+     * the default migration state in an empty metadata log.
      */
     NONE((byte) 0),
 
@@ -44,15 +39,20 @@ public enum ZkMigrationState {
      * The controller is now awaiting the preconditions for starting the migration to KRaft. In this
      * state, the metadata log does not yet contain the cluster's data. There is a metadata quorum,
      * but it is not doing anything useful yet.
+     * </p>
+     * In Kafka 3.4, PRE_MIGRATION was written out as value 1 to the log, but no MIGRATION state
+     * was ever written. Since this would be an invalid log state in 3.5+, we have swapped the
+     * enum values for PRE_MIGRATION and MIGRATION. This allows us to handle the upgrade case
+     * from 3.4 without adding additional fields to the migration record.
      */
-    PRE_MIGRATION((byte) 1),
+    PRE_MIGRATION((byte) 2),
 
     /**
      * The ZK data has been migrated, and the KRaft controller is now writing metadata to both ZK
-     * and the metadata log. The controller will remain in this state until all of the brokers have
+     * and the metadata log. The controller will remain in this state until all the brokers have
      * been restarted in KRaft mode.
      */
-    MIGRATION((byte) 2),
+    MIGRATION((byte) 1),
 
     /**
      * The migration from ZK has been fully completed. The cluster is running in KRaft mode. This state

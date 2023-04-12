@@ -43,7 +43,7 @@ public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(
         Collections.emptyMap(),
         MetadataVersion.MINIMUM_KRAFT_VERSION,
-        ZkMigrationState.UNINITIALIZED
+        ZkMigrationState.NONE
     );
 
     private final Map<String, Short> finalizedVersions;
@@ -63,7 +63,7 @@ public final class FeaturesImage {
     }
 
     public boolean isEmpty() {
-        return finalizedVersions.isEmpty() && zkMigrationState.equals(ZkMigrationState.UNINITIALIZED);
+        return finalizedVersions.isEmpty() && zkMigrationState.equals(ZkMigrationState.NONE);
     }
 
     public MetadataVersion metadataVersion() {
@@ -89,11 +89,11 @@ public final class FeaturesImage {
             writeFeatureLevels(writer, options);
         }
 
-        if (!zkMigrationState.equals(ZkMigrationState.UNINITIALIZED)) {
-            if (options.metadataVersion().isMigrationSupported()) {
-                writer.write(0, new ZkMigrationStateRecord().setZkMigrationState(zkMigrationState.value()));
-            } else {
-                options.handleLoss("the ZK Migration state");
+        if (options.metadataVersion().isMigrationSupported()) {
+            writer.write(0, new ZkMigrationStateRecord().setZkMigrationState(zkMigrationState.value()));
+        } else {
+            if (!zkMigrationState.equals(ZkMigrationState.NONE)) {
+                options.handleLoss("the ZK Migration state which was " + zkMigrationState);
             }
         }
     }

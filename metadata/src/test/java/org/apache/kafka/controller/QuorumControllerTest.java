@@ -1348,10 +1348,10 @@ public class QuorumControllerTest {
         assertEquals(ZkMigrationState.NONE,
             checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, false));
 
-        assertEquals(ZkMigrationState.UNINITIALIZED,
+        assertEquals(ZkMigrationState.NONE,
             checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true));
 
-        assertEquals(ZkMigrationState.UNINITIALIZED,
+        assertEquals(ZkMigrationState.NONE,
             checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, false));
     }
 

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
@@ -913,9 +914,7 @@ public final class QuorumController implements Controller {
             ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Complete ZK Migration",
                 new MigrationWriteOperation(
                     Collections.singletonList(
-                        new ApiMessageAndVersion(
-                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.MIGRATION.value()),
-                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION)
+                        FeatureControlManager.buildZkMigrationRecord(ZkMigrationState.MIGRATION)
                     )),
                 EnumSet.of(RUNS_IN_PREMIGRATION));
             queue.append(event);
@@ -1178,33 +1177,63 @@ public final class QuorumController implements Controller {
         }
     }
 
+    public static void generateBootstrapRecords(
+        Logger log,
+        boolean isLogEmpty,
+        boolean zkMigrationEnabled,
+        BootstrapMetadata bootstrapMetadata,
+        FeatureControlManager featureControl,
+        Consumer<ApiMessageAndVersion> recordConsumer
+    ) {
+        if (isLogEmpty) {
+            // If no records have been replayed, we need to write out the bootstrap records.
+            // This will include the new metadata.version, as well as things like SCRAM
+            // initialization, etc.
+            log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
+                            "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
+                    bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
+            bootstrapMetadata.records().forEach(recordConsumer);
+
+            if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
+                if (zkMigrationEnabled) {
+                    log.info("Writing ZkMigrationState of PRE_MIGRATION to the log, since migrations are enabled.");
+                    recordConsumer.accept(FeatureControlManager.buildZkMigrationRecord(ZkMigrationState.PRE_MIGRATION));
+                } else {
+                    log.debug("Writing ZkMigrationState of NONE to the log, since migrations are not enabled.");
+                    recordConsumer.accept(FeatureControlManager.buildZkMigrationRecord(ZkMigrationState.NONE));
+                }
+            }
+        } else {
+            // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
+            if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
+                log.info("No metadata.version feature level record was found in the log. " +
+                        "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
+            }
+
+            if (featureControl.metadataVersion().isMigrationSupported()) {
+                switch (featureControl.zkMigrationState()) {
+                    case NONE:
+                        // There may, or may not, be a NONE in the log. Since this is the default state, it will
+                        // be persisted in a snapshot, so we don't need to explicitly write it here.
+                        if (zkMigrationEnabled) {
+                            throw new ConfigException("Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
+                        }
+                        break;
+                    case PRE_MIGRATION:
+                        throw new IllegalStateException("Detected an failed migration state during bootstrap, cannot continue.");
+                    case MIGRATION:
+                    case POST_MIGRATION:
+                        // These states need more context, so they will be handled by KRaftMigrationDriver
+                        break;
+                }
+            }
+        }
+    }
     class CompleteActivationEvent implements ControllerWriteOperation<Void> {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() throws Exception {
             List<ApiMessageAndVersion> records = new ArrayList<>();
-            if (logReplayTracker.empty()) {
-                // If no records have been replayed, we need to write out the bootstrap records.
-                // This will include the new metadata.version, as well as things like SCRAM
-                // initialization, etc.
-                log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
-                        "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
-                        bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
-                records.addAll(bootstrapMetadata.records());
-
-                // Bootstrap the initial ZK Migration record
-                featureControl.generateZkMigrationRecord(
-                    bootstrapMetadata.metadataVersion(), true, records::add);
-            } else {
-                // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
-                if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-                    log.info("No metadata.version feature level record was found in the log. " +
-                        "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
-                }
-
-                // Initialize the ZK migration state as NONE, or throw an error if we find an in-progress migration
-                featureControl.generateZkMigrationRecord(
-                    featureControl.metadataVersion(), false, records::add);
-            }
+            generateBootstrapRecords(log, logReplayTracker.empty(), zkMigrationEnabled, bootstrapMetadata, featureControl, records::add);
             return ControllerResult.atomicOf(records, null);
         }
 
@@ -1712,6 +1741,8 @@ public final class QuorumController implements Controller {
 
     private final ZkRecordConsumer zkRecordConsumer;
 
+    private final boolean zkMigrationEnabled;
+
     /**
      * The maximum number of records per batch to allow.
      */
@@ -1776,7 +1807,6 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
-            setZkMigrationEnabled(zkMigrationEnabled).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -1819,6 +1849,7 @@ public final class QuorumController implements Controller {
         this.curClaimEpoch = -1;
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();
         this.zkRecordConsumer = new MigrationRecordConsumer();
+        this.zkMigrationEnabled = zkMigrationEnabled;
         updateWriteOffset(-1);
 
         resetToEmptyState();

@@ -91,6 +91,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private volatile MigrationDriverState migrationState;
     private volatile ZkMigrationLeadershipState migrationLeadershipState;
     private volatile MetadataImage image;
+    private volatile boolean firstPublish;
 
     public KRaftMigrationDriver(
         int nodeId,
@@ -111,6 +112,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "controller-" + nodeId + "-migration-driver-");
         this.image = MetadataImage.EMPTY;
+        this.firstPublish = false;
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
@@ -157,8 +159,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     private boolean areZkBrokersReadyForMigration() {
-        if (image == MetadataImage.EMPTY) {
-            // TODO maybe add WAIT_FOR_INITIAL_METADATA_PUBLISH state to avoid this kind of check?
+        if (!firstPublish) {
             log.info("Waiting for initial metadata publish before checking if Zk brokers are registered.");
             return false;
         }
@@ -417,13 +418,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             if (migrationState.equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM)) {
-                if (image.isEmpty()) {
+                if (!firstPublish) {
                     log.trace("Waiting until we have received metadata before proceeding with migration");
-                    return;
-                }
-
-                if (image.features().zkMigrationState().equals(ZkMigrationState.UNINITIALIZED)) {
-                    log.trace("Waiting until we have received metadata regarding the ZK migration before proceeding with migration");
                     return;
                 }
 
@@ -570,6 +566,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
+            KRaftMigrationDriver.this.firstPublish = true;
             MetadataImage prevImage = KRaftMigrationDriver.this.image;
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";

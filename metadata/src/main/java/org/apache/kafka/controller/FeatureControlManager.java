@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
@@ -49,34 +50,12 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 
 public class FeatureControlManager {
 
-    /**
-     * Value class for the migration state and support for pre-migration (derived from MetadataVersion).
-     */
-    private static class ZkMigrationControlState {
-        private final ZkMigrationState zkMigrationState;
-        private final boolean preMigrationSupported;
-
-        private ZkMigrationControlState(ZkMigrationState zkMigrationState, boolean preMigrationSupported) {
-            this.zkMigrationState = zkMigrationState;
-            this.preMigrationSupported = preMigrationSupported;
-        }
-
-        public ZkMigrationState zkMigrationState() {
-            return zkMigrationState;
-        }
-
-        public boolean preMigrationSupported() {
-            return preMigrationSupported;
-        }
-    }
-
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private MetadataVersion metadataVersion = MetadataVersion.latest();
         private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-        private boolean zkMigrationEnabled = false;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -103,11 +82,6 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
-            this.zkMigrationEnabled = zkMigrationEnabled;
-            return this;
-        }
-
         public FeatureControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -120,8 +94,7 @@ public class FeatureControlManager {
                 quorumFeatures,
                 snapshotRegistry,
                 metadataVersion,
-                minimumBootstrapVersion,
-                zkMigrationEnabled
+                minimumBootstrapVersion
             );
         }
     }
@@ -143,31 +116,29 @@ public class FeatureControlManager {
      */
     private final TimelineObject<MetadataVersion> metadataVersion;
 
-    private final TimelineObject<ZkMigrationControlState> migrationControlState;
+    /**
+     * The current ZK migration state
+     */
+    private final TimelineObject<ZkMigrationState> migrationControlState;
 
     /**
      * The minimum bootstrap version that we can't downgrade before.
      */
     private final MetadataVersion minimumBootstrapVersion;
 
-    private final boolean zkMigrationEnabled;
-
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         MetadataVersion metadataVersion,
-        MetadataVersion minimumBootstrapVersion,
-        boolean zkMigrationEnabled
+        MetadataVersion minimumBootstrapVersion
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
         this.minimumBootstrapVersion = minimumBootstrapVersion;
-        this.migrationControlState = new TimelineObject<>(snapshotRegistry,
-            new ZkMigrationControlState(ZkMigrationState.UNINITIALIZED, false));
-        this.zkMigrationEnabled = zkMigrationEnabled;
+        this.migrationControlState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -195,7 +166,7 @@ public class FeatureControlManager {
     }
 
     ZkMigrationState zkMigrationState() {
-        return migrationControlState.get().zkMigrationState();
+        return migrationControlState.get();
     }
 
     private ApiError updateFeature(
@@ -277,11 +248,18 @@ public class FeatureControlManager {
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
         MetadataVersion currentVersion = metadataVersion();
+        ZkMigrationState zkMigrationState = zkMigrationState();
         final MetadataVersion newVersion;
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
         } catch (IllegalArgumentException e) {
             return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version.");
+        }
+
+        // Don't allow metadata.version changes while we're migrating
+        if (EnumSet.of(ZkMigrationState.PRE_MIGRATION, ZkMigrationState.MIGRATION).contains(zkMigrationState)) {
+            return invalidMetadataVersion(newVersionLevel, "Unable to modify metadata.version while a " +
+                "ZK migration is in progress.");
         }
 
         // We cannot set a version earlier than IBP_3_3_IV0, since that was the first version that contained
@@ -314,7 +292,7 @@ public class FeatureControlManager {
 
         // If we are moving to a version that supports migrations, we need to write the correct state into the log
         if (newVersion.isMigrationSupported()) {
-            generateZkMigrationRecord(newVersion, false, recordConsumer);
+            recordConsumer.accept(buildZkMigrationRecord(ZkMigrationState.NONE));
         }
         return ApiError.NONE;
     }
@@ -345,7 +323,7 @@ public class FeatureControlManager {
      * @param metadataVersion       The current MetadataVersion of the log
      * @param isMetadataLogEmpty    True if the log is being initialized from empty
      * @param recordConsumer        A consumer for the ZkMigrationStateRecord
-     */
+
     public void generateZkMigrationRecord(
         MetadataVersion metadataVersion,
         boolean isMetadataLogEmpty,
@@ -367,17 +345,9 @@ public class FeatureControlManager {
         } else {
             // non-empty log
             String prefix = "During metadata log initialization,";
-            ZkMigrationControlState state = migrationControlState.get();
-            switch (state.zkMigrationState()) {
-                case UNINITIALIZED:
-                    // No ZkMigrationState record has been seen yet
-                    log.debug("{} did not read any ZkMigrationState. Writing a ZkMigrationState of NONE to the log to " +
-                            "indicate this cluster was not migrated from ZK.", prefix);
-                    if (zkMigrationEnabled) {
-                        log.error("Should not have ZK migrations enabled on a cluster that was created in KRaft mode");
-                    }
-                    recordConsumer.accept(buildRecord(ZkMigrationState.NONE));
-                    break;
+            ZkMigrationState state = migrationControlState.get();
+            switch (state) {
+
                 case NONE:
                     // This is a non-migrated KRaft cluster
                     log.debug("{} read a ZkMigrationState of NONE indicating this cluster was never migrated from ZK.", prefix);
@@ -422,7 +392,7 @@ public class FeatureControlManager {
                     throw new IllegalStateException("Unsupported migration state " + state.zkMigrationState());
             }
         }
-    }
+    }*/
 
     /**
      * Tests if the controller should be preventing metadata updates due to being in the PRE_MIGRATION
@@ -431,19 +401,17 @@ public class FeatureControlManager {
      * migrations, then this method checks if the controller is in the PRE_MIGRATION state.
      */
     boolean inPreMigrationMode(MetadataVersion metadataVersion) {
-        ZkMigrationControlState state = migrationControlState.get();
-        if (metadataVersion.isMigrationSupported() && state.preMigrationSupported()) {
-            return state.zkMigrationState() == ZkMigrationState.PRE_MIGRATION;
+        ZkMigrationState state = migrationControlState.get();
+        if (metadataVersion.isMigrationSupported()) {
+            return state == ZkMigrationState.PRE_MIGRATION;
         } else {
             return false;
         }
     }
 
-    private ApiMessageAndVersion buildRecord(ZkMigrationState state) {
+    static ApiMessageAndVersion buildZkMigrationRecord(ZkMigrationState state) {
         return new ApiMessageAndVersion(
-            new ZkMigrationStateRecord()
-                .setZkMigrationState(state.value())
-                .setPreMigrationSupported(true),
+            new ZkMigrationStateRecord().setZkMigrationState(state.value()),
             ZkMigrationStateRecord.HIGHEST_SUPPORTED_VERSION
         );
     }
@@ -468,42 +436,11 @@ public class FeatureControlManager {
         }
     }
 
-    /**
-     * Allowed state changes:
-     * <li>UNINITIALIZED -> ANY</li>
-     * <li>PRE_MIGRATION -> MIGRATION</li>
-     * <li>MIGRATION -> POST_MIGRATION</li>
-     */
-    void replay(ZkMigrationStateRecord record) {
+    public void replay(ZkMigrationStateRecord record) {
         ZkMigrationState recordState = ZkMigrationState.of(record.zkMigrationState());
-        ZkMigrationControlState currentState = migrationControlState.get();
-        if (currentState.zkMigrationState().equals(ZkMigrationState.UNINITIALIZED)) {
-            log.info("Initializing ZK migration state as {}", recordState);
-            migrationControlState.set(new ZkMigrationControlState(recordState, record.preMigrationSupported()));
-        } else {
-            switch (currentState.zkMigrationState()) {
-                case NONE:
-                    throw new IllegalStateException("Cannot ever change migration state away from NONE");
-                case PRE_MIGRATION:
-                    if (recordState.equals(ZkMigrationState.MIGRATION)) {
-                        log.info("Transitioning ZK migration state from {} to {}", currentState.zkMigrationState(), recordState);
-                        migrationControlState.set(new ZkMigrationControlState(recordState, record.preMigrationSupported()));
-                    } else {
-                        throw new IllegalStateException("Cannot change migration state from PRE_MIGRATION to " + recordState);
-                    }
-                    break;
-                case MIGRATION:
-                    if (recordState.equals(ZkMigrationState.POST_MIGRATION)) {
-                        log.info("Transitioning ZK migration state from {} to {}", currentState.zkMigrationState(), recordState);
-                        migrationControlState.set(new ZkMigrationControlState(recordState, record.preMigrationSupported()));
-                    } else {
-                        throw new IllegalStateException("Cannot change migration state from MIGRATION to " + recordState);
-                    }
-                    break;
-                case POST_MIGRATION:
-                    throw new IllegalStateException("Cannot ever change migration state from POST_MIGRATION");
-            }
-        }
+        ZkMigrationState currentState = migrationControlState.get();
+        log.info("Transitioning ZK migration state from {} to {}", currentState, recordState);
+        migrationControlState.set(recordState);
     }
 
     boolean isControllerId(int nodeId) {

@@ -25,8 +25,6 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ZkMigrationState", "type": "int8", "versions": "0+",
-      "about": "One of the possible migration states." },
-    { "name": "PreMigrationSupported", "type": "bool", "versions": "0+", "taggedVersions": "0+", "tag": 0,
-      "about": "True if the cluster supports pre-migration mode" }
+      "about": "One of the possible migration states." }
   ]
 }
