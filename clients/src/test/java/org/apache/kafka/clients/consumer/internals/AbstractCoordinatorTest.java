@@ -549,6 +549,46 @@ public class AbstractCoordinatorTest {
         assertEquals("", coordinator.rejoinReason());
     }
 
+    @Test
+    public void testSyncGroupRebalanceInProgressResetGeneration() throws InterruptedException {
+        setupCoordinator();
+        joinGroup();
+
+        final AbstractCoordinator.Generation generation = coordinator.generation();
+
+        coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+
+        // successfully join group
+        TestUtils.waitForCondition(() -> {
+            consumerClient.poll(mockTime.timer(REQUEST_TIMEOUT_MS));
+            return !mockClient.requests().isEmpty();
+        }, 2000, "The join-group request was not sent");
+        mockClient.respond(joinGroupFollowerResponse(generation.generationId,
+            memberId,
+            JoinGroupRequest.UNKNOWN_MEMBER_ID,
+            Errors.NONE));
+        assertTrue(mockClient.requests().isEmpty());
+
+        TestUtils.waitForCondition(() -> {
+            consumerClient.poll(mockTime.timer(REQUEST_TIMEOUT_MS));
+            return !mockClient.requests().isEmpty();
+        }, 2000, "The sync-group request was not sent");
+
+        // sync group response with REBALANCE_IN_PROGRESS should reset the generation
+        final AbstractCoordinator.Generation newGen = new AbstractCoordinator.Generation(
+            generation.generationId,
+            generation.memberId + "-new",
+            generation.protocolName);
+        coordinator.setNewGeneration(newGen);
+
+        mockClient.respond(syncGroupResponse(Errors.REBALANCE_IN_PROGRESS));
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+
+        assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+    }
+
     private void ensureActiveGroup(
         int generation,
         String memberId
