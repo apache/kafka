@@ -215,28 +215,29 @@ public class RecordCollectorImpl implements RecordCollector {
         } catch (final SerializationException exception) {
             final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
             final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
+
+            log.debug("Error serializing record to topic {} due to {}", topic, exception);
+
             try {
-                response = productionExceptionHandler.onSerializationException(record, exception);
+                response = productionExceptionHandler.handleSerializationException(record, exception);
             } catch (final Exception e) {
-                log.error("Fatal handling serialization exception on record {}", record, e);
+                log.error("Fatal when handling serialization exception", e);
                 recordSendError(topic, e, null);
                 return;
             }
 
             if (response == ProductionExceptionHandlerResponse.FAIL) {
-                log.error("Fatal handling serialization exception on record {}", record, exception);
-                recordSendError(topic, exception, null);
-                return;
+                log.error("Fatal due to SerializationException.", exception);
+                droppedRecordsSensor.record();
+                throw exception;
             }
 
-            log.warn("Unable to serialize {}. Continue processing. " +
-                    "ProducerRecord(key=[{}], value=[{}], topic=[{}], partition=[{}], timestamp=[{}])",
-                keyBytes == null ? "key" : "value",
-                key,
-                value,
+            log.warn("Unable to serialize record, continue processing. " +
+                    "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
                 topic,
                 partition,
                 timestamp);
+
         } catch (final RuntimeException exception) {
             final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
             throw new StreamsException(errorMessage, exception);

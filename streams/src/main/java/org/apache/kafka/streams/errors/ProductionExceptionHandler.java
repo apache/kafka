@@ -18,7 +18,6 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.errors.SerializationException;
 
 /**
  * Interface that specifies how an exception when attempting to produce a result to
@@ -42,8 +41,8 @@ public interface ProductionExceptionHandler extends Configurable {
      * @param record        the record that failed to serialize
      * @param exception     the exception that occurred during serialization
      */
-    default ProductionExceptionHandlerResponse onSerializationException(final ProducerRecord record,
-                                                                        final SerializationException exception) {
+    default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
+                                                                            final Exception exception) {
         return ProductionExceptionHandlerResponse.FAIL;
     }
 
