@@ -92,13 +92,13 @@ class AddPartitionsToTxnManagerTest {
 
     val transaction1AgainErrorsOldEpoch = mutable.Map[TopicPartition, Errors]()
     val transaction1AgainErrorsNewEpoch = mutable.Map[TopicPartition, Errors]()
-    // Trying to add more transactional data for the same transactional ID, producer ID, and epoch should simply replace the old data. The error map should remain empty.
+    // Trying to add more transactional data for the same transactional ID, producer ID, and epoch should simply replace the old data and send a retriable response.
     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transaction1AgainErrorsOldEpoch))
     val expectedNetworkErrors = topicPartitions.map(_ -> Errors.NETWORK_EXCEPTION).toMap
     assertEquals(expectedNetworkErrors, transaction1Errors)
 
     // Trying to add more transactional data for the same transactional ID and producer ID, but new epoch should replace the old data and send an error response for it.
-     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 1), setErrors(transaction1AgainErrorsNewEpoch))
+    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 1), setErrors(transaction1AgainErrorsNewEpoch))
     
     val expectedEpochErrors = topicPartitions.map(_ -> Errors.INVALID_PRODUCER_EPOCH).toMap
     assertEquals(expectedEpochErrors, transaction1AgainErrorsOldEpoch)
@@ -209,11 +209,11 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(expectedTransaction2Errors, transaction2Errors)
   }
 
-  def clientResponse(response: AbstractResponse, authException: AuthenticationException = null, mismatchException: UnsupportedVersionException = null): ClientResponse = {
+  private def clientResponse(response: AbstractResponse, authException: AuthenticationException = null, mismatchException: UnsupportedVersionException = null): ClientResponse = {
     new ClientResponse(null, null, null, 0, 0, false, mismatchException, authException, response)
   }
 
-  def transactionData(transactionalId: String, producerId: Long, producerEpoch: Short = 0): AddPartitionsToTxnTransaction = {
+  private def transactionData(transactionalId: String, producerId: Long, producerEpoch: Short = 0): AddPartitionsToTxnTransaction = {
     new AddPartitionsToTxnTransaction()
       .setTransactionalId(transactionalId)
       .setProducerId(producerId)
@@ -224,11 +224,11 @@ class AddPartitionsToTxnManagerTest {
           .setPartitions(Seq[Integer](1, 2, 3).asJava)).iterator.asJava))
   }
 
-  def receiveResponse(response: ClientResponse): Unit = {
+  private def receiveResponse(response: ClientResponse): Unit = {
     addPartitionsToTxnManager.generateRequests().head.handler.onComplete(response)
   }
 
-  def verifyRequest(expectedDestination: Node, transactionalId: String, producerId: Long, requestAndHandler: RequestAndCompletionHandler): Unit = {
+  private def verifyRequest(expectedDestination: Node, transactionalId: String, producerId: Long, requestAndHandler: RequestAndCompletionHandler): Unit = {
     assertEquals(time.milliseconds(), requestAndHandler.creationTimeMs)
     assertEquals(expectedDestination, requestAndHandler.destination)
     assertEquals(AddPartitionsToTxnRequest.Builder.forBroker(

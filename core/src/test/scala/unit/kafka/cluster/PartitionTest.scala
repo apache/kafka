@@ -1189,7 +1189,6 @@ class PartitionTest extends AbstractPartitionTest {
                               baseSequence: Int = 0,
                               producerId: Long = 1L): MemoryRecords = {
     val producerEpoch = 0.toShort
-    val baseSequence = 0
     val isTransactional = false
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(buf, CompressionType.NONE, baseOffset, producerId,
