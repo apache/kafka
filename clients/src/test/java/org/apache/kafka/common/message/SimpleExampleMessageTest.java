@@ -339,9 +339,8 @@ public class SimpleExampleMessageTest {
                                Consumer<SimpleExampleMessageData> validator,
                                short version) {
         validator.accept(message);
-        ByteBuffer buf = MessageUtil.toByteBuffer(message, version);
 
-        SimpleExampleMessageData message2 = deserialize(buf.duplicate(), version);
+        SimpleExampleMessageData message2 = roundTripSerde(message, version);
         validator.accept(message2);
         assertEquals(message, message2);
         assertEquals(message.hashCode(), message2.hashCode());
@@ -352,6 +351,30 @@ public class SimpleExampleMessageTest {
         validator.accept(messageFromJson);
         assertEquals(message, messageFromJson);
         assertEquals(message.hashCode(), messageFromJson.hashCode());
+    }
+
+    private SimpleExampleMessageData roundTripSerde(
+        SimpleExampleMessageData message,
+        short version
+    ) {
+        ByteBuffer buf = MessageUtil.toByteBuffer(message, version);
+        return deserialize(buf.duplicate(), version);
+    }
+
+    @Test
+    public void testTaggedFieldsShouldSupportFlexibleVersionSubset() {
+        SimpleExampleMessageData message = new SimpleExampleMessageData()
+            .setTaggedLongFlexibleVersionSubset(15L);
+
+        testRoundTrip(
+            message,
+            msg -> assertEquals(15, msg.taggedLongFlexibleVersionSubset),
+            (short) 2
+        );
+
+        SimpleExampleMessageData deserialized = roundTripSerde(message, (short) 1);
+        assertEquals(new SimpleExampleMessageData(), deserialized);
+        assertEquals(0, deserialized.taggedLongFlexibleVersionSubset);
     }
 
     @Test
