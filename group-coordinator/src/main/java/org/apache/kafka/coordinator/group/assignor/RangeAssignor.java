@@ -36,9 +36,8 @@ import static java.lang.Math.min;
  * <li> 1) Each consumer must get at least one partition per topic that it is subscribed to whenever the number of consumers is
  *    less than or equal to the number of partitions for that topic. (Range) </li>
  * <li> 2) Partitions should be assigned to consumers in a way that facilitates join operations where required. (Range) </li>
- *    This can only be done if the topics are co-partitioned in the first place
- *    Co-partitioned:-
- *    Two streams are co-partitioned if the following conditions are met:-
+ *    This can only be done if every consumer is subscribed to the same topics and the topics are co-partitioned.
+ *    Two streams are co-partitioned if the following conditions are met:
  * ->The keys must have the same schemas
  * ->The topics involved must have the same number of partitions
  * <li> 3) Consumers should retain as much as their previous assignment as possible. (Sticky) </li>
@@ -47,17 +46,17 @@ import static java.lang.Math.min;
  *
  * <p>The algorithm works mainly in 5 steps described below
  * <ul>
- * <li> 1) Get a map of the consumersPerTopic created using the member subscriptions.</li>
- * <li> 2) Get a list of consumers (potentiallyUnfilled) that have not met the minimum required quota for assignment AND
+ * <li> 1) Generate a map of <code>consumersPerTopic</code> using the member subscriptions.</li>
+ * <li> 2) Generate a list of consumers (<code>potentiallyUnfilledConsumers</code>) that have not met the minimum required quota for assignment AND
  * get a list of sticky partitions that we want to retain in the new assignment.</li>
- * <li> 3) Add consumers from potentiallyUnfilled to Unfilled if they haven't met the total required quota = minQuota + (if necessary) extraPartition </li>
- * <li> 4) Get a list of available partitions by calculating the difference between total partitions and assigned sticky partitions </li>
- * <li> 5) Iterate through unfilled consumers and assign partitions from available partitions </li>
+ * <li> 3) Add consumers from the <code>potentiallyUnfilled</code> list to the <code>Unfilled</code> list if they haven't met the total required quota i.e. minimum number of partitions per member + 1 (if member is designated to receive one of the excess partitions) </li>
+ * <li> 4) Generate a list of unassigned partitions by calculating the difference between total partitions and already assigned (sticky) partitions </li>
+ * <li> 5) Iterate through unfilled consumers and assign partitions from the available partitions </li>
  * </ul>
  * </p>
  *
  */
-public class ServerSideStickyRangeAssignor implements PartitionAssignor {
+public class RangeAssignor implements PartitionAssignor {
 
     public static final String RANGE_ASSIGNOR_NAME = "range";
 

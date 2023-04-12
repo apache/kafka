@@ -35,9 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ServerSideStickyRangeAssignorTest {
+public class RangeAssignorTest {
 
-    private final ServerSideStickyRangeAssignor assignor = new ServerSideStickyRangeAssignor();
+    private final RangeAssignor assignor = new RangeAssignor();
 
     private final String topic1Name = "topic1";
     private final Uuid topic1Uuid = Uuid.randomUuid();
