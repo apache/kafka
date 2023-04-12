@@ -59,7 +59,8 @@ class AddPartitionsToTxnManagerTest {
   private val producerId3 = 2L
 
   private val authenticationErrorResponse = clientResponse(null, authException = new SaslAuthenticationException(""))
-  private val versionMismatchResponse = clientResponse(null, mismatchException = new UnsupportedVersionException(""))  
+  private val versionMismatchResponse = clientResponse(null, mismatchException = new UnsupportedVersionException(""))
+  private val disconnectedResponse = clientResponse(null, disconnected = true)
 
   @BeforeEach
   def setup(): Unit = {
@@ -181,6 +182,12 @@ class AddPartitionsToTxnManagerTest {
     receiveResponse(versionMismatchResponse)
     assertEquals(expectedVersionMismatchErrors, transaction1Errors)
     assertEquals(expectedVersionMismatchErrors, transaction2Errors)
+    
+    val expectedDisconnectedErrors = topicPartitions.map(_ -> Errors.NETWORK_EXCEPTION).toMap
+    addTransactionsToVerify()
+    receiveResponse(disconnectedResponse)
+    assertEquals(expectedDisconnectedErrors, transaction1Errors)
+    assertEquals(expectedDisconnectedErrors, transaction2Errors)
 
     val expectedTopLevelErrors = topicPartitions.map(_ -> Errors.INVALID_RECORD).toMap
     val topLevelErrorAddPartitionsResponse = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()))
@@ -209,8 +216,8 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(expectedTransaction2Errors, transaction2Errors)
   }
 
-  private def clientResponse(response: AbstractResponse, authException: AuthenticationException = null, mismatchException: UnsupportedVersionException = null): ClientResponse = {
-    new ClientResponse(null, null, null, 0, 0, false, mismatchException, authException, response)
+  private def clientResponse(response: AbstractResponse, authException: AuthenticationException = null, mismatchException: UnsupportedVersionException = null, disconnected: Boolean = false): ClientResponse = {
+    new ClientResponse(null, null, null, 0, 0, disconnected, mismatchException, authException, response)
   }
 
   private def transactionData(transactionalId: String, producerId: Long, producerEpoch: Short = 0): AddPartitionsToTxnTransaction = {

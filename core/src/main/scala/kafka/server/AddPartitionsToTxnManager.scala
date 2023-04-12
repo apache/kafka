@@ -89,8 +89,12 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
         // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it. 
         // In this case, skip verification.
         warn(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with invalid version exception. This suggests verification is not supported." +
-              s"Continuing handling the produce request.")
+          s"Continuing handling the produce request.")
         transactionDataAndCallbacks.callbacks.values.foreach(_(Map.empty))
+      } else if (response.wasDisconnected() || response.wasTimedOut()) {
+        transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
+          callback(buildErrorMap(txnId, Errors.NETWORK_EXCEPTION.code()))
+        }
       } else {
         val addPartitionsToTxnResponseData = response.responseBody.asInstanceOf[AddPartitionsToTxnResponse].data
         if (addPartitionsToTxnResponseData.errorCode != 0) {
@@ -143,11 +147,6 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       }
       errors.toMap
     }
-  }
-
-  override def shutdown(): Unit = {
-    super.shutdown()
-    networkClient.close()
   }
 
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
