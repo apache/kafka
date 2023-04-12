@@ -1196,7 +1196,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                         entry.setValue(offset - 1);
                     }
                 } catch (final TimeoutException swallow) {
-                    log.debug("Could not get consumer position for partition {} due to: {}", partition, swallow);
+                    log.debug(
+                        String.format("Could not get consumer position for partition %s", partition),
+                        swallow
+                    );
                 } catch (final KafkaException fatal) {
                     throw new StreamsException(fatal);
                 }
