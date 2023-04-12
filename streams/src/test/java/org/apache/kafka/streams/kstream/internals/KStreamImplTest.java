@@ -3149,7 +3149,7 @@ public class KStreamImplTest {
                 "    Processor: KTABLE-FK-JOIN-OUTPUT-0000000018 (stores: [])\n" +
                 "      --> KTABLE-TOSTREAM-0000000020\n" +
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017\n" +
-                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000007 (stores: [])\n" +
+                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000007 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-SINK-0000000008\n" +
                 "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KTABLE-TOSTREAM-0000000020 (stores: [])\n" +
@@ -3174,7 +3174,7 @@ public class KStreamImplTest {
                 "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-SINK-0000000015\n" +
                 "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000011\n" +
-                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013 (stores: [KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010])\n" +
+                "    Processor: KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005, KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010])\n" +
                 "      --> KTABLE-SINK-0000000015\n" +
                 "      <-- KSTREAM-TOTABLE-0000000004\n" +
                 "    Sink: KTABLE-SINK-0000000015 (topic: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic)\n" +
