@@ -219,13 +219,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void maybeRecordRestored(final Time time, final long numRecords) {
-        maybeRecordSensor(numRecords, time, restoreSensor);
-        maybeRecordSensor(-1 * numRecords, time, restoreRemainingSensor);
-    }
-
-    public void initRemainingRecordsToRestore(final Time time, final long numRecords) {
-        maybeRecordSensor(numRecords, time, restoreRemainingSensor);
+    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+        if (initRemaining) {
+            maybeRecordSensor(numRecords, time, restoreRemainingSensor);
+        } else {
+            maybeRecordSensor(numRecords, time, restoreSensor);
+            maybeRecordSensor(-1 * numRecords, time, restoreRemainingSensor);
+        }
     }
 
     /**

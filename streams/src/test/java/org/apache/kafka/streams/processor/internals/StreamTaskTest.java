@@ -797,17 +797,17 @@ public class StreamTaskTest {
         assertThat(rateMetric.metricValue(), equalTo(0.0));
         assertThat(remainMetric.metricValue(), equalTo(0.0));
 
-        task.initRemainingRecordsToRestore(time, 100L);
+        task.recordRestoration(time, 100L, true);
 
         assertThat(remainMetric.metricValue(), equalTo(100.0));
 
-        task.maybeRecordRestored(time, 25L);
+        task.recordRestoration(time, 25L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(25.0));
         assertThat(rateMetric.metricValue(), not(0.0));
         assertThat(remainMetric.metricValue(), equalTo(75.0));
 
-        task.maybeRecordRestored(time, 50L);
+        task.recordRestoration(time, 50L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
         assertThat(rateMetric.metricValue(), not(0.0));
