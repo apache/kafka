@@ -2124,26 +2124,27 @@ class KafkaApisTest {
 
     val tp = new TopicPartition(topic, 0)
 
-    val addPartitionsToTxnRequest = if (version < 4) 
-      AddPartitionsToTxnRequest.Builder.forClient(
-        transactionalId,
-        producerId,
-        epoch,
-        Collections.singletonList(tp)).build(version)
-    else
-      AddPartitionsToTxnRequest.Builder.forBroker(
-        new AddPartitionsToTxnTransactionCollection(
-        List(new AddPartitionsToTxnTransaction()
-          .setTransactionalId(transactionalId)
-          .setProducerId(producerId)
-          .setProducerEpoch(epoch)
-          .setVerifyOnly(true)
-          .setTopics(new AddPartitionsToTxnTopicCollection(
-            Collections.singletonList(new AddPartitionsToTxnTopic()
-              .setName(tp.topic)
-              .setPartitions(Collections.singletonList(tp.partition))
-            ).iterator()))
-        ).asJava.iterator())).build(version)
+    val addPartitionsToTxnRequest = 
+      if (version < 4) 
+        AddPartitionsToTxnRequest.Builder.forClient(
+          transactionalId,
+          producerId,
+          epoch,
+          Collections.singletonList(tp)).build(version)
+      else
+        AddPartitionsToTxnRequest.Builder.forBroker(
+          new AddPartitionsToTxnTransactionCollection(
+            List(new AddPartitionsToTxnTransaction()
+              .setTransactionalId(transactionalId)
+              .setProducerId(producerId)
+              .setProducerEpoch(epoch)
+              .setVerifyOnly(true)
+              .setTopics(new AddPartitionsToTxnTopicCollection(
+                Collections.singletonList(new AddPartitionsToTxnTopic()
+                  .setName(tp.topic)
+                  .setPartitions(Collections.singletonList(tp.partition))
+                ).iterator()))
+            ).asJava.iterator())).build(version)
 
     val requestChannelRequest = buildRequest(addPartitionsToTxnRequest)
 
@@ -2151,16 +2152,16 @@ class KafkaApisTest {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
 
-      createKafkaApis(authorizer = Some(authorizer)).handle(
-        requestChannelRequest,
-        RequestLocal.NoCaching
-      )
+    createKafkaApis(authorizer = Some(authorizer)).handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
 
     val response = verifyNoThrottling[AddPartitionsToTxnResponse](requestChannelRequest)
     val error = if (version < 4) 
       response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp) 
     else
-      Errors.forCode(response.data().errorCode())
+      Errors.forCode(response.data().errorCode)
       
     val expectedError = if (version < 4) Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED else Errors.CLUSTER_AUTHORIZATION_FAILED
     assertEquals(expectedError, error)
@@ -2209,17 +2210,17 @@ class KafkaApisTest {
 
     val response = verifyNoThrottling[AddPartitionsToTxnResponse](requestChannelRequest)
     
-    def checkErrorForTp(tp: TopicPartition): Unit = {
+    def checkErrorForTp(tp: TopicPartition, expectedError: Errors): Unit = {
       val error = if (version < 4)
         response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)
       else
         response.errors().get(transactionalId).get(tp)
 
-      val expectedError = if (tp == tp0) Errors.OPERATION_NOT_ATTEMPTED else Errors.UNKNOWN_TOPIC_OR_PARTITION
       assertEquals(expectedError, error)
     }
-    checkErrorForTp(tp1)
-    checkErrorForTp(tp0)
+
+    checkErrorForTp(tp0, Errors.OPERATION_NOT_ATTEMPTED)
+    checkErrorForTp(tp1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
   @Test
