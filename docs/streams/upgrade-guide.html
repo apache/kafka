@@ -34,10 +34,10 @@
     </div>
 
     <p>
-        Upgrading from any older version to {{fullDotVersion}} is possible: if upgrading from 3.2 or below, you will need to do two rolling bounces, where during the first rolling bounce phase you set the config <code>upgrade.from="older version"</code>
-        (possible values are <code>"0.10.0" - "3.2"</code>) and during the second you remove it. This is required to safely handle 2 changes. The first is introduction of the new cooperative rebalancing protocol of the embedded consumer. The second is a change in foreign-key join serialization format.
+        Upgrading from any older version to {{fullDotVersion}} is possible: if upgrading from 3.4 or below, you will need to do two rolling bounces, where during the first rolling bounce phase you set the config <code>upgrade.from="older version"</code>
+        (possible values are <code>"0.10.0" - "3.4"</code>) and during the second you remove it. This is required to safely handle 3 changes. The first is introduction of the new cooperative rebalancing protocol of the embedded consumer. The second is a change in foreign-key join serialization format.
         Note that you will remain using the old eager rebalancing protocol if you skip or delay the second rolling bounce, but you can safely switch over to cooperative at any time once the entire group is on 2.4+ by removing the config value and bouncing. For more details please refer to
-        <a href="https://cwiki.apache.org/confluence/x/vAclBg">KIP-429</a>:
+        <a href="https://cwiki.apache.org/confluence/x/vAclBg">KIP-429</a>. The third is a change in the serialization format for an internal repartition topic. For more details, please refer to <a href="https://cwiki.apache.org/confluence/x/P5VbDg">KIP-904</a>:
     </p>
     <ul>
         <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade.</li>
@@ -73,6 +73,20 @@
         Users need to wipe out the local RocksDB state stores written by the new versioned Kafka Streams before swapping in the
         older versioned Kafka Streams bytecode, which would then restore the state stores with the old on-disk format from the
         changelogs.
+    </p>
+
+    <p>
+        Downgrading from 3.5.x or newer version to 3.4.x or older version needs special attention:
+        Since 3.5.0 release, Kafka Streams uses a new serialization format for repartition topics.
+        This means that older versions of Kafka Streams would not be able to recognize the bytes written by newer versions,
+        and hence it is harder to downgrade Kafka Streams with version 3.5.0 or newer to older versions in-flight. For
+        more details, please refer to <a href="https://cwiki.apache.org/confluence/x/P5VbDg">KIP-904</a>.
+
+        For a downgrade, first switch the config from <code>"upgrade.from"</code> to the version you are downgrading to.
+        This disables writing of the new serialization format in your application. It's important to wait in this state
+        long enough to make sure that the application has finished processing any "in-flight" messages written
+        into the repartition topics in the new serialization format. Afterwards, you can downgrade your application to a
+        pre-3.5.x version.
     </p>
 
     <p>

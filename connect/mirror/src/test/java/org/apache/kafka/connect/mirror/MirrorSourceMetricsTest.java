@@ -47,6 +47,7 @@ public class MirrorSourceMetricsTest {
         configs.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, MirrorSourceConnector.class.getName());
         configs.put(MirrorConnectorConfig.SOURCE_CLUSTER_ALIAS, SOURCE);
         configs.put(MirrorConnectorConfig.TARGET_CLUSTER_ALIAS, TARGET);
+        configs.put(MirrorConnectorConfig.TASK_INDEX, "0");
         configs.put(MirrorSourceTaskConfig.TASK_TOPIC_PARTITIONS, TP.toString());
         reporter = new TestReporter();
     }

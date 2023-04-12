@@ -390,7 +390,7 @@ class ZkMigrationClient(
     controllerEpoch: Int
   ): (String, Array[Byte]) = {
     val path = TopicPartitionStateZNode.path(topicPartition)
-    val data = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(new LeaderAndIsr(
+    val data = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(LeaderAndIsr(
       partitionRegistration.leader,
       partitionRegistration.leaderEpoch,
       partitionRegistration.isr.toList,

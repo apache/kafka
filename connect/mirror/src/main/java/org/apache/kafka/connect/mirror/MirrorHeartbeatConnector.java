@@ -48,8 +48,8 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorHeartbeatConfig(props);
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
-        scheduler = new Scheduler(MirrorHeartbeatConnector.class, config.adminTimeout());
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("heartbeats-target-admin"));
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }
 
