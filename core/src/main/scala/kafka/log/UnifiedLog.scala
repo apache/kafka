@@ -149,6 +149,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def localLogStartOffset(): Long = _localLogStartOffset
 
+  @volatile private var highestOffsetInRemoteStorage: Long = -1L
+
   locally {
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
@@ -519,6 +521,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     if (localLog.recoveryPoint < offset) {
       localLog.updateRecoveryPoint(offset)
     }
+  }
+  def updateHighestOffsetInRemoteStorage(offset: Long): Unit = {
+    if (!remoteLogEnabled())
+      warn(s"Unable to update the highest offset in remote storage with offset $offset since remote storage is not enabled. The existing highest offset is $highestOffsetInRemoteStorage.")
+    else if (offset > highestOffsetInRemoteStorage) highestOffsetInRemoteStorage = offset
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
@@ -1231,10 +1238,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           }
 
           remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset, leaderEpochCache.get)
-        } else None
+        } else Optional.empty()
 
-        if (remoteOffset.nonEmpty) {
-          remoteOffset
+        if (remoteOffset.isPresent) {
+          remoteOffset.asScala
         } else {
           // If it is not found in remote storage, search in the local storage starting with local log start offset.
 
