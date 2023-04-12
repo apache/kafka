@@ -21,17 +21,17 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "MemberEpoch", "versions": "0+", "type": "int32",
-      "about": "The member epoch." },
+      "about": "The current member epoch that is expected from the member in the heartbeat request." },
     { "name": "PreviousMemberEpoch", "versions": "0+", "type": "int32",
-      "about": "The previous member epoch." },
+      "about": "If the last epoch bump is lost before reaching the member, the member will retry with the previous epoch." },
     { "name": "TargetMemberEpoch", "versions": "0+", "type": "int32",
-      "about": "The target member epoch." },
+      "about": "The target epoch corresponding to the assignment used to compute the AssignedPartitions, the PartitionsPendingRevocation and the PartitionsPendingAssignment fields." },
     { "name": "AssignedPartitions", "versions": "0+", "type": "[]TopicPartitions",
-      "about": "The partitions assigned to (owned by) this member." },
+      "about": "The partitions assigned to (or owned by) this member." },
     { "name": "PartitionsPendingRevocation", "versions": "0+", "type": "[]TopicPartitions",
-      "about": "The partitions being revoked by this member." },
+      "about": "The partitions that must be revoked by this member." },
     { "name": "PartitionsPendingAssignment", "versions": "0+", "type": "[]TopicPartitions",
-      "about": "The partitions being assigned to this member." },
+      "about": "The partitions that will be assigned to this member when they are freed up by their current owners." },
     { "name": "Error", "versions": "0+", "type": "int8",
       "about": "The error reported by the assignor." },
     { "name": "MetadataVersion", "versions": "0+", "type": "int16",
@@ -42,9 +42,9 @@
   "commonStructs": [
     { "name": "TopicPartitions", "versions": "0+", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
-        "about": "The topic ID." },
+        "about": "The topic Id." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions." }
+        "about": "The partition Ids." }
     ]}
   ]
 }
