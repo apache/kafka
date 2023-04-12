@@ -92,6 +92,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
           s"Continuing handling the produce request.")
         transactionDataAndCallbacks.callbacks.values.foreach(_(Map.empty))
       } else if (response.wasDisconnected() || response.wasTimedOut()) {
+        warn(s"AddPartitionsToTxnRequest failed for broker ${config.brokerId} with a network exception.")
         transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
           callback(buildErrorMap(txnId, Errors.NETWORK_EXCEPTION.code()))
         }
