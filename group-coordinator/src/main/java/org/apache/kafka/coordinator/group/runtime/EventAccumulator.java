@@ -84,12 +84,12 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     private final Condition condition;
 
     /**
-     * The number of events in the queue.
+     * The number of events in the accumulator.
      */
     private int size;
 
     /**
-     * A boolean indicated whether the queue is closed.
+     * A boolean indicated whether the accumulator is closed.
      */
     private boolean closed;
 
@@ -117,7 +117,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     public void add(T event) {
         lock.lock();
         try {
-            if (closed) throw new IllegalStateException("Can't accept an event because the queue is closed.");
+            if (closed) throw new IllegalStateException("Can't accept an event because the accumulator is closed.");
 
             K key = event.key();
             Queue<T> queue = queues.get(key);
@@ -137,7 +137,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
 
     /**
      * Returns the next {{@link Event}} available. This method block indefinitely until
-     * one event is ready or the queue is closed.
+     * one event is ready or the accumulator is closed.
      *
      * @return The next event.
      */
@@ -202,7 +202,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     }
 
     /**
-     * Returns the size of the queue.
+     * Returns the size of the accumulator.
      */
     public int size() {
         lock.lock();
@@ -214,7 +214,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     }
 
     /**
-     * Closes the queue. This unblocks all the waiting threads.
+     * Closes the accumulator. This unblocks all the waiting threads.
      */
     @Override
     public void close() {
