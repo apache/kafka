@@ -36,7 +36,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
