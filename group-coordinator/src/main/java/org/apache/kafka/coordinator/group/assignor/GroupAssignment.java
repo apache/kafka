@@ -35,6 +35,9 @@ public class GroupAssignment {
         this.members = members;
     }
 
+    /**
+     * @return Member assignments keyed by member Ids.
+     */
     public Map<String, MemberAssignment> members() {
         return members;
     }

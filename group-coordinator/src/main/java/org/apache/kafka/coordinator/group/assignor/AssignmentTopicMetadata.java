@@ -41,10 +41,16 @@ public class AssignmentTopicMetadata {
         this.numPartitions = numPartitions;
     }
 
+    /**
+     * @return The topic name.
+     */
     public String topicName() {
         return topicName;
     }
 
+    /**
+     * @return The number of partitions present for the topic.
+     */
     public int numPartitions() {
         return numPartitions;
     }

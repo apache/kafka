@@ -39,45 +39,57 @@ public class AssignmentMemberSpec {
     private final Optional<String> rackId;
 
     /**
-     * The topicIds of topics that the member is subscribed to.
+     * Topics Ids that the member is subscribed to.
      */
-    private final Collection<Uuid> subscribedTopics;
+    private final Collection<Uuid> subscribedTopicIds;
 
     /**
-     * Partitions assigned for this member keyed by topicId
+     * Partitions assigned keyed by topicId.
      */
-    private final Map<Uuid, Set<Integer>> assignedTopicIdPartitions;
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
 
+    /**
+     * @return The instance ID as an Optional.
+     */
     public Optional<String> instanceId() {
         return instanceId;
     }
 
+    /**
+     * @return The rack ID as an Optional.
+     */
     public Optional<String> rackId() {
         return rackId;
     }
 
-    public Collection<Uuid> subscribedTopics() {
-        return subscribedTopics;
+    /**
+     * @return Collection of subscribed topic Ids.
+     */
+    public Collection<Uuid> subscribedTopicIds() {
+        return subscribedTopicIds;
     }
 
-    public Map<Uuid, Set<Integer>> assignmentTopicIdPartitions() {
-        return assignedTopicIdPartitions;
+    /**
+     * @return Assigned partitions keyed by topic Ids.
+     */
+    public Map<Uuid, Set<Integer>> assignedPartitions() {
+        return assignedPartitions;
     }
 
     public AssignmentMemberSpec(
         Optional<String> instanceId,
         Optional<String> rackId,
-        Collection<Uuid> subscribedTopics,
-        Map<Uuid, Set<Integer>> assignedTopicIdPartitions
+        Collection<Uuid> subscribedTopicIds,
+        Map<Uuid, Set<Integer>> assignedPartitions
     ) {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
-        Objects.requireNonNull(subscribedTopics);
-        Objects.requireNonNull(assignedTopicIdPartitions);
+        Objects.requireNonNull(subscribedTopicIds);
+        Objects.requireNonNull(assignedPartitions);
         this.instanceId = instanceId;
         this.rackId = rackId;
-        this.subscribedTopics = subscribedTopics;
-        this.assignedTopicIdPartitions = assignedTopicIdPartitions;
+        this.subscribedTopicIds = subscribedTopicIds;
+        this.assignedPartitions = assignedPartitions;
     }
 
     @Override
@@ -89,16 +101,16 @@ public class AssignmentMemberSpec {
 
         if (!instanceId.equals(that.instanceId)) return false;
         if (!rackId.equals(that.rackId)) return false;
-        if (!subscribedTopics.equals(that.subscribedTopics)) return false;
-        return assignedTopicIdPartitions.equals(that.assignedTopicIdPartitions);
+        if (!subscribedTopicIds.equals(that.subscribedTopicIds)) return false;
+        return assignedPartitions.equals(that.assignedPartitions);
     }
 
     @Override
     public int hashCode() {
         int result = instanceId.hashCode();
         result = 31 * result + rackId.hashCode();
-        result = 31 * result + subscribedTopics.hashCode();
-        result = 31 * result + assignedTopicIdPartitions.hashCode();
+        result = 31 * result + subscribedTopicIds.hashCode();
+        result = 31 * result + assignedPartitions.hashCode();
         return result;
     }
 
@@ -106,8 +118,8 @@ public class AssignmentMemberSpec {
     public String toString() {
         return "AssignmentMemberSpec(instanceId=" + instanceId +
             ", rackId=" + rackId +
-            ", subscribedTopics=" + subscribedTopics +
-            ", assignedTopicIdPartitions=" + assignedTopicIdPartitions +
+            ", subscribedTopicIds=" + subscribedTopicIds +
+            ", assignedPartitions=" + assignedPartitions +
             ')';
     }
 }

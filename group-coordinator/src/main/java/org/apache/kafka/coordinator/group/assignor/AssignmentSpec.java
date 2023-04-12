@@ -31,7 +31,7 @@ public class AssignmentSpec {
     private final Map<String, AssignmentMemberSpec> members;
 
     /**
-     * The topics' metadata keyed by topic id
+     * The topics' metadata keyed by topic id.
      */
     private final Map<Uuid, AssignmentTopicMetadata> topics;
 
@@ -45,10 +45,16 @@ public class AssignmentSpec {
         this.topics = topics;
     }
 
+    /**
+     * @return Member metadata keyed by member Ids.
+     */
     public Map<String, AssignmentMemberSpec> members() {
         return members;
     }
 
+    /**
+     * @return Topic metadata keyed by topic Ids.
+     */
     public Map<Uuid, AssignmentTopicMetadata> topics() {
         return topics;
     }

@@ -29,15 +29,18 @@ public class MemberAssignment {
     /**
      * The target partitions assigned to this member keyed by topicId.
      */
-    private final Map<Uuid, Set<Integer>> assignedTopicIdPartitions;
+    private final Map<Uuid, Set<Integer>> targetPartitions;
 
-    public MemberAssignment(Map<Uuid, Set<Integer>> topicIdPartitionsForAssignment) {
-        Objects.requireNonNull(topicIdPartitionsForAssignment);
-        this.assignedTopicIdPartitions = topicIdPartitionsForAssignment;
+    public MemberAssignment(Map<Uuid, Set<Integer>> targetPartitions) {
+        Objects.requireNonNull(targetPartitions);
+        this.targetPartitions = targetPartitions;
     }
 
-    public Map<Uuid, Set<Integer>> assignedTopicIdPartitions() {
-        return this.assignedTopicIdPartitions;
+    /**
+     * @return Target partition numbers keyed by topic Ids.
+     */
+    public Map<Uuid, Set<Integer>> targetPartitions() {
+        return this.targetPartitions;
     }
 
     @Override
@@ -47,16 +50,16 @@ public class MemberAssignment {
 
         MemberAssignment that = (MemberAssignment) o;
 
-        return assignedTopicIdPartitions.equals(that.assignedTopicIdPartitions);
+        return targetPartitions.equals(that.targetPartitions);
     }
 
     @Override
     public int hashCode() {
-        return assignedTopicIdPartitions.hashCode();
+        return targetPartitions.hashCode();
     }
 
     @Override
     public String toString() {
-        return "MemberAssignment (Assignment per topic Id = " + assignedTopicIdPartitions + ')';
+        return "MemberAssignment (Target partitions = " + targetPartitions + ')';
     }
 }
