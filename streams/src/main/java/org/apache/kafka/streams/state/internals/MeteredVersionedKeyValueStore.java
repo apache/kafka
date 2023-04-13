@@ -107,12 +107,12 @@ public class MeteredVersionedKeyValueStore<K, V>
             this.rawValueSerde = valueSerde;
         }
 
-        public boolean put(final K key, final V value, final long timestamp) {
+        public long put(final K key, final V value, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                final boolean isLatest = maybeMeasureLatency(() -> inner.put(keyBytes(key), rawValueSerdes.rawValue(value), timestamp), time, putSensor);
+                final long validTo = maybeMeasureLatency(() -> inner.put(keyBytes(key), rawValueSerdes.rawValue(value), timestamp), time, putSensor);
                 maybeRecordE2ELatency();
-                return isLatest;
+                return validTo;
             } catch (final ProcessorStateException e) {
                 final String message = String.format(e.getMessage(), key, value);
                 throw new ProcessorStateException(message, e);
@@ -201,7 +201,7 @@ public class MeteredVersionedKeyValueStore<K, V>
     }
 
     @Override
-    public boolean put(final K key, final V value, final long timestamp) {
+    public long put(final K key, final V value, final long timestamp) {
         return internal.put(key, value, timestamp);
     }
 

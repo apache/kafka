@@ -37,10 +37,10 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     }
 
     @Override
-    public boolean put(final Bytes key, final byte[] value, final long timestamp) {
-        final boolean isLatest = inner.put(key, value, timestamp);
+    public long put(final Bytes key, final byte[] value, final long timestamp) {
+        final long validTo = inner.put(key, value, timestamp);
         log(key, value, timestamp);
-        return isLatest;
+        return validTo;
     }
 
     @Override

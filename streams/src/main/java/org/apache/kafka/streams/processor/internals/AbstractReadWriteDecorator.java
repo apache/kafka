@@ -166,7 +166,7 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
-        public boolean put(final K key, final V value, final long timestamp) {
+        public long put(final K key, final V value, final long timestamp) {
             return wrapped().put(key, value, timestamp);
         }
 

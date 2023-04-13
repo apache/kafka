@@ -60,7 +60,7 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
-    public boolean put(final Bytes key, final byte[] value, final long timestamp) {
+    public long put(final Bytes key, final byte[] value, final long timestamp) {
         return inner.put(key, value, timestamp);
     }
 

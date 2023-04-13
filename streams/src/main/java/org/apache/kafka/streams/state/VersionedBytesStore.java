@@ -27,7 +27,7 @@ public interface VersionedBytesStore extends KeyValueStore<Bytes, byte[]>, Times
     /**
      * The analog of {@link VersionedKeyValueStore#put(Object, Object, long)}.
      */
-    boolean put(Bytes key, byte[] value, long timestamp);
+    long put(Bytes key, byte[] value, long timestamp);
 
     /**
      * The analog of {@link VersionedKeyValueStore#get(Object, long)}.

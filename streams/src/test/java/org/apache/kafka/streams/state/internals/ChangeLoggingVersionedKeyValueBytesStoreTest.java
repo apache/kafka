@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -122,9 +123,9 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         final String value = "foo";
         final long timestamp = 10L;
 
-        final boolean isLatest = store.put(rawKey, rawBytes(value), timestamp);
+        final long validTo = store.put(rawKey, rawBytes(value), timestamp);
 
-        assertThat(isLatest, equalTo(true));
+        assertThat(validTo, equalTo(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
         assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp(value, timestamp)));
         assertThat(collector.collected().size(), equalTo(1));
         assertThat(collector.collected().get(0).key(), equalTo(rawKey));
@@ -140,9 +141,9 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         inner.put(rawKey, rawBytes("foo"), timestamp - 1);
         assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp("foo", timestamp - 1)));
 
-        final boolean isLatest = store.put(rawKey, null, timestamp);
+        final long validTo = store.put(rawKey, null, timestamp);
 
-        assertThat(isLatest, equalTo(true));
+        assertThat(validTo, equalTo(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
         assertThat(inner.get(rawKey), nullValue());
         assertThat(collector.collected().size(), equalTo(1));
         assertThat(collector.collected().get(0).key(), equalTo(rawKey));

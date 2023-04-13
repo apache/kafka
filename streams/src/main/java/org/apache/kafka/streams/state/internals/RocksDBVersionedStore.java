@@ -115,12 +115,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     @Override
-    public boolean put(final Bytes key, final byte[] value, final long timestamp) {
+    public long put(final Bytes key, final byte[] value, final long timestamp) {
 
         if (timestamp < observedStreamTime - gracePeriod) {
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired put.");
-            return false;
+            return PUT_RETURN_CODE_NOT_PUT;
         }
         observedStreamTime = Math.max(observedStreamTime, timestamp);
 
@@ -504,7 +504,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
      * in the entire restore batch at the beginning of restore, in order to optimize for not
      * putting records into the store which will have expired by the end of the restore.
      */
-    private <T extends VersionedStoreSegment> boolean doPut(
+    private <T extends VersionedStoreSegment> long doPut(
         final VersionedStoreClient<T> versionedStoreClient,
         final long observedStreamTime,
         final Bytes key,
@@ -527,7 +527,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             timestamp
         );
         if (status.isComplete) {
-            return status.foundTs == SENTINEL_TIMESTAMP;
+            return status.foundTs == SENTINEL_TIMESTAMP ? PUT_RETURN_CODE_VALID_TO_UNDEFINED : status.foundTs;
         } else {
             foundTs = status.foundTs;
         }
@@ -542,14 +542,14 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             foundTs
         );
         if (status.isComplete) {
-            return status.foundTs == SENTINEL_TIMESTAMP;
+            return status.foundTs == SENTINEL_TIMESTAMP ? PUT_RETURN_CODE_VALID_TO_UNDEFINED : status.foundTs;
         } else {
             foundTs = status.foundTs;
         }
 
         // the record did not unconditionally belong in any specific store (latest value store
         // or segments store). insert based on foundTs here instead.
-        return finishPut(
+        foundTs = finishPut(
             versionedStoreClient,
             observedStreamTime,
             key,
@@ -557,6 +557,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             timestamp,
             foundTs
         );
+        return foundTs == SENTINEL_TIMESTAMP ? PUT_RETURN_CODE_VALID_TO_UNDEFINED : foundTs;
     }
 
     /**
@@ -692,7 +693,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // this can happen during restore because individual put calls are executed after
                     // observedStreamTime is fast-forwarded for the entire batch of records being
                     // restored at once.
-                    return new PutStatus(true, foundMinTs);
+                    return new PutStatus(true, PUT_RETURN_CODE_NOT_PUT);
                 }
 
                 // it's possible the record belongs in this segment, but also possible it belongs
@@ -790,9 +791,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     /**
-     * @return whether the record being put is the latest record (by timestamp) for the key
+     * @return updated {@code foundTs} value, i.e., the validTo timestamp of the record being put
      */
-    private <T extends VersionedStoreSegment> boolean finishPut(
+    private <T extends VersionedStoreSegment> long finishPut(
         final VersionedStoreClient<T> versionedStoreClient,
         final long observedStreamTime,
         final Bytes key,
@@ -814,7 +815,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // this can happen during restore because individual put calls are executed after
                     // observedStreamTime is fast-forwarded for the entire batch of records being
                     // restored at once.
-                    return false;
+                    return PUT_RETURN_CODE_NOT_PUT;
                 }
 
                 final byte[] rawSegmentValue = segment.get(key);
@@ -834,7 +835,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     if (RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue) == timestamp) {
                         // next timestamp equal to put() timestamp already represents a tombstone,
                         // so no additional insertion is needed in this case
-                        return true;
+                        return foundTs;
                     }
                     final SegmentValue segmentValue
                         = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
@@ -846,7 +847,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     segment.put(key, segmentValue.serialize());
                 }
             }
-            return true;
+            return foundTs;
         } else {
             // insert into segment corresponding to foundTs, as foundTs represents the validTo
             // timestamp of the current put.
@@ -862,7 +863,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 // this can happen during restore because individual put calls are executed after
                 // observedStreamTime is fast-forwarded for the entire batch of records being
                 // restored at once.
-                return false;
+                return PUT_RETURN_CODE_NOT_PUT;
             }
 
             final byte[] rawSegmentValue = segment.get(key);
@@ -890,7 +891,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     segment.put(key, segmentValue.serialize());
                 }
             }
-            return false;
+            return foundTs;
         }
     }
 

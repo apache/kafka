@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
@@ -192,14 +193,11 @@ public class MeteredVersionedKeyValueStoreTest {
 
     @Test
     public void shouldDelegateAndRecordMetricsOnPut() {
-        // `isLatest = true` case
-        when(inner.put(RAW_KEY, RAW_VALUE, TIMESTAMP)).thenReturn(true);
-        assertThat(store.put(KEY, VALUE, TIMESTAMP), is(true));
+        when(inner.put(RAW_KEY, RAW_VALUE, TIMESTAMP)).thenReturn(PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
-        // `isLatest = false` case
-        when(inner.put(RAW_KEY, RAW_VALUE, TIMESTAMP)).thenReturn(false);
-        assertThat(store.put(KEY, VALUE, TIMESTAMP), is(false));
+        final long validto = store.put(KEY, VALUE, TIMESTAMP);
 
+        assertThat(validto, is(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
         assertThat((Double) getMetric("put-rate").metricValue(), greaterThan(0.0));
     }
 
