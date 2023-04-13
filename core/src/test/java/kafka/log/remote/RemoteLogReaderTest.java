@@ -59,8 +59,8 @@ public class RemoteLogReaderTest {
         verify(callback, times(1)).accept(remoteLogReadResultArg.capture());
         RemoteLogReadResult actualRemoteLogReadResult = remoteLogReadResultArg.getValue();
         assertFalse(actualRemoteLogReadResult.error.isPresent());
-        assertTrue(actualRemoteLogReadResult.info.isPresent());
-        assertEquals(fetchDataInfo, actualRemoteLogReadResult.info.get());
+        assertTrue(actualRemoteLogReadResult.fetchDataInfo.isPresent());
+        assertEquals(fetchDataInfo, actualRemoteLogReadResult.fetchDataInfo.get());
     }
 
     @Test
@@ -77,6 +77,6 @@ public class RemoteLogReaderTest {
         verify(callback, times(1)).accept(remoteLogReadResultArg.capture());
         RemoteLogReadResult actualRemoteLogReadResult = remoteLogReadResultArg.getValue();
         assertTrue(actualRemoteLogReadResult.error.isPresent());
-        assertFalse(actualRemoteLogReadResult.info.isPresent());
+        assertFalse(actualRemoteLogReadResult.fetchDataInfo.isPresent());
     }
 }
