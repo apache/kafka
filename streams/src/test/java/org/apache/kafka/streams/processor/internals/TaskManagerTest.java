@@ -4866,6 +4866,11 @@ public class TaskManagerTest {
         }
 
         @Override
+        public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+            // do nothing
+        }
+
+        @Override
         public void closeClean() {
             transitionTo(State.CLOSED);
         }

@@ -18,13 +18,15 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.nio.ByteBuffer;
 
 public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, Void, T> {
 
-    private static final int NEWFLAG_SIZE = 1;
+    private static final int NEW_OLD_FLAG_SIZE = 1;
 
     private Deserializer<T> inner;
 
@@ -46,16 +48,41 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
 
     @Override
     public Change<T> deserialize(final String topic, final Headers headers, final byte[] data) {
+        // The format we need to deserialize is:
+        // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
+        // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
+        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
+        final ByteBuffer buffer = ByteBuffer.wrap(data);
+        final byte newOldFlag = buffer.get(data.length - NEW_OLD_FLAG_SIZE);
 
-        final byte[] bytes = new byte[data.length - NEWFLAG_SIZE];
+        final byte[] newData;
+        final byte[] oldData;
+        if (newOldFlag == (byte) 0) {
+            newData = null;
+            final int oldDataLength = data.length - NEW_OLD_FLAG_SIZE;
+            oldData = new byte[oldDataLength];
+            buffer.get(oldData);
+        } else if (newOldFlag == (byte) 1) {
+            oldData = null;
+            final int newDataLength = data.length - NEW_OLD_FLAG_SIZE;
+            newData = new byte[newDataLength];
+            buffer.get(newData);
+        } else if (newOldFlag == (byte) 2) {
+            final int newDataLength = Math.toIntExact(ByteUtils.readUnsignedInt(buffer));
+            newData = new byte[newDataLength];
 
-        System.arraycopy(data, 0, bytes, 0, bytes.length);
+            final int oldDataLength = data.length - Integer.BYTES - newDataLength - NEW_OLD_FLAG_SIZE;
+            oldData = new byte[oldDataLength];
 
-        if (ByteBuffer.wrap(data).get(data.length - NEWFLAG_SIZE) != 0) {
-            return new Change<>(inner.deserialize(topic, headers, bytes), null);
+            buffer.get(newData);
+            buffer.get(oldData);
         } else {
-            return new Change<>(null, inner.deserialize(topic, headers, bytes));
+            throw new StreamsException("Encountered unknown byte value `" + newOldFlag + "` for oldNewFlag in ChangedDeserializer.");
         }
+
+        return new Change<>(
+                inner.deserialize(topic, headers, newData),
+                inner.deserialize(topic, headers, oldData));
     }
 
     @Override

@@ -239,6 +239,17 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
+    public synchronized void stopConnector(String connName, Callback<Void> callback) {
+        try {
+            removeConnectorTasks(connName);
+            configBackingStore.putTargetState(connName, TargetState.STOPPED);
+            callback.onCompletion(null, null);
+        } catch (Throwable t) {
+            callback.onCompletion(t, null);
+        }
+    }
+
+    @Override
     public synchronized void requestTaskReconfiguration(String connName) {
         if (!worker.connectorNames().contains(connName)) {
             log.error("Task that requested reconfiguration does not exist: {}", connName);
@@ -429,7 +440,10 @@ public class StandaloneHerder extends AbstractHerder {
 
     private void updateConnectorTasks(String connName) {
         if (!worker.isRunning(connName)) {
-            log.info("Skipping update of connector {} since it is not running", connName);
+            log.info("Skipping update of tasks for connector {} since it is not running", connName);
+            return;
+        } else if (configState.targetState(connName) != TargetState.STARTED) {
+            log.info("Skipping update of tasks for connector {} since its target state is {}", connName, configState.targetState(connName));
             return;
         }
 
