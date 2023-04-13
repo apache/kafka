@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.purgatory;
 
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
-public class ControllerPurgatoryTest {
+public class PurgatoryTest {
 
     static class SampleDeferredEvent implements DeferredEvent {
         private final CompletableFuture<Void> future = new CompletableFuture<>();
@@ -50,7 +51,7 @@ public class ControllerPurgatoryTest {
 
     @Test
     public void testCompleteEvents() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        Purgatory purgatory = new Purgatory();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
@@ -71,7 +72,7 @@ public class ControllerPurgatoryTest {
 
     @Test
     public void testFailOnIncorrectOrdering() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        Purgatory purgatory = new Purgatory();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         purgatory.add(2, event1);
@@ -80,7 +81,7 @@ public class ControllerPurgatoryTest {
 
     @Test
     public void testFailEvents() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        Purgatory purgatory = new Purgatory();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();

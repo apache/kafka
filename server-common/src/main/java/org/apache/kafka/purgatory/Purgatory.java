@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.purgatory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -26,10 +26,9 @@ import java.util.TreeMap;
 
 /**
  * The purgatory which holds events that have been started, but not yet completed.
- * We wait for the high water mark of the metadata log to advance before completing
- * them.
+ * We wait for the high watermark of the log to advance before completing them.
  */
-class ControllerPurgatory {
+public class Purgatory {
     /**
      * A map from log offsets to events.  Each event will be completed once the log
      * advances past its offset.
@@ -41,7 +40,7 @@ class ControllerPurgatory {
      *
      * @param offset        The offset which the high water mark has advanced to.
      */
-    void completeUpTo(long offset) {
+    public void completeUpTo(long offset) {
         Iterator<Entry<Long, List<DeferredEvent>>> iter = pending.entrySet().iterator();
         while (iter.hasNext()) {
             Entry<Long, List<DeferredEvent>> entry = iter.next();
@@ -60,7 +59,7 @@ class ControllerPurgatory {
      *
      * @param exception     The exception to fail the entries with.
      */
-    void failAll(Exception exception) {
+    public void failAll(Exception exception) {
         Iterator<Entry<Long, List<DeferredEvent>>> iter = pending.entrySet().iterator();
         while (iter.hasNext()) {
             Entry<Long, List<DeferredEvent>> entry = iter.next();
@@ -77,13 +76,13 @@ class ControllerPurgatory {
      * @param offset        The offset to add the new event at.
      * @param event         The new event.
      */
-    void add(long offset, DeferredEvent event) {
+    public void add(long offset, DeferredEvent event) {
         if (!pending.isEmpty()) {
             long lastKey = pending.lastKey();
             if (offset < lastKey) {
                 throw new RuntimeException("There is already a purgatory event with " +
                     "offset " + lastKey + ".  We should not add one with an offset of " +
-                    offset + " which " + "is lower than that.");
+                    offset + " which is lower than that.");
             }
         }
         List<DeferredEvent> events = pending.get(offset);
@@ -98,7 +97,7 @@ class ControllerPurgatory {
      * Get the offset of the highest pending event, or empty if there are no pending
      * events.
      */
-    OptionalLong highestPendingOffset() {
+    public OptionalLong highestPendingOffset() {
         if (pending.isEmpty()) {
             return OptionalLong.empty();
         } else {
