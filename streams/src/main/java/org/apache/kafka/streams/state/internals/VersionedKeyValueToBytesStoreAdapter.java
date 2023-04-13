@@ -49,7 +49,7 @@ import org.apache.kafka.streams.state.VersionedRecord;
  */
 public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore {
     private static final Serde<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERDE
-        = new NullableValueAndTimestampSerde<>(new ByteArraySerde());
+        = new ValueAndTimestampSerde<>(new ByteArraySerde());
     private static final Serializer<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERIALIZER
         = VALUE_AND_TIMESTAMP_SERDE.serializer();
 

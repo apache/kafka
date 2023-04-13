@@ -52,7 +52,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
 
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
     private static final Serializer<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_SERIALIZER
-        = new NullableValueAndTimestampSerializer<>(STRING_SERIALIZER);
+        = new ValueAndTimestampSerializer<>(STRING_SERIALIZER);
     private static final long HISTORY_RETENTION = 1000L;
 
     private final MockRecordCollector collector = new MockRecordCollector();

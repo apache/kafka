@@ -17,13 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -47,9 +47,7 @@ import org.apache.kafka.streams.state.VersionedRecord;
  * metrics, and hence its inner {@link VersionedBytesStore} implementation does not need to provide
  * its own metrics collecting functionality. The inner {@code VersionedBytesStore} of this class
  * is a {@link KeyValueStore} of type &lt;Bytes,byte[]&gt;, so we use {@link Serde}s
- * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;. In particular,
- * {@link NullableValueAndTimestampSerde} is used since putting a tombstone to a versioned key-value
- * store requires putting a null value associated with a timestamp.
+ * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;.
  *
  * @param <K> The key type
  * @param <V> The (raw) value type
@@ -103,7 +101,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                 keySerde,
                 valueSerde == null
                     ? null
-                    : new NullableValueAndTimestampSerde<>(valueSerde)
+                    : new ValueAndTimestampSerde<>(valueSerde)
             );
             this.inner = inner;
             this.rawValueSerde = valueSerde;
@@ -166,7 +164,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             final SerdeGetter getter
         ) {
             if (valueSerde == null) {
-                return new NullableValueAndTimestampSerde<>((Serde<V>) getter.valueSerde());
+                return new ValueAndTimestampSerde<>((Serde<V>) getter.valueSerde());
             } else {
                 return super.prepareValueSerdeForStore(valueSerde, getter);
             }
@@ -183,7 +181,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             rawValueSerdes = new StateSerdes<>(
                 changelogTopic,
                 prepareKeySerde(keySerde, new SerdeGetter(context)),
-                WrappingNullableUtils.prepareValueSerde(rawValueSerde, new SerdeGetter(context))
+                prepareValueSerde(rawValueSerde, new SerdeGetter(context))
             );
         }
 
@@ -197,7 +195,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             rawValueSerdes = new StateSerdes<>(
                 changelogTopic,
                 prepareKeySerde(keySerde, new SerdeGetter(context)),
-                WrappingNullableUtils.prepareValueSerde(rawValueSerde, new SerdeGetter(context))
+                prepareValueSerde(rawValueSerde, new SerdeGetter(context))
             );
         }
     }

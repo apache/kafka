@@ -71,7 +71,7 @@ public class MeteredVersionedKeyValueStoreTest {
 
     private static final String STORE_NAME = "versioned_store";
     private static final Serde<String> STRING_SERDE = new StringSerde();
-    private static final Serde<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_SERDE = new NullableValueAndTimestampSerde<>(STRING_SERDE);
+    private static final Serde<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_SERDE = new ValueAndTimestampSerde<>(STRING_SERDE);
     private static final String METRICS_SCOPE = "scope";
     private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
     private static final String APPLICATION_ID = "test-app";
