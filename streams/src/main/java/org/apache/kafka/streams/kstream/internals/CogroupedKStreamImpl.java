@@ -137,8 +137,6 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
                                         final NamedInternal named,
                                         final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        final boolean isOutputVersioned = materializedInternal != null
-            && materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier;
         return aggregateBuilder.build(
             groupPatterns,
             initializer,
@@ -147,6 +145,6 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
-            isOutputVersioned);
+            materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
     }
 }

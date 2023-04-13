@@ -237,8 +237,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, V, K, T> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        final boolean isOutputVersioned = materializedInternal != null
-            && materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier;
         return aggregateBuilder.build(
             new NamedInternal(functionName),
             new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
@@ -246,7 +244,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
-            isOutputVersioned);
+            materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
     }
 
     @Override
