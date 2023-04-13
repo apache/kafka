@@ -629,7 +629,7 @@ class KafkaServer(
       brokerTopicStats = brokerTopicStats,
       isShuttingDown = isShuttingDown,
       zkClient = Some(zkClient),
-      delayedRemoteFetchPurgatory = None,
+      delayedRemoteFetchPurgatoryParam = None,
       threadNamePrefix = threadNamePrefix,
       brokerEpochSupplier = brokerEpochSupplier,
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
