@@ -1732,7 +1732,7 @@ class GroupMetadataManagerTest {
     assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
-    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).get.asInstanceOf[GroupMetadataKey]
+    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
     assertEquals(groupId, groupKey.key)
 
     // the full group should be gone since all offsets were removed
@@ -1776,7 +1776,7 @@ class GroupMetadataManagerTest {
     assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
-    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).get.asInstanceOf[GroupMetadataKey]
+    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
     assertEquals(groupId, groupKey.key)
 
     // the full group should be gone since all offsets were removed
@@ -1837,7 +1837,7 @@ class GroupMetadataManagerTest {
     records.foreach { message =>
       assertTrue(message.hasKey)
       assertFalse(message.hasValue)
-      val offsetKey = GroupMetadataManager.readMessageKey(message.key).get.asInstanceOf[OffsetKey]
+      val offsetKey = GroupMetadataManager.readMessageKey(message.key).asInstanceOf[OffsetKey]
       assertEquals(groupId, offsetKey.key.group)
       assertEquals("foo", offsetKey.key.topicPartition.topic)
     }
@@ -2770,7 +2770,9 @@ class GroupMetadataManagerTest {
 
   @Test
   def testIgnoreUnknownMessageKeyVersion(): Unit = {
-    GroupMetadataManager.readMessageKey(ByteBuffer.wrap(MessageUtil.messageWithUnknownVersion()))
+    val record = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
+    val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
+    GroupMetadataManager.readMessageKey(ByteBuffer.wrap(unknownRecord))
   }
 
 }

@@ -17,6 +17,7 @@
 package kafka.coordinator.transaction
 
 
+import kafka.internals.generated.TransactionLogKey
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.MessageUtil
@@ -83,7 +84,7 @@ class TransactionLogTest {
 
     var count = 0
     for (record <- records.records.asScala) {
-      val txnKey = TransactionLog.readTxnRecordKey(record.key).get
+      val txnKey = TransactionLog.readTxnRecordKey(record.key)
       val transactionalId = txnKey.transactionalId
       val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value).get
 
@@ -139,7 +140,9 @@ class TransactionLogTest {
 
   @Test
   def testReadUnknownMessageKeyVersion(): Unit = {
-    TransactionLog.readTxnRecordKey(ByteBuffer.wrap(MessageUtil.messageWithUnknownVersion()))
+    val record = new TransactionLogKey()
+    val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
+    TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))
   }
 
 }

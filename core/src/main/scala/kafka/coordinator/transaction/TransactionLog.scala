@@ -98,18 +98,18 @@ object TransactionLog extends Logging {
     *
     * @return the key
     */
-  def readTxnRecordKey(buffer: ByteBuffer): Option[TxnKey] = {
+  def readTxnRecordKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
     if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
       val value = new TransactionLogKey(new ByteBufferAccessor(buffer), version)
-      Some(TxnKey(
+      TxnKey(
         version = version,
         transactionalId = value.transactionalId
-      ))
+      )
     } else {
       warn(s"Unknown version $version from the transaction log message." +
         s" The downgraded coordinator will ignore this key and corresponding value.")
-      None
+      UnknownKey(version)
     }
   }
 
@@ -153,7 +153,7 @@ object TransactionLog extends Logging {
   class TransactionLogMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach {
-        case Some(txnKey) =>
+        case txnKey: TxnKey =>
           val transactionalId = txnKey.transactionalId
           val value = consumerRecord.value
           val producerIdMetadata = if (value == null)
@@ -165,7 +165,10 @@ object TransactionLog extends Logging {
           output.write(producerIdMetadata.getOrElse("NULL").toString.getBytes(StandardCharsets.UTF_8))
           output.write("\n".getBytes(StandardCharsets.UTF_8))
 
-        case None => // Only print if this message is a transaction record
+        case _: UnknownKey => // Only print if this message is a transaction record
+
+        case unexpectedKey =>
+          throw new IllegalStateException(s"Found unexpected key $unexpectedKey while reading transaction log.")
       }
     }
   }
@@ -175,7 +178,7 @@ object TransactionLog extends Logging {
    */
   def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
     TransactionLog.readTxnRecordKey(record.key) match {
-      case Some(txnKey) =>
+      case txnKey: TxnKey =>
         val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
 
         val valueString = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value) match {
@@ -191,13 +194,26 @@ object TransactionLog extends Logging {
 
         (Some(keyString), Some(valueString))
 
-      case None =>
+      case _: UnknownKey =>
         (Some("<UNKNOWN>"), Some("<UNKNOWN>"))
+
+      case unexpectedKey =>
+        throw new IllegalStateException(s"Found unexpected key $unexpectedKey while formatting transaction log.")
     }
   }
 
 }
 
-case class TxnKey(version: Short, transactionalId: String) {
+trait BaseKey{
+  def version: Short
+  def transactionalId: String
+}
+
+case class TxnKey(version: Short, transactionalId: String) extends BaseKey {
   override def toString: String = transactionalId
 }
+
+case class UnknownKey(version: Short, transactionalId: String = null) extends BaseKey {
+  override def toString: String = transactionalId
+}
+

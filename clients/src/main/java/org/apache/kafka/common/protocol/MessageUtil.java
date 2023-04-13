@@ -231,38 +231,4 @@ public final class MessageUtil {
                 buffer.limit() == buffer.array().length) return buffer.array();
         else return Utils.toArray(buffer);
     }
-
-    // Should only be used for testing
-    public static byte[] messageWithUnknownVersion() {
-        return MessageUtil.toVersionPrefixedBytes(Short.MAX_VALUE, new Message() {
-            @Override
-            public short lowestSupportedVersion() {
-                return Short.MAX_VALUE;
-            }
-
-            @Override
-            public short highestSupportedVersion() {
-                return Short.MAX_VALUE;
-            }
-
-            @Override
-            public void addSize(MessageSizeAccumulator size, ObjectSerializationCache cache, short version) {}
-
-            @Override
-            public void write(Writable writable, ObjectSerializationCache cache, short version) {}
-
-            @Override
-            public void read(Readable readable, short version) {}
-
-            @Override
-            public List<RawTaggedField> unknownTaggedFields() {
-                return null;
-            }
-
-            @Override
-            public Message duplicate() {
-                return null;
-            }
-        });
-    }
 }

@@ -468,7 +468,7 @@ class TransactionStateManager(brokerId: Int,
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
                 TransactionLog.readTxnRecordKey(record.key) match {
-                  case Some(txnKey) =>
+                  case txnKey: TxnKey =>
                     // load transaction metadata along with transaction state
                     val transactionalId = txnKey.transactionalId
                     TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
@@ -479,7 +479,10 @@ class TransactionStateManager(brokerId: Int,
                     }
                     currOffset = batch.nextOffset
 
-                  case None => // ignore unknown keys
+                  case _: UnknownKey => // ignore unknown keys
+
+                  case unexpectedKey =>
+                    throw new IllegalStateException(s"Found unexpected key $unexpectedKey while reading transaction log.")
                 }
               }
             }
