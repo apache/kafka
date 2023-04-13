@@ -187,8 +187,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                 log.warn("Found multiple consumers {} and {} claiming the same TopicPartition {} in " +
                                         "different generations. The topic partition wil be assigned to the member with higher generation.",
                                     consumer, otherConsumer, tp);
+                                // move partition from the member with an older generation to the member with the newer generation
                                 consumerToOwnedPartitions.get(consumer).add(tp);
-                                // this partition is owned by other consumer in the same generation
                                 consumerToOwnedPartitions.get(otherConsumer).remove(tp);
                                 allPreviousPartitionsToOwner.put(tp, consumer);
                             }
