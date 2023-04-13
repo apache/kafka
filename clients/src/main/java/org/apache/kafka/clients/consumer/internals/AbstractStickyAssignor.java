@@ -91,6 +91,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     @Override
     public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                               Map<String, Subscription> subscriptions) {
+        Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
         Set<TopicPartition> partitionsWithMultiplePreviousOwners = new HashSet<>();
 
         List<PartitionInfo> allPartitions = new ArrayList<>();
@@ -98,12 +99,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         RackInfo rackInfo = new RackInfo(allPartitions, subscriptions);
 
         AbstractAssignmentBuilder assignmentBuilder;
-        Map<String, List<TopicPartition>> consumerToOwnedPartitions = getConsumerToOwnedPartitions(
-            partitionsPerTopic.keySet(),
-            subscriptions,
-            partitionsWithMultiplePreviousOwners);
-
-        if (allSubscriptionsEqual(subscriptions)) {
+        if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
             partitionsTransferringOwnership = new HashMap<>();
@@ -124,45 +120,45 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     /**
-     * Returns true iff all consumers have an identical subscription.
-     */
-    private boolean allSubscriptionsEqual(final Map<String, Subscription> subscriptions) {
-        Set<String> subscribedTopics = new HashSet<>();
-        return subscriptions.entrySet().stream().noneMatch(s -> {
-            // returns immediately when it finds any different subscription
-            Subscription subscription = s.getValue();
-            if (subscribedTopics.isEmpty()) {
-                subscribedTopics.addAll(subscription.topics());
-            } else if (!(subscription.topics().size() == subscribedTopics.size()
-                && subscribedTopics.containsAll(subscription.topics()))) {
-                return true;
-            }
-            return false;
-        });
-    }
-
-    /**
      * Returns the mapping of consumer to its owned TopicPartition, and fill the {@code
      * partitionsWithMultiplePreviousOwners} with any partitions claimed by multiple previous owners
      */
-    private Map<String, List<TopicPartition>> getConsumerToOwnedPartitions(
-        final Set<String> allTopics,
-        final Map<String, Subscription> subscriptions,
-        final Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
-        Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
+    private boolean allSubscriptionsEqual(Set<String> allTopics,
+                                          Map<String, Subscription> subscriptions,
+                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions,
+                                          Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
+        boolean isAllSubscriptionsEqual = true;
+
+        Set<String> subscribedTopics = new HashSet<>();
 
         // keep track of all previously owned partitions so we can invalidate them if invalid input is
         // detected, eg two consumers somehow claiming the same partition in the same/current generation
         Map<TopicPartition, String> allPreviousPartitionsToOwner = new HashMap<>();
 
+        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
+            Subscription subscription = subscriptionEntry.getValue();
+            maxGeneration = Math.max(maxGeneration,
+                subscription.generationId().orElse(DEFAULT_GENERATION));
+        }
+
         maxGeneration = subscriptions.values().stream()
-            .mapToInt(s -> s.generationId().orElse(DEFAULT_GENERATION))
-            .max().orElse(DEFAULT_GENERATION);
+            .map(v -> v.generationId().orElse(DEFAULT_GENERATION))
+            .max(Integer::compareTo)
+            .orElse(DEFAULT_GENERATION);
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             final String consumer = subscriptionEntry.getKey();
-            final MemberData memberData = memberData(subscriptionEntry.getValue());
+            Subscription subscription = subscriptionEntry.getValue();
 
+            // initialize the subscribed topics set if this is the first subscription
+            if (subscribedTopics.isEmpty()) {
+                subscribedTopics.addAll(subscription.topics());
+            } else if (isAllSubscriptionsEqual && !(subscription.topics().size() == subscribedTopics.size()
+                && subscribedTopics.containsAll(subscription.topics()))) {
+                isAllSubscriptionsEqual = false;
+            }
+
+            MemberData memberData = memberData(subscription);
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
@@ -174,47 +170,42 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
 
             for (final TopicPartition tp : memberData.partitions) {
-                if (!allTopics.contains(tp.topic())) {
-                    continue;
-                }
+                if (allTopics.contains(tp.topic())) {
+                    String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
+                    if (otherConsumer == null) {
+                        // this partition is not owned by other consumer in the same generation
+                        ownedPartitions.add(tp);
+                    } else {
+                        int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
+                        int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
-                if (!allPreviousPartitionsToOwner.containsKey(tp)) {
-                    // this partition is not owned by other consumer in the same generation
-                    ownedPartitions.add(tp);
-                    allPreviousPartitionsToOwner.put(tp, consumer);
-                    continue;
-                }
+                        if (memberGeneration == otherMemberGeneration) {
+                            if (subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION) == memberData.generation.orElse(DEFAULT_GENERATION)) {
+                                log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
+                                        + "same generation {}, this will be invalidated and removed from their previous assignment.",
+                                    consumer, otherConsumer, tp, maxGeneration);
+                                partitionsWithMultiplePreviousOwners.add(tp);
+                            }
+                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
+                            continue;
+                        }
 
-                // filter out any topics that no longer exist or aren't part of the current subscription
-                String otherConsumer = allPreviousPartitionsToOwner.get(tp);
-
-                int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
-                int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
-
-                if (memberGeneration == otherMemberGeneration) {
-                    if (subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION) == memberData.generation.orElse(DEFAULT_GENERATION)) {
-                        log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
-                                + "same generation {}, this will be invalidated and removed from their previous assignment.",
-                            consumer, otherConsumer, tp, maxGeneration);
-                        partitionsWithMultiplePreviousOwners.add(tp);
+                        if (memberGeneration > otherMemberGeneration) {
+                            log.warn("Found multiple consumers {} and {} claiming the same TopicPartition {} in " +
+                                    "different " +
+                                    "generations. The topic partition wil be assigned to the member with higher generation.",
+                                consumer, otherConsumer, tp);
+                            consumerToOwnedPartitions.get(consumer).add(tp);
+                            // this partition is owned by other consumer in the same generation
+                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
+                        }
                     }
-                    consumerToOwnedPartitions.get(otherConsumer).remove(tp);
-                    allPreviousPartitionsToOwner.put(tp, consumer);
-                    continue;
-                }
-
-                if (memberGeneration > otherMemberGeneration) {
-                    log.info("Found multiple consumers {} and {} claiming the same TopicPartition {} in different " +
-                            "generations. The topic partition wil be assigned to the member with higher generation.",
-                        consumer, otherConsumer, tp);
-                    // this partition is owned by other consumer in the same generation
-                    ownedPartitions.add(tp);
-                    consumerToOwnedPartitions.get(otherConsumer).remove(tp);
-                    allPreviousPartitionsToOwner.put(tp, consumer);
                 }
             }
         }
-        return consumerToOwnedPartitions;
+        return isAllSubscriptionsEqual;
     }
 
     private static boolean hasValidGeneration(final int maxGeneration, final Optional<Integer> memberGeneration) {
