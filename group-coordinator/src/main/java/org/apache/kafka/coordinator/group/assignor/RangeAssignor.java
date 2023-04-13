@@ -31,28 +31,30 @@ import static java.lang.Math.min;
 
 /**
  * <p>The Server Side Sticky Range Assignor inherits properties of both the range assignor and the sticky assignor.
- * Properties are :-
- * <ul>
- * <li> 1) Each consumer must get at least one partition per topic that it is subscribed to whenever the number of consumers is
- *    less than or equal to the number of partitions for that topic. (Range) </li>
- * <li> 2) Partitions should be assigned to consumers in a way that facilitates join operations where required. (Range) </li>
- *    This can only be done if every consumer is subscribed to the same topics and the topics are co-partitioned.
+ * Properties are as follows:
+ * <ol>
+ * <li> Each member must get at least one partition for every topic that it is subscribed to. The only exception is when
+ *      the number of subscribed members is greater than the number of partitions for that topic. (Range) </li>
+ * <li> Partitions should be assigned to members in a way that facilitates the join operation when required. (Range) </li>
+ *    This can only be done if every member is subscribed to the same topics and the topics are co-partitioned.
  *    Two streams are co-partitioned if the following conditions are met:
- * ->The keys must have the same schemas
- * ->The topics involved must have the same number of partitions
- * <li> 3) Consumers should retain as much as their previous assignment as possible. (Sticky) </li>
- * </ul>
+ *    <ul>
+ * <li> The keys must have the same schemas.
+ * <li> The topics involved must have the same number of partitions.
+ *    </ul>
+ * <li> Members should retain as much as their previous assignment as possible to reduce the number of partition movements during reassignment. (Sticky) </li>
+ * </ol>
  * </p>
  *
- * <p>The algorithm works mainly in 5 steps described below
- * <ul>
- * <li> 1) Generate a map of <code>consumersPerTopic</code> using the member subscriptions.</li>
- * <li> 2) Generate a list of consumers (<code>potentiallyUnfilledConsumers</code>) that have not met the minimum required quota for assignment AND
+ * <p>The algorithm includes the following steps:
+ * <ol>
+ * <li> Generate a map of <code>membersPerTopic</code> using the given member subscriptions.</li>
+ * <li> Generate a list of members (<code>potentiallyUnfilledMembers</code>) that have not met the minimum required quota for assignment AND
  * get a list of sticky partitions that we want to retain in the new assignment.</li>
- * <li> 3) Add consumers from the <code>potentiallyUnfilled</code> list to the <code>Unfilled</code> list if they haven't met the total required quota i.e. minimum number of partitions per member + 1 (if member is designated to receive one of the excess partitions) </li>
- * <li> 4) Generate a list of unassigned partitions by calculating the difference between total partitions and already assigned (sticky) partitions </li>
- * <li> 5) Iterate through unfilled consumers and assign partitions from the available partitions </li>
- * </ul>
+ * <li> Add members from the <code>potentiallyUnfilled</code> list to the <code>Unfilled</code> list if they haven't met the total required quota i.e. minimum number of partitions per member + 1 (if member is designated to receive one of the excess partitions) </li>
+ * <li> Generate a list of unassigned partitions by calculating the difference between total partitions and already assigned (sticky) partitions </li>
+ * <li> Iterate through unfilled members and assign partitions from the unassigned partitions </li>
+ * </ol>
  * </p>
  *
  */
@@ -65,119 +67,101 @@ public class RangeAssignor implements PartitionAssignor {
         return RANGE_ASSIGNOR_NAME;
     }
 
-    private static <K, V> void putList(Map<K, List<V>> map, K key, V value) {
-        List<V> list = map.computeIfAbsent(key, k -> new ArrayList<>());
-        list.add(value);
+    static class RemainingAssignmentsForMember<String, Integer> {
+        private final String memberId;
+        private final Integer remaining;
+
+        public RemainingAssignmentsForMember(String memberId, Integer remaining) {
+            this.memberId = memberId;
+            this.remaining = remaining;
+        }
+
+        public String memberId() {
+            return memberId;
+        }
+
+        public Integer remaining() {
+            return remaining;
+        }
+
     }
 
-    private static <K, V> void putSet(Map<K, Set<V>> map, K key, V value) {
-        Set<V> set = map.computeIfAbsent(key, k -> new HashSet<>());
-        set.add(value);
-    }
+    private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec) {
+        Map<Uuid, List<String>> membersPerTopic = new HashMap<>();
+        Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
-    static class Pair<T, U> {
-        private final T first;
-        private final U second;
-
-        public Pair(T first, U second) {
-            this.first = first;
-            this.second = second;
-        }
-
-        public T getFirst() {
-            return first;
-        }
-
-        public U getSecond() {
-            return second;
-        }
-
-        @Override
-        public String toString() {
-            return "(" + first + ", " + second + ")";
-        }
-    }
-
-    // Returns a map of the list of consumers per Topic (keyed by topicId)
-    private Map<Uuid, List<String>> consumersPerTopic(AssignmentSpec assignmentSpec) {
-        Map<Uuid, List<String>> mapTopicsToConsumers = new HashMap<>();
-        Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members;
-
-        for (Map.Entry<String, AssignmentMemberSpec> memberEntry : membersData.entrySet()) {
-            String memberId = memberEntry.getKey();
-            AssignmentMemberSpec memberMetadata = memberEntry.getValue();
-            Collection<Uuid> topics = memberMetadata.subscribedTopics;
+        membersData.forEach((memberId, memberMetadata) -> {
+            Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
             for (Uuid topicId: topics) {
-                putList(mapTopicsToConsumers, topicId, memberId);
+                membersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberId);
             }
-        }
-        return mapTopicsToConsumers;
+        });
+
+        return membersPerTopic;
     }
 
-    private Map<Uuid, List<Integer>> getAvailablePartitionsPerTopic(AssignmentSpec assignmentSpec, Map<Uuid, Set<Integer>> assignedStickyPartitionsPerTopic) {
-        Map<Uuid, List<Integer>> availablePartitionsPerTopic = new HashMap<>();
-        Map<Uuid, AssignmentTopicMetadata> topicsMetadata = assignmentSpec.topics;
+    private Map<Uuid, List<Integer>> getUnassignedPartitionsPerTopic(final AssignmentSpec assignmentSpec, Map<Uuid, Set<Integer>> assignedStickyPartitionsPerTopic) {
+        Map<Uuid, List<Integer>> unassignedPartitionsPerTopic = new HashMap<>();
+        Map<Uuid, AssignmentTopicMetadata> topicsMetadata = assignmentSpec.topics();
 
-        for (Map.Entry<Uuid, AssignmentTopicMetadata> topicMetadataEntry : topicsMetadata.entrySet()) {
-            Uuid topicId = topicMetadataEntry.getKey();
-            ArrayList<Integer> availablePartitionsForTopic = new ArrayList<>();
-            int numPartitions = topicsMetadata.get(topicId).numPartitions;
-            // since the loop iterates from 0 to n, the partitions will be in ascending order within the list of available partitions per topic
+        topicsMetadata.forEach((topicId, assignmentTopicMetadata) -> {
+            ArrayList<Integer> unassignedPartitionsForTopic = new ArrayList<>();
+            int numPartitions = assignmentTopicMetadata.numPartitions();
+            // The partitions will be in ascending order within the list of unassigned partitions per topic.
             Set<Integer> assignedStickyPartitionsForTopic = assignedStickyPartitionsPerTopic.getOrDefault(topicId, new HashSet<>());
             for (int i = 0; i < numPartitions; i++) {
                 if (!assignedStickyPartitionsForTopic.contains(i)) {
-                    availablePartitionsForTopic.add(i);
+                    unassignedPartitionsForTopic.add(i);
                 }
             }
-            availablePartitionsPerTopic.put(topicId, availablePartitionsForTopic);
-        }
-        return availablePartitionsPerTopic;
+            unassignedPartitionsPerTopic.put(topicId, unassignedPartitionsForTopic);
+        });
+
+        return unassignedPartitionsPerTopic;
     }
 
     @Override
-    public GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException {
+    public GroupAssignment assign(final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
         Map<String, Map<Uuid, Set<Integer>>> membersWithNewAssignmentPerTopic = new HashMap<>();
         // Step 1
-        Map<Uuid, List<String>> consumersPerTopic = consumersPerTopic(assignmentSpec);
+        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentSpec);
         // Step 2
-        Map<Uuid, List<Pair<String, Integer>>> unfilledConsumersPerTopic = new HashMap<>();
+        Map<Uuid, List<RemainingAssignmentsForMember<String, Integer>>> unfilledMembersPerTopic = new HashMap<>();
         Map<Uuid, Set<Integer>> assignedStickyPartitionsPerTopic = new HashMap<>();
 
-        for (Map.Entry<Uuid, List<String>> topicEntry : consumersPerTopic.entrySet()) {
-            Uuid topicId = topicEntry.getKey();
-            // For each topic we have a temporary list of consumers stored in potentiallyUnfilledConsumers.
-            // The list is populated with consumers that satisfy one of the two conditions :-
-            // 1) Consumers that have the minimum required number of partitions .i.e numPartitionsPerConsumer BUT they could be assigned an extra partition later on.
-            //    In this case we add the consumer to the unfilled consumers map iff an extra partition needs to be assigned to it.
-            // 2) Consumers that don't have the minimum required partitions, so irrespective of whether they get an extra partition or not they get added to the unfilled map later.
-            List<Pair<String, Integer>> potentiallyUnfilledConsumers = new ArrayList<>();
-            List<String> consumersForTopic = topicEntry.getValue();
+        membersPerTopic.forEach((topicId, membersForTopic) -> {
+            // For each topic we have a temporary list of members stored in potentiallyUnfilledMembers.
+            // The list is populated with members that satisfy one of the two conditions:
+            // 1) Members that already have the minimum required number of partitions i.e. total partitions divided by total subscribed members
+            //    BUT they could be assigned an extra partition later on. Extra partitions exist if total partitions % number of members is greater than 0.
+            //    In this case we add the member to the unfilled members map iff an extra partition needs to be assigned to it.
+            // 2) Members that don't have the minimum required partitions, so irrespective of whether they get an extra partition or not they get added to the unfilled map later.
+            List<RemainingAssignmentsForMember<String, Integer>> potentiallyUnfilledMembers = new ArrayList<>();
 
-            AssignmentTopicMetadata topicData = assignmentSpec.topics.get(topicId);
-            int numPartitionsForTopic = topicData.numPartitions;
-            // Initially, minRequiredQuota is the minimum number of partitions that each consumer should get i.e numPartitionsPerConsumer.
-            // Idle consumers case :- The numConsumers subscribed to a topic is greater than numPartitions. In such cases, all consumers get assigned via the "extra partitions" logic since min = 0.
-            int minRequiredQuota = numPartitionsForTopic / consumersForTopic.size();
-            // Each consumer can get only one extra partition per topic after receiving the minimum quota = numPartitionsPerConsumer
-            int numConsumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();
+            AssignmentTopicMetadata topicData = assignmentSpec.topics().get(topicId);
+            int numPartitionsForTopic = topicData.numPartitions();
 
-            for (String memberId: consumersForTopic) {
+            // Idle members case : When the number of members subscribed to a topic is greater than the total number of Partitions,
+            // all members get assigned via the "extra partitions" logic since minRequiredQuota = 0.
+            int minRequiredQuota = numPartitionsForTopic / membersForTopic.size();
+            // Each member can get only ONE extra partition per topic after receiving the minimum quota.
+            int numMembersWithExtraPartition = numPartitionsForTopic % membersForTopic.size();
 
-                // Convert the set to a list first and sort the partitions in numeric order since we want the same partition numbers from each topic
-                // to go to the same consumer in case of co-partitioned topics.
-                Set<Integer> currentAssignmentSetForTopic =  assignmentSpec.members.get(memberId).currentAssignmentPerTopic.getOrDefault(topicId, new HashSet<>());
-                // Size of the older assignment, this will be 0 when assign is called for the first time.
-                // The older assignment is required when a reassignment occurs to ensure stickiness.
-                int currentAssignmentSize = currentAssignmentSetForTopic.size();
-                List<Integer> currentAssignmentListForTopic = new ArrayList<>(currentAssignmentSetForTopic);
+            for (String memberId: membersForTopic) {
+                // The partitions need to be in numeric order since we want the same partition numbers from each topic
+                // to go to the same member in case of co-partitioned topics to facilitate joins.
+                Set<Integer> assignedPartitionsForTopic =  assignmentSpec.members().get(memberId).assignedPartitions().getOrDefault(topicId, new HashSet<>());
 
-                // If there are previously assigned partitions present, we want to retain them.
+                int currentAssignmentSize = assignedPartitionsForTopic.size();
+                List<Integer> currentAssignmentListForTopic = new ArrayList<>(assignedPartitionsForTopic);
+
+                // If there were previously assigned partitions present, we want to retain them.
                 if (currentAssignmentSize > 0) {
                     // We either need to retain currentSize number of partitions when currentSize < required OR required number of partitions otherwise.
                     int retainedPartitionsCount = min(currentAssignmentSize, minRequiredQuota);
                     Collections.sort(currentAssignmentListForTopic);
                     for (int i = 0; i < retainedPartitionsCount; i++) {
-                        putSet(assignedStickyPartitionsPerTopic, topicId, currentAssignmentListForTopic.get(i));
+                        assignedStickyPartitionsPerTopic.computeIfAbsent(topicId, k -> new HashSet<>()).add(currentAssignmentListForTopic.get(i));
                         membersWithNewAssignmentPerTopic.computeIfAbsent(memberId, k -> new HashMap<>()).computeIfAbsent(topicId, k -> new HashSet<>()).add(currentAssignmentListForTopic.get(i));
                     }
                 }
@@ -186,69 +170,60 @@ public class RangeAssignor implements PartitionAssignor {
                 int remaining = minRequiredQuota - currentAssignmentSize;
 
                 // There are 3 cases w.r.t value of remaining
-                // 1) remaining < 0 this means that the consumer has more than the min required amount.
-                // It could have an extra partition, so we check for that.
-                if (remaining < 0 && numConsumersWithExtraPartition > 0) {
-                    // In order to remain as sticky as possible, since the order of members can be different, we want the consumers that already had extra
-                    // partitions to retain them if it's still required, instead of assigning the extras to the first few consumers directly.
-                    // Ex:- If two consumers out of 3 are supposed to get an extra partition and currently 1 of them already has the extra, we want this consumer
-                    // to retain it first and later if we have partitions left they will be assigned to the first few consumers and the unfilled map is updated
-                    numConsumersWithExtraPartition--;
+                // 1) remaining < 0 this means that the member has more than the min required amount.
+                if (remaining < 0 && numMembersWithExtraPartition > 0) {
+                    // In order to remain as sticky as possible, since the order of members can be different, we want the members that already had extra
+                    // partitions to retain them if it's still required, instead of assigning the extras to the first few members directly.
+                    numMembersWithExtraPartition--;
                     // Since we already added the minimumRequiredQuota of partitions in the previous step (until minReq - 1), we just need to
-                    // add the extra partition which will be present at the index right after min quota is satisfied.
-                    putSet(assignedStickyPartitionsPerTopic, topicId, currentAssignmentListForTopic.get(minRequiredQuota));
+                    // add the extra partition that will be present at the index right after min quota was satisfied.
+                    assignedStickyPartitionsPerTopic.computeIfAbsent(topicId, k -> new HashSet<>()).add(currentAssignmentListForTopic.get(minRequiredQuota));
                     membersWithNewAssignmentPerTopic.computeIfAbsent(memberId, k -> new HashMap<>()).computeIfAbsent(topicId, k -> new HashSet<>()).add(currentAssignmentListForTopic.get(minRequiredQuota));
                 } else {
-                    // 3) If remaining = 0 it has min req partitions but there is scope for getting an extra partition later on, so it is a potentialUnfilledConsumer.
-                    // 4) If remaining > 0 it doesn't even have the min required partitions, and it definitely is unfilled so it should be added to potentialUnfilledConsumers.
-                    Pair<String, Integer> newPair = new Pair<>(memberId, remaining);
-                    potentiallyUnfilledConsumers.add(newPair);
+                    // 2) If remaining = 0 it has min req partitions but there is scope for getting an extra partition later on, so it is a potentialUnfilledMember.
+                    // 3) If remaining > 0 it doesn't even have the min required partitions, and it definitely is unfilled, so it should be added to potentialUnfilledMembers.
+                    RemainingAssignmentsForMember<String, Integer> newPair = new RemainingAssignmentsForMember<>(memberId, remaining);
+                    potentiallyUnfilledMembers.add(newPair);
                 }
             }
 
             // Step 3
-            // Iterate through potentially unfilled consumers and if remaining > 0 after considering the extra partitions assignment, add to the unfilled list.
-            for (Pair<String, Integer> pair : potentiallyUnfilledConsumers) {
-                String memberId = pair.getFirst();
-                Integer remaining = pair.getSecond();
-                if (numConsumersWithExtraPartition > 0) {
+            // If remaining > 0 after increasing the required quota due to the extra partition, add potentially unfilled member to the unfilled members list.
+            for (RemainingAssignmentsForMember<String, Integer> pair : potentiallyUnfilledMembers) {
+                String memberId = pair.memberId();
+                Integer remaining = pair.remaining();
+                if (numMembersWithExtraPartition > 0) {
                     remaining++;
-                    numConsumersWithExtraPartition--;
+                    numMembersWithExtraPartition--;
                 }
                 if (remaining > 0) {
-                    Pair<String, Integer> newPair = new Pair<>(memberId, remaining);
-                    putList(unfilledConsumersPerTopic, topicId, newPair);
+                    RemainingAssignmentsForMember<String, Integer> newPair = new RemainingAssignmentsForMember<>(memberId, remaining);
+                    unfilledMembersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(newPair);
                 }
             }
-        }
+        });
 
         // Step 4
-        // Find the difference between the total partitions per topic and the already assigned sticky partitions for the topic to get available partitions.
-        Map<Uuid, List<Integer>> availablePartitionsPerTopic = getAvailablePartitionsPerTopic(assignmentSpec, assignedStickyPartitionsPerTopic);
+        // Find the difference between the total partitions per topic and the already assigned sticky partitions for the topic to get unassigned partitions.
+        Map<Uuid, List<Integer>> unassignedPartitionsPerTopic = getUnassignedPartitionsPerTopic(assignmentSpec, assignedStickyPartitionsPerTopic);
 
         // Step 5
-        // Iterate through the unfilled consumers list and assign remaining number of partitions from the availablePartitions list
-        for (Map.Entry<Uuid, List<Pair<String, Integer>>> unfilledEntry : unfilledConsumersPerTopic.entrySet()) {
-            Uuid topicId = unfilledEntry.getKey();
-            List<Pair<String, Integer>> unfilledConsumersForTopic = unfilledEntry.getValue();
-            int newStartPointer = 0;
-            for (Pair<String, Integer> stringIntegerPair : unfilledConsumersForTopic) {
-                String memberId = stringIntegerPair.getFirst();
-                int remaining = stringIntegerPair.getSecond();
-                // assign the first few partitions from the list and then delete them from the availablePartitions list for this topic
-                List<Integer> subList = availablePartitionsPerTopic.get(topicId).subList(newStartPointer, newStartPointer + remaining);
-                newStartPointer += remaining;
-                membersWithNewAssignmentPerTopic.computeIfAbsent(memberId, k -> new HashMap<>()).computeIfAbsent(topicId, k -> new HashSet<>()).addAll(subList);
+        // Iterate through the unfilled members list and assign the remaining number of partitions from the unassignedPartitions list.
+        unfilledMembersPerTopic.forEach((topicId, unfilledMembersForTopic) -> {
+            int unassignedPartitionsListStartPointer = 0;
+            for (RemainingAssignmentsForMember<String, Integer> remainingAssignmentsForMember : unfilledMembersForTopic) {
+                String memberId = remainingAssignmentsForMember.memberId();
+                int remaining = remainingAssignmentsForMember.remaining();
+                List<Integer> partitionsToAssign = unassignedPartitionsPerTopic.get(topicId).subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
+                unassignedPartitionsListStartPointer += remaining;
+                membersWithNewAssignmentPerTopic.computeIfAbsent(memberId, k -> new HashMap<>()).computeIfAbsent(topicId, k -> new HashSet<>()).addAll(partitionsToAssign);
             }
-        }
+        });
 
-        // Consolidate the maps into MemberAssignment and then finally map each consumer to a MemberAssignment.
+        // Consolidate the maps into MemberAssignment and then finally map each member to a MemberAssignment.
         Map<String, MemberAssignment> membersWithNewAssignment = new HashMap<>();
-        for (Map.Entry<String, Map<Uuid, Set<Integer>>> consumer : membersWithNewAssignmentPerTopic.entrySet()) {
-            String consumerId = consumer.getKey();
-            Map<Uuid, Set<Integer>> assignmentPerTopic = consumer.getValue();
-            membersWithNewAssignment.computeIfAbsent(consumerId, k -> new MemberAssignment(assignmentPerTopic));
-        }
+
+        membersWithNewAssignmentPerTopic.forEach((memberId, assignmentPerTopic) -> membersWithNewAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(assignmentPerTopic)));
 
         return new GroupAssignment(membersWithNewAssignment);
     }
