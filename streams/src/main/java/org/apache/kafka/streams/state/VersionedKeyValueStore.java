@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 
