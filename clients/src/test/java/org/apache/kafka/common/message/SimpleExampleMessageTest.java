@@ -395,6 +395,7 @@ public class SimpleExampleMessageTest {
                 "nullableZeroCopyByteBuffer=java.nio.HeapByteBuffer[pos=0 lim=0 cap=0], " +
                 "myStruct=MyStruct(structId=0, arrayInStruct=[]), " +
                 "myTaggedStruct=TaggedStruct(structId=''), " +
+                "taggedLongFlexibleVersionSubset=0, " +
                 "myCommonStruct=TestCommonStruct(foo=123, bar=123), " +
                 "myOtherCommonStruct=TestCommonStruct(foo=123, bar=123), " +
                 "myUint16=65535, " +
