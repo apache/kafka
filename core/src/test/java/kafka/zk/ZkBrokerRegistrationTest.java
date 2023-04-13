@@ -23,7 +23,6 @@ import kafka.server.KafkaConfig;
 import kafka.zookeeper.ZooKeeperClient;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Time;
-import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.client.ZKClientConfig;
 import org.apache.zookeeper.server.PrepRequestProcessor;
@@ -201,7 +200,17 @@ public class ZkBrokerRegistrationTest {
             new ReceiptEvent(ZooDefs.OpCode.multi, true),
 
             // (7) The client perfoms a GetData in order to get the owner of the ephemeral znode.
-            new ReceiptEvent(ZooDefs.OpCode.getData, true)
+            new ReceiptEvent(ZooDefs.OpCode.getData, true),
+
+            // Provides further multi events for the retries performed by the KafkaZkClient.
+            // We may not need all of them, but that is fine.
+            new ReceiptEvent(ZooDefs.OpCode.multi, true),
+            new ReceiptEvent(ZooDefs.OpCode.getData, true),
+
+            new ReceiptEvent(ZooDefs.OpCode.multi, true),
+            new ReceiptEvent(ZooDefs.OpCode.getData, true),
+
+            new ReceiptEvent(ZooDefs.OpCode.multi, true)
         ).iterator();
 
         Iterator<ConnectionEvent> connectionTimeline = asList(
@@ -256,36 +265,27 @@ public class ZkBrokerRegistrationTest {
         client.registerBroker(brokerInfo);
 
         try {
-            try {
-                // Send the multi(14) to create the broker znode only once the second session is created
-                // on the server although not acknowledged by the client.
-                secondZookeeperSession.awaitProcessed();
-                client.registerBroker(brokerInfo);
+            // Send the multi(14) to create the broker znode only once the second session is created
+            // on the server although not acknowledged by the client.
+            secondZookeeperSession.awaitProcessed();
+            client.registerBroker(brokerInfo);
 
-                // The expected error log is something like:
-                // ERROR Error while creating ephemeral at /brokers/ids/18, node already exists and
-                //       owner '72071046321995776' does not match current session '72071046321995777'
-                //       (kafka.zk.KafkaZkClient$CheckedEphemeral)
-
-                throw new AssertionError("Broker registration should fail");
-
-            } catch (Exception e) {
-                log.info("Expecting NodeExists", e);
-                //
-                // Should be:
-                //
-                // org.apache.zookeeper.KeeperException$NodeExistsException: KeeperErrorCode = NodeExists
-                //     at org.apache.zookeeper.KeeperException.create(KeeperException.java:126)
-                //     at kafka.zk.KafkaZkClient$CheckedEphemeral.getAfterNodeExists(KafkaZkClient.scala:2185)
-                //     at kafka.zk.KafkaZkClient$CheckedEphemeral.create(KafkaZkClient.scala:2123)
-                //     at kafka.zk.KafkaZkClient.checkedEphemeralCreate(KafkaZkClient.scala:2090)
-                //     at kafka.zk.KafkaZkClient.registerBroker(KafkaZkClient.scala:102)
-                //     at kafka.repro.BrokerRegistrationTest.main(BrokerRegistrationTest.java:137)
-                //
-                if (!(e instanceof KeeperException.NodeExistsException)) {
-                    throw new AssertionError("Invalid failure mode");
-                }
-            }
+            // The following errors are expected in the logs, but with the fix KAFKA-14845, retries
+            // eventually succeed.
+            //
+            // ERROR Error while creating ephemeral at /brokers/ids/18, node already exists and
+            //       owner '72071046321995776' does not match current session '72071046321995777'
+            //       (kafka.zk.KafkaZkClient$CheckedEphemeral)
+            //
+            // Without the fix, the following exception would be thrown:
+            //
+            // org.apache.zookeeper.KeeperException$NodeExistsException: KeeperErrorCode = NodeExists
+            //     at org.apache.zookeeper.KeeperException.create(KeeperException.java:126)
+            //     at kafka.zk.KafkaZkClient$CheckedEphemeral.getAfterNodeExists(KafkaZkClient.scala:2185)
+            //     at kafka.zk.KafkaZkClient$CheckedEphemeral.create(KafkaZkClient.scala:2123)
+            //     at kafka.zk.KafkaZkClient.checkedEphemeralCreate(KafkaZkClient.scala:2090)
+            //     at kafka.zk.KafkaZkClient.registerBroker(KafkaZkClient.scala:102)
+            //     at kafka.repro.BrokerRegistrationTest.main(BrokerRegistrationTest.java:137)
         } finally {
             testContext.terminate();
 
