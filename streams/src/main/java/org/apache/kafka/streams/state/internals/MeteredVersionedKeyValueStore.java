@@ -176,7 +176,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             super.initStoreSerde(context);
 
             // additionally init raw value serde
-            final String storeName = name();
+            final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
             rawValueSerdes = new StateSerdes<>(
                 changelogTopic,
@@ -190,7 +190,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             super.initStoreSerde(context);
 
             // additionally init raw value serde
-            final String storeName = name();
+            final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
             rawValueSerdes = new StateSerdes<>(
                 changelogTopic,
