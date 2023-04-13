@@ -40,10 +40,20 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
     private final KTableImpl<K, ?, V> parent;
     private final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper;
+    private boolean useVersionedSemantics = false;
 
     KTableRepartitionMap(final KTableImpl<K, ?, V> parent, final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
+    }
+
+    // VisibleForTesting
+    boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
+    }
+
+    public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
+        this.useVersionedSemantics = useVersionedSemantics;
     }
 
     @Override
@@ -131,6 +141,13 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
             }
 
+            if (useVersionedSemantics && isOutOfOrder(record.value())) {
+                // skip out-of-order records when aggregating a versioned table, since the
+                // aggregate should include latest-by-timestamp records only. as an optimization,
+                // do not forward the out-of-order record downstream to the repartition topic either.
+                return;
+            }
+
             // if the value is null, we do not need to forward its selected key-value further
             final KeyValue<? extends K1, ? extends V1> newPair = record.value().newValue == null ? null :
                 mapper.apply(record.key(), record.value().newValue);
@@ -153,6 +170,10 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 }
             }
 
+        }
+
+        private boolean isOutOfOrder(final Change<V> change) {
+            return false; // TODO: this will be updated in a follow-up PR
         }
     }
 

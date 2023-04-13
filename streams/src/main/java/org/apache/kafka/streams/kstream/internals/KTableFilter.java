@@ -25,12 +25,13 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
+public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final KTableImpl<KIn, ?, VIn> parent;
     private final Predicate<? super KIn, ? super VIn> predicate;
     private final boolean filterNot;
     private final String queryableName;
     private boolean sendOldValues;
+    private boolean useVersionedSemantics = false;
 
     KTableFilter(final KTableImpl<KIn, ?, VIn> parent,
                  final Predicate<? super KIn, ? super VIn> predicate,
@@ -42,6 +43,15 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
         this.queryableName = queryableName;
         // If upstream is already materialized, enable sending old values to avoid sending unnecessary tombstones:
         this.sendOldValues = parent.enableSendingOldValues(false);
+    }
+
+    public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
+        this.useVersionedSemantics = useVersionedSemantics;
+    }
+
+    // VisibleForTesting
+    boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
     }
 
     @Override
@@ -112,8 +122,10 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
             final VIn newValue = computeValue(key, change.newValue);
             final VIn oldValue = computeOldValue(key, change);
 
-            if (sendOldValues && oldValue == null && newValue == null) {
-                return; // unnecessary to forward here.
+            if (!useVersionedSemantics) {
+                if (sendOldValues && oldValue == null && newValue == null) {
+                    return; // unnecessary to forward here.
+                }
             }
 
             if (queryableName != null) {
