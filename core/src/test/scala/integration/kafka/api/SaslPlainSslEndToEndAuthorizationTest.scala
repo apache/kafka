@@ -38,8 +38,9 @@ import org.junit.jupiter.api.Test
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
-  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
+  val controllerPrincipalName = "admin"
 
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val saslContext = context.asInstanceOf[SaslAuthenticationContext]
 
@@ -50,7 +51,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
 
       saslContext.server.getAuthorizationID match {
         case KafkaPlainAdmin =>
-          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
         case KafkaPlainUser =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
         case _ =>
@@ -117,16 +118,13 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.adminClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
-  private val plainLogin = s"org.apache.kafka.common.security.plain.PlainLoginModule username=$KafkaPlainUser required;"
-  this.producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
+  this.superuserClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
 
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
 
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
-  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
 
   override def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                             kafkaClientSaslMechanism: Option[String],

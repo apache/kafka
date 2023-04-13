@@ -21,6 +21,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -43,24 +45,32 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
     private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionProcessorSupplier.class);
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
     private final CombinedKeySchema<KO, K> keySchema;
+    private final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetterSupplier;
 
     public ForeignJoinSubscriptionProcessorSupplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
-        final CombinedKeySchema<KO, K> keySchema) {
+        final CombinedKeySchema<KO, K> keySchema,
+        final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetterSupplier) {
 
         this.storeBuilder = storeBuilder;
         this.keySchema = keySchema;
+        this.foreignKeyValueGetterSupplier = foreignKeyValueGetterSupplier;
     }
 
     @Override
     public Processor<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> get() {
-        return new KTableKTableJoinProcessor();
+        return new KTableKTableJoinProcessor(foreignKeyValueGetterSupplier.get());
     }
 
 
     private final class KTableKTableJoinProcessor extends ContextualProcessor<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
         private Sensor droppedRecordsSensor;
-        private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
+        private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> subscriptionStore;
+        private final KTableValueGetter<KO, VO> foreignKeyValueGetter;
+
+        private KTableKTableJoinProcessor(final KTableValueGetter<KO, VO> foreignKeyValueGetter) {
+            this.foreignKeyValueGetter = foreignKeyValueGetter;
+        }
 
         @Override
         public void init(final ProcessorContext<K, SubscriptionResponseWrapper<VO>> context) {
@@ -71,7 +81,8 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
                 internalProcessorContext.taskId().toString(),
                 internalProcessorContext.metrics()
             );
-            store = internalProcessorContext.getStateStore(storeBuilder);
+            subscriptionStore = internalProcessorContext.getStateStore(storeBuilder);
+            foreignKeyValueGetter.init(context);
         }
 
         @Override
@@ -95,11 +106,21 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
                 return;
             }
 
+            // drop out-of-order records from versioned tables (cf. KIP-914)
+            if (foreignKeyValueGetter.isVersioned()) {
+                final ValueAndTimestamp<VO> latestValueAndTimestamp = foreignKeyValueGetter.get(record.key());
+                if (latestValueAndTimestamp != null && latestValueAndTimestamp.timestamp() > record.timestamp()) {
+                    LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
+                    droppedRecordsSensor.record();
+                    return;
+                }
+            }
+
             final Bytes prefixBytes = keySchema.prefixBytes(record.key());
 
             //Perform the prefixScan and propagate the results
             try (final KeyValueIterator<Bytes, ValueAndTimestamp<SubscriptionWrapper<K>>> prefixScanResults =
-                     store.range(prefixBytes, Bytes.increment(prefixBytes))) {
+                     subscriptionStore.range(prefixBytes, Bytes.increment(prefixBytes))) {
 
                 while (prefixScanResults.hasNext()) {
                     final KeyValue<Bytes, ValueAndTimestamp<SubscriptionWrapper<K>>> next = prefixScanResults.next();
@@ -116,6 +137,11 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
                     }
                 }
             }
+        }
+
+        @Override
+        public void close() {
+            foreignKeyValueGetter.close();
         }
 
         private boolean prefixEquals(final byte[] x, final byte[] y) {

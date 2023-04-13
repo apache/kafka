@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.io.Closeable;
 import java.util.Optional;
 
 /**
  * This class interfaces with the KafkaConsumer and the background thread. It allows the caller to enqueue events via
  * the {@code add()} method and to retrieve events via the {@code poll()} method.
  */
-public interface EventHandler {
+public interface EventHandler extends Closeable {
     /**
      * Retrieves and removes a {@link BackgroundEvent}. Returns an empty Optional instance if there is nothing.
      * @return an Optional of {@link BackgroundEvent} if the value is present. Otherwise, an empty Optional.

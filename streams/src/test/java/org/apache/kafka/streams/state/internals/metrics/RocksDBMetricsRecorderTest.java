@@ -23,12 +23,16 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.rocksdb.Cache;
 import org.rocksdb.HistogramData;
 import org.rocksdb.HistogramType;
@@ -52,7 +56,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
     private final static TaskId TASK_ID1 = new TaskId(0, 0);
@@ -98,16 +103,21 @@ public class RocksDBMetricsRecorderTest {
 
     private MockedStatic<RocksDBMetrics> dbMetrics;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         setUpMetricsMock();
         when(streamsMetrics.rocksDBMetricsRecordingTrigger()).thenReturn(recordingTrigger);
         recorder.init(streamsMetrics, TASK_ID1);
     }
 
-    @After
+    @AfterEach
     public void cleanUpMocks() {
         dbMetrics.close();
+    }
+
+    @AfterAll
+    public static void cleanUpMockito() {
+        Mockito.framework().clearInlineMocks();
     }
 
     @Test
@@ -344,20 +354,6 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
 
         verifyNoMoreInteractions(recordingTrigger);
-    }
-
-    @Test
-    public void shouldCloseStatisticsWhenValueProvidersAreRemoved() {
-        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
-        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
-        verify(statisticsToAdd1).close();
-    }
-
-    @Test
-    public void shouldNotCloseStatisticsWhenValueProvidersWithoutStatisticsAreRemoved() {
-        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
-        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
-        verify(statisticsToAdd1, never()).close();
     }
 
     @Test

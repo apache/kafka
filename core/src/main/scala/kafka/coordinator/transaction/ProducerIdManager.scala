@@ -167,7 +167,9 @@ class RPCProducerIdManager(brokerId: Int,
       if (nextProducerId > currentProducerIdBlock.lastProducerId) {
         val block = nextProducerIdBlock.poll(maxWaitMs, TimeUnit.MILLISECONDS)
         if (block == null) {
-          throw Errors.REQUEST_TIMED_OUT.exception("Timed out waiting for next producer ID block")
+          // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
+          // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
+          throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Timed out waiting for next producer ID block")
         } else {
           block match {
             case Success(nextBlock) =>
@@ -236,7 +238,6 @@ class RPCProducerIdManager(brokerId: Int,
   private[transaction] def handleTimeout(): Unit = {
     warn("Timed out when requesting AllocateProducerIds from the controller.")
     requestInFlight.set(false)
-    nextProducerIdBlock.put(Failure(Errors.REQUEST_TIMED_OUT.exception))
     maybeRequestNextBlock()
   }
 }

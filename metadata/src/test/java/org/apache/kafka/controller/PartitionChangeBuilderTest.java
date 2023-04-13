@@ -20,10 +20,12 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.protocol.types.TaggedFields;
+import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.controller.PartitionChangeBuilder.ElectionResult;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -33,6 +35,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.function.IntPredicate;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.controller.PartitionChangeBuilder.Election;
@@ -127,12 +130,17 @@ public class PartitionChangeBuilderTest {
         assertElectLeaderEquals(createFooBuilder().setElection(Election.PREFERRED), 2, false);
         assertElectLeaderEquals(createFooBuilder(), 1, false);
         assertElectLeaderEquals(createFooBuilder().setElection(Election.UNCLEAN), 1, false);
-        assertElectLeaderEquals(createFooBuilder().setTargetIsr(Arrays.asList(1, 3)), 1, false);
-        assertElectLeaderEquals(createFooBuilder().setElection(Election.UNCLEAN).setTargetIsr(Arrays.asList(1, 3)), 1, false);
-        assertElectLeaderEquals(createFooBuilder().setTargetIsr(Arrays.asList(3)), NO_LEADER, false);
-        assertElectLeaderEquals(createFooBuilder().setElection(Election.UNCLEAN).setTargetIsr(Arrays.asList(3)), 2, true);
+        assertElectLeaderEquals(createFooBuilder()
+            .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 3))), 1, false);
+        assertElectLeaderEquals(createFooBuilder().setElection(Election.UNCLEAN)
+            .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 3))), 1, false);
+        assertElectLeaderEquals(createFooBuilder()
+            .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(3))), NO_LEADER, false);
+        assertElectLeaderEquals(createFooBuilder().setElection(Election.UNCLEAN).
+            setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(3))), 2, true);
         assertElectLeaderEquals(
-            createFooBuilder().setElection(Election.UNCLEAN).setTargetIsr(Arrays.asList(4)).setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
+            createFooBuilder().setElection(Election.UNCLEAN)
+                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(4))).setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
             4,
             false
         );
@@ -154,9 +162,11 @@ public class PartitionChangeBuilderTest {
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(),
             new PartitionChangeRecord(), NO_LEADER_CHANGE);
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder().
-            setTargetIsr(Arrays.asList(2, 1)), new PartitionChangeRecord(), 1);
+            setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))),
+            new PartitionChangeRecord(), 1);
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder().
-            setTargetIsr(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
+            setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4))),
+            new PartitionChangeRecord(),
             NO_LEADER_CHANGE);
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder().
             setTargetReplicas(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
@@ -182,7 +192,7 @@ public class PartitionChangeBuilderTest {
             setPartitionId(0).
             setIsr(Arrays.asList(2, 1)).
             setLeader(1), PARTITION_CHANGE_RECORD.highestSupportedVersion())),
-            createFooBuilder().setTargetIsr(Arrays.asList(2, 1)).build());
+            createFooBuilder().setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))).build());
     }
 
     @Test
@@ -192,7 +202,7 @@ public class PartitionChangeBuilderTest {
                 setPartitionId(0).
                 setIsr(Arrays.asList(2, 3)).
                 setLeader(2), PARTITION_CHANGE_RECORD.highestSupportedVersion())),
-            createFooBuilder().setTargetIsr(Arrays.asList(2, 3)).build());
+            createFooBuilder().setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 3))).build());
     }
 
     @Test
@@ -216,7 +226,7 @@ public class PartitionChangeBuilderTest {
                 setRemovingReplicas(Collections.emptyList()).
                 setAddingReplicas(Collections.emptyList()),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion())),
-            createBarBuilder().setTargetIsr(Arrays.asList(1, 2, 3, 4)).build());
+            createBarBuilder().setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 2, 3, 4))).build());
     }
 
     @Test
@@ -234,7 +244,7 @@ public class PartitionChangeBuilderTest {
                 PARTITION_CHANGE_RECORD.highestSupportedVersion())),
             createBarBuilder().
                 setTargetReplicas(revert.replicas()).
-                setTargetIsr(revert.isr()).
+                setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(revert.isr())).
                 setTargetRemoving(Collections.emptyList()).
                 setTargetAdding(Collections.emptyList()).
                 build());
@@ -243,10 +253,10 @@ public class PartitionChangeBuilderTest {
     @Test
     public void testRemovingReplicaReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            Replicas.toList(FOO.replicas), Arrays.asList(1, 2));
+            new PartitionAssignment(Replicas.toList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2)));
         assertEquals(Collections.singletonList(3), replicas.removing());
         assertEquals(Collections.emptyList(), replicas.adding());
-        assertEquals(Arrays.asList(1, 2, 3), replicas.merged());
+        assertEquals(Arrays.asList(1, 2, 3), replicas.replicas());
         assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
@@ -255,7 +265,7 @@ public class PartitionChangeBuilderTest {
                 setLeader(1),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion())),
             createFooBuilder().
-                setTargetReplicas(replicas.merged()).
+                setTargetReplicas(replicas.replicas()).
                 setTargetRemoving(replicas.removing()).
                 build());
     }
@@ -263,10 +273,10 @@ public class PartitionChangeBuilderTest {
     @Test
     public void testAddingReplicaReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            Replicas.toList(FOO.replicas), Arrays.asList(1, 2, 3, 4));
+            new PartitionAssignment(Replicas.toList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2, 3, 4)));
         assertEquals(Collections.emptyList(), replicas.removing());
         assertEquals(Collections.singletonList(4), replicas.adding());
-        assertEquals(Arrays.asList(1, 2, 3, 4), replicas.merged());
+        assertEquals(Arrays.asList(1, 2, 3, 4), replicas.replicas());
         assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
@@ -274,7 +284,7 @@ public class PartitionChangeBuilderTest {
                 setAddingReplicas(Collections.singletonList(4)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion())),
             createFooBuilder().
-                setTargetReplicas(replicas.merged()).
+                setTargetReplicas(replicas.replicas()).
                 setTargetAdding(replicas.adding()).
                 build());
     }
@@ -292,7 +302,8 @@ public class PartitionChangeBuilderTest {
         );
         assertEquals(
             Optional.of(expectedRecord),
-            createFooBuilder().setElection(Election.UNCLEAN).setTargetIsr(Arrays.asList(3)).build()
+            createFooBuilder().setElection(Election.UNCLEAN)
+                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(3))).build()
         );
 
         expectedRecord = new ApiMessageAndVersion(
@@ -310,7 +321,8 @@ public class PartitionChangeBuilderTest {
         );
         assertEquals(
             Optional.of(expectedRecord),
-            createOfflineBuilder().setElection(Election.UNCLEAN).setTargetIsr(Arrays.asList(2)).build()
+            createOfflineBuilder().setElection(Election.UNCLEAN)
+                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2))).build()
         );
     }
 
@@ -340,7 +352,7 @@ public class PartitionChangeBuilderTest {
             isLeaderRecoverySupported
         );
         // Set the target ISR to empty to indicate that the last leader is offline
-        offlineBuilder.setTargetIsr(Collections.emptyList());
+        offlineBuilder.setTargetIsrWithBrokerStates(Collections.emptyList());
 
         // The partition should stay as recovering
         PartitionChangeRecord changeRecord = (PartitionChangeRecord) offlineBuilder
@@ -429,4 +441,64 @@ public class PartitionChangeBuilderTest {
         assertEquals(leaderId, registration.isr[0]);
         assertEquals(expectedRecovery, registration.leaderRecoveryState);
     }
+
+    @Test
+    public void testStoppedLeaderIsDemotedAfterReassignmentCompletesEvenIfNoNewEligibleLeaders() {
+        // Set up PartitionRegistration as if there's an ongoing reassignment from [0, 1] to [2, 3]
+        int[] replicas = new int[] {2, 3, 0, 1};
+        // The ISR starts off with the old replicas
+        int[] isr = new int[] {0, 1};
+        // We're removing [0, 1]
+        int[] removingReplicas = new int[] {0, 1};
+        // And adding [2, 3]
+        int[] addingReplicas = new int[] {2, 3};
+        // The leader is 0, one of the replicas we're removing
+        int leader = 0;
+        LeaderRecoveryState leaderRecoveryState = LeaderRecoveryState.RECOVERED;
+        int leaderEpoch = 0;
+        int partitionEpoch = 0;
+        PartitionRegistration part = new PartitionRegistration(
+            replicas,
+            isr,
+            removingReplicas,
+            addingReplicas,
+            leader,
+            leaderRecoveryState,
+            leaderEpoch,
+            partitionEpoch
+        );
+
+        Uuid topicId = Uuid.randomUuid();
+        // Always return false for valid leader. This is so none of the new replicas are valid leaders. This is so we
+        // test what happens when the previous leader is a replica being "stopped" ie removed from the replicas list
+        // and none of the adding replicas can be a leader. We want to make sure we do not leave the previous replica
+        // being stopped as leader.
+        IntPredicate isValidLeader = l -> false;
+
+        PartitionChangeBuilder partitionChangeBuilder =
+            new PartitionChangeBuilder(
+                part,
+                topicId,
+                0,
+                isValidLeader,
+                false
+            );
+
+        // Before we build the new PartitionChangeBuilder, confirm the current leader is 0.
+        assertEquals(0, part.leader);
+        // The important part is that the new leader is NO_LEADER.
+        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+                setTopicId(topicId).
+                setPartitionId(0).
+                setReplicas(Arrays.asList(2, 3)).
+                setIsr(Arrays.asList(2, 3)).
+                setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).
+                setLeader(NO_LEADER),
+                PARTITION_CHANGE_RECORD.highestSupportedVersion())),
+            partitionChangeBuilder.setTargetIsr(Arrays.asList(0, 1, 2, 3)).
+                build());
+    }
+
+
 }

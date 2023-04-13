@@ -20,7 +20,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -70,13 +69,13 @@ public class ToolsUtils {
 
     private static void printRow(
         List<Integer> columnLengths,
-        String[] row,
+        List<String> row,
         PrintStream out
     ) {
         StringBuilder rowBuilder = new StringBuilder();
-        for (int i = 0; i < row.length; i++) {
+        for (int i = 0; i < row.size(); i++) {
             Integer columnLength = columnLengths.get(i);
-            String columnValue = row[i];
+            String columnValue = row.get(i);
             appendColumnValue(rowBuilder, columnValue, columnLength);
             rowBuilder.append('\t');
         }
@@ -84,17 +83,17 @@ public class ToolsUtils {
     }
 
     public static void prettyPrintTable(
-        String[] headers,
-        List<String[]> rows,
+        List<String> headers,
+        List<List<String>> rows,
         PrintStream out
     ) {
-        List<Integer> columnLengths = Arrays.stream(headers)
+        List<Integer> columnLengths = headers.stream()
             .map(String::length)
             .collect(Collectors.toList());
 
-        for (String[] row : rows) {
-            for (int i = 0; i < headers.length; i++) {
-                columnLengths.set(i, Math.max(columnLengths.get(i), row[i].length()));
+        for (List<String> row : rows) {
+            for (int i = 0; i < headers.size(); i++) {
+                columnLengths.set(i, Math.max(columnLengths.get(i), row.get(i).length()));
             }
         }
 

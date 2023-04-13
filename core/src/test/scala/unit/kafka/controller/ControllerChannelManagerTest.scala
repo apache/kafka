@@ -17,7 +17,6 @@
 package kafka.controller
 
 import java.util.Properties
-
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
@@ -34,7 +33,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_10_2_IV0, IBP_0_9_0, IBP_1_0_IV0, IBP_2_2_IV0, IBP_2_4_IV0, IBP_2_4_IV1, IBP_2_6_IV0, IBP_2_8_IV1, IBP_3_2_IV0}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_10_2_IV0, IBP_0_9_0, IBP_1_0_IV0, IBP_2_2_IV0, IBP_2_4_IV0, IBP_2_4_IV1, IBP_2_6_IV0, IBP_2_8_IV1, IBP_3_2_IV0, IBP_3_4_IV0}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -164,14 +163,16 @@ class ControllerChannelManagerTest {
     testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.LEADER_AND_ISR.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
-      val leaderAndIsrRequestVersion: Short =
-        if (metadataVersion.isAtLeast(IBP_3_2_IV0)) 6
+      val leaderAndIsrRequestVersion: Short = {
+        if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 7
+        else if (metadataVersion.isAtLeast(IBP_3_2_IV0)) 6
         else if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 5
         else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 4
         else if (metadataVersion.isAtLeast(IBP_2_4_IV0)) 3
         else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 2
         else if (metadataVersion.isAtLeast(IBP_1_0_IV0)) 1
         else 0
+      }
 
       testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(metadataVersion, leaderAndIsrRequestVersion)
     }
@@ -382,7 +383,8 @@ class ControllerChannelManagerTest {
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       val updateMetadataRequestVersion: Short =
-        if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 7
+        if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 8
+        else if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 7
         else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 6
         else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 5
         else if (metadataVersion.isAtLeast(IBP_1_0_IV0)) 4
@@ -782,8 +784,10 @@ class ControllerChannelManagerTest {
         testStopReplicaFollowsInterBrokerProtocolVersion(metadataVersion, 1.toShort)
       else if (metadataVersion.isLessThan(IBP_2_6_IV0))
         testStopReplicaFollowsInterBrokerProtocolVersion(metadataVersion, 2.toShort)
-      else
+      else if (metadataVersion.isLessThan(IBP_3_4_IV0))
         testStopReplicaFollowsInterBrokerProtocolVersion(metadataVersion, 3.toShort)
+      else
+        testStopReplicaFollowsInterBrokerProtocolVersion(metadataVersion, 4.toShort)
     }
   }
 
@@ -937,14 +941,11 @@ class ControllerChannelManagerTest {
   private case class SentRequest(request: ControlRequest, responseCallback: AbstractResponse => Unit)
 
   private class MockControllerBrokerRequestBatch(context: ControllerContext, config: KafkaConfig = config)
-    extends AbstractControllerBrokerRequestBatch(config, context, logger) {
+    extends AbstractControllerBrokerRequestBatch(config, () => context, () => config.interBrokerProtocolVersion, logger) {
 
     val sentEvents = ListBuffer.empty[ControllerEvent]
     val sentRequests = mutable.Map.empty[Int, ListBuffer[SentRequest]]
 
-    override def sendEvent(event: ControllerEvent): Unit = {
-      sentEvents.append(event)
-    }
     override def sendRequest(brokerId: Int, request: ControlRequest, callback: AbstractResponse => Unit): Unit = {
       sentRequests.getOrElseUpdate(brokerId, ListBuffer.empty)
       sentRequests(brokerId).append(SentRequest(request, callback))
@@ -975,6 +976,21 @@ class ControllerChannelManagerTest {
           .map(_.request.build().asInstanceOf[LeaderAndIsrRequest]).toList
         case None => List.empty[LeaderAndIsrRequest]
       }
+    }
+
+    override def handleLeaderAndIsrResponse(response: LeaderAndIsrResponse, broker: Int): Unit = {
+      sentEvents.append(LeaderAndIsrResponseReceived(response, broker))
+    }
+
+    override def handleUpdateMetadataResponse(response: UpdateMetadataResponse, broker: Int)
+    : Unit = {
+      sentEvents.append(UpdateMetadataResponseReceived(response, broker))
+    }
+
+    override def handleStopReplicaResponse(stopReplicaResponse: StopReplicaResponse,
+                                           brokerId: Int, partitionErrorsForDeletingTopics: Map[TopicPartition, Errors]): Unit = {
+      if (partitionErrorsForDeletingTopics.nonEmpty)
+        sentEvents.append(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error, partitionErrorsForDeletingTopics))
     }
   }
 

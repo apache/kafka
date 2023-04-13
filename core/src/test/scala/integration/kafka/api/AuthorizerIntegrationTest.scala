@@ -19,7 +19,6 @@ import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
-import kafka.log.LogConfig
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
@@ -33,7 +32,7 @@ import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -232,7 +231,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       resp.errors.get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error),
     ApiKeys.INIT_PRODUCER_ID -> ((resp: InitProducerIdResponse) => resp.error),
     ApiKeys.WRITE_TXN_MARKERS -> ((resp: WriteTxnMarkersResponse) => resp.errorsByProducerId.get(producerId).get(tp)),
-    ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(tp)),
+    ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)),
     ApiKeys.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => Errors.forCode(resp.data.errorCode)),
     ApiKeys.END_TXN -> ((resp: EndTxnResponse) => resp.error),
     ApiKeys.TXN_OFFSET_COMMIT -> ((resp: TxnOffsetCommitResponse) => resp.errors.get(tp)),
@@ -386,7 +385,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
       0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
-    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forReplica(version, 5000, -1, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createListOffsetsRequest = {
@@ -617,13 +616,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     new AlterConfigsRequest.Builder(
       Collections.singletonMap(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic),
         new AlterConfigsRequest.Config(Collections.singleton(
-          new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
+          new AlterConfigsRequest.ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1000000")
         ))), true).build()
 
   private def incrementalAlterConfigsRequest = {
     val data = new IncrementalAlterConfigsRequestData
     val alterableConfig = new AlterableConfig
-    alterableConfig.setName(LogConfig.MaxMessageBytesProp).
+    alterableConfig.setName(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).
       setValue("1000000").setConfigOperation(AlterConfigOp.OpType.SET.id())
     val alterableConfigSet = new AlterableConfigCollection
     alterableConfigSet.add(alterableConfig)
@@ -673,7 +672,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def describeLogDirsRequest = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(new DescribeLogDirsRequestData.DescribableLogDirTopicCollection(Collections.singleton(
     new DescribeLogDirsRequestData.DescribableLogDirTopic().setTopic(tp.topic).setPartitions(Collections.singletonList(tp.partition))).iterator()))).build()
 
-  private def addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(transactionalId, 1, 1, Collections.singletonList(tp)).build()
+  private def addPartitionsToTxnRequest = AddPartitionsToTxnRequest.Builder.forClient(transactionalId, 1, 1, Collections.singletonList(tp)).build()
 
   private def addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(
     new AddOffsetsToTxnRequestData()
@@ -1340,7 +1339,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumer.poll(Duration.ofMillis(50L))
       brokers.forall { broker =>
         broker.metadataCache.getPartitionInfo(newTopic, 0) match {
-          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
+          case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       }

@@ -63,7 +63,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         this.snapshotPath = snapshotPath;
         this.listener = listener;
         this.queue = new KafkaEventQueue(Time.SYSTEM,
-            new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_");
+            new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_", new ShutdownEvent());
         this.caughtUpFuture = new CompletableFuture<>();
     }
 
@@ -174,22 +174,24 @@ public final class SnapshotFileReader implements AutoCloseable {
         } else {
             caughtUpFuture.completeExceptionally(new RuntimeException(reason));
         }
-        queue.beginShutdown(reason, new EventQueue.Event() {
-            @Override
-            public void run() throws Exception {
-                listener.beginShutdown();
-                if (fileRecords != null) {
-                    fileRecords.close();
-                    fileRecords = null;
-                }
-                batchIterator = null;
-            }
+        queue.beginShutdown(reason);
+    }
 
-            @Override
-            public void handleException(Throwable e) {
-                log.error("shutdown error", e);
+    class ShutdownEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
+            listener.beginShutdown();
+            if (fileRecords != null) {
+                fileRecords.close();
+                fileRecords = null;
             }
-        });
+            batchIterator = null;
+        }
+
+        @Override
+        public void handleException(Throwable e) {
+            log.error("shutdown error", e);
+        }
     }
 
     @Override

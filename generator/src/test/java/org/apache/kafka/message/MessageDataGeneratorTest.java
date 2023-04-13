@@ -258,4 +258,51 @@ public class MessageDataGeneratorTest {
                     "}")), MessageSpec.class);
             }).getMessage());
     }
+
+    @Test
+    public void testInvalidNullDefaultForNullableStruct() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"FooBar\",",
+            "  \"validVersions\": \"0\",",
+            "  \"flexibleVersions\": \"none\",",
+            "  \"fields\": [",
+            "    { \"name\": \"struct1\", \"type\": \"MyStruct\", \"versions\": \"0+\", \"nullableVersions\": \"0+\", ",
+            "      \"default\": \"not-null\", \"fields\": [",
+            "        { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\" }",
+            "      ]",
+            "    }",
+            "  ]",
+            "}")), MessageSpec.class);
+
+        assertStringContains("Invalid default for struct field struct1.  The only valid default for a struct field " +
+                "is the empty struct or null",
+            assertThrows(RuntimeException.class, () -> {
+                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+            }).getMessage());
+    }
+
+    @Test
+    public void testInvalidNullDefaultForPotentiallyNonNullableStruct() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"FooBar\",",
+            "  \"validVersions\": \"0-1\",",
+            "  \"flexibleVersions\": \"none\",",
+            "  \"fields\": [",
+            "    { \"name\": \"struct1\", \"type\": \"MyStruct\", \"versions\": \"0+\", \"nullableVersions\": \"1+\", ",
+            "      \"default\": \"null\", \"fields\": [",
+            "        { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\" }",
+            "      ]",
+            "    }",
+            "  ]",
+            "}")), MessageSpec.class);
+
+        assertStringContains("not all versions of this field are nullable",
+            assertThrows(RuntimeException.class, () -> {
+                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+            }).getMessage());
+    }
 }

@@ -31,12 +31,13 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
-import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryStatusBackingStore;
@@ -148,8 +149,7 @@ public class StandaloneHerder extends AbstractHerder {
         if (!configState.contains(connector))
             return null;
         Map<String, String> config = configState.rawConnectorConfig(connector);
-        return new ConnectorInfo(connector, config, configState.tasks(connector),
-            connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+        return new ConnectorInfo(connector, config, configState.tasks(connector), connectorType(config));
     }
 
     @Override
@@ -233,6 +233,17 @@ public class StandaloneHerder extends AbstractHerder {
                     callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
                 });
             });
+        } catch (Throwable t) {
+            callback.onCompletion(t, null);
+        }
+    }
+
+    @Override
+    public synchronized void stopConnector(String connName, Callback<Void> callback) {
+        try {
+            removeConnectorTasks(connName);
+            configBackingStore.putTargetState(connName, TargetState.STOPPED);
+            callback.onCompletion(null, null);
         } catch (Throwable t) {
             callback.onCompletion(t, null);
         }
@@ -359,6 +370,12 @@ public class StandaloneHerder extends AbstractHerder {
         cb.onCompletion(null, plan.restartConnectorStateInfo());
     }
 
+    @Override
+    public synchronized void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        log.trace("Fetching offsets for connector: {}", connName);
+        super.connectorOffsets(connName, cb);
+    }
+
     private void startConnector(String connName, Callback<TargetState> onStart) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
@@ -388,7 +405,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     private boolean startTask(ConnectorTaskId taskId, Map<String, String> connProps) {
-        switch (connectorTypeForClass(connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))) {
+        switch (connectorType(connProps)) {
             case SINK:
                 return worker.startSinkTask(
                         taskId,
@@ -423,14 +440,16 @@ public class StandaloneHerder extends AbstractHerder {
 
     private void updateConnectorTasks(String connName) {
         if (!worker.isRunning(connName)) {
-            log.info("Skipping update of connector {} since it is not running", connName);
+            log.info("Skipping update of tasks for connector {} since it is not running", connName);
+            return;
+        } else if (configState.targetState(connName) != TargetState.STARTED) {
+            log.info("Skipping update of tasks for connector {} since its target state is {}", connName, configState.targetState(connName));
             return;
         }
 
         List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
-        List<Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
 
-        if (!newTaskConfigs.equals(oldTaskConfigs)) {
+        if (taskConfigsChanged(configState, connName, newTaskConfigs)) {
             removeConnectorTasks(connName);
             List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
             configBackingStore.putTaskConfigs(connName, rawTaskConfigs);

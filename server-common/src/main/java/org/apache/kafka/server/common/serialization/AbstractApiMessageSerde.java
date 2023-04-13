@@ -33,7 +33,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
  * <p></p>
  * <pre>
  *     [data_frame_version header message]
- *     header => [api_key version]
+ *     header =&gt; [api_key version]
  *
  *     data_frame_version   : This is the header version, current value is 0. Header includes both api_key and version.
  *     api_key              : apiKey of {@code ApiMessageAndVersion} object.

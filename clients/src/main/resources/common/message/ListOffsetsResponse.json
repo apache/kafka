@@ -31,7 +31,10 @@
   // Version 6 enables flexible versions.
   //
   // Version 7 is the same as version 6 (KIP-734).
-  "validVersions": "0-7",
+  //
+  // Version 8 enables listing offsets by local log start offset.
+  // This is the ealiest log start offset in the local log. (KIP-405).
+  "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,

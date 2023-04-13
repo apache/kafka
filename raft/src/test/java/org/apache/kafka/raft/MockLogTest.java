@@ -509,7 +509,7 @@ public class MockLogTest {
         }
 
         assertTrue(log.deleteBeforeSnapshot(snapshotId));
-        assertEquals(snapshotId.offset, log.startOffset());
+        assertEquals(snapshotId.offset(), log.startOffset());
 
         assertEquals(Optional.empty(), log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch)));
     }
@@ -528,7 +528,7 @@ public class MockLogTest {
         }
 
         assertTrue(log.deleteBeforeSnapshot(snapshotId));
-        assertEquals(snapshotId.offset, log.startOffset());
+        assertEquals(snapshotId.offset(), log.startOffset());
 
         assertThrows(
             IllegalArgumentException.class,
@@ -578,7 +578,7 @@ public class MockLogTest {
         }
 
         assertTrue(log.deleteBeforeSnapshot(snapshotId));
-        assertEquals(snapshotId.offset, log.startOffset());
+        assertEquals(snapshotId.offset(), log.startOffset());
         assertEquals(Optional.empty(), log.createNewSnapshot(snapshotId));
     }
 
@@ -665,10 +665,10 @@ public class MockLogTest {
         }
 
         assertTrue(log.truncateToLatestSnapshot());
-        assertEquals(sameEpochSnapshotId.offset, log.startOffset());
-        assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch());
-        assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset);
-        assertEquals(sameEpochSnapshotId.offset, log.highWatermark().offset);
+        assertEquals(sameEpochSnapshotId.offset(), log.startOffset());
+        assertEquals(sameEpochSnapshotId.epoch(), log.lastFetchedEpoch());
+        assertEquals(sameEpochSnapshotId.offset(), log.endOffset().offset);
+        assertEquals(sameEpochSnapshotId.offset(), log.highWatermark().offset);
 
         OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch + 1);
 
@@ -679,10 +679,10 @@ public class MockLogTest {
         }
 
         assertTrue(log.truncateToLatestSnapshot());
-        assertEquals(greaterEpochSnapshotId.offset, log.startOffset());
-        assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch());
-        assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset);
-        assertEquals(greaterEpochSnapshotId.offset, log.highWatermark().offset);
+        assertEquals(greaterEpochSnapshotId.offset(), log.startOffset());
+        assertEquals(greaterEpochSnapshotId.epoch(), log.lastFetchedEpoch());
+        assertEquals(greaterEpochSnapshotId.offset(), log.endOffset().offset);
+        assertEquals(greaterEpochSnapshotId.offset(), log.highWatermark().offset);
     }
 
     @Test
@@ -716,7 +716,7 @@ public class MockLogTest {
 
         OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
         appendBatch(numberOfRecords, epoch);
-        log.updateHighWatermark(new LogOffsetMetadata(sameEpochSnapshotId.offset));
+        log.updateHighWatermark(new LogOffsetMetadata(sameEpochSnapshotId.offset()));
 
         try (RawSnapshotWriter snapshot = log.createNewSnapshot(sameEpochSnapshotId).get()) {
             snapshot.freeze();
@@ -740,15 +740,15 @@ public class MockLogTest {
 
         OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
         appendBatch(numberOfRecords, epoch);
-        log.updateHighWatermark(new LogOffsetMetadata(sameEpochSnapshotId.offset));
+        log.updateHighWatermark(new LogOffsetMetadata(sameEpochSnapshotId.offset()));
 
         try (RawSnapshotWriter snapshot = log.createNewSnapshot(sameEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
         OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch + 1);
-        appendBatch(numberOfRecords, greaterEpochSnapshotId.epoch);
-        log.updateHighWatermark(new LogOffsetMetadata(greaterEpochSnapshotId.offset));
+        appendBatch(numberOfRecords, greaterEpochSnapshotId.epoch());
+        log.updateHighWatermark(new LogOffsetMetadata(greaterEpochSnapshotId.offset()));
 
         try (RawSnapshotWriter snapshot = log.createNewSnapshot(greaterEpochSnapshotId).get()) {
             snapshot.freeze();

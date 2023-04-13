@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.easymock.EasyMockRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
+import static org.easymock.EasyMock.resetToNice;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -148,6 +149,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
+        } finally {
+            resetToNice(mockedDbOptions);
+            optionsFacadeDbOptions.close();
         }
     }
 
@@ -253,6 +257,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
+        } finally {
+            resetToNice(mockedColumnFamilyOptions);
+            optionsFacadeColumnFamilyOptions.close();
         }
     }
 
@@ -333,24 +340,23 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
 
-            final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter
-                = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions());
-
-            for (final Method method : RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class.getDeclaredMethods()) {
-                if (walRelatedMethods.contains(method.getName())) {
-                    method.invoke(adapter, getDBOptionsParameters(method.getParameterTypes()));
+            try (RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
+                     new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+                for (final Method method : RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class.getDeclaredMethods()) {
+                    if (walRelatedMethods.contains(method.getName())) {
+                        method.invoke(adapter, getDBOptionsParameters(method.getParameterTypes()));
+                    }
                 }
+
+                final List<String> walOptions = Arrays.asList("walDir", "walFilter", "walRecoveryMode", "walBytesPerSync", "walSizeLimitMB", "manualWalFlush", "maxTotalWalSize", "walTtlSeconds");
+
+                final Set<String> logMessages = appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(LogCaptureAppender.Event::getMessage)
+                    .collect(Collectors.toSet());
+
+                walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
             }
-
-            final List<String> walOptions = Arrays.asList("walDir", "walFilter", "walRecoveryMode", "walBytesPerSync", "walSizeLimitMB", "manualWalFlush", "maxTotalWalSize", "walTtlSeconds");
-
-            final Set<String> logMessages = appender.getEvents().stream()
-                .filter(e -> e.getLevel().equals("WARN"))
-                .map(LogCaptureAppender.Event::getMessage)
-                .collect(Collectors.toSet());
-
-            walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
-
         }
     }
 }

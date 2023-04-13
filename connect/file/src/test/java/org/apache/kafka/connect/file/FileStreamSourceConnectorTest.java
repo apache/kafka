@@ -20,6 +20,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +59,23 @@ public class FileStreamSourceConnectorTest {
         for (ConfigValue val : configValues) {
             assertEquals(0, val.errorMessages().size(), "Config property errors: " + val.errorMessages());
         }
+    }
+
+    @Test
+    public void testExactlyOnceSupport() {
+        sourceProperties.put(FileStreamSourceConnector.FILE_CONFIG, FILENAME);
+        assertEquals(ExactlyOnceSupport.SUPPORTED, connector.exactlyOnceSupport(sourceProperties));
+
+        sourceProperties.put(FileStreamSourceConnector.FILE_CONFIG, " ");
+        assertEquals(ExactlyOnceSupport.UNSUPPORTED, connector.exactlyOnceSupport(sourceProperties));
+
+        sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
+        assertEquals(ExactlyOnceSupport.UNSUPPORTED, connector.exactlyOnceSupport(sourceProperties));
+    }
+
+    @Test
+    public void testTransactionBoundaryDefinition() {
+        assertEquals(ConnectorTransactionBoundaries.UNSUPPORTED, connector.canDefineTransactionBoundaries(sourceProperties));
     }
 
     @Test

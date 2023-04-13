@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -155,6 +156,8 @@ public class WorkerSinkTaskTest {
     private StatusBackingStore statusBackingStore;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
+    @Mock
+    private ErrorHandlingMetrics errorHandlingMetrics;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     private Capture<Pattern> topicsRegex = EasyMock.newCapture();
 
@@ -182,7 +185,7 @@ public class WorkerSinkTaskTest {
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
-            keyConverter, valueConverter, headerConverter,
+            keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
             transformationChain, consumer, pluginLoader, time,
             RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
     }
@@ -1359,6 +1362,53 @@ public class WorkerSinkTaskTest {
             assertTrue("Exception from close should be suppressed", e.getSuppressed().length > 0);
             assertSame(closeException, e.getSuppressed()[0]);
         }
+    }
+
+    @Test
+    public void testTaskCancelPreventsFinalOffsetCommit() throws Exception {
+        createTask(initialState);
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+
+        expectPollInitialAssignment();
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
+
+        // Put one message through the task to get some offsets to commit
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall();
+
+        // the second put will return after the task is stopped and cancelled (asynchronously)
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall().andAnswer(() -> {
+            workerTask.stop();
+            workerTask.cancel();
+            return null;
+        });
+
+        // stop wakes up the consumer
+        consumer.wakeup();
+        EasyMock.expectLastCall();
+
+        // task performs normal steps in advance of committing offsets
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        sinkTask.preCommit(offsets);
+        EasyMock.expectLastCall().andReturn(offsets);
+        sinkTask.close(EasyMock.anyObject());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.execute();
+
+        PowerMock.verifyAll();
     }
 
     // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a

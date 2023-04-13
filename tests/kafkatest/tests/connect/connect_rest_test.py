@@ -15,6 +15,7 @@
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.connect import ConnectDistributedService, ConnectRestError, ConnectServiceBase
+from kafkatest.services.kafka import quorum
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
@@ -78,8 +79,8 @@ class ConnectRestApiTest(KafkaTest):
                                             include_filestream_connectors=True)
 
     @cluster(num_nodes=4)
-    @matrix(connect_protocol=['compatible', 'eager'])
-    def test_rest_api(self, connect_protocol):
+    @matrix(connect_protocol=['compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_rest_api(self, connect_protocol, metadata_quorum):
         # Template parameters
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"

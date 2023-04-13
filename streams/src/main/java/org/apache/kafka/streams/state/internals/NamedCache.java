@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.internals.metrics.NamedCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ class NamedCache {
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor hitRatioSensor;
+    private final Sensor totalCacheSizeSensor;
 
     // internal stats
     private long numReadHits = 0;
@@ -65,6 +67,11 @@ class NamedCache {
             Thread.currentThread().getName(),
             taskName,
             storeName
+        );
+        totalCacheSizeSensor = TaskMetrics.totalCacheSizeBytesSensor(
+                Thread.currentThread().getName(),
+                taskName,
+                streamsMetrics
         );
     }
 
@@ -182,6 +189,7 @@ class NamedCache {
             dirtyKeys.add(key);
         }
         currentSizeBytes += node.size();
+        totalCacheSizeSensor.record(currentSizeBytes);
     }
 
     synchronized long sizeInBytes() {
@@ -243,6 +251,7 @@ class NamedCache {
         if (eldest.entry.isDirty()) {
             flush(eldest);
         }
+        totalCacheSizeSensor.record(currentSizeBytes);
     }
 
     synchronized LRUCacheEntry putIfAbsent(final Bytes key, final LRUCacheEntry value) {
@@ -269,6 +278,7 @@ class NamedCache {
         remove(node);
         dirtyKeys.remove(key);
         currentSizeBytes -= node.size();
+        totalCacheSizeSensor.record(currentSizeBytes);
         return node.entry();
     }
 
@@ -349,6 +359,13 @@ class NamedCache {
         dirtyKeys.clear();
         cache.clear();
         streamsMetrics.removeAllCacheLevelSensors(Thread.currentThread().getName(), taskName, storeName);
+    }
+
+    synchronized void clear() {
+        head = tail = null;
+        currentSizeBytes = 0;
+        dirtyKeys.clear();
+        cache.clear();
     }
 
     /**

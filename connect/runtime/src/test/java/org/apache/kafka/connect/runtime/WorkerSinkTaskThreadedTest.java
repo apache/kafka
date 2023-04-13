@@ -31,6 +31,7 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -125,6 +126,7 @@ public class WorkerSinkTaskThreadedTest {
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     @Mock private TaskStatus.Listener statusListener;
     @Mock private StatusBackingStore statusBackingStore;
+    @Mock private ErrorHandlingMetrics errorHandlingMetrics;
 
     private long recordsReturned;
 
@@ -141,7 +143,7 @@ public class WorkerSinkTaskThreadedTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
-                valueConverter, headerConverter,
+                valueConverter, errorHandlingMetrics, headerConverter,
                 new TransformationChain<>(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
                 consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
 

@@ -28,7 +28,7 @@ import java.util.Objects;
  * <p>
  * If a valid partition number is specified that partition will be used when sending the record. If no partition is
  * specified but a key is present a partition will be chosen using a hash of the key. If neither key nor partition is
- * present a partition will be assigned in a round-robin fashion.
+ * present a partition will be assigned in a round-robin fashion. Note that partition numbers are 0-indexed.
  * <p>
  * The record also has an associated timestamp. If the user did not provide a timestamp, the producer will stamp the
  * record with its current time. The timestamp eventually used by Kafka depends on the timestamp type configured for

@@ -24,8 +24,7 @@ import org.slf4j.Logger;
 
 /**
  * The LogReplayTracker manages state associated with replaying the metadata log, such as whether
- * we have seen any records and whether we have seen any metadata version records. It is accessed
- * solely from the quorum controller thread.
+ * we have seen any records. It is accessed solely from the quorum controller thread.
  */
 public class LogReplayTracker {
     public static class Builder {

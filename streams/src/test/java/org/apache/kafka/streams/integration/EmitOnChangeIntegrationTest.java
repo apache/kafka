@@ -30,7 +30,6 @@ import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThr
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -90,7 +89,7 @@ public class EmitOnChangeIntegrationTest {
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
-                mkEntry(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0),
+                mkEntry(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
@@ -114,7 +113,7 @@ public class EmitOnChangeIntegrationTest {
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
 
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,

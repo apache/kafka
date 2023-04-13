@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Arrays;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -35,6 +36,7 @@ import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparato
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -117,6 +119,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
     private final boolean throwOnFetchStableOffsetsUnsupported;
+    private final Optional<String> rackId;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -162,7 +165,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
-                               boolean throwOnFetchStableOffsetsUnsupported) {
+                               boolean throwOnFetchStableOffsetsUnsupported,
+                               String rackId) {
         super(rebalanceConfig,
               logContext,
               client,
@@ -172,7 +176,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
+        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
+        this.metadataSnapshot = new MetadataSnapshot(this.rackId, subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.autoCommitEnabled = autoCommitEnabled;
@@ -244,7 +249,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (ConsumerPartitionAssignor assignor : assignors) {
             Subscription subscription = new Subscription(topics,
                                                          assignor.subscriptionUserData(joinedSubscription),
-                                                         subscriptions.assignedPartitionsList());
+                                                         subscriptions.assignedPartitionsList(),
+                                                         generation().generationId,
+                                                         rackId);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
@@ -484,7 +491,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             // Update the current snapshot, which will be used to check for subscription
             // changes that would require a rebalance (e.g. new partitions).
-            metadataSnapshot = new MetadataSnapshot(subscriptions, cluster, version);
+            metadataSnapshot = new MetadataSnapshot(rackId, subscriptions, cluster, version);
         }
     }
 
@@ -1608,14 +1615,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static class MetadataSnapshot {
         private final int version;
-        private final Map<String, Integer> partitionsPerTopic;
+        private final Map<String, List<PartitionRackInfo>> partitionsPerTopic;
 
-        private MetadataSnapshot(SubscriptionState subscription, Cluster cluster, int version) {
-            Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        private MetadataSnapshot(Optional<String> clientRack, SubscriptionState subscription, Cluster cluster, int version) {
+            Map<String, List<PartitionRackInfo>> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.metadataTopics()) {
-                Integer numPartitions = cluster.partitionCountForTopic(topic);
-                if (numPartitions != null)
-                    partitionsPerTopic.put(topic, numPartitions);
+                List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+                if (partitions != null) {
+                    List<PartitionRackInfo> partitionRacks = partitions.stream()
+                            .map(p -> new PartitionRackInfo(clientRack, p))
+                            .collect(Collectors.toList());
+                    partitionsPerTopic.put(topic, partitionRacks);
+                }
             }
             this.partitionsPerTopic = partitionsPerTopic;
             this.version = version;
@@ -1628,6 +1639,40 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         @Override
         public String toString() {
             return "(version" + version + ": " + partitionsPerTopic + ")";
+        }
+    }
+
+    private static class PartitionRackInfo {
+        private final Set<String> racks;
+
+        PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
+            if (clientRack.isPresent() && partition.replicas() != null) {
+                racks = Arrays.stream(partition.replicas()).map(Node::rack).collect(Collectors.toSet());
+            } else {
+                racks = Collections.emptySet();
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof PartitionRackInfo)) {
+                return false;
+            }
+            PartitionRackInfo rackInfo = (PartitionRackInfo) o;
+            return Objects.equals(racks, rackInfo.racks);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(racks);
+        }
+
+        @Override
+        public String toString() {
+            return racks.isEmpty() ? "NO_RACKS" : "racks=" + racks;
         }
     }
 

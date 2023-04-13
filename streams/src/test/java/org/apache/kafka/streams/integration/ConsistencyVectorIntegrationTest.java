@@ -52,7 +52,6 @@ import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -121,24 +120,29 @@ public class ConsistencyVectorIntegrationTest {
         final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration());
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
+        try {
+            startApplicationAndWaitUntilRunning(kafkaStreamsList);
 
-        produceValueRange(key, 0, batch1NumMessages);
+            produceValueRange(key, 0, batch1NumMessages);
 
-        // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+            // Assert that all messages in the first batch were processed in a timely manner
+            assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
+            final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
 
-        // Assert that both active and standby have the same position bound
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
-            StateQueryRequest
-                .inStore(TABLE_NAME)
-                .withQuery(KeyQuery.<Integer, ValueAndTimestamp<Integer>>withKey(key))
-                .withPositionBound(PositionBound.unbounded());
+            // Assert that both active and standby have the same position bound
+            final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+                StateQueryRequest
+                    .inStore(TABLE_NAME)
+                    .withQuery(KeyQuery.<Integer, ValueAndTimestamp<Integer>>withKey(key))
+                    .withPositionBound(PositionBound.unbounded());
 
-        checkPosition(batch1NumMessages, request, kafkaStreams1);
-        checkPosition(batch1NumMessages, request, kafkaStreams2);
+            checkPosition(batch1NumMessages, request, kafkaStreams1);
+            checkPosition(batch1NumMessages, request, kafkaStreams2);
+        } finally {
+            kafkaStreams1.close();
+            kafkaStreams2.close();
+        }
     }
 
     private void checkPosition(final int batch1NumMessages,

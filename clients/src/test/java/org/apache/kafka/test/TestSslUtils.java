@@ -23,7 +23,12 @@ import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.DERT61String;
+import org.bouncycastle.asn1.DERUTF8String;
+import org.bouncycastle.asn1.x500.AttributeTypeAndValue;
+import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
@@ -330,7 +335,7 @@ public class TestSslUtils {
 
     static String pem(Certificate cert) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8.name()))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             pemWriter.writeObject(new JcaMiscPEMGenerator(cert));
         }
         return new String(out.toByteArray(), StandardCharsets.UTF_8);
@@ -338,7 +343,7 @@ public class TestSslUtils {
 
     static String pem(PrivateKey privateKey, Password password) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8.name()))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             if (password == null) {
                 pemWriter.writeObject(new JcaPKCS8Generator(privateKey, null));
             } else {
@@ -382,6 +387,17 @@ public class TestSslUtils {
         }
 
         public X509Certificate generate(String dn, KeyPair keyPair) throws CertificateException {
+            return generate(new X500Name(dn), keyPair);
+        }
+
+        public X509Certificate generate(String commonName, String org, boolean utf8, KeyPair keyPair) throws CertificateException {
+            RDN[] rdns = new RDN[2];
+            rdns[0] = new RDN(new AttributeTypeAndValue(BCStyle.CN, utf8 ? new DERUTF8String(commonName) : new DERT61String(commonName)));
+            rdns[1] = new RDN(new AttributeTypeAndValue(BCStyle.O, utf8 ? new DERUTF8String(org) : new DERT61String(org)));
+            return generate(new X500Name(rdns), keyPair);
+        }
+
+        public X509Certificate generate(X500Name dn, KeyPair keyPair) throws CertificateException {
             try {
                 Security.addProvider(new BouncyCastleProvider());
                 AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
@@ -399,11 +415,10 @@ public class TestSslUtils {
                 else
                     throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
-                X500Name name = new X500Name(dn);
                 Date from = new Date();
                 Date to = new Date(from.getTime() + days * 86400000L);
                 BigInteger sn = new BigInteger(64, new SecureRandom());
-                X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(name, sn, from, to, name, subPubKeyInfo);
+                X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(dn, sn, from, to, dn, subPubKeyInfo);
 
                 if (subjectAltName != null)
                     v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);

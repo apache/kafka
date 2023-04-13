@@ -76,7 +76,7 @@ public class ControlRecordUtilsTest {
         data.write(new ByteBufferAccessor(valueBuffer), new ObjectSerializationCache(), data.highestSupportedVersion());
         valueBuffer.flip();
 
-        byte[] keyData = new byte[]{0, 0, 0, (byte) controlRecordType.type};
+        byte[] keyData = new byte[]{0, 0, 0, (byte) controlRecordType.type()};
 
         DefaultRecord record = new DefaultRecord(
             256, (byte) 0, 0, 0L, 0, ByteBuffer.wrap(keyData),  valueBuffer, null

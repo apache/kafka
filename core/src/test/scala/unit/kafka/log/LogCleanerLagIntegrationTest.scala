@@ -46,7 +46,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
   @MethodSource(Array("parameters"))
   def cleanerTest(codec: CompressionType): Unit = {
     cleaner = makeCleaner(partitions = topicPartitions,
-      backOffMs = cleanerBackOffMs,
+      backoffMs = cleanerBackOffMs,
       minCompactionLagMs = minCompactionLag,
       segmentSize = segmentSize)
     val log = cleaner.logs.get(topicPartitions(0))

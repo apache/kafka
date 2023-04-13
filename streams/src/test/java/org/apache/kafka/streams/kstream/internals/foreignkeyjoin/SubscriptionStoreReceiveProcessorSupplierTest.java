@@ -50,6 +50,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private File stateDir;
     private MockInternalNewProcessorContext<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> context;
+    private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = null;
 
     private static final String FK = "fk1";
     private static final String PK1 = "pk1";
@@ -71,6 +72,9 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
 
     @After
     public void after() throws IOException {
+        if (stateStore != null) {
+            stateStore.close();
+        }
         Utils.delete(stateDir);
     }
 
@@ -88,7 +92,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
                         SubscriptionWrapper<String>,
                         CombinedKey<String, String>,
                         Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
 
@@ -140,10 +144,9 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
-
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
             Instruction.DELETE_KEY_AND_PROPAGATE,
@@ -192,7 +195,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
 
@@ -244,7 +247,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
 
@@ -296,7 +299,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
 
@@ -348,7 +351,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
 
@@ -400,7 +403,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
 
@@ -452,7 +455,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
-        final TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = storeBuilder.build();
+        stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);
 

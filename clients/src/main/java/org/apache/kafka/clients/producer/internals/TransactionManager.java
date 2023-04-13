@@ -1067,7 +1067,7 @@ public class TransactionManager {
         pendingPartitionsInTransaction.addAll(newPartitionsInTransaction);
         newPartitionsInTransaction.clear();
         AddPartitionsToTxnRequest.Builder builder =
-            new AddPartitionsToTxnRequest.Builder(transactionalId,
+            AddPartitionsToTxnRequest.Builder.forClient(transactionalId,
                 producerIdAndEpoch.producerId,
                 producerIdAndEpoch.epoch,
                 new ArrayList<>(pendingPartitionsInTransaction));
@@ -1305,7 +1305,7 @@ public class TransactionManager {
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
+            } else if (error.exception() instanceof RetriableException) {
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED ||
                     error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
@@ -1345,7 +1345,7 @@ public class TransactionManager {
         @Override
         public void handleResponse(AbstractResponse response) {
             AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
-            Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
+            Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID);
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
             retryBackoffMs = TransactionManager.this.retryBackoffMs;
@@ -1364,7 +1364,7 @@ public class TransactionManager {
                     maybeOverrideRetryBackoffMs();
                     reenqueue();
                     return;
-                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                } else if (error.exception() instanceof RetriableException) {
                     reenqueue();
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
@@ -1484,7 +1484,7 @@ public class TransactionManager {
                 }
                 result.done();
                 log.info("Discovered {} coordinator {}", coordinatorType.toString().toLowerCase(Locale.ROOT), node);
-            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
+            } else if (error.exception() instanceof RetriableException) {
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
@@ -1532,7 +1532,7 @@ public class TransactionManager {
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
+            } else if (error.exception() instanceof RetriableException) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
                 // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
@@ -1589,7 +1589,7 @@ public class TransactionManager {
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
+            } else if (error.exception() instanceof RetriableException) {
                 reenqueue();
             } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
                 abortableErrorIfPossible(error.exception());

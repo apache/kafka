@@ -387,8 +387,7 @@ public class ConnectorPluginsResourceTest {
     public void testListAllPlugins() {
         Set<Class<?>> excludes = Stream.of(
                         ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.TRANSFORM_EXCLUDES
+                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES
                 ).flatMap(Collection::stream)
                 .collect(Collectors.toSet());
         Set<PluginInfo> expectedConnectorPlugins = Stream.of(

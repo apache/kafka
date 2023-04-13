@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -60,12 +61,14 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -92,11 +95,7 @@ import java.util.stream.Collectors;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.isNull;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.notNull;
-import static org.easymock.EasyMock.reset;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
 import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -109,10 +108,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private static boolean enableBloomFilters = false;
     final static String DB_NAME = "db-name";
@@ -123,7 +127,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Deserializer<String> stringDeserializer = new StringDeserializer();
 
-    private final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
+    @Mock
+    private RocksDBMetricsRecorder metricsRecorder;
 
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
@@ -164,7 +169,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     private RocksDBStore getRocksDBStoreWithRocksDBMetricsRecorder() {
-        return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
+        return new RocksDBStore(DB_NAME, DB_FILE_DIR, metricsRecorder);
+    }
+
+    private RocksDBStore getRocksDBStoreWithCustomManagedIterators() {
+        return new RocksDBStore(DB_NAME, DB_FILE_DIR, metricsRecorder, false);
     }
 
     private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
@@ -194,28 +203,20 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     public void shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.INFO);
-        reset(metricsRecorder);
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
 
     @Test
     public void shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
-        reset(metricsRecorder);
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
     }
 
     @Test
@@ -224,39 +225,83 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         try {
             context = getProcessorContext(RecordingLevel.DEBUG);
             rocksDBStore.openDB(context.appConfigs(), context.stateDir());
-            reset(metricsRecorder);
-            metricsRecorder.removeValueProviders(DB_NAME);
-            replay(metricsRecorder);
         } finally {
             rocksDBStore.close();
         }
 
-        verify(metricsRecorder);
+        verify(metricsRecorder).removeValueProviders(DB_NAME);
     }
 
     public static class RocksDBConfigSetterWithUserProvidedStatistics implements RocksDBConfigSetter {
         public RocksDBConfigSetterWithUserProvidedStatistics(){}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            options.setStatistics(new Statistics());
+            lastStatistics = new Statistics();
+            options.setStatistics(lastStatistics);
         }
 
         public void close(final String storeName, final Options options) {
-            options.statistics().close();
+            // We want to be in charge of closing our statistics ourselves.
+            assertTrue(lastStatistics.isOwningHandle());
+            lastStatistics.close();
+            lastStatistics = null;
         }
+
+        protected static Statistics lastStatistics = null;
     }
 
     @Test
     public void shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
+
+
+    @Test
+    public void shouldCloseStatisticsWhenUserProvidesStatistics() throws Exception {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        final Statistics userStatistics = RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics;
+        final Statistics statisticsHandle = getStatistics(rocksDBStore);
+        rocksDBStore.close();
+
+        // Both statistics handles must be closed now.
+        assertFalse(userStatistics.isOwningHandle());
+        assertFalse(statisticsHandle.isOwningHandle());
+        assertNull(getStatistics(rocksDBStore));
+        assertNull(RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics);
+    }
+
+    @Test
+    public void shouldSetStatisticsInValueProvidersWhenUserProvidesNoStatistics() throws Exception {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), eq(getStatistics(rocksDBStore)));
+    }
+
+    @Test
+    public void shouldCloseStatisticsWhenUserProvidesNoStatistics() throws Exception {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        final Statistics statisticsHandle = getStatistics(rocksDBStore);
+        rocksDBStore.close();
+
+        // Statistics handles must be closed now.
+        assertFalse(statisticsHandle.isOwningHandle());
+        assertNull(getStatistics(rocksDBStore));
+    }
+
 
     public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
         public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig(){}
@@ -306,12 +351,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             RecordingLevel.DEBUG,
             RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig.class
         );
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
     }
 
     @Test
@@ -487,6 +530,69 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
             assertThat(numberOfKeysReturned, is(1));
         }
+    }
+
+    @Test
+    public void shouldAllowCustomManagedIterators() {
+        rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
+
+        final KeyValueIterator<Bytes, byte[]> prefixScanIterator = rocksDBStore.prefixScan("abcd", stringSerializer, openIterators);
+        assertThat(openIterators.size(), is(1));
+        prefixScanIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> rangeIterator = rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
+        assertThat(openIterators.size(), is(1));
+        rangeIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> reverseRangeIterator = rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
+        assertThat(openIterators.size(), is(1));
+        reverseRangeIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> allIterator = rocksDBStore.all(openIterators);
+        assertThat(openIterators.size(), is(1));
+        allIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> reverseAllIterator = rocksDBStore.reverseAll(openIterators);
+        assertThat(openIterators.size(), is(1));
+        reverseAllIterator.close();
+        assertThat(openIterators.size(), is(0));
+    }
+
+    @Test
+    public void shouldRequireOpenIteratorsWhenUsingCustomManagedIterators() {
+        rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.prefixScan("abcd", stringSerializer));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1"))));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1"))));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.all());
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll());
+    }
+
+    @Test
+    public void shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators() {
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
+
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.prefixScan("abcd", stringSerializer, openIterators));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.all(openIterators));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll(openIterators));
     }
 
     @Test
@@ -813,15 +919,14 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
-        context = EasyMock.niceMock(InternalMockProcessorContext.class);
-        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
-        EasyMock.expect(context.appConfigs())
-            .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
-        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        context = mock(InternalMockProcessorContext.class);
+        when(context.metrics()).thenReturn(streamsMetrics);
+        when(context.taskId()).thenReturn(taskId);
+        when(context.appConfigs())
+            .thenReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+        when(context.stateDir()).thenReturn(dir);
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
-        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(processorRecordContext));
-        EasyMock.replay(context);
+        when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         final byte[] key = "hello".getBytes();
@@ -847,15 +952,14 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
-        context = EasyMock.niceMock(InternalMockProcessorContext.class);
-        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
-        EasyMock.expect(context.appConfigs())
-                .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
-        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        context = mock(InternalMockProcessorContext.class);
+        when(context.metrics()).thenReturn(streamsMetrics);
+        when(context.taskId()).thenReturn(taskId);
+        when(context.appConfigs())
+                .thenReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+        when(context.stateDir()).thenReturn(dir);
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
-        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(processorRecordContext));
-        EasyMock.replay(context);
+        when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         final byte[] key = "hello".getBytes();
@@ -881,12 +985,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        context = EasyMock.niceMock(InternalMockProcessorContext.class);
-        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
-        EasyMock.expect(context.appConfigs()).andStubReturn(new StreamsConfig(props).originals());
-        EasyMock.expect(context.stateDir()).andStubReturn(dir);
-        EasyMock.replay(context);
+        context = mock(InternalMockProcessorContext.class);
+        when(context.metrics()).thenReturn(streamsMetrics);
+        when(context.taskId()).thenReturn(taskId);
+        when(context.appConfigs()).thenReturn(new StreamsConfig(props).originals());
+        when(context.stateDir()).thenReturn(dir);
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
@@ -1180,5 +1283,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         return result;
     }
 
-
+    private Statistics getStatistics(final RocksDBStore rocksDBStore) throws Exception {
+        final Field statisticsField = rocksDBStore.getClass().getDeclaredField("statistics");
+        statisticsField.setAccessible(true);
+        final Statistics statistics = (Statistics) statisticsField.get(rocksDBStore);
+        statisticsField.setAccessible(false);
+        return statistics;
+    }
 }
