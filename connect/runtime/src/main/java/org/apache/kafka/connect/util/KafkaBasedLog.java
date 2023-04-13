@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 /**
@@ -99,10 +100,12 @@ public class KafkaBasedLog<K, V> {
     private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
 
-    private Thread thread;
+    public Thread thread;
     private boolean stopRequested;
-    private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
+    public Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
+    public AtomicBoolean unexpectedExceptionCaught;
+    public Throwable exception;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -169,6 +172,8 @@ public class KafkaBasedLog<K, V> {
         this.initializer = initializer != null ? initializer : admin -> { };
         // Initialize the producer Optional here to prevent NPEs later on
         this.producer = Optional.empty();
+        unexpectedExceptionCaught.set(false);
+        this.exception = null;
 
         // If the consumer is configured with isolation.level = read_committed, then its end offsets method cannot be relied on
         // as it will not take records from currently-open transactions into account. We want to err on the side of caution in that
@@ -276,13 +281,18 @@ public class KafkaBasedLog<K, V> {
 
         readToLogEnd(true);
 
-        thread = new WorkThread();
-        thread.start();
+        startWorkThread();
 
         log.info("Finished reading KafkaBasedLog for topic " + topic);
 
         log.info("Started KafkaBasedLog for topic " + topic);
     }
+
+    public void startWorkThread() {
+        thread = new WorkThread();
+        thread.start();
+    }
+
 
     public void stop() {
         log.info("Stopping KafkaBasedLog for topic " + topic);
@@ -432,7 +442,7 @@ public class KafkaBasedLog<K, V> {
      * @param shouldRetry Boolean flag to enable retry for the admin client {@code listOffsets()} call.
      * @see TopicAdmin#retryEndOffsets
      */
-    private void readToLogEnd(boolean shouldRetry) {
+    public void readToLogEnd(boolean shouldRetry) {
         Set<TopicPartition> assignment = consumer.assignment();
         Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment, shouldRetry);
         log.trace("Reading to end of log offsets {}", endOffsets);
@@ -507,17 +517,17 @@ public class KafkaBasedLog<K, V> {
         return consumer.endOffsets(assignment);
     }
 
-    private class WorkThread extends Thread {
+    public class WorkThread extends Thread {
         public WorkThread() {
             super("KafkaBasedLog Work Thread - " + topic);
         }
 
         @Override
         public void run() {
+            int numCallbacks;
             try {
-                log.trace("{} started execution", this);
+                log.info("{} started execution", this);
                 while (true) {
-                    int numCallbacks;
                     synchronized (KafkaBasedLog.this) {
                         if (stopRequested)
                             break;
@@ -561,7 +571,10 @@ public class KafkaBasedLog<K, V> {
                 }
             } catch (Throwable t) {
                 log.error("Unexpected exception in {}", this, t);
+                unexpectedExceptionCaught.set(true);
+                exception = t;
             }
+            log.info("Worker thread execution is done");
         }
     }
 }
