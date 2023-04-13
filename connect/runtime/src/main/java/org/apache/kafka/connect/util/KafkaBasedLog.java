@@ -155,12 +155,12 @@ public class KafkaBasedLog<K, V> {
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
      */
     public KafkaBasedLog(String topic,
-            Map<String, Object> producerConfigs,
-            Map<String, Object> consumerConfigs,
-            Supplier<TopicAdmin> topicAdminSupplier,
-            Callback<ConsumerRecord<K, V>> consumedCallback,
-            Time time,
-            java.util.function.Consumer<TopicAdmin> initializer) {
+                         Map<String, Object> producerConfigs,
+                         Map<String, Object> consumerConfigs,
+                         Supplier<TopicAdmin> topicAdminSupplier,
+                         Callback<ConsumerRecord<K, V>> consumedCallback,
+                         Time time,
+                         java.util.function.Consumer<TopicAdmin> initializer) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -540,11 +540,11 @@ public class KafkaBasedLog<K, V> {
                             log.trace("Finished read to end log for topic {}", topic);
                         } catch (TimeoutException e) {
                             log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
+                                    "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
                             log.warn("Retriable error while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "Reason: {}", topic, e.getMessage());
+                                    "Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was

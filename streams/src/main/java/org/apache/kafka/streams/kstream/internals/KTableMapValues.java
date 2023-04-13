@@ -165,6 +165,16 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         }
 
         @Override
+        public ValueAndTimestamp<VOut> get(final KIn key, final long asOfTimestamp) {
+            return computeValueAndTimestamp(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
+        }
+
+        @Override
         public void close() {
             parentGetter.close();
         }

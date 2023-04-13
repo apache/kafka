@@ -56,6 +56,11 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
                 public ValueAndTimestamp<V> get(final K key) {
                     return ValueAndTimestamp.make(map.get(key), -1);
                 }
+
+                @Override
+                public boolean isVersioned() {
+                    return false;
+                }
             };
         }
 

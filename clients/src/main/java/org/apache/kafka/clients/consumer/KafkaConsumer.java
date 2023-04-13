@@ -727,8 +727,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
             this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
-            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
-                    valueDeserializer, metrics.reporters(), interceptorList);
+            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keyDeserializer,
+                    this.valueDeserializer, metrics.reporters(), interceptorList);
             this.metadata = new ConsumerMetadata(retryBackoffMs,
                     config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
                     !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
@@ -799,7 +799,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
-            FetchConfig<K, V> fetchConfig = new FetchConfig<>(config, keyDeserializer, valueDeserializer, isolationLevel);
+            FetchConfig<K, V> fetchConfig = new FetchConfig<>(config,
+                    this.keyDeserializer,
+                    this.valueDeserializer,
+                    isolationLevel);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
@@ -2540,9 +2543,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws ConcurrentModificationException if another thread already has the lock
      */
     private void acquire() {
-        long threadId = Thread.currentThread().getId();
+        final Thread thread = Thread.currentThread();
+        final long threadId = thread.getId();
         if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
-            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");
+            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
+                    "currentThread(name: " + thread.getName() + ", id: " + threadId + ")" +
+                    " otherThread(id: " + currentThread.get() + ")"
+            );
         refcount.incrementAndGet();
     }
 

@@ -194,7 +194,7 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedDeleteRecordsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedDeleteRecords]] = None,
                      delayedElectLeaderPurgatoryParam: Option[DelayedOperationPurgatory[DelayedElectLeader]] = None,
                      threadNamePrefix: Option[String] = None,
-                     brokerEpochSupplier: () => Long = () => -1
+                     val brokerEpochSupplier: () => Long = () => -1
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -1484,6 +1484,9 @@ class ReplicaManager(val config: KafkaConfig,
 
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+
+          remoteLogManager.foreach(rlm => rlm.onLeadershipChange(partitionsBecomeLeader.asJava, partitionsBecomeFollower.asJava, topicIds))
+
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
 
           val data = new LeaderAndIsrResponseData().setErrorCode(Errors.NONE.code)
