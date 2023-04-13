@@ -190,7 +190,7 @@ public class InternalStreamsBuilderTest {
         assertThrows(
             IllegalArgumentException.class,
             () -> builder.globalTable(
-            "table",
+                "table",
                 consumed,
                 materializedInternal)
         );
