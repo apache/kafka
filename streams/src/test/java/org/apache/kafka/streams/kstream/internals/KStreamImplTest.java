@@ -3254,10 +3254,10 @@ public class KStreamImplTest {
                 "    Processor: KSTREAM-TOTABLE-0000000004 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
                 "      --> KTABLE-JOINOTHER-0000000008\n" +
                 "      <-- KSTREAM-SOURCE-0000000003\n" +
-                "    Processor: KTABLE-JOINOTHER-0000000008 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
+                "    Processor: KTABLE-JOINOTHER-0000000008 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005, KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-MERGE-0000000006\n" +
                 "      <-- KSTREAM-TOTABLE-0000000004\n" +
-                "    Processor: KTABLE-JOINTHIS-0000000007 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])\n" +
+                "    Processor: KTABLE-JOINTHIS-0000000007 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005, KSTREAM-TOTABLE-STATE-STORE-0000000002])\n" +
                 "      --> KTABLE-MERGE-0000000006\n" +
                 "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KTABLE-MERGE-0000000006 (stores: [])\n" +
