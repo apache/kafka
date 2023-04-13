@@ -66,6 +66,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class InternalStreamsBuilderTest {
@@ -175,6 +176,24 @@ public class InternalStreamsBuilderTest {
 
         assertEquals(1, stateStores.size());
         assertEquals("globalTable", stateStores.get(0).name());
+    }
+
+    @Test
+    public void shouldThrowOnVersionedStoreSupplierForGlobalTable() {
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
+                new MaterializedInternal<>(
+                        Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO)),
+                        builder,
+                        storePrefix
+                );
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> builder.globalTable(
+            "table",
+                consumed,
+                materializedInternal)
+        );
     }
 
     private void doBuildGlobalTopologyWithAllGlobalTables() {

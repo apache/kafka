@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.SuppressNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.VersionedSemanticsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
@@ -74,6 +75,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final LinkedHashSet<GraphNode> mergeNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> tableSourceNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> versionedSemanticsNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<SuppressNode> suppressNodesNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -164,6 +166,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+
+        if (materialized.storeSupplier() instanceof VersionedBytesStoreSupplier) {
+            throw new IllegalArgumentException("GlobalTables cannot be versioned.");
+        }
+
         // explicitly disable logging for global stores
         materialized.withLoggingDisabled();
 
@@ -281,6 +288,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void maybeAddNodeForVersionedSemanticsMetadata(final GraphNode node) {
         if (node instanceof VersionedSemanticsGraphNode) {
             versionedSemanticsNodes.add(node);
+        }
+        if (node instanceof SuppressNode) {
+            suppressNodesNodes.add((SuppressNode<?, ?>) node);
         }
     }
 
@@ -611,6 +621,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private void enableVersionedSemantics() {
         versionedSemanticsNodes.forEach(node -> ((VersionedSemanticsGraphNode) node).enableVersionedSemantics(isVersionedUpstream(node)));
+        suppressNodesNodes.forEach(node -> {
+            if (isVersionedUpstream(node)) {
+                throw new UnsupportedOperationException("suppress() is only supported for non-versioned KTables");
+            }
+        });
     }
 
     /**

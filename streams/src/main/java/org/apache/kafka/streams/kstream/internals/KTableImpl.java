@@ -54,6 +54,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.SuppressNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableFilterNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableRepartitionMapNode;
@@ -539,6 +540,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
+        if (graphNode.isOutputVersioned().isPresent() && graphNode.isOutputVersioned().get()) {
+            throw new UnsupportedOperationException("suppress() is only supported for non-versioned KTables");
+        }
+
         final String name;
         if (suppressed instanceof NamedSuppressed) {
             final String givenName = ((NamedSuppressed<?>) suppressed).name();
@@ -575,7 +580,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withLoggingDisabled();
         }
 
-        final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
+        final ProcessorGraphNode<K, Change<V>> node = new SuppressNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
             storeBuilder
