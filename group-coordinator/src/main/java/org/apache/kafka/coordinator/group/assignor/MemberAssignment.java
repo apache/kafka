@@ -37,7 +37,7 @@ public class MemberAssignment {
     }
 
     /**
-     * @return Target partition numbers keyed by topic Ids.
+     * @return Target partitions keyed by topic Ids.
      */
     public Map<Uuid, Set<Integer>> targetPartitions() {
         return this.targetPartitions;
@@ -60,6 +60,6 @@ public class MemberAssignment {
 
     @Override
     public String toString() {
-        return "MemberAssignment (Target partitions = " + targetPartitions + ')';
+        return "MemberAssignment(targetPartitions=" + targetPartitions + ')';
     }
 }
