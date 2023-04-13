@@ -17,7 +17,6 @@
 
 package kafka.server
 
-
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.errors.FencedLeaderEpochException
 import org.apache.kafka.common.message.FetchResponseData
