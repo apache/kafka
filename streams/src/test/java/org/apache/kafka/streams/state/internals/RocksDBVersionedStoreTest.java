@@ -92,8 +92,8 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutLatest() {
-        putToStore("k", "v", BASE_TIMESTAMP);
-        putToStore("k", "v2", BASE_TIMESTAMP + 1);
+        putToStore("k", "v", BASE_TIMESTAMP, true);
+        putToStore("k", "v2", BASE_TIMESTAMP + 1, true);
 
         verifyGetValueFromStore("k", "v2", BASE_TIMESTAMP + 1);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
@@ -103,8 +103,8 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutNullAsLatest() {
-        putToStore("k", null, BASE_TIMESTAMP);
-        putToStore("k", null, BASE_TIMESTAMP + 1);
+        putToStore("k", null, BASE_TIMESTAMP, true);
+        putToStore("k", null, BASE_TIMESTAMP + 1, true);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
@@ -114,10 +114,10 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutOlderWithNonNullLatest() {
-        putToStore("k", "v", BASE_TIMESTAMP);
-        putToStore("k", "v2", BASE_TIMESTAMP - 2);
-        putToStore("k", "v1", BASE_TIMESTAMP - 1);
-        putToStore("k", "v4", BASE_TIMESTAMP - 4);
+        putToStore("k", "v", BASE_TIMESTAMP, true);
+        putToStore("k", "v2", BASE_TIMESTAMP - 2, false);
+        putToStore("k", "v1", BASE_TIMESTAMP - 1, false);
+        putToStore("k", "v4", BASE_TIMESTAMP - 4, false);
 
         verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
@@ -128,10 +128,10 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutOlderWithNullLatest() {
-        putToStore("k", null, BASE_TIMESTAMP);
-        putToStore("k", "v2", BASE_TIMESTAMP - 2);
-        putToStore("k", "v1", BASE_TIMESTAMP - 1);
-        putToStore("k", "v4", BASE_TIMESTAMP - 4);
+        putToStore("k", null, BASE_TIMESTAMP, true);
+        putToStore("k", "v2", BASE_TIMESTAMP - 2, false);
+        putToStore("k", "v1", BASE_TIMESTAMP - 1, false);
+        putToStore("k", "v4", BASE_TIMESTAMP - 4, false);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
@@ -142,13 +142,13 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutOlderNullWithNonNullLatest() {
-        putToStore("k", "v", BASE_TIMESTAMP);
-        putToStore("k", null, BASE_TIMESTAMP - 2);
-        putToStore("k", null, BASE_TIMESTAMP - 1);
-        putToStore("k", null, BASE_TIMESTAMP - 4);
-        putToStore("k", "v5", BASE_TIMESTAMP - 5);
-        putToStore("k", "v3", BASE_TIMESTAMP - 3);
-        putToStore("k", null, BASE_TIMESTAMP - 6);
+        putToStore("k", "v", BASE_TIMESTAMP, true);
+        putToStore("k", null, BASE_TIMESTAMP - 2, false);
+        putToStore("k", null, BASE_TIMESTAMP - 1, false);
+        putToStore("k", null, BASE_TIMESTAMP - 4, false);
+        putToStore("k", "v5", BASE_TIMESTAMP - 5, false);
+        putToStore("k", "v3", BASE_TIMESTAMP - 3, false);
+        putToStore("k", null, BASE_TIMESTAMP - 6, false);
 
         verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
@@ -162,13 +162,13 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutOlderNullWithNullLatest() {
-        putToStore("k", null, BASE_TIMESTAMP);
-        putToStore("k", null, BASE_TIMESTAMP - 2);
-        putToStore("k", null, BASE_TIMESTAMP - 1);
-        putToStore("k", null, BASE_TIMESTAMP - 4);
-        putToStore("k", "v3", BASE_TIMESTAMP - 3);
-        putToStore("k", "v5", BASE_TIMESTAMP - 5);
-        putToStore("k", null, BASE_TIMESTAMP - 6);
+        putToStore("k", null, BASE_TIMESTAMP, true);
+        putToStore("k", null, BASE_TIMESTAMP - 2, false);
+        putToStore("k", null, BASE_TIMESTAMP - 1, false);
+        putToStore("k", null, BASE_TIMESTAMP - 4, false);
+        putToStore("k", "v3", BASE_TIMESTAMP - 3, false);
+        putToStore("k", "v5", BASE_TIMESTAMP - 5, false);
+        putToStore("k", null, BASE_TIMESTAMP - 6, false);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
@@ -182,26 +182,26 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutRepeatTimestampAsLatest() {
-        putToStore("k", "to_be_replaced", BASE_TIMESTAMP);
-        putToStore("k", "b", BASE_TIMESTAMP);
+        putToStore("k", "to_be_replaced", BASE_TIMESTAMP, true);
+        putToStore("k", "b", BASE_TIMESTAMP, true);
 
         verifyGetValueFromStore("k", "b", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
 
-        putToStore("k", null, BASE_TIMESTAMP);
+        putToStore("k", null, BASE_TIMESTAMP, true);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
 
-        putToStore("k", null, BASE_TIMESTAMP);
+        putToStore("k", null, BASE_TIMESTAMP, true);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
 
-        putToStore("k", "b", BASE_TIMESTAMP);
+        putToStore("k", "b", BASE_TIMESTAMP, true);
 
         verifyGetValueFromStore("k", "b", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP);
@@ -210,22 +210,22 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutRepeatTimestamps() {
-        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL + 20);
-        putToStore("k", null, SEGMENT_INTERVAL - 10);
-        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 10); // replace existing null with non-null, with timestamps spanning segments
-        putToStore("k", null, SEGMENT_INTERVAL - 10); // replace existing non-null with null
-        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 1);
-        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL + 1);
-        putToStore("k", null, SEGMENT_INTERVAL - 1); // replace existing non-null with null
-        putToStore("k", null, SEGMENT_INTERVAL + 1); // replace existing non-null with null, with timestamps spanning segments
-        putToStore("k", null, SEGMENT_INTERVAL + 10);
-        putToStore("k", null, SEGMENT_INTERVAL + 5);
-        putToStore("k", "vp5", SEGMENT_INTERVAL + 5); // replace existing null with non-null
-        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 5);
-        putToStore("k", "vn5", SEGMENT_INTERVAL - 5); // replace existing non-null with non-null
-        putToStore("k", null, SEGMENT_INTERVAL + 20); // replace existing non-null (latest value) with null
-        putToStore("k", null, SEGMENT_INTERVAL + 20); // replace existing null with null
-        putToStore("k", "vn6", SEGMENT_INTERVAL - 6);
+        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL + 20, true);
+        putToStore("k", null, SEGMENT_INTERVAL - 10, false);
+        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 10, false); // replace existing null with non-null, with timestamps spanning segments
+        putToStore("k", null, SEGMENT_INTERVAL - 10, false); // replace existing non-null with null
+        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 1, false);
+        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL + 1, false);
+        putToStore("k", null, SEGMENT_INTERVAL - 1, false); // replace existing non-null with null
+        putToStore("k", null, SEGMENT_INTERVAL + 1, false); // replace existing non-null with null, with timestamps spanning segments
+        putToStore("k", null, SEGMENT_INTERVAL + 10, false);
+        putToStore("k", null, SEGMENT_INTERVAL + 5, false);
+        putToStore("k", "vp5", SEGMENT_INTERVAL + 5, false); // replace existing null with non-null
+        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 5, false);
+        putToStore("k", "vn5", SEGMENT_INTERVAL - 5, false); // replace existing non-null with non-null
+        putToStore("k", null, SEGMENT_INTERVAL + 20, true); // replace existing non-null (latest value) with null
+        putToStore("k", null, SEGMENT_INTERVAL + 20, true); // replace existing null with null
+        putToStore("k", "vn6", SEGMENT_INTERVAL - 6, false);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
@@ -241,12 +241,12 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutIntoMultipleSegments() {
-        putToStore("k", null, SEGMENT_INTERVAL - 20);
-        putToStore("k", "vn10", SEGMENT_INTERVAL - 10);
-        putToStore("k", null, SEGMENT_INTERVAL - 1);
-        putToStore("k", null, SEGMENT_INTERVAL + 1);
-        putToStore("k", "vp10", SEGMENT_INTERVAL + 10);
-        putToStore("k", null, SEGMENT_INTERVAL + 20);
+        putToStore("k", null, SEGMENT_INTERVAL - 20, true);
+        putToStore("k", "vn10", SEGMENT_INTERVAL - 10, true);
+        putToStore("k", null, SEGMENT_INTERVAL - 1, true);
+        putToStore("k", null, SEGMENT_INTERVAL + 1, true);
+        putToStore("k", "vp10", SEGMENT_INTERVAL + 10, true);
+        putToStore("k", null, SEGMENT_INTERVAL + 20, true);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
@@ -261,12 +261,12 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldMoveRecordToOlderSegmentDuringPut() {
-        putToStore("k", "vp20", SEGMENT_INTERVAL + 20);
-        putToStore("k", "vp10", SEGMENT_INTERVAL + 10);
-        putToStore("k", "vn10", SEGMENT_INTERVAL - 10);
-        putToStore("k", "vn2", SEGMENT_INTERVAL - 2);
-        putToStore("k", "vn1", SEGMENT_INTERVAL - 1);
-        putToStore("k", "vp1", SEGMENT_INTERVAL + 1);
+        putToStore("k", "vp20", SEGMENT_INTERVAL + 20, true);
+        putToStore("k", "vp10", SEGMENT_INTERVAL + 10, false);
+        putToStore("k", "vn10", SEGMENT_INTERVAL - 10, false);
+        putToStore("k", "vn2", SEGMENT_INTERVAL - 2, false);
+        putToStore("k", "vn1", SEGMENT_INTERVAL - 1, false);
+        putToStore("k", "vp1", SEGMENT_INTERVAL + 1, false);
 
         verifyGetValueFromStore("k", "vp20", SEGMENT_INTERVAL + 20);
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20);
@@ -280,14 +280,14 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldMoveRecordToOlderSegmentWithNullsDuringPut() {
-        putToStore("k", null, SEGMENT_INTERVAL + 20);
-        putToStore("k", null, SEGMENT_INTERVAL - 1);
-        putToStore("k", null, SEGMENT_INTERVAL + 1);
-        putToStore("k", null, SEGMENT_INTERVAL - 10);
-        putToStore("k", null, SEGMENT_INTERVAL + 10);
-        putToStore("k", "vp5", SEGMENT_INTERVAL + 5);
-        putToStore("k", "vn5", SEGMENT_INTERVAL - 5);
-        putToStore("k", "vn6", SEGMENT_INTERVAL - 6);
+        putToStore("k", null, SEGMENT_INTERVAL + 20, true);
+        putToStore("k", null, SEGMENT_INTERVAL - 1, false);
+        putToStore("k", null, SEGMENT_INTERVAL + 1, false);
+        putToStore("k", null, SEGMENT_INTERVAL - 10, false);
+        putToStore("k", null, SEGMENT_INTERVAL + 10, false);
+        putToStore("k", "vp5", SEGMENT_INTERVAL + 5, false);
+        putToStore("k", "vn5", SEGMENT_INTERVAL - 5, false);
+        putToStore("k", "vn6", SEGMENT_INTERVAL - 6, false);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
@@ -303,12 +303,12 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldFallThroughToExistingOlderSegmentAsLatestDuringPut() {
-        putToStore("k", null, SEGMENT_INTERVAL - 5);
-        putToStore("k", "vn6", SEGMENT_INTERVAL - 6);
-        putToStore("k", "vp20", SEGMENT_INTERVAL + 20);
-        putToStore("k", null, SEGMENT_INTERVAL + 10);
-        putToStore("k", null, SEGMENT_INTERVAL - 1);
-        putToStore("k", "vn2", SEGMENT_INTERVAL - 2);
+        putToStore("k", null, SEGMENT_INTERVAL - 5, true);
+        putToStore("k", "vn6", SEGMENT_INTERVAL - 6, false);
+        putToStore("k", "vp20", SEGMENT_INTERVAL + 20, true);
+        putToStore("k", null, SEGMENT_INTERVAL + 10, false);
+        putToStore("k", null, SEGMENT_INTERVAL - 1, false);
+        putToStore("k", "vn2", SEGMENT_INTERVAL - 2, false);
 
         verifyGetValueFromStore("k", "vp20", SEGMENT_INTERVAL + 20);
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20);
@@ -322,11 +322,11 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldPutNonLatestTombstoneIntoNewSegmentWithValidTo() {
-        putToStore("k", "vp30", SEGMENT_INTERVAL + 30);
-        putToStore("k", null, SEGMENT_INTERVAL - 10); // this put should result in tombstone with validTo=SEGMENT_INTERVAL+30
-        putToStore("k", "vn5", SEGMENT_INTERVAL - 5);
-        putToStore("k", "vn1", SEGMENT_INTERVAL - 1);
-        putToStore("k", null, SEGMENT_INTERVAL - 2);
+        putToStore("k", "vp30", SEGMENT_INTERVAL + 30, true);
+        putToStore("k", null, SEGMENT_INTERVAL - 10, false); // this put should result in tombstone with validTo=SEGMENT_INTERVAL+30
+        putToStore("k", "vn5", SEGMENT_INTERVAL - 5, false);
+        putToStore("k", "vn1", SEGMENT_INTERVAL - 1, false);
+        putToStore("k", null, SEGMENT_INTERVAL - 2, false);
 
         verifyGetValueFromStore("k", "vp30", SEGMENT_INTERVAL + 30);
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 10, "vn1", SEGMENT_INTERVAL - 1);
@@ -338,10 +338,10 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldDelete() {
-        putToStore("k", "vp20", SEGMENT_INTERVAL + 20);
-        putToStore("k", "vp10", SEGMENT_INTERVAL + 10);
-        putToStore("k", "vn10", SEGMENT_INTERVAL - 10);
-        putToStore("k", "vn2", SEGMENT_INTERVAL - 2);
+        putToStore("k", "vp20", SEGMENT_INTERVAL + 20, true);
+        putToStore("k", "vp10", SEGMENT_INTERVAL + 10, false);
+        putToStore("k", "vn10", SEGMENT_INTERVAL - 10, false);
+        putToStore("k", "vn2", SEGMENT_INTERVAL - 2, false);
 
         VersionedRecord<String> deleted = deleteFromStore("k", SEGMENT_INTERVAL - 5); // delete from segment
         assertThat(deleted.value(), equalTo("vn10"));
@@ -361,14 +361,14 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldNotPutExpired() {
-        putToStore("k", "v", HISTORY_RETENTION + 10);
+        putToStore("k", "v", HISTORY_RETENTION + 10, true);
 
         // grace period has not elapsed
-        putToStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+        putToStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD, true);
         verifyGetValueFromStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
 
         // grace period has elapsed, so this put does not take place
-        putToStore("k2", "v2", HISTORY_RETENTION + 9 - GRACE_PERIOD);
+        putToStore("k2", "v2", HISTORY_RETENTION + 9 - GRACE_PERIOD, false);
         verifyGetNullFromStore("k2");
 
         verifyExpiredRecordSensor(1);
@@ -376,9 +376,9 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldNotDeleteExpired() {
-        putToStore("k1", "v1", 1L);
-        putToStore("k2", "v2", 1L);
-        putToStore("kother", "vother", HISTORY_RETENTION + 10); // use separate key to advance stream time
+        putToStore("k1", "v1", 1L, true);
+        putToStore("k2", "v2", 1L, true);
+        putToStore("kother", "vother", HISTORY_RETENTION + 10, true); // use separate key to advance stream time
 
         // grace period has not elapsed
         VersionedRecord<String> deleted = deleteFromStore("k1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
@@ -397,24 +397,24 @@ public class RocksDBVersionedStoreTest {
     @Test
     public void shouldGetFromOlderSegments() {
         // use a different key to create three different segments
-        putToStore("ko", null, SEGMENT_INTERVAL - 10);
-        putToStore("ko", null, 2 * SEGMENT_INTERVAL - 10);
-        putToStore("ko", null, 3 * SEGMENT_INTERVAL - 10);
+        putToStore("ko", null, SEGMENT_INTERVAL - 10, true);
+        putToStore("ko", null, 2 * SEGMENT_INTERVAL - 10, true);
+        putToStore("ko", null, 3 * SEGMENT_INTERVAL - 10, true);
 
         // return null after visiting all segments
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 20);
 
         // insert data to create non-empty (first) segment
-        putToStore("k", "v", SEGMENT_INTERVAL - 20);
-        putToStore("k", null, SEGMENT_INTERVAL - 10);
+        putToStore("k", "v", SEGMENT_INTERVAL - 20, true);
+        putToStore("k", null, SEGMENT_INTERVAL - 10, true);
 
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 30);
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, "v", SEGMENT_INTERVAL - 20);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 5);
 
         // insert data to create non-empty (third) segment
-        putToStore("k", "v2", 3 * SEGMENT_INTERVAL - 20);
-        putToStore("k", null, 3 * SEGMENT_INTERVAL - 10);
+        putToStore("k", "v2", 3 * SEGMENT_INTERVAL - 20, true);
+        putToStore("k", null, 3 * SEGMENT_INTERVAL - 10, true);
 
         // presence of non-empty later segment does not affect results of getting from earlier segment
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 30);
@@ -424,18 +424,18 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldNotGetExpired() {
-        putToStore("k", "v_old", 0);
-        putToStore("k", "v", SEGMENT_INTERVAL - 10);
+        putToStore("k", "v_old", 0, true);
+        putToStore("k", "v", SEGMENT_INTERVAL - 10, true);
 
         // old record has not yet expired
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, "v_old", 0);
 
-        putToStore("ko", "vo", HISTORY_RETENTION + SEGMENT_INTERVAL - 11);
+        putToStore("ko", "vo", HISTORY_RETENTION + SEGMENT_INTERVAL - 11, true);
 
         // old record still has not yet expired
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, "v_old", 0);
 
-        putToStore("ko", "vo2", HISTORY_RETENTION + SEGMENT_INTERVAL - 10);
+        putToStore("ko", "vo2", HISTORY_RETENTION + SEGMENT_INTERVAL - 10, true);
 
         // old record is expired now
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 11);
@@ -443,9 +443,9 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldGetExpiredIfLatestValue() {
-        putToStore("k", "v", 1);
-        putToStore("ko", "vo_old", 1);
-        putToStore("ko", "vo_new", HISTORY_RETENTION + 12);
+        putToStore("k", "v", 1, true);
+        putToStore("ko", "vo_old", 1, true);
+        putToStore("ko", "vo_new", HISTORY_RETENTION + 12, true);
 
         // expired get on key where latest satisfies timestamp bound still returns data
         verifyTimestampedGetValueFromStore("k", 10, "v", 1);
@@ -456,15 +456,15 @@ public class RocksDBVersionedStoreTest {
 
     @Test
     public void shouldDistinguishEmptyAndNull() {
-        putToStore("k", null, SEGMENT_INTERVAL + 20);
-        putToStore("k", null, SEGMENT_INTERVAL - 10);
-        putToStore("k", null, SEGMENT_INTERVAL - 1);
-        putToStore("k", null, SEGMENT_INTERVAL + 1);
-        putToStore("k", null, SEGMENT_INTERVAL + 10);
+        putToStore("k", null, SEGMENT_INTERVAL + 20, true);
+        putToStore("k", null, SEGMENT_INTERVAL - 10, false);
+        putToStore("k", null, SEGMENT_INTERVAL - 1, false);
+        putToStore("k", null, SEGMENT_INTERVAL + 1, false);
+        putToStore("k", null, SEGMENT_INTERVAL + 10, false);
         // empty string is serialized as an empty byte array, which is different from null (tombstone)
-        putToStore("k", "", SEGMENT_INTERVAL + 5);
-        putToStore("k", "", SEGMENT_INTERVAL - 5);
-        putToStore("k", "", SEGMENT_INTERVAL - 6);
+        putToStore("k", "", SEGMENT_INTERVAL + 5, false);
+        putToStore("k", "", SEGMENT_INTERVAL - 5, false);
+        putToStore("k", "", SEGMENT_INTERVAL - 6, false);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
@@ -622,18 +622,18 @@ public class RocksDBVersionedStoreTest {
         store.init((StateStoreContext) context, store);
 
         // put and get
-        putToStore("k", "v", BASE_TIMESTAMP);
+        putToStore("k", "v", BASE_TIMESTAMP, true);
         verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v", BASE_TIMESTAMP); // query in "future" is allowed
 
         // update existing record at same timestamp
-        putToStore("k", "updated", BASE_TIMESTAMP);
+        putToStore("k", "updated", BASE_TIMESTAMP, true);
         verifyGetValueFromStore("k", "updated", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "updated", BASE_TIMESTAMP);
 
         // put new record version
-        putToStore("k", "v2", BASE_TIMESTAMP + 2);
+        putToStore("k", "v2", BASE_TIMESTAMP + 2, true);
         verifyGetValueFromStore("k", "v2", BASE_TIMESTAMP + 2);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 2, "v2", BASE_TIMESTAMP + 2);
 
@@ -645,17 +645,18 @@ public class RocksDBVersionedStoreTest {
         verifyGetNullFromStore("k");
 
         // put in past (grace period expired) does not update the store
-        putToStore("k2", "v", BASE_TIMESTAMP + 2);
+        putToStore("k2", "v", BASE_TIMESTAMP + 2, false);
         verifyGetNullFromStore("k2");
         verifyExpiredRecordSensor(1);
     }
 
-    private void putToStore(final String key, final String value, final long timestamp) {
-        store.put(
+    private void putToStore(final String key, final String value, final long timestamp, final boolean expectedIsLatest) {
+        final boolean isLatest = store.put(
             new Bytes(STRING_SERIALIZER.serialize(null, key)),
             STRING_SERIALIZER.serialize(null, value),
             timestamp
         );
+        assertThat(isLatest, equalTo(expectedIsLatest));
     }
 
     private VersionedRecord<String> deleteFromStore(final String key, final long timestamp) {

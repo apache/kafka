@@ -16,15 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -32,6 +35,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
@@ -60,7 +64,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                                   final String metricScope,
                                   final Time time,
                                   final Serde<K> keySerde,
-                                  final Serde<ValueAndTimestamp<V>> valueSerde) {
+                                  final Serde<V> valueSerde) {
         super(inner);
         internal = new MeteredVersionedKeyValueStoreInternal(inner, metricScope, time, keySerde, valueSerde);
     }
@@ -84,22 +88,37 @@ public class MeteredVersionedKeyValueStore<K, V>
         extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
         private final VersionedBytesStore inner;
+        private final Serde<V> rawValueSerde;
+        private StateSerdes<K, V> rawValueSerdes;
 
         MeteredVersionedKeyValueStoreInternal(final VersionedBytesStore inner,
                                               final String metricScope,
                                               final Time time,
                                               final Serde<K> keySerde,
-                                              final Serde<ValueAndTimestamp<V>> valueSerde) {
-            super(inner, metricScope, time, keySerde, valueSerde);
+                                              final Serde<V> valueSerde) {
+            super(
+                inner,
+                metricScope,
+                time,
+                keySerde,
+                valueSerde == null
+                    ? null
+                    : new NullableValueAndTimestampSerde<>(valueSerde)
+            );
             this.inner = inner;
+            this.rawValueSerde = valueSerde;
         }
 
-        @Override
-        public void put(final K key, final ValueAndTimestamp<V> value) {
-            if (value == null) {
-                throw new IllegalStateException("Versioned store requires timestamp associated with all puts, including tombstones/deletes");
+        public boolean put(final K key, final V value, final long timestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                final boolean isLatest = maybeMeasureLatency(() -> inner.put(keyBytes(key), rawValueSerdes.rawValue(value), timestamp), time, putSensor);
+                maybeRecordE2ELatency();
+                return isLatest;
+            } catch (final ProcessorStateException e) {
+                final String message = String.format(e.getMessage(), key, value);
+                throw new ProcessorStateException(message, e);
             }
-            super.put(key, value);
         }
 
         public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
@@ -152,11 +171,40 @@ public class MeteredVersionedKeyValueStore<K, V>
                 return super.prepareValueSerdeForStore(valueSerde, getter);
             }
         }
+
+        @Deprecated
+        @Override
+        protected void initStoreSerde(final ProcessorContext context) {
+            super.initStoreSerde(context);
+
+            // additionally init raw value serde
+            final String storeName = name();
+            final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
+            rawValueSerdes = new StateSerdes<>(
+                changelogTopic,
+                prepareKeySerde(keySerde, new SerdeGetter(context)),
+                WrappingNullableUtils.prepareValueSerde(rawValueSerde, new SerdeGetter(context))
+            );
+        }
+
+        @Override
+        protected void initStoreSerde(final StateStoreContext context) {
+            super.initStoreSerde(context);
+
+            // additionally init raw value serde
+            final String storeName = name();
+            final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
+            rawValueSerdes = new StateSerdes<>(
+                changelogTopic,
+                prepareKeySerde(keySerde, new SerdeGetter(context)),
+                WrappingNullableUtils.prepareValueSerde(rawValueSerde, new SerdeGetter(context))
+            );
+        }
     }
 
     @Override
-    public void put(final K key, final V value, final long timestamp) {
-        internal.put(key, ValueAndTimestamp.makeAllowNullable(value, timestamp));
+    public boolean put(final K key, final V value, final long timestamp) {
+        return internal.put(key, value, timestamp);
     }
 
     @Override

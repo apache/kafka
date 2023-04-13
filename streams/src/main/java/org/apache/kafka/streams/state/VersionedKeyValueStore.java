@@ -51,9 +51,11 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * @param key       The key
      * @param value     The value, it can be {@code null}. {@code null} is interpreted as a delete.
      * @param timestamp The timestamp for this record version
+     * @return Whether the record that was put is the latest value for the particular key.
+     *         Returns false if the record was not put (due to grace period having been exceeded).
      * @throws NullPointerException If {@code null} is used for key.
      */
-    void put(K key, V value, long timestamp);
+    boolean put(K key, V value, long timestamp);
 
     /**
      * Delete the value associated with this key from the store, at the specified timestamp

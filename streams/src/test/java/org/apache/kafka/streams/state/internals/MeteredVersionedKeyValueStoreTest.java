@@ -81,6 +81,7 @@ public class MeteredVersionedKeyValueStoreTest {
     private static final String VALUE = "v";
     private static final long TIMESTAMP = 10L;
     private static final Bytes RAW_KEY = new Bytes(STRING_SERDE.serializer().serialize(null, KEY));
+    private static final byte[] RAW_VALUE = STRING_SERDE.serializer().serialize(null, VALUE);
     private static final byte[] RAW_VALUE_AND_TIMESTAMP = VALUE_AND_TIMESTAMP_SERDE.serializer()
         .serialize(null, ValueAndTimestamp.make(VALUE, TIMESTAMP));
 
@@ -117,7 +118,7 @@ public class MeteredVersionedKeyValueStoreTest {
             METRICS_SCOPE,
             mockTime,
             STRING_SERDE,
-            VALUE_AND_TIMESTAMP_SERDE
+            STRING_SERDE
         );
     }
 
@@ -172,7 +173,7 @@ public class MeteredVersionedKeyValueStoreTest {
             METRICS_SCOPE,
             mockTime,
             keySerde,
-            new NullableValueAndTimestampSerde<>(valueSerde)
+            valueSerde
         );
         store.init((StateStoreContext) context, store);
 
@@ -191,9 +192,14 @@ public class MeteredVersionedKeyValueStoreTest {
 
     @Test
     public void shouldDelegateAndRecordMetricsOnPut() {
-        store.put(KEY, VALUE, TIMESTAMP);
+        // `isLatest = true` case
+        when(inner.put(RAW_KEY, RAW_VALUE, TIMESTAMP)).thenReturn(true);
+        assertThat(store.put(KEY, VALUE, TIMESTAMP), is(true));
 
-        verify(inner).put(RAW_KEY, RAW_VALUE_AND_TIMESTAMP);
+        // `isLatest = false` case
+        when(inner.put(RAW_KEY, RAW_VALUE, TIMESTAMP)).thenReturn(false);
+        assertThat(store.put(KEY, VALUE, TIMESTAMP), is(false));
+
         assertThat((Double) getMetric("put-rate").metricValue(), greaterThan(0.0));
     }
 

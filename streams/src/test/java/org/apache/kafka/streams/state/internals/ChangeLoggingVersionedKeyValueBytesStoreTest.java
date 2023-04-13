@@ -121,11 +121,11 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
         final String value = "foo";
         final long timestamp = 10L;
-        final byte[] rawValueAndTimestamp = rawValueAndTimestamp(value, timestamp);
 
-        store.put(rawKey, rawValueAndTimestamp);
+        final boolean isLatest = store.put(rawKey, rawBytes(value), timestamp);
 
-        assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp));
+        assertThat(isLatest, equalTo(true));
+        assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp(value, timestamp)));
         assertThat(collector.collected().size(), equalTo(1));
         assertThat(collector.collected().get(0).key(), equalTo(rawKey));
         assertThat(collector.collected().get(0).value(), equalTo(rawBytes(value)));
@@ -136,14 +136,13 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     public void shouldPropagateAndLogOnPutNull() {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
         final long timestamp = 10L;
-        final byte[] rawTombstoneAndTimestamp = rawValueAndTimestamp(null, timestamp);
         // put initial record to inner, so that later verification confirms that store.put() has an effect
-        final byte[] initialRawValueAndTimestamp = rawValueAndTimestamp("foo", timestamp - 1);
-        inner.put(rawKey, initialRawValueAndTimestamp);
-        assertThat(inner.get(rawKey), equalTo(initialRawValueAndTimestamp));
+        inner.put(rawKey, rawBytes("foo"), timestamp - 1);
+        assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp("foo", timestamp - 1)));
 
-        store.put(rawKey, rawTombstoneAndTimestamp);
+        final boolean isLatest = store.put(rawKey, null, timestamp);
 
+        assertThat(isLatest, equalTo(true));
         assertThat(inner.get(rawKey), nullValue());
         assertThat(collector.collected().size(), equalTo(1));
         assertThat(collector.collected().get(0).key(), equalTo(rawKey));
@@ -155,13 +154,14 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     public void shouldPropagateAndLogOnDeleteWithTimestamp() {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
         final long timestamp = 10L;
+        final byte[] rawValueAndTimestamp = rawValueAndTimestamp("foo", timestamp - 1);
         // put initial record to inner, so that later verification confirms that store.put() has an effect
-        final byte[] initialRawValueAndTimestamp = rawValueAndTimestamp("foo", timestamp - 1);
-        inner.put(rawKey, initialRawValueAndTimestamp);
-        assertThat(inner.get(rawKey), equalTo(initialRawValueAndTimestamp));
+        inner.put(rawKey, rawBytes("foo"), timestamp - 1);
+        assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp));
 
-        store.delete(rawKey, timestamp);
+        final byte[] result = store.delete(rawKey, timestamp);
 
+        assertThat(result, equalTo(rawValueAndTimestamp));
         assertThat(inner.get(rawKey), nullValue());
         assertThat(collector.collected().size(), equalTo(1));
         assertThat(collector.collected().get(0).key(), equalTo(rawKey));
@@ -202,19 +202,17 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     @Test
     public void shouldDelegateGet() {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
-        final byte[] rawValueAndTimestamp = rawValueAndTimestamp("v", 8L);
-        inner.put(rawKey, rawValueAndTimestamp);
+        inner.put(rawKey, rawBytes("v"), 8L);
 
-        assertThat(store.get(rawKey), equalTo(rawValueAndTimestamp));
+        assertThat(store.get(rawKey), equalTo(rawValueAndTimestamp("v", 8L)));
     }
 
     @Test
     public void shouldDelegateGetWithTimestamp() {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
-        final byte[] rawValueAndTimestamp = rawValueAndTimestamp("v", 8L);
-        inner.put(rawKey, rawValueAndTimestamp);
+        inner.put(rawKey, rawBytes("v"), 8L);
 
-        assertThat(store.get(rawKey, 10L), equalTo(rawValueAndTimestamp));
+        assertThat(store.get(rawKey, 10L), equalTo(rawValueAndTimestamp("v", 8L)));
     }
 
     private static byte[] rawBytes(final String s) {

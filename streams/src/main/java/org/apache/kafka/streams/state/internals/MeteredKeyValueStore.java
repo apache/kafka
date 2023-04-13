@@ -169,7 +169,7 @@ public class MeteredKeyValueStore<K, V>
 
 
     @Deprecated
-    private void initStoreSerde(final ProcessorContext context) {
+    protected void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
@@ -179,7 +179,7 @@ public class MeteredKeyValueStore<K, V>
         );
     }
 
-    private void initStoreSerde(final StateStoreContext context) {
+    protected void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
@@ -439,7 +439,7 @@ public class MeteredKeyValueStore<K, V>
         return byteEntries;
     }
 
-    private void maybeRecordE2ELatency() {
+    protected void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && context != null) {
