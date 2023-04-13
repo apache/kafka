@@ -579,6 +579,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     result
   }
 
+  def hasOngoingTransaction(producerId: Long): Boolean = lock synchronized {
+    val entry = producerStateManager.activeProducers.get(producerId)
+    entry != null && entry.currentTxnFirstOffset.isPresent
+  }
+
   /**
    * The number of segments in the log.
    * Take care! this is an O(n) operation.

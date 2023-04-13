@@ -31,6 +31,7 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.{LeaderAndIsrPartitionError, LeaderAndIsrTopicError}
@@ -194,7 +195,8 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedDeleteRecordsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedDeleteRecords]] = None,
                      delayedElectLeaderPurgatoryParam: Option[DelayedOperationPurgatory[DelayedElectLeader]] = None,
                      threadNamePrefix: Option[String] = None,
-                     val brokerEpochSupplier: () => Long = () => -1
+                     val brokerEpochSupplier: () => Long = () => -1,
+                     addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -312,6 +314,7 @@ class ReplicaManager(val config: KafkaConfig,
     val haltBrokerOnFailure = metadataCache.metadataVersion().isLessThan(IBP_1_0_IV0)
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
+    addPartitionsToTxnManager.foreach(_.start())
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
@@ -607,6 +610,18 @@ class ReplicaManager(val config: KafkaConfig,
    * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
    * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
    * locks.
+   * 
+   * @param timeout                       maximum time we will wait to append before returning
+   * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
+   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
+   * @param origin                        source of the append request (ie, client, replication, coordinator)
+   * @param entriesPerPartition           the records per partition to be appended
+   * @param responseCallback              callback for sending the response
+   * @param delayedProduceLock            lock for the delayed actions
+   * @param recordConversionStatsCallback callback for updating stats on record conversions
+   * @param requestLocal                  container for the stateful instances scoped to this request
+   * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
+   * @param transactionStatePartition     partition that holds the transactional state if transactionalId is present
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -616,66 +631,128 @@ class ReplicaManager(val config: KafkaConfig,
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                    requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                    requestLocal: RequestLocal = RequestLocal.NoCaching,
+                    transactionalId: String = null,
+                    transactionStatePartition: Option[Int] = None): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
-      val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-        origin, entriesPerPartition, requiredAcks, requestLocal)
-      debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-
-      val produceStatus = localProduceResults.map { case (topicPartition, result) =>
-        topicPartition -> ProducePartitionStatus(
-          result.info.lastOffset + 1, // required offset
-          new PartitionResponse(
-            result.error,
-            result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
-            result.info.logAppendTime,
-            result.info.logStartOffset,
-            result.info.recordErrors,
-            result.info.errorMessage
-          )
-        ) // response status
-      }
-
-      actionQueue.add {
-        () =>
-          localProduceResults.foreach {
-            case (topicPartition, result) =>
-              val requestKey = TopicPartitionOperationKey(topicPartition)
-              result.info.leaderHwChange match {
-                case LeaderHwChange.INCREASED =>
-                  // some delayed operations may be unblocked after HW changed
-                  delayedProducePurgatory.checkAndComplete(requestKey)
-                  delayedFetchPurgatory.checkAndComplete(requestKey)
-                  delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                case LeaderHwChange.SAME =>
-                  // probably unblock some follower fetch requests since log end offset has been updated
-                  delayedFetchPurgatory.checkAndComplete(requestKey)
-                case LeaderHwChange.NONE =>
-                  // nothing
-              }
+      
+      val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) = 
+        if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
+          (entriesPerPartition, Map.empty)
+        else
+          entriesPerPartition.partition { case (topicPartition, records) =>
+            getPartitionOrException(topicPartition).hasOngoingTransaction(records.firstBatch().producerId())
           }
+
+      def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
+        val verifiedEntries = 
+          if (unverifiedEntries.isEmpty) 
+            allEntries 
+          else
+            allEntries.filter { case (tp, _) =>
+              !unverifiedEntries.contains(tp)
+            }
+        
+        val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
+          origin, verifiedEntries, requiredAcks, requestLocal)
+        debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+        
+        val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
+          // NOTE: Older clients return INVALID_RECORD, but newer clients will return INVALID_TXN_STATE
+          val message = if (error.equals(Errors.INVALID_RECORD)) "Partition was not added to the transaction" else error.message()
+          topicPartition -> LogAppendResult(
+            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+            Some(error.exception(message))
+          )
+        }
+        
+        val allResults = localProduceResults ++ unverifiedResults
+
+        val produceStatus = allResults.map { case (topicPartition, result) =>
+          topicPartition -> ProducePartitionStatus(
+            result.info.lastOffset + 1, // required offset
+            new PartitionResponse(
+              result.error,
+              result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
+              result.info.logAppendTime,
+              result.info.logStartOffset,
+              result.info.recordErrors,
+              result.info.errorMessage
+            )
+          ) // response status
+        }
+
+        actionQueue.add {
+          () =>
+            allResults.foreach {
+              case (topicPartition, result) =>
+                val requestKey = TopicPartitionOperationKey(topicPartition)
+                result.info.leaderHwChange match {
+                  case LeaderHwChange.INCREASED =>
+                    // some delayed operations may be unblocked after HW changed
+                    delayedProducePurgatory.checkAndComplete(requestKey)
+                    delayedFetchPurgatory.checkAndComplete(requestKey)
+                    delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+                  case LeaderHwChange.SAME =>
+                    // probably unblock some follower fetch requests since log end offset has been updated
+                    delayedFetchPurgatory.checkAndComplete(requestKey)
+                  case LeaderHwChange.NONE =>
+                  // nothing
+                }
+            }
+        }
+
+        recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
+
+        if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
+          // create delayed produce operation
+          val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
+          val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
+
+          // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
+          val producerRequestKeys = allEntries.keys.map(TopicPartitionOperationKey(_)).toSeq
+
+          // try to complete the request immediately, otherwise put it into the purgatory
+          // this is because while the delayed produce operation is being created, new
+          // requests may arrive and hence make this operation completable.
+          delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+
+        } else {
+          // we can respond immediately
+          val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
+          responseCallback(produceResponseStatus)
+        }
       }
 
-      recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
-
-      if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
-        // create delayed produce operation
-        val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
-
-        // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-        val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
-
-        // try to complete the request immediately, otherwise put it into the purgatory
-        // this is because while the delayed produce operation is being created, new
-        // requests may arrive and hence make this operation completable.
-        delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-
+      if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
+        appendEntries(verifiedEntriesPerPartition)(Map.empty)
       } else {
-        // we can respond immediately
-        val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
-        responseCallback(produceResponseStatus)
+        // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
+        val (error, node) = getTransactionCoordinator(transactionStatePartition.get)
+
+        if (error != Errors.NONE) {
+          throw error.exception() // Can throw coordinator not available -- which is retriable
+        }
+
+        val topicGrouping = notYetVerifiedEntriesPerPartition.keySet.groupBy(tp => tp.topic())
+        val topicCollection = new AddPartitionsToTxnTopicCollection()
+        topicGrouping.foreach { case (topic, tps) =>
+          topicCollection.add(new AddPartitionsToTxnTopic()
+            .setName(topic)
+            .setPartitions(tps.map(tp => Integer.valueOf(tp.partition())).toList.asJava))
+        }
+
+        // map not yet verified partitions to a request object
+        val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
+        val notYetVerifiedTransaction = new AddPartitionsToTxnTransaction()
+          .setTransactionalId(transactionalId)
+          .setProducerId(batchInfo.producerId())
+          .setProducerEpoch(batchInfo.producerEpoch())
+          .setVerifyOnly(true)
+          .setTopics(topicCollection)
+
+        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
@@ -1957,6 +2034,7 @@ class ReplicaManager(val config: KafkaConfig,
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
     removeAllTopicMetrics()
+    addPartitionsToTxnManager.foreach(_.shutdown())
     info("Shut down completely")
   }
 
@@ -2292,6 +2370,34 @@ class ReplicaManager(val config: KafkaConfig,
         case e: Throwable =>
           stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
             s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
+      }
+    }
+  }
+
+  private[server] def getTransactionCoordinator(partition: Int): (Errors, Node) = {
+    val listenerName = config.interBrokerListenerName
+
+    val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), listenerName)
+
+    if (topicMetadata.headOption.isEmpty) {
+      // If topic is not created, then the transaction is definitely not started.
+      (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+    } else {
+      if (topicMetadata.head.errorCode != Errors.NONE.code) {
+        (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+      } else {
+        val coordinatorEndpoint = topicMetadata.head.partitions.asScala
+          .find(_.partitionIndex == partition)
+          .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
+          .flatMap(metadata => metadataCache.
+            getAliveBrokerNode(metadata.leaderId, listenerName))
+
+        coordinatorEndpoint match {
+          case Some(endpoint) =>
+            (Errors.NONE, endpoint)
+          case _ =>
+            (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+        }
       }
     }
   }

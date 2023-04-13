@@ -670,6 +670,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
+      val transactionStatePartition =
+        if (produceRequest.transactionalId() == null)
+          None
+        else
+          Some(txnCoordinator.partitionFor(produceRequest.transactionalId()))
+
       // call the replica manager to append messages to the replicas
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
@@ -679,7 +685,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         entriesPerPartition = authorizedRequestInfo,
         requestLocal = requestLocal,
         responseCallback = sendResponseCallback,
-        recordConversionStatsCallback = processingStatsCallback)
+        recordConversionStatsCallback = processingStatsCallback,
+        transactionalId = produceRequest.transactionalId(),
+        transactionStatePartition = transactionStatePartition)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -2432,6 +2440,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     txns.forEach { transaction => 
       val transactionalId = transaction.transactionalId
+
+      if (transactionalId == null)
+        throw new InvalidRequestException("Transactional ID can not be null in request.")
+
       val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
 
       // Versions < 4 come from clients and must be authorized to write for the given transaction and for the given topics.
@@ -2477,7 +2489,6 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
             addResultAndMaybeSendResponse(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
           }
-
 
           if (!transaction.verifyOnly) {
             txnCoordinator.handleAddPartitionsToTransaction(transactionalId,

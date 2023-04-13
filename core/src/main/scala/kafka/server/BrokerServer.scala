@@ -27,6 +27,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -250,6 +251,10 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
+      val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+      val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, addPartitionsToTxnNetworkClient, time)
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -265,7 +270,8 @@ class BrokerServer(
         isShuttingDown = isShuttingDown,
         zkClient = None,
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
+        addPartitionsToTxnManager = Some(addPartitionsToTxnManager)
       )
 
       /* start token manager */

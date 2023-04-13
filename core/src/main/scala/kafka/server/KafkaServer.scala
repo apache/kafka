@@ -611,6 +611,10 @@ class KafkaServer(
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
+    val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+    val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+    val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, addPartitionsToTxnNetworkClient, time)
+
     new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -626,7 +630,8 @@ class KafkaServer(
       isShuttingDown = isShuttingDown,
       zkClient = Some(zkClient),
       threadNamePrefix = threadNamePrefix,
-      brokerEpochSupplier = brokerEpochSupplier)
+      brokerEpochSupplier = brokerEpochSupplier,
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
   }
 
   private def initZkClient(time: Time): Unit = {
