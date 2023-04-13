@@ -82,7 +82,7 @@ public class LogDirsCommand {
         if (!nonExistingBrokers.isEmpty()) {
             throw new TerseException(
                     String.format(
-                            "ERROR: The given brokers do not exist from --broker-list: %s. Current existent brokers: %s%n",
+                            "ERROR: The given brokers do not exist from --broker-list: %s. Current existent brokers: %s",
                             commaDelimitedStringFromIntegerSet(nonExistingBrokers),
                             commaDelimitedStringFromIntegerSet(clusterBrokers)));
         } else {
@@ -146,7 +146,7 @@ public class LogDirsCommand {
     private static Admin createAdminClient(LogDirsCommandOptions options) throws IOException {
         Properties props = new Properties();
         if (options.hasCommandConfig()) {
-            Utils.loadProps(options.commandConfig());
+            props.putAll(Utils.loadProps(options.commandConfig()));
         }
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, options.bootstrapServers());
         props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool");
