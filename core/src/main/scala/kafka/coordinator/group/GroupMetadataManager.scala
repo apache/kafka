@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicIdPartition, TopicPartition}
+import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
@@ -510,14 +510,12 @@ class GroupMetadataManager(brokerId: Int,
             topicIdPartition -> partitionData
           }.toMap
         } else {
-          val topicIdPartitions = topicIdPartitionsOpt.getOrElse(group.allOffsets.keySet)
-
-          topicIdPartitions.map { topicIdPartition =>
+          def resolvePartitionData(topicIdPartition: TopicIdPartition): PartitionData = {
             if (requireStable && group.hasPendingOffsetCommitsForTopicPartition(topicIdPartition)) {
-              topicIdPartition -> new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+              new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
                 Optional.empty(), "", Errors.UNSTABLE_OFFSET_COMMIT)
             } else {
-              val partitionData = group.offset(topicIdPartition) match {
+              group.offset(topicIdPartition) match {
                 case None =>
                   new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
                     Optional.empty(), "", Errors.NONE)
@@ -525,9 +523,28 @@ class GroupMetadataManager(brokerId: Int,
                   new PartitionData(offsetAndMetadata.offset,
                     offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
               }
-              topicIdPartition -> partitionData
             }
-          }.toMap
+          }
+
+          topicIdPartitionsOpt match {
+            case Some(topicIdPartitions) =>
+              topicIdPartitions.map { topicIdPartition =>
+                topicIdPartition -> resolvePartitionData(topicIdPartition)
+              }.toMap
+
+            case None =>
+              val topicIds = replicaManager.metadataCache.topicNamesToIds()
+              group.allOffsets.keySet.map { topicPartition =>
+                Option(topicIds.get(topicPartition.topic())) match {
+                  case Some(topicId) =>
+                    val topicIdPartition = new TopicIdPartition(topicId, topicPartition)
+                    topicIdPartition -> resolvePartitionData(topicIdPartition)
+                  case None =>
+                    val zeroIdPartition = new TopicIdPartition(Uuid.ZERO_UUID, topicPartition)
+                    zeroIdPartition -> OffsetFetchResponse.UNKNOWN_PARTITION
+                }
+              }.toMap
+            }
         }
       }
     }

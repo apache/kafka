@@ -19,6 +19,7 @@ package kafka.coordinator.group
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
+
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import kafka.utils.Implicits._
@@ -823,8 +824,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     expiredOffsets
   }
 
-  def allOffsets: Map[TopicIdPartition, OffsetAndMetadata] = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
-    (new TopicIdPartition(Uuid.ZERO_UUID, topicPartition), commitRecordMetadataAndOffset.offsetAndMetadata)
+  def allOffsets: Map[TopicPartition, OffsetAndMetadata] = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
+    (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
   }.toMap
 
   def offset(topicIdPartition: TopicIdPartition): Option[OffsetAndMetadata] = offsets.get(topicIdPartition.topicPartition).map(_.offsetAndMetadata)
