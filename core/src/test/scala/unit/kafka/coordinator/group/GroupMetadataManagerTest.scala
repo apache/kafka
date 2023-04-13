@@ -642,7 +642,8 @@ class GroupMetadataManagerTest {
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
 
     // Should ignore unknown record
-    val unknownMessage = MessageUtil.messageWithUnknownVersion()
+    val unknownKey = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
+    val unknownMessage = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
     val unknownRecord = new SimpleRecord(unknownMessage, unknownMessage)
 
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
@@ -2772,7 +2773,8 @@ class GroupMetadataManagerTest {
   def testIgnoreUnknownMessageKeyVersion(): Unit = {
     val record = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
     val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
-    GroupMetadataManager.readMessageKey(ByteBuffer.wrap(unknownRecord))
+    val key = GroupMetadataManager.readMessageKey(ByteBuffer.wrap(unknownRecord))
+    assertEquals(UnknownKey(Short.MaxValue), key)
   }
 
 }

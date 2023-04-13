@@ -479,7 +479,10 @@ class TransactionStateManager(brokerId: Int,
                     }
                     currOffset = batch.nextOffset
 
-                  case _: UnknownKey => // ignore unknown keys
+                  case unknownKey: UnknownKey =>
+                    warn(s"Unknown message key with version ${unknownKey.version}" +
+                      s" while loading transaction state. Ignoring it. " +
+                      s"It could be a left over from an aborted upgrade.")
 
                   case unexpectedKey =>
                     throw new IllegalStateException(s"Found unexpected key $unexpectedKey while reading transaction log.")

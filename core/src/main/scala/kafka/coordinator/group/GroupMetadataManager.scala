@@ -685,7 +685,11 @@ class GroupMetadataManager(brokerId: Int,
                       removedGroups.add(groupId)
                     }
 
-                  case _: UnknownKey => // do nothing
+                  case unknownKey: UnknownKey =>
+                    // Unknown versions may exist when a downgraded coordinator is reading records from the log.
+                    warn(s"Unknown message key with version ${unknownKey.version}" +
+                      s" while loading offsets and group metadata. Ignoring it. " +
+                      s"It could be a left over from an aborted upgrade.")
 
                   case unexpectedKey =>
                     throw new IllegalStateException(s"Unexpected message key $unexpectedKey while loading offsets and group metadata")
@@ -1045,7 +1049,7 @@ class GroupMetadataManager(brokerId: Int,
  * key version 2:       group metadata
  *    -> value version 0:       [protocol_type, generation, protocol, leader, members]
  */
-object GroupMetadataManager extends Logging {
+object GroupMetadataManager {
   // Metrics names
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
@@ -1160,9 +1164,6 @@ object GroupMetadataManager extends Logging {
       val key = new GroupMetadataKeyData(new ByteBufferAccessor(buffer), version)
       GroupMetadataKey(version, key.group)
     } else {
-      // Unknown versions may exist when a downgraded coordinator is reading records from the log.
-      warn(s"Found unknown message key version: $version." +
-        s" The downgraded coordinator will ignore this key and corresponding value.")
       UnknownKey(version)
     }
   }
@@ -1284,7 +1285,7 @@ object GroupMetadataManager extends Logging {
       GroupMetadataManager.readMessageKey(record.key) match {
           case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
           case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
-          case _: UnknownKey => (Some("<UNKNOWN>"), Some("<UNKNOWN>"))
+          case unknownKey: UnknownKey => (Some(s"UNKNOWN(version=${unknownKey.version})"), None)
           case _ => throw new KafkaException("Failed to decode message using offset topic decoder (message had an invalid key)")
       }
     }
@@ -1369,17 +1370,14 @@ trait BaseKey{
 }
 
 case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
-
   override def toString: String = key.toString
 }
 
 case class GroupMetadataKey(version: Short, key: String) extends BaseKey {
-
   override def toString: String = key
 }
 
-case class UnknownKey(version: Short, key: String = null) extends BaseKey {
-
+case class UnknownKey(version: Short) extends BaseKey {
+  override def key: String = null
   override def toString: String = key
 }
-

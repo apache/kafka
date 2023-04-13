@@ -142,7 +142,8 @@ class TransactionLogTest {
   def testReadUnknownMessageKeyVersion(): Unit = {
     val record = new TransactionLogKey()
     val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
-    TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))
+    val key = TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))
+    assertEquals(UnknownKey(Short.MaxValue), key)
   }
 
 }

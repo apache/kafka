@@ -16,6 +16,8 @@
  */
 package kafka.coordinator.transaction
 
+import kafka.internals.generated.TransactionLogKey
+
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
@@ -758,7 +760,7 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).get.transactionalId
+          val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
           assertNull(record.value)
           expiredTransactionalIds += transactionalId
           assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
@@ -1096,7 +1098,8 @@ class TransactionStateManagerTest {
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
     val startOffset = 0L
 
-    val unknownMessage = MessageUtil.messageWithUnknownVersion()
+    val unknownKey = new TransactionLogKey()
+    val unknownMessage = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
     val unknownRecord = new SimpleRecord(unknownMessage, unknownMessage)
 
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,

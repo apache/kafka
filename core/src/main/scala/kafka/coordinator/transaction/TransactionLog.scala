@@ -20,7 +20,6 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import kafka.internals.generated.{TransactionLogKey, TransactionLogValue}
-import kafka.utils.Logging
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{CompressionType, Record, RecordBatch}
@@ -37,7 +36,7 @@ import scala.jdk.CollectionConverters._
  * key version 0:               [transactionalId]
  *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
  */
-object TransactionLog extends Logging {
+object TransactionLog {
 
   // log-level config default values and enforced values
   val DefaultNumPartitions: Int = 50
@@ -107,8 +106,6 @@ object TransactionLog extends Logging {
         transactionalId = value.transactionalId
       )
     } else {
-      warn(s"Unknown version $version from the transaction log message." +
-        s" The downgraded coordinator will ignore this key and corresponding value.")
       UnknownKey(version)
     }
   }
@@ -213,7 +210,8 @@ case class TxnKey(version: Short, transactionalId: String) extends BaseKey {
   override def toString: String = transactionalId
 }
 
-case class UnknownKey(version: Short, transactionalId: String = null) extends BaseKey {
+case class UnknownKey(version: Short) extends BaseKey {
+  override def transactionalId: String = null
   override def toString: String = transactionalId
 }
 
