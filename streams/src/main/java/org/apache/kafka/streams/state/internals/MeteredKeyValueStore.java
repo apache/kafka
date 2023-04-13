@@ -200,7 +200,8 @@ public class MeteredKeyValueStore<K, V>
                     record.withKey(serdes.keyFrom(record.key()))
                         .withValue(new Change<>(
                             record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().isLatest
                         ))
                 ),
                 sendOldValues);

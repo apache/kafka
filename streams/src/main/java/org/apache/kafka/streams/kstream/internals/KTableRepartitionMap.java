@@ -154,19 +154,21 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
             final KeyValue<? extends K1, ? extends V1> oldPair = record.value().oldValue == null ? null :
                 mapper.apply(record.key(), record.value().oldValue);
 
+            final boolean isLatest = record.value().isLatest;
+
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
             final boolean oldPairNotNull = oldPair != null && oldPair.key != null && oldPair.value != null;
             final boolean newPairNotNull = newPair != null && newPair.key != null && newPair.value != null;
             if (isNotUpgrade && oldPairNotNull && newPairNotNull && oldPair.key.equals(newPair.key)) {
-                context().forward(record.withKey(oldPair.key).withValue(new Change<>(newPair.value, oldPair.value)));
+                context().forward(record.withKey(oldPair.key).withValue(new Change<>(newPair.value, oldPair.value, isLatest)));
             } else {
                 if (oldPairNotNull) {
-                    context().forward(record.withKey(oldPair.key).withValue(new Change<>(null, oldPair.value)));
+                    context().forward(record.withKey(oldPair.key).withValue(new Change<>(null, oldPair.value, isLatest)));
                 }
 
                 if (newPairNotNull) {
-                    context().forward(record.withKey(newPair.key).withValue(new Change<>(newPair.value, null)));
+                    context().forward(record.withKey(newPair.key).withValue(new Change<>(newPair.value, null, isLatest)));
                 }
             }
 
