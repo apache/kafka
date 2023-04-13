@@ -109,7 +109,7 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "client-" + UUID.randomUUID());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         instanceId.ifPresent(id -> props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, id));
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, readCommitted ? "false" : "true");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, !readCommitted);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         if (readCommitted) {
