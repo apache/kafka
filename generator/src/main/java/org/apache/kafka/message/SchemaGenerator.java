@@ -369,14 +369,6 @@ final class SchemaGenerator {
 
         buffer.printf("public static final short LOWEST_SUPPORTED_VERSION = %d;%n", versions.lowest());
         buffer.printf("public static final short HIGHEST_SUPPORTED_VERSION = %d;%n", versions.highest());
-
-        if (!messageFlexibleVersions.empty()) {
-            Versions nonFlexibleVersions = versions.subtract(messageFlexibleVersions);
-            if(nonFlexibleVersions != null) {
-                buffer.printf("public static final short HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION = %d;%n",
-                    nonFlexibleVersions.highest());
-            }
-        }
         buffer.printf("%n");
     }
 }

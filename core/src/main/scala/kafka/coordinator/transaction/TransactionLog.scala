@@ -84,7 +84,7 @@ object TransactionLog {
 
     // Serialize with the highest supported non-flexible version
     // until a tagged field is introduced or the version is bumped.
-    MessageUtil.toVersionPrefixedBytes(TransactionLogValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION,
+    MessageUtil.toVersionPrefixedBytes(0,
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)
         .setProducerEpoch(txnMetadata.producerEpoch)

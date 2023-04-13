@@ -26,6 +26,7 @@ import com.yammer.metrics.core.Gauge
 import javax.management.ObjectName
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
+import kafka.internals.generated.{GroupMetadataValueWithUnknownTaggedFields, OffsetCommitValueWithUnknownTaggedFields}
 import kafka.log.UnifiedLog
 import kafka.server.{HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.{MockTime, TestUtils}
@@ -35,12 +36,11 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics => kMetrics}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{Errors, MessageUtil}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -2479,7 +2479,7 @@ class GroupMetadataManagerTest {
     val record = TestUtils.records(Seq(
       buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, assignmentBytes)
     )).records.asScala.head
-    assertEquals(GroupMetadataValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION, record.value().getShort)
+    assertEquals(3, record.value().getShort)
   }
 
   @Test
@@ -2491,8 +2491,38 @@ class GroupMetadataManagerTest {
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     offsetCommitRecords.foreach { record =>
-      assertEquals(OffsetCommitValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION, record.value().getShort)
+      assertEquals(3, record.value().getShort)
     }
+  }
+
+  @Test
+  def testDeserializeOffsetCommitValueWithUnknownTaggedFields(): Unit = {
+    val offsetCommitValue = new OffsetCommitValueWithUnknownTaggedFields()
+      .setOffset(1000L)
+      .setMetadata("metadata")
+      .setUnknownTaggedField1("unknown tagged field")
+      .setUnknownTaggedField2(2000L)
+    val serialized = MessageUtil.toVersionPrefixedByteBuffer(4, offsetCommitValue)
+    val offsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(serialized)
+    assertEquals(1000L, offsetAndMetadata.offset)
+    assertEquals("metadata", offsetAndMetadata.metadata)
+  }
+
+  @Test
+  def testDeserializeGroupMetadataValueWithUnknownTaggedFields(): Unit = {
+    val member = new GroupMetadataValueWithUnknownTaggedFields.MemberMetadata()
+      .setMemberId("member")
+    val groupMetadataValue = new GroupMetadataValueWithUnknownTaggedFields()
+      .setProtocolType("consumer")
+      .setLeader("leader")
+      .setMembers(Collections.singletonList(member))
+      .setUnknownTaggedField1("unknown tagged field")
+      .setUnknownTaggedField2(2000L)
+    val serialized = MessageUtil.toVersionPrefixedByteBuffer(4, groupMetadataValue)
+    val groupMetadata = GroupMetadataManager.readGroupMessageValue("group", serialized, time)
+    assertEquals("consumer", groupMetadata.protocolType.get)
+    assertEquals("leader", groupMetadata.leaderOrNull)
+    assertTrue(groupMetadata.allMembers.contains("member"))
   }
 
   @Test

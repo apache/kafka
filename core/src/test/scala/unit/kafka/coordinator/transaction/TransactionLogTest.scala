@@ -17,9 +17,10 @@
 package kafka.coordinator.transaction
 
 
-import kafka.internals.generated.TransactionLogValue
+import kafka.internals.generated.TransactionLogValueWithUnknownTaggedFields
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.MessageUtil
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
@@ -141,7 +142,24 @@ class TransactionLogTest {
   def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
     val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata))
-    assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION, txnLogValueBuffer.getShort)
+    assertEquals(0, txnLogValueBuffer.getShort)
+  }
+
+  @Test
+  def testDeserializeTransactionLogValueWithUnknownTaggedFields(): Unit = {
+    val transactionLogValue = new TransactionLogValueWithUnknownTaggedFields()
+      .setProducerId(1000L)
+      .setTransactionStatus(CompleteCommit.id)
+      .setUnknownTaggedField1("unknown tagged field")
+      .setUnknownTaggedField2(2000L)
+
+    val serialized = MessageUtil.toVersionPrefixedBytes(1, transactionLogValue)
+
+    val transactionMetadata = TransactionLog.readTxnRecordValue("transaction",
+      ByteBuffer.wrap(serialized)).get
+
+    assertEquals(1000L, transactionMetadata.producerId)
+    assertEquals(CompleteCommit, transactionMetadata.state)
   }
 
 }

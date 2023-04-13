@@ -1089,7 +1089,7 @@ object GroupMetadataManager {
       else if (metadataVersion.isLessThan(IBP_2_1_IV1)) 2.toShort
       // Serialize with the highest supported non-flexible version
       // until a tagged field is introduced or the version is bumped.
-      else OffsetCommitValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION
+      else 3.toShort
     MessageUtil.toVersionPrefixedBytes(version, new OffsetCommitValue()
       .setOffset(offsetAndMetadata.offset)
       .setMetadata(offsetAndMetadata.metadata)
@@ -1119,7 +1119,7 @@ object GroupMetadataManager {
       else if (metadataVersion.isLessThan(IBP_2_3_IV0)) 2.toShort
       // Serialize with the highest supported non-flexible version
       // until a tagged field is introduced or the version is bumped.
-      else GroupMetadataValue.HIGHEST_SUPPORTED_NON_FLEXIBLE_VERSION
+      else 3.toShort
 
     MessageUtil.toVersionPrefixedBytes(version, new GroupMetadataValue()
       .setProtocolType(groupMetadata.protocolType.getOrElse(""))
