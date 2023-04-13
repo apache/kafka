@@ -77,7 +77,7 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
             return forceComplete()
         }
     }
-    if (remoteFetchResult.isDone)
+    if (remoteFetchResult.isDone) // Case c
       forceComplete()
     else
       false
