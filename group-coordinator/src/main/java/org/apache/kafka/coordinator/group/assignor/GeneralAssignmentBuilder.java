@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.coordinator.group.common.TopicIdToPartition;
+import org.apache.kafka.coordinator.group.common.RackAwareTopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +30,7 @@ public class GeneralAssignmentBuilder extends UniformAssignor.AbstractAssignment
     }
 
     @Override
-    Map<String, List<TopicIdToPartition>> build() {
+    Map<String, List<RackAwareTopicIdPartition>> build() {
         return null;
     }
 }

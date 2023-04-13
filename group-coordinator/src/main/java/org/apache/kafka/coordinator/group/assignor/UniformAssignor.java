@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.coordinator.group.common.TopicIdToPartition;
+import org.apache.kafka.coordinator.group.common.RackAwareTopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,15 +61,15 @@ public class UniformAssignor implements PartitionAssignor {
         }
         return areAllSubscriptionsEqual;
     }
-    protected GroupAssignment assignmentInCorrectFormat(Set<String> membersKeySet, Map<String, List<TopicIdToPartition>> computedAssignment) {
+    protected GroupAssignment assignmentInCorrectFormat(Set<String> membersKeySet, Map<String, List<RackAwareTopicIdPartition>> computedAssignment) {
         Map<String, MemberAssignment> members = new HashMap<>();
         if (computedAssignment.isEmpty()) {
             return new GroupAssignment(members);
         }
         for (String member : membersKeySet) {
-            List<TopicIdToPartition> assignment = computedAssignment.get(member);
+            List<RackAwareTopicIdPartition> assignment = computedAssignment.get(member);
             Map<Uuid, Set<Integer>> topicToSetOfPartitions = new HashMap<>();
-            for (TopicIdToPartition topicIdPartition : assignment) {
+            for (RackAwareTopicIdPartition topicIdPartition : assignment) {
                 Uuid topicId = topicIdPartition.topicId();
                 Integer partition = topicIdPartition.partition();
                 topicToSetOfPartitions.computeIfAbsent(topicId, k -> new HashSet<>());
@@ -96,14 +96,14 @@ public class UniformAssignor implements PartitionAssignor {
          *
          * @return Map from each member to the list of partitions assigned to them.
          */
-        abstract Map<String, List<TopicIdToPartition>> build();
+        abstract Map<String, List<RackAwareTopicIdPartition>> build();
 
-        protected List<TopicIdToPartition> getAllTopicPartitions(List<Uuid> listAllTopics) {
-            List<TopicIdToPartition> allPartitions = new ArrayList<>();
+        protected List<RackAwareTopicIdPartition> getAllTopicPartitions(List<Uuid> listAllTopics) {
+            List<RackAwareTopicIdPartition> allPartitions = new ArrayList<>();
             for (Uuid topic : listAllTopics) {
                 int partitionCount = metadataPerTopic.get(topic).numPartitions;
                 for (int i = 0; i < partitionCount; ++i) {
-                    allPartitions.add(new TopicIdToPartition(topic, i, null));
+                    allPartitions.add(new RackAwareTopicIdPartition(topic, i, null));
                 }
             }
             return allPartitions;

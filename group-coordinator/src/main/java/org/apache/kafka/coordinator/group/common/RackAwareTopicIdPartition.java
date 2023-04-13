@@ -22,12 +22,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-public class TopicIdToPartition {
+public class RackAwareTopicIdPartition {
     private final Uuid topicId;
     private final Integer partition;
     private final Optional<List<String>> rackIds;
 
-    public TopicIdToPartition(Uuid topicId, Integer topicPartition, Optional<List<String>> rackIds) {
+    public RackAwareTopicIdPartition(Uuid topicId, Integer topicPartition, Optional<List<String>> rackIds) {
         this.topicId = Objects.requireNonNull(topicId, "topicId can not be null");
         this.partition = Objects.requireNonNull(topicPartition, "topicPartition can not be null");
         this.rackIds = rackIds;
@@ -55,7 +55,7 @@ public class TopicIdToPartition {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        TopicIdToPartition that = (TopicIdToPartition) o;
+        RackAwareTopicIdPartition that = (RackAwareTopicIdPartition) o;
         return topicId.equals(that.topicId) &&
                 partition.equals(that.partition);
     }
