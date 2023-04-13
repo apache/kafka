@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
@@ -116,8 +119,14 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             thisProcessorName,
             otherProcessorName);
 
-        topologyBuilder.connectProcessorAndStateStores(thisProcessorName, joinOtherStoreNames);
-        topologyBuilder.connectProcessorAndStateStores(otherProcessorName, joinThisStoreNames);
+        // join processors for both sides of the join should have access to both stores
+        final Set<String> stores = new HashSet<>(joinThisStoreNames.length + joinOtherStoreNames.length);
+        Collections.addAll(stores, joinThisStoreNames);
+        Collections.addAll(stores, joinOtherStoreNames);
+        final String[] mergedStoreNames = stores.toArray(new String[0]);
+
+        topologyBuilder.connectProcessorAndStateStores(thisProcessorName, mergedStoreNames);
+        topologyBuilder.connectProcessorAndStateStores(otherProcessorName, mergedStoreNames);
 
         if (storeBuilder != null) {
             topologyBuilder.addStateStore(storeBuilder, mergeProcessorName);

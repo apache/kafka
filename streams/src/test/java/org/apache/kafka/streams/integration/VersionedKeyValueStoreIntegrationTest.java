@@ -27,9 +27,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -39,6 +41,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -59,6 +62,8 @@ import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
@@ -361,6 +366,116 @@ public class VersionedKeyValueStoreIntegrationTest {
         }
     }
 
+    @Test
+    public void shouldManualUpgradeFromNonVersionedTimestampedToVersioned() throws Exception {
+        // build non-versioned (timestamped) topology
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+
+        streamsBuilder
+            .addStateStore(
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                    Serdes.Integer(),
+                    Serdes.String()
+                )
+            )
+            .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .process(TimestampedStoreContentCheckerProcessor::new, STORE_NAME)
+            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
+
+        shouldManualUpgradeFromNonVersionedToVersioned(streamsBuilder.build());
+    }
+
+    @Test
+    public void shouldManualUpgradeFromNonVersionedNonTimestampedToVersioned() throws Exception {
+        // build non-versioned (non-timestamped) topology
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+
+        streamsBuilder
+            .addStateStore(
+                Stores.keyValueStoreBuilder(
+                    Stores.persistentKeyValueStore(STORE_NAME),
+                    Serdes.Integer(),
+                    Serdes.String()
+                )
+            )
+            .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .process(KeyValueStoreContentCheckerProcessor::new, STORE_NAME)
+            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
+
+        shouldManualUpgradeFromNonVersionedToVersioned(streamsBuilder.build());
+    }
+
+    private void shouldManualUpgradeFromNonVersionedToVersioned(final Topology originalTopology) throws Exception {
+        // build original (non-versioned) topology and start app
+        Properties props = props();
+        // additional property to prevent premature compaction of older record versions while using timestamped store
+        props.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, 60_000L);
+        kafkaStreams = new KafkaStreams(originalTopology, props);
+        kafkaStreams.start();
+
+        // produce source data and track in-memory to verify after restore
+        final DataTracker data = new DataTracker();
+        int initialRecordsProduced = 0;
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp, KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp + 5, KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp + 2, KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null)); // out-of-order data
+
+        // wait for output and verify
+        List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerDeserializer.class,
+                IntegerDeserializer.class),
+            outputStream,
+            initialRecordsProduced);
+
+        for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
+            // verify zero failed checks for each record
+            assertThat(receivedRecord.value, equalTo(0));
+        }
+
+        // wipe out state store to trigger restore process on restart
+        kafkaStreams.close();
+        kafkaStreams.cleanUp();
+
+        // restart app with versioned store, and pass expected store contents to processor
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+
+        streamsBuilder
+            .addStateStore(
+                Stores.versionedKeyValueStoreBuilder(
+                    Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMillis(HISTORY_RETENTION)),
+                    Serdes.Integer(),
+                    Serdes.String()
+                )
+            )
+            .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .process(() -> new VersionedStoreContentCheckerProcessor(true, data), STORE_NAME)
+            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
+
+        props = props();
+        kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
+        kafkaStreams.start();
+
+        // produce additional records
+        final int additionalRecordsProduced = produceDataToTopic(inputStream, baseTimestamp + 12, KeyValue.pair(1, "a12"), KeyValue.pair(2, "b12"), KeyValue.pair(3, "c12"));
+
+        // wait for output and verify
+        receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerDeserializer.class,
+                IntegerDeserializer.class),
+            outputStream,
+            initialRecordsProduced + additionalRecordsProduced);
+
+        for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
+            // verify zero failed checks for each record
+            assertThat(receivedRecord.value, equalTo(0));
+        }
+    }
+
     private Properties props() {
         final Properties streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(getClass(), testName);
@@ -526,6 +641,127 @@ public class VersionedKeyValueStoreIntegrationTest {
                 return expectedValue.equals(versionedRecord.value())
                     && expectedTimestamp == versionedRecord.timestamp();
             }
+        }
+    }
+
+    /**
+     * Same as {@link VersionedStoreContentCheckerProcessor} but for timestamped stores instead,
+     * for use in validating the manual upgrade path from non-versioned to versioned stores.
+     */
+    private static class TimestampedStoreContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
+
+        private ProcessorContext<Integer, Integer> context;
+        private TimestampedKeyValueStore<Integer, String> store;
+
+        // in-memory copy of seen data, to validate for testing purposes.
+        private final Map<Integer, Optional<ValueAndTimestamp<String>>> data;
+
+        TimestampedStoreContentCheckerProcessor() {
+            this.data = new HashMap<>();
+        }
+
+        @Override
+        public void init(final ProcessorContext<Integer, Integer> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            // add record to store
+            if (DataTracker.DELETE_VALUE_KEYWORD.equals(record.value())) {
+                // special value "delete" is interpreted as a delete() call from
+                // VersionedStoreContentCheckerProcessor but we do not support it here
+                throw new IllegalArgumentException("Using 'delete' keyword for "
+                    + "TimestampedStoreContentCheckerProcessor will result in the record "
+                    + "timestamp being ignored. Use regular put with null value instead.");
+            }
+            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(record.value(), record.timestamp());
+            store.put(record.key(), valueAndTimestamp);
+            data.put(record.key(), Optional.ofNullable(valueAndTimestamp));
+
+            // check expected contents of store, and signal completion by writing
+            // number of failures to downstream
+            final int failedChecks = checkStoreContents();
+            context.forward(record.withValue(failedChecks));
+        }
+
+        /**
+         * @return number of failed checks
+         */
+        private int checkStoreContents() {
+            int failedChecks = 0;
+            for (final Map.Entry<Integer, Optional<ValueAndTimestamp<String>>> keyWithValueAndTimestamp : data.entrySet()) {
+                final Integer key = keyWithValueAndTimestamp.getKey();
+                final ValueAndTimestamp<String> valueAndTimestamp = keyWithValueAndTimestamp.getValue().orElse(null);
+
+                // validate get from store
+                final ValueAndTimestamp<String> record = store.get(key);
+                if (!Objects.equals(record, valueAndTimestamp)) {
+                    failedChecks++;
+                }
+            }
+            return failedChecks;
+        }
+    }
+
+    /**
+     * Same as {@link VersionedStoreContentCheckerProcessor} but for regular key-value stores instead,
+     * for use in validating the manual upgrade path from non-versioned to versioned stores.
+     */
+    private static class KeyValueStoreContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
+
+        private ProcessorContext<Integer, Integer> context;
+        private KeyValueStore<Integer, String> store;
+
+        // in-memory copy of seen data, to validate for testing purposes.
+        private final Map<Integer, Optional<String>> data;
+
+        KeyValueStoreContentCheckerProcessor() {
+            this.data = new HashMap<>();
+        }
+
+        @Override
+        public void init(final ProcessorContext<Integer, Integer> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            // add record to store
+            if (DataTracker.DELETE_VALUE_KEYWORD.equals(record.value())) {
+                // special value "delete" is interpreted as a delete() call from
+                // VersionedStoreContentCheckerProcessor but we do not support it here
+                throw new IllegalArgumentException("Using 'delete' keyword for "
+                    + "KeyValueStoreContentCheckerProcessor will result in the record "
+                    + "timestamp being ignored. Use regular put with null value instead.");
+            }
+            store.put(record.key(), record.value());
+            data.put(record.key(), Optional.ofNullable(record.value()));
+
+            // check expected contents of store, and signal completion by writing
+            // number of failures to downstream
+            final int failedChecks = checkStoreContents();
+            context.forward(record.withValue(failedChecks));
+        }
+
+        /**
+         * @return number of failed checks
+         */
+        private int checkStoreContents() {
+            int failedChecks = 0;
+            for (final Map.Entry<Integer, Optional<String>> keyValue : data.entrySet()) {
+                final Integer expectedKey = keyValue.getKey();
+                final String expectedValue = keyValue.getValue().orElse(null);
+
+                // validate get from store
+                final String foundValue = store.get(expectedKey);
+                if (!Objects.equals(foundValue, expectedValue)) {
+                    failedChecks++;
+                }
+            }
+            return failedChecks;
         }
     }
 

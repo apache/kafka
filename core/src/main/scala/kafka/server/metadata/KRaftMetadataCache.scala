@@ -310,6 +310,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
+  def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
+    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
+      map(brokerRegistration => brokerRegistration.epoch())
+  }
+
   override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
     val image = _currentImage
     val nodes = new util.HashMap[Integer, Node]
