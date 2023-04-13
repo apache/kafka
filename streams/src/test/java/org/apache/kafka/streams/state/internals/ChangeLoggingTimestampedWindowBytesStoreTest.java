@@ -96,7 +96,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         store.put(bytesKey, valueAndTimestamp, context.timestamp());
 
         verify(inner).put(bytesKey, valueAndTimestamp, 0);
-        verify(context).logChange(store.name(), key, value, 42, POSITION);
+        verify(context).logChange(store.name(), key, value, context.timestamp(), POSITION);
     }
 
     @Test
