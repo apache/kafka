@@ -229,6 +229,7 @@ public class StandaloneHerder extends AbstractHerder {
                     try {
                         updateConnectorTasks(connName);
                     } catch (Throwable t) {
+                        log.error("Failed to update connector tasks after startup", t);
                         callback.onCompletion(t, null);
                         return;
                     }
@@ -312,6 +313,7 @@ public class StandaloneHerder extends AbstractHerder {
                 try {
                     requestTaskReconfiguration(connName);
                 } catch (Throwable t) {
+                    log.error("Failed to reconfigure connector tasks after restart", t);
                     cb.onCompletion(t, null);
                     return;
                 }
