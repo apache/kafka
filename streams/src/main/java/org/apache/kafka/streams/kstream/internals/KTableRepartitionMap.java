@@ -47,6 +47,11 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
         this.mapper = mapper;
     }
 
+    // VisibleForTesting
+    boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
+    }
+
     public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
         this.useVersionedSemantics = useVersionedSemantics;
     }

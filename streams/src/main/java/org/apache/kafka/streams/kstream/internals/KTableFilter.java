@@ -49,6 +49,11 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
         this.useVersionedSemantics = useVersionedSemantics;
     }
 
+    // VisibleForTesting
+    boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
+    }
+
     @Override
     public Processor<KIn, Change<VIn>, KIn, Change<VIn>> get() {
         return new KTableFilterProcessor();
