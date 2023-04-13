@@ -153,8 +153,26 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
         @Override
         public ValueAndTimestamp<VOut> get(final K key) {
-            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
+            return transformValue(key, parentGetter.get(key));
+        }
 
+        @Override
+        public ValueAndTimestamp<VOut> get(final K key, final long asOfTimestamp) {
+            return transformValue(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
+        }
+
+        @Override
+        public void close() {
+            parentGetter.close();
+            valueTransformer.close();
+        }
+
+        private ValueAndTimestamp<VOut> transformValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
             final ProcessorRecordContext currentContext = internalProcessorContext.recordContext();
 
             internalProcessorContext.setRecordContext(new ProcessorRecordContext(
@@ -176,12 +194,6 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             internalProcessorContext.setRecordContext(currentContext);
 
             return result;
-        }
-
-        @Override
-        public void close() {
-            parentGetter.close();
-            valueTransformer.close();
         }
     }
 }

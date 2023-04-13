@@ -26,7 +26,7 @@ import java.util.Objects;
 /**
  * Contains information about a set of changes that were loaded from the metadata log.
  */
-public class LogDeltaManifest {
+public class LogDeltaManifest implements LoaderManifest {
     /**
      * The highest offset and epoch included in this delta, inclusive.
      */
@@ -66,7 +66,12 @@ public class LogDeltaManifest {
         this.numBytes = numBytes;
     }
 
+    @Override
+    public LoaderManifestType type() {
+        return LoaderManifestType.LOG_DELTA;
+    }
 
+    @Override
     public MetadataProvenance provenance() {
         return provenance;
     }

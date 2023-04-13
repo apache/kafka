@@ -23,7 +23,6 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
@@ -42,6 +41,7 @@ import org.apache.kafka.common.config.TopicConfig
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 
@@ -76,9 +76,11 @@ class LogManager(logDirs: Seq[File],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
-                 val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
+                 val keepPartitionMetadataFile: Boolean) extends Logging {
 
   import LogManager._
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val InitialTaskDelayMs = 30 * 1000
 
@@ -132,12 +134,12 @@ class LogManager(logDirs: Seq[File],
   @volatile private var _cleaner: LogCleaner = _
   private[kafka] def cleaner: LogCleaner = _cleaner
 
-  newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
+  metricsGroup.newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
 
   for (dir <- logDirs) {
-    newGauge("LogDirectoryOffline",
+    metricsGroup.newGauge("LogDirectoryOffline",
       () => if (_liveLogDirs.contains(dir)) 0 else 1,
-      Map("logDirectory" -> dir.getAbsolutePath))
+      Map("logDirectory" -> dir.getAbsolutePath).asJava)
   }
 
   /**
@@ -471,12 +473,12 @@ class LogManager(logDirs: Seq[File],
                                          numRemainingSegments: ConcurrentMap[String, Int]): Unit = {
     debug("Adding log recovery metrics")
     for (dir <- logDirs) {
-      newGauge("remainingLogsToRecover", () => numRemainingLogs.get(dir.getAbsolutePath),
-        Map("dir" -> dir.getAbsolutePath))
+      metricsGroup.newGauge("remainingLogsToRecover", () => numRemainingLogs.get(dir.getAbsolutePath),
+        Map("dir" -> dir.getAbsolutePath).asJava)
       for (i <- 0 until numRecoveryThreadsPerDataDir) {
         val threadName = logRecoveryThreadName(dir.getAbsolutePath, i)
-        newGauge("remainingSegmentsToRecover", () => numRemainingSegments.get(threadName),
-          Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
+        metricsGroup.newGauge("remainingSegmentsToRecover", () => numRemainingSegments.get(threadName),
+          Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString).asJava)
       }
     }
   }
@@ -484,9 +486,9 @@ class LogManager(logDirs: Seq[File],
   private[log] def removeLogRecoveryMetrics(): Unit = {
     debug("Removing log recovery metrics")
     for (dir <- logDirs) {
-      removeMetric("remainingLogsToRecover", Map("dir" -> dir.getAbsolutePath))
+      metricsGroup.removeMetric("remainingLogsToRecover", Map("dir" -> dir.getAbsolutePath).asJava)
       for (i <- 0 until numRecoveryThreadsPerDataDir) {
-        removeMetric("remainingSegmentsToRecover", Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
+        metricsGroup.removeMetric("remainingSegmentsToRecover", Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString).asJava)
       }
     }
   }
@@ -575,9 +577,9 @@ class LogManager(logDirs: Seq[File],
   def shutdown(): Unit = {
     info("Shutting down.")
 
-    removeMetric("OfflineLogDirectoryCount")
+    metricsGroup.removeMetric("OfflineLogDirectoryCount")
     for (dir <- logDirs) {
-      removeMetric("LogDirectoryOffline", Map("logDirectory" -> dir.getAbsolutePath))
+      metricsGroup.removeMetric("LogDirectoryOffline", Map("logDirectory" -> dir.getAbsolutePath).asJava)
     }
 
     val threadPools = ArrayBuffer.empty[ExecutorService]

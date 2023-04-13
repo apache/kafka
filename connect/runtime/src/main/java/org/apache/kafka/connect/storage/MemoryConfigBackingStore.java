@@ -147,9 +147,10 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         if (connectorState == null)
             throw new IllegalArgumentException("No connector `" + connector + "` configured");
 
+        TargetState prevState = connectorState.targetState;
         connectorState.targetState = state;
 
-        if (updateListener != null)
+        if (updateListener != null && !state.equals(prevState))
             updateListener.onConnectorTargetStateChange(connector);
     }
 

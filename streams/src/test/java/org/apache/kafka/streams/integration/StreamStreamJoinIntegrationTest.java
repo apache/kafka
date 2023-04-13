@@ -137,7 +137,31 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null, 14L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null, 14L))
         );
 
         leftStream.join(
@@ -182,7 +206,31 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null, 14L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null, 14L))
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
@@ -229,7 +277,31 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null, 14L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null, 14L))
         );
 
         leftStream.leftJoin(
@@ -274,7 +346,31 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null, 14L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null, 14L))
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
@@ -321,7 +417,31 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null, 14L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null, 14L))
         );
 
         leftStream.outerJoin(
@@ -366,7 +486,31 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d", null, 14L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f", null, 15L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d", null, 14L))
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
@@ -404,7 +548,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "C-a-b", null, 9L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "C-b-a", null, 9L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "C-b-b", null, 9L)),
-            Arrays.asList(
+            Arrays.<TestRecord<Long, String>>asList(
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-c-a", null, 10L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-c-b", null, 10L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "B-c-a", null, 10L),
@@ -423,7 +567,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             null,
             null,
             null,
-            Arrays.asList(
+            Arrays.<TestRecord<Long, String>>asList(
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-d-a", null, 14L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-d-b", null, 14L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-d-c", null, 14L),
@@ -445,7 +589,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-d-d", null, 14L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "B-d-d", null, 14L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "C-d-d", null, 14L)),
-            Arrays.asList(
+            Arrays.<TestRecord<Long, String>>asList(
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-a-c", null, 15L),
@@ -461,7 +605,163 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d-a", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
+            Arrays.<TestRecord<Long, String>>asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b-a", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c-a", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c-b", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d-a", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d-b", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d-c", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d-d", null, 14L)),
+            Arrays.<TestRecord<Long, String>>asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e-a", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e-a", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e-a", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e-b", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e-a", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e-b", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e-c", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e-d", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e-e", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-a-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e-e", null, 4L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-a-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e-e", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-b-e", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-b-e", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b-e", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-a-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-b-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-c-e", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-c-e", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-c-e", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c-e", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-d-e", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-d-e", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-d-e", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d-e", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-a-e", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-b-e", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-c-e", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d-e", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e-e", null, 15L)),
+            Arrays.<TestRecord<Long, String>>asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f-e", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f-a", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f-b", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f-e", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f-a", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f-b", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f-e", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f-a", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f-b", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f-e", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f-a", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f-b", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f-e", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f-a", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f-b", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f-c", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f-d", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-e-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-a-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-a-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-e-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-a-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-e-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-b-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-b-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-b-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-f-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-f-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-f-f", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-a-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-b-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-e-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-f-f", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-c-f", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-c-f", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-c-f", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-c-f", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-d-f", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-d-f", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-d-f", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "E-d-f", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-a-f", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-b-f", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-c-f", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d-f", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-e-f", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-f-f", null, 15L)),
+            Arrays.<TestRecord<Long, String>>asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-e-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-a-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-b-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f-e", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f-a", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f-b", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f-f", null, 8L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-f-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c-e", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c-a", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c-b", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c-f", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-c-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d-e", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d-a", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d-b", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d-f", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d-c", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "F-d-d", null, 14L))
         );
 
         leftStream.join(
