@@ -37,6 +37,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessor;
@@ -166,10 +167,66 @@ public class KTableAggregateTest {
                     new KeyValueTimestamp<>("1", "0+1-1", 15),
                     new KeyValueTimestamp<>("1", "0+1-1+1", 15),
                     new KeyValueTimestamp<>("2", "0+2", 20),
-                        new KeyValueTimestamp<>("2", "0+2-2", 23),
-                        new KeyValueTimestamp<>("4", "0+4", 23),
-                        new KeyValueTimestamp<>("4", "0+4-4", 23),
-                        new KeyValueTimestamp<>("7", "0+7", 22)),
+                    new KeyValueTimestamp<>("2", "0+2-2", 23),
+                    new KeyValueTimestamp<>("4", "0+4", 23),
+                    new KeyValueTimestamp<>("4", "0+4-4", 23),
+                    new KeyValueTimestamp<>("7", "0+7", 22)),
+                supplier.theCapturedProcessor().processed());
+        }
+    }
+
+    @Test
+    public void testAggOfVersionedStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
+
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5)));
+        final KTable<String, String> table1 = builder.table(topic1, consumed, versionedMaterialize);
+        final KTable<String, String> table2 = table1
+            .groupBy(
+                (key, value) -> {
+                    switch (key) {
+                        case "null":
+                            return KeyValue.pair(null, value);
+                        case "NULL":
+                            return null;
+                        default:
+                            return KeyValue.pair(value, value);
+                    }
+                },
+                stringSerialized)
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized")
+                    .withValueSerde(stringSerde));
+
+        table2.toStream().process(supplier);
+
+        try (
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+            inputTopic.pipeInput("A", "1", 10L);
+            inputTopic.pipeInput("A", (String) null, 15L);
+            inputTopic.pipeInput("A", "1", 12L); // out-of-order record will be ignored
+            inputTopic.pipeInput("B", "2", 20L);
+            inputTopic.pipeInput("null", "3", 25L);
+            inputTopic.pipeInput("B", "4", 23L);
+            inputTopic.pipeInput("NULL", "5", 24L);
+            inputTopic.pipeInput("B", "7", 22L); // out-of-order record will be ignored
+
+            assertEquals(
+                asList(
+                    new KeyValueTimestamp<>("1", "0+1", 10),
+                    new KeyValueTimestamp<>("1", "0+1-1", 15),
+                    new KeyValueTimestamp<>("2", "0+2", 20),
+                    new KeyValueTimestamp<>("2", "0+2-2", 23),
+                    new KeyValueTimestamp<>("4", "0+4", 23)),
                 supplier.theCapturedProcessor().processed());
         }
     }
@@ -230,6 +287,45 @@ public class KTableAggregateTest {
             .process(supplier);
 
         testCountHelper(builder, input, supplier);
+    }
+
+    @Test
+    public void testCountOfVersionedStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "count-test-input";
+
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5)));
+        builder
+            .table(input, consumed, versionedMaterialize)
+            .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
+            .count()
+            .toStream()
+            .process(supplier);
+
+        try (
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+            inputTopic.pipeInput("A", "green", 10L);
+            inputTopic.pipeInput("B", "green", 9L);
+            inputTopic.pipeInput("A", "blue", 12L);
+            inputTopic.pipeInput("A", "blue", 11L); // out-of-order record will be ignored
+            inputTopic.pipeInput("C", "yellow", 15L);
+            inputTopic.pipeInput("D", "green", 11L);
+
+            assertEquals(
+                asList(
+                    new KeyValueTimestamp<>("green", 1L, 10),
+                    new KeyValueTimestamp<>("green", 2L, 10),
+                    new KeyValueTimestamp<>("green", 1L, 12),
+                    new KeyValueTimestamp<>("blue", 1L, 12),
+                    new KeyValueTimestamp<>("yellow", 1L, 15),
+                    new KeyValueTimestamp<>("green", 2L, 12)),
+                supplier.theCapturedProcessor().processed());
+        }
     }
 
     @Test
