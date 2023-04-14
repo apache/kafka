@@ -165,12 +165,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testBrokerTopicMetricsBytesInOut(quorum: String): Unit = {
+  def testBrokerTopicMetricsBytesInOutAndMessageIn(quorum: String): Unit = {
     val topic = "test-bytes-in-out"
     val replicationBytesIn = BrokerTopicStats.ReplicationBytesInPerSec
     val replicationBytesOut = BrokerTopicStats.ReplicationBytesOutPerSec
     val bytesIn = s"${BrokerTopicStats.BytesInPerSec},topic=$topic"
     val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic"
+    val messageIn = s"${BrokerTopicStats.MessagesInPerSec},topic=$topic"
+    val partitionBytesIn = s"${BrokerTopicStats.PartitionBytesInPerSec},topic=$topic,partition=0"
+    val partitionMessageIn = s"${BrokerTopicStats.PartitionMessagesInPerSec},topic=$topic,partition=0"
 
     val topicConfig = new Properties
     topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
@@ -194,6 +197,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val initialReplicationBytesOut = TestUtils.meterCount(replicationBytesOut)
     val initialBytesIn = TestUtils.meterCount(bytesIn)
     val initialBytesOut = TestUtils.meterCount(bytesOut)
+    val initialMessageIn = TestUtils.meterCount(messageIn)
+    val initialPartitionBytesIn = TestUtils.meterCount(partitionBytesIn)
+    val initialPartitionMessageIn = TestUtils.meterCount(partitionMessageIn)
 
     // BytesOut doesn't include replication, so it shouldn't have changed
     assertEquals(initialBytesOut, TestUtils.meterCount(bytesOut))
@@ -204,6 +210,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(TestUtils.meterCount(replicationBytesIn) > initialReplicationBytesIn)
     assertTrue(TestUtils.meterCount(replicationBytesOut) > initialReplicationBytesOut)
     assertTrue(TestUtils.meterCount(bytesIn) > initialBytesIn)
+    assertTrue(TestUtils.meterCount(messageIn) > initialMessageIn)
+    assertTrue(TestUtils.meterCount(partitionBytesIn) > initialPartitionBytesIn)
+    assertTrue(TestUtils.meterCount(partitionMessageIn) > initialPartitionMessageIn)
 
     // Consume messages to make bytesOut tick
     TestUtils.consumeTopicRecords(brokers, topic, nMessages)
@@ -278,7 +287,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   private def filterByTopicMetricRegex(metrics: Set[String], topic: Option[String]): Set[String] = {
-    val pattern = (".*BrokerTopicMetrics.*" + topic.map(t => s"($t)$$").getOrElse("")).r.pattern
-    metrics.filter(pattern.matcher(_).matches())
+    val topicPattern = (".*BrokerTopicMetrics.*" + topic.map(t => s"($t)$$").getOrElse("") + ".*").r.pattern
+    val partitionPattern = (".*BrokerTopicPartitionMetrics.partition.*.topic.*" + topic.map(t => s"($t)$$").getOrElse("")).r.pattern
+    metrics.filter(topicPattern.matcher(_).matches()).union(metrics.filter(partitionPattern.matcher(_).matches()))
   }
 }

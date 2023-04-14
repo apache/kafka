@@ -24,6 +24,7 @@ import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChan
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -345,6 +346,66 @@ class BrokerTopicMetrics(name: Option[String]) {
   def close(): Unit = metricTypeMap.values.foreach(_.close())
 }
 
+class BrokerTopicPartitionMetrics(name: Option[TopicPartition]) {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
+  val tags: java.util.Map[String, String] = name match {
+    case None => Collections.emptyMap()
+    case Some(topicPartition) => Map("topic" -> topicPartition.topic(), "partition" -> topicPartition.partition().toString).asJava
+  }
+
+  case class MeterWrapper(metricType: String, eventType: String) {
+    @volatile private var lazyMeter: Meter = _
+    private val meterLock = new Object
+
+    def meter(): Meter = {
+      var meter = lazyMeter
+      if (meter == null) {
+        meterLock synchronized {
+          meter = lazyMeter
+          if (meter == null) {
+            meter = metricsGroup.newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
+            lazyMeter = meter
+          }
+        }
+      }
+      meter
+    }
+
+    def close(): Unit = meterLock synchronized {
+      if (lazyMeter != null) {
+        metricsGroup.removeMetric(metricType, tags)
+        lazyMeter = null
+      }
+    }
+
+    if (tags.isEmpty) // greedily initialize the general topic metrics
+      meter()
+  }
+
+  // an internal map for "lazy initialization" of certain metrics
+  private val metricTypeMap = new Pool[String, MeterWrapper]()
+  metricTypeMap.putAll(Map(
+    BrokerTopicStats.PartitionMessagesInPerSec -> MeterWrapper(BrokerTopicStats.PartitionMessagesInPerSec, "messages"),
+    BrokerTopicStats.PartitionBytesInPerSec -> MeterWrapper(BrokerTopicStats.PartitionBytesInPerSec, "bytes")
+  ).asJava)
+
+  // used for testing only
+  def metricMap: Map[String, MeterWrapper] = metricTypeMap.toMap
+
+  def partitionMessagesInRate: Meter = metricTypeMap.get(BrokerTopicStats.PartitionMessagesInPerSec).meter()
+
+  def partitionBytesInRate: Meter = metricTypeMap.get(BrokerTopicStats.PartitionBytesInPerSec).meter()
+
+  def closeMetric(metricType: String): Unit = {
+    val meter = metricTypeMap.get(metricType)
+    if (meter != null)
+      meter.close()
+  }
+
+  def close(): Unit = metricTypeMap.values.foreach(_.close())
+}
+
 object BrokerTopicStats {
   val MessagesInPerSec = "MessagesInPerSec"
   val BytesInPerSec = "BytesInPerSec"
@@ -367,17 +428,29 @@ object BrokerTopicStats {
   val InvalidMessageCrcRecordsPerSec = "InvalidMessageCrcRecordsPerSec"
   val InvalidOffsetOrSequenceRecordsPerSec = "InvalidOffsetOrSequenceRecordsPerSec"
 
+  val PartitionMessagesInPerSec = "PartitionMessagesInPerSec"
+  val PartitionBytesInPerSec = "PartitionBytesInPerSec"
+
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
+  private val partitionValueFactory = (k: TopicPartition) => new BrokerTopicPartitionMetrics(Some(k))
 }
 
 class BrokerTopicStats extends Logging {
   import BrokerTopicStats._
 
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
+  private val partitionStats = new Pool[TopicPartition, BrokerTopicPartitionMetrics](Some(partitionValueFactory))
   val allTopicsStats = new BrokerTopicMetrics(None)
 
   def topicStats(topic: String): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)
+
+  def topicPartitionStats(topicPartition: TopicPartition): BrokerTopicPartitionMetrics =
+    partitionStats.getAndMaybePut(topicPartition)
+
+  def getTopicPartitionMetricsByTopic(topic: String): List[(TopicPartition, BrokerTopicPartitionMetrics)] = {
+    partitionStats.filter(tp => tp._1.topic() == topic).toList
+  }
 
   def updateReplicationBytesIn(value: Long): Unit = {
     allTopicsStats.replicationBytesInRate.foreach { metric =>
@@ -406,6 +479,7 @@ class BrokerTopicStats extends Logging {
   // This method only removes metrics only used for leader
   def removeOldLeaderMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
+    val topicPartitionMetrics = getTopicPartitionMetricsByTopic(topic)
     if (topicMetrics != null) {
       topicMetrics.closeMetric(BrokerTopicStats.MessagesInPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.BytesInPerSec)
@@ -415,6 +489,12 @@ class BrokerTopicStats extends Logging {
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
+    }
+    if (topicPartitionMetrics != null && topicPartitionMetrics.nonEmpty) {
+      topicPartitionMetrics.foreach(metric => {
+        metric._2.closeMetric(BrokerTopicStats.PartitionMessagesInPerSec)
+        metric._2.closeMetric(BrokerTopicStats.PartitionBytesInPerSec)
+      })
     }
   }
 
@@ -429,8 +509,14 @@ class BrokerTopicStats extends Logging {
 
   def removeMetrics(topic: String): Unit = {
     val metrics = stats.remove(topic)
+    val topicPartitionMetrics = getTopicPartitionMetricsByTopic(topic)
     if (metrics != null)
       metrics.close()
+    if (topicPartitionMetrics != null && topicPartitionMetrics.nonEmpty) {
+      topicPartitionMetrics.foreach(metric => {
+        metric._2.close()
+      })
+    }
   }
 
   def updateBytesOut(topic: String, isFollower: Boolean, isReassignment: Boolean, value: Long): Unit = {
@@ -447,6 +533,7 @@ class BrokerTopicStats extends Logging {
   def close(): Unit = {
     allTopicsStats.close()
     stats.values.foreach(_.close())
+    partitionStats.values.foreach(_.close())
 
     info("Broker and topic stats closed")
   }
