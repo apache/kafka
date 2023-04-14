@@ -52,10 +52,10 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
         // The format we need to deserialize is:
         // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
         // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
-        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
         // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=3}
         // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE newOldFlag=4}
-        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=5}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=5}
         final ByteBuffer buffer = ByteBuffer.wrap(data);
         final byte newOldFlag = buffer.get(data.length - NEW_OLD_FLAG_SIZE);
 
@@ -96,14 +96,14 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             buffer.get(newData);
             isLatest = readIsLatestFlag(buffer);
         } else if (newOldFlag == (byte) 5) {
-            final int newDataLength = Math.toIntExact(ByteUtils.readUnsignedInt(buffer));
+            final int newDataLength = ByteUtils.readVarint(buffer);
             newData = new byte[newDataLength];
-
-            final int oldDataLength = data.length - Integer.BYTES - newDataLength - IS_LATEST_FLAG_SIZE - NEW_OLD_FLAG_SIZE;
-            oldData = new byte[oldDataLength];
-
             buffer.get(newData);
+
+            final int oldDataLength = buffer.capacity() - buffer.position() - IS_LATEST_FLAG_SIZE - NEW_OLD_FLAG_SIZE;
+            oldData = new byte[oldDataLength];
             buffer.get(oldData);
+
             isLatest = readIsLatestFlag(buffer);
         } else {
             throw new StreamsException("Encountered unknown byte value `" + newOldFlag + "` for oldNewFlag in ChangedDeserializer.");
