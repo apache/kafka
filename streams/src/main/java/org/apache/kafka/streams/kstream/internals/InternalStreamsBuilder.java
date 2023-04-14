@@ -620,11 +620,17 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private void enableVersionedSemantics() {
-        versionedSemanticsNodes.forEach(node -> ((VersionedSemanticsGraphNode) node).enableVersionedSemantics(isVersionedUpstream(node)));
+        versionedSemanticsNodes.forEach(node -> {
+            for (final GraphNode parentNode : node.parentNodes()) {
+                if (isVersionedOrVersionedUpstream(parentNode)) {
+                    ((VersionedSemanticsGraphNode) node).enableVersionedSemantics(true, parentNode.nodeName());
+                }
+            }
+        });
         tableSuppressNodesNodes.forEach(node -> {
             if (isVersionedUpstream(node)) {
                 throw new TopologyException("suppress() is only supported for non-versioned KTables " +
-                        "(note that version semantics might be inherited from upstream)");
+                    "(note that version semantics might be inherited from upstream)");
             }
         });
     }

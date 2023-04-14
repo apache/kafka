@@ -21,8 +21,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -31,7 +29,6 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,29 +49,36 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
     private final Supplier<String> foreignKeySerdeTopicSupplier;
     private final Supplier<String> valueSerdeTopicSupplier;
     private final boolean leftJoin;
-    private final KTableValueGetterSupplier<K, V> primaryKeyValueGetterSupplier;
     private Serializer<KO> foreignKeySerializer;
     private Serializer<V> valueSerializer;
+    private boolean useVersionedSemantics;
 
     public SubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
                                              final Supplier<String> foreignKeySerdeTopicSupplier,
                                              final Supplier<String> valueSerdeTopicSupplier,
                                              final Serde<KO> foreignKeySerde,
                                              final Serializer<V> valueSerializer,
-                                             final boolean leftJoin,
-                                             final KTableValueGetterSupplier<K, V> primaryKeyValueGetterSupplier) {
+                                             final boolean leftJoin) {
         this.foreignKeyExtractor = foreignKeyExtractor;
         this.foreignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
         this.valueSerdeTopicSupplier = valueSerdeTopicSupplier;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
-        this.primaryKeyValueGetterSupplier = primaryKeyValueGetterSupplier;
         foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
     }
 
     @Override
     public Processor<K, Change<V>, KO, SubscriptionWrapper<K>> get() {
-        return new UnbindChangeProcessor(primaryKeyValueGetterSupplier.get());
+        return new UnbindChangeProcessor();
+    }
+
+    public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
+        this.useVersionedSemantics = useVersionedSemantics;
+    }
+
+    // VisibleForTesting
+    public boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
     }
 
     private class UnbindChangeProcessor extends ContextualProcessor<K, Change<V>, KO, SubscriptionWrapper<K>> {
@@ -82,11 +86,6 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
         private Sensor droppedRecordsSensor;
         private String foreignKeySerdeTopic;
         private String valueSerdeTopic;
-        private final KTableValueGetter<K, V> primaryKeyValueGetter;
-
-        private UnbindChangeProcessor(final KTableValueGetter<K, V> primaryKeyValueGetter) {
-            this.primaryKeyValueGetter = primaryKeyValueGetter;
-        }
 
         @SuppressWarnings("unchecked")
         @Override
@@ -106,23 +105,15 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics()
             );
-            primaryKeyValueGetter.init(context);
         }
 
         @Override
         public void process(final Record<K, Change<V>> record) {
             // drop out-of-order records from versioned tables (cf. KIP-914)
-            if (primaryKeyValueGetter.isVersioned()) {
-                // key-value stores do not contain data for null keys, so skip the check
-                // if the key is null
-                if (record.key() != null) {
-                    final ValueAndTimestamp<V> latestValueAndTimestamp = primaryKeyValueGetter.get(record.key());
-                    if (latestValueAndTimestamp != null && latestValueAndTimestamp.timestamp() > record.timestamp()) {
-                        LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
-                        droppedRecordsSensor.record();
-                        return;
-                    }
-                }
+            if (useVersionedSemantics && !record.value().isLatest) {
+                LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
+                droppedRecordsSensor.record();
+                return;
             }
 
             final long[] currentHash = record.value().newValue == null ?
@@ -206,11 +197,6 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
                                 partition)));
                 }
             }
-        }
-
-        @Override
-        public void close() {
-            primaryKeyValueGetter.close();
         }
 
         private void logSkippedRecordDueToNullForeignKey() {
