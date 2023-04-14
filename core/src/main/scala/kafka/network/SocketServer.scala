@@ -723,6 +723,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         new InetSocketAddress(host, port)
     val serverChannel = ServerSocketChannel.open()
     serverChannel.configureBlocking(false)
+    serverChannel.socket().setReuseAddress(true);
     if (recvBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
       serverChannel.socket().setReceiveBufferSize(recvBufferSize)
 
