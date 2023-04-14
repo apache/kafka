@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import java.util.Objects;
-
 /**
  * Metadata of a topic.
  */
@@ -51,7 +49,7 @@ public class AssignmentTopicMetadata {
 
     @Override
     public int hashCode() {
-        return Objects.hash(numPartitions);
+        return numPartitions;
     }
 
     @Override

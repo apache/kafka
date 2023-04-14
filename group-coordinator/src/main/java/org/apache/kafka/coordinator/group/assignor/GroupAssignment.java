@@ -46,9 +46,7 @@ public class GroupAssignment {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         GroupAssignment that = (GroupAssignment) o;
-
         return members.equals(that.members);
     }
 

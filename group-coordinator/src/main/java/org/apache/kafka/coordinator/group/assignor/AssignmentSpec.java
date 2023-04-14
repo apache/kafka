@@ -63,9 +63,7 @@ public class AssignmentSpec {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         AssignmentSpec that = (AssignmentSpec) o;
-
         if (!members.equals(that.members)) return false;
         return topics.equals(that.topics);
     }

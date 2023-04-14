@@ -96,9 +96,7 @@ public class AssignmentMemberSpec {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         AssignmentMemberSpec that = (AssignmentMemberSpec) o;
-
         if (!instanceId.equals(that.instanceId)) return false;
         if (!rackId.equals(that.rackId)) return false;
         if (!subscribedTopicIds.equals(that.subscribedTopicIds)) return false;
