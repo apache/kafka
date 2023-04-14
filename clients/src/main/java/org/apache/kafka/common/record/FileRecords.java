@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -461,13 +460,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                            int initFileSize,
                                            boolean preallocate) throws IOException {
         if (mutable) {
-            if (fileAlreadyExists || !preallocate) {
+            if (preallocate && !fileAlreadyExists) {
+                return Utils.createPreallocatedFile(file.toPath(), initFileSize);
+            } else {
                 return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
                         StandardOpenOption.WRITE);
-            } else {
-                RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
             }
         } else {
             return FileChannel.open(file.toPath());

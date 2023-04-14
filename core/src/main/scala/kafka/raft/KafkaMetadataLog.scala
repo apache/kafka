@@ -663,7 +663,7 @@ object KafkaMetadataLog extends Logging {
       }
 
       snapshotsToDelete.foreach { snapshotPath =>
-        Files.deleteIfExists(snapshotPath.path)
+        Snapshots.makeWritableAndDeleteIfExists(snapshotPath.path)
         info(s"Deleted unneeded snapshot file with path $snapshotPath")
       }
     } finally {

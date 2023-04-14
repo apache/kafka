@@ -30,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.locks.Lock;
@@ -86,27 +87,42 @@ public abstract class AbstractIndex implements Closeable {
 
     private void createAndAssignMmap() throws IOException {
         boolean newlyCreated = file.createNewFile();
-        RandomAccessFile raf;
+        FileChannel channel;
         if (writable)
-            raf = new RandomAccessFile(file, "rw");
+            channel = FileChannel.open(file.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.SPARSE);
         else
-            raf = new RandomAccessFile(file, "r");
+            channel = FileChannel.open(file.toPath(), StandardOpenOption.READ);
 
         try {
             /* pre-allocate the file if necessary */
             if (newlyCreated) {
                 if (maxIndexSize < entrySize())
                     throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize);
-                raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize()));
+
+                int size = roundDownToExactMultiple(maxIndexSize, entrySize());
+                Utils.preallocateFile(channel, size);
             }
 
-            long length = raf.length();
-            MappedByteBuffer mmap = createMappedBuffer(raf, newlyCreated, length, writable, entrySize());
+            long length = channel.size();
+            MappedByteBuffer mmap;
+
+            if (writable)
+                mmap = channel.map(FileChannel.MapMode.READ_WRITE, 0, length);
+            else
+                mmap = channel.map(FileChannel.MapMode.READ_ONLY, 0, length);
+
+            /* set the position in the index for the next entry */
+            if (newlyCreated)
+                mmap.position(0);
+            else {
+                // if this is a pre-existing index, assume it is valid and set position to last entry
+                mmap.position(roundDownToExactMultiple(mmap.limit(), entrySize()));
+            }
 
             this.length = length;
             this.mmap = mmap;
         } finally {
-            Utils.closeQuietly(raf, "index " + file.getName());
+            Utils.closeQuietly(channel, "index " + file.getName());
         }
     }
 
@@ -193,23 +209,23 @@ public abstract class AbstractIndex implements Closeable {
                 log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
                 return false;
             } else {
-                RandomAccessFile raf = new RandomAccessFile(file, "rw");
+                FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
                 try {
                     int position = mmap.position();
 
                     /* Windows or z/OS won't let us modify the file length while the file is mmapped :-( */
                     if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
                         safeForceUnmap();
-                    raf.setLength(roundedNewSize);
+                    Utils.preallocateFile(channel, roundedNewSize);
                     this.length = roundedNewSize;
-                    mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
+                    mmap = channel.map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
                     this.maxEntries = mmap.limit() / entrySize();
                     mmap.position(position);
                     log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
                             mmap.position(), mmap.limit());
                     return true;
                 } finally {
-                    Utils.closeQuietly(raf, "index file " + file.getName());
+                    Utils.closeQuietly(channel, "index file " + file.getName());
                 }
             }
         } finally {
