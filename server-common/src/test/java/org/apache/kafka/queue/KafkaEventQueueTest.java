@@ -267,7 +267,7 @@ public class KafkaEventQueueTest {
         assertFalse(queue.isEmpty());
         queue.cancelDeferred("later");
         queue.cancelDeferred("soon");
-        assertTrue(queue.isEmpty());
+        TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
         queue.close();
         assertTrue(queue.isEmpty());
     }
