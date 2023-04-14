@@ -56,11 +56,7 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     }
 
     @Override
-    void log(final Bytes key, final byte[] rawValueAndTimestamp) {
-        throw new IllegalStateException("versioned changelogging layer should call log(key, value, timestamp) instead");
-    }
-
-    private void log(final Bytes key, final byte[] value, final long timestamp) {
+    public void log(final Bytes key, final byte[] value, final long timestamp) {
         context.logChange(
             name(),
             key,
