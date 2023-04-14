@@ -332,7 +332,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request for verification")
       responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> Errors.INVALID_REQUEST).toMap.asJava))
     } else {
-      val result: ApiResult[(Int, TransactionMetadata)] = getTransactionMetadata(transactionalId, producerId, producerEpoch, partitions)
+      val result: ApiResult[(Int, TransactionMetadata)] = getTransactionMetadata(transactionalId, producerId, producerEpoch, partitions, true)
       
       result match {
         case Left(err) =>
@@ -364,7 +364,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
       // if there is no such metadata treat it as invalid producerId mapping error.
-      val result: ApiResult[(Int, TransactionMetadata)] = getTransactionMetadata(transactionalId, producerId, producerEpoch, partitions)
+      val result: ApiResult[(Int, TransactionMetadata)] = getTransactionMetadata(transactionalId, producerId, producerEpoch, partitions, false)
 
       result match {
         case Left(err) =>
@@ -381,7 +381,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   private def getTransactionMetadata(transactionalId: String,
                                      producerId: Long,
                                      producerEpoch: Short,
-                                     partitions: collection.Set[TopicPartition]): ApiResult[(Int, TransactionMetadata)] = {
+                                     partitions: collection.Set[TopicPartition],
+                                     verifyOnly: Boolean): ApiResult[(Int, TransactionMetadata)] = {
     txnManager.getTransactionState(transactionalId).flatMap {
       case None => Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
@@ -396,8 +397,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           } else if (txnMetadata.producerEpoch != producerEpoch) {
             Left(Errors.PRODUCER_FENCED)
           } else if (txnMetadata.pendingTransitionInProgress) {
-            // return a retriable exception to let the client backoff and retry
-            Left(Errors.CONCURRENT_TRANSACTIONS)
+            // If we are in the produce path, we want to avoid OutOfOrderSequence errors if the added partition is pending.
+            // TODO: Part 2 of KIP-890 will always start transactions with sequence 0, so we enforce that and avoid this workaround.
+            if (verifyOnly && txnMetadata.pendingState == Some(Ongoing) && partitions.subsetOf(txnMetadata.topicPartitions)) {
+              Left(Errors.NONE)
+            } else {
+              // return a retriable exception to let the client backoff and retry
+              Left(Errors.CONCURRENT_TRANSACTIONS)
+            }
           } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
             Left(Errors.CONCURRENT_TRANSACTIONS)
           } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {

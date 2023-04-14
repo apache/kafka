@@ -234,6 +234,24 @@ class TransactionCoordinatorTest {
     coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, error)
   }
+ 
+  @Test 
+  def shouldRespondWithNoErrorWhenVerifyingAndPendingStateIsOngoingWithPartition(): Unit = {
+    var errors: Map[TopicPartition, Errors] = Map.empty
+
+    def verifyPartitionsInTxnCallback(result: AddPartitionsToTxnResult): Unit = {
+      errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults()).asScala.toMap
+    }
+    
+    val txnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Empty, mutable.Set.empty, 0, 0)
+    txnMetadata.pendingState = Some(Ongoing)
+    partitions.foreach(txnMetadata.topicPartitions.add(_))
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 1, partitions, verifyPartitionsInTxnCallback)
+    assertEquals(Errors.NONE, error)
+  }
 
   @Test
   def shouldRespondWithConcurrentTransactionsOnAddPartitionsWhenStateIsPrepareCommit(): Unit = {
