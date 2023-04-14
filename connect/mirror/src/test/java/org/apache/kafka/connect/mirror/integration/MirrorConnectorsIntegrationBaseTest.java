@@ -181,7 +181,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         backupWorkerProps.putAll(mm2Config.workerConfig(new SourceAndTarget(PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS)));
         
         primary = new EmbeddedConnectCluster.Builder()
-                .name(PRIMARY_CLUSTER_ALIAS + "-connect-cluster")
+                .name(getClass().getSimpleName() + "-" + PRIMARY_CLUSTER_ALIAS + "-connect-cluster")
                 .numWorkers(NUM_WORKERS)
                 .numBrokers(1)
                 .brokerProps(primaryBrokerProps)
@@ -191,7 +191,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .build();
 
         backup = new EmbeddedConnectCluster.Builder()
-                .name(BACKUP_CLUSTER_ALIAS + "-connect-cluster")
+                .name(getClass().getSimpleName() + "-" + BACKUP_CLUSTER_ALIAS + "-connect-cluster")
                 .numWorkers(NUM_WORKERS)
                 .numBrokers(1)
                 .brokerProps(backupBrokerProps)

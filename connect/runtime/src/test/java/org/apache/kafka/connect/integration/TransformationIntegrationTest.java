@@ -86,7 +86,7 @@ public class TransformationIntegrationTest {
 
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
-                .name("connect-cluster")
+                .name(getClass().getSimpleName() + "-cluster")
                 .numWorkers(NUM_WORKERS)
                 .numBrokers(1)
                 .workerProps(workerProps)

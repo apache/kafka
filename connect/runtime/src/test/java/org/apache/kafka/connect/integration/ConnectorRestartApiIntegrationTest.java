@@ -102,7 +102,7 @@ public class ConnectorRestartApiIntegrationTest {
             brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
             EmbeddedConnectCluster.Builder connectBuilder = new EmbeddedConnectCluster.Builder()
-                    .name("connect-cluster")
+                    .name(getClass().getSimpleName() + "-cluster")
                     .numWorkers(numWorkers)
                     .workerProps(workerProps)
                     .brokerProps(brokerProps)

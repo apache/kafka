@@ -63,7 +63,7 @@ public class InternalTopicsIntegrationTest {
     public void testCreateInternalTopicsWithDefaultSettings() throws InterruptedException {
         int numWorkers = 1;
         int numBrokers = 3;
-        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+        connect = new EmbeddedConnectCluster.Builder().name(getClass().getSimpleName() + "-cluster")
                                                       .workerProps(workerProps)
                                                       .numWorkers(numWorkers)
                                                       .numBrokers(numBrokers)
@@ -102,7 +102,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         int numWorkers = 1;
         int numBrokers = 2;
-        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+        connect = new EmbeddedConnectCluster.Builder().name(getClass().getSimpleName() + "-cluster")
                                                       .workerProps(workerProps)
                                                       .numWorkers(numWorkers)
                                                       .numBrokers(numBrokers)
@@ -128,7 +128,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         int numWorkers = 1;
         int numBrokers = 1;
-        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+        connect = new EmbeddedConnectCluster.Builder().name(getClass().getSimpleName() + "-cluster")
                                                       .workerProps(workerProps)
                                                       .numWorkers(numWorkers)
                                                       .numBrokers(numBrokers)
@@ -159,7 +159,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         int numWorkers = 0;
         int numBrokers = 1;
-        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+        connect = new EmbeddedConnectCluster.Builder().name(getClass().getSimpleName() + "-cluster")
                                                       .workerProps(workerProps)
                                                       .numWorkers(numWorkers)
                                                       .numBrokers(numBrokers)
@@ -233,7 +233,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         int numWorkers = 0;
         int numBrokers = 1;
-        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+        connect = new EmbeddedConnectCluster.Builder().name(getClass().getSimpleName() + "-cluster")
                                                       .workerProps(workerProps)
                                                       .numWorkers(numWorkers)
                                                       .numBrokers(numBrokers)
