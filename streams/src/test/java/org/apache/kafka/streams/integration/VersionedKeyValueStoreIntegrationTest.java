@@ -838,7 +838,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             }
 
             @Override
-            public void put(final Bytes key, final byte[] value, final long timestamp) {
+            public long put(final Bytes key, final byte[] value, final long timestamp) {
                 throw new UnsupportedOperationException();
             }
 
