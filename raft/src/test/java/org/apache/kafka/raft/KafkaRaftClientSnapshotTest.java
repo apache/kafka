@@ -1756,14 +1756,14 @@ final public class KafkaRaftClientSnapshotTest {
 
     private static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
         return RecordsSnapshotWriter.createWithHeader(
-            () -> Optional.of(snapshot),
+            snapshot,
             4 * 1024,
             MemoryPool.NONE,
             context.time,
             0,
             CompressionType.NONE,
             new StringSerde()
-        ).get();
+        );
     }
 
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {

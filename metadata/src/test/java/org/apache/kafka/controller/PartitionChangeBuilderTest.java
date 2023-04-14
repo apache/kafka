@@ -35,6 +35,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.function.IntPredicate;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.controller.PartitionChangeBuilder.Election;
@@ -440,4 +441,64 @@ public class PartitionChangeBuilderTest {
         assertEquals(leaderId, registration.isr[0]);
         assertEquals(expectedRecovery, registration.leaderRecoveryState);
     }
+
+    @Test
+    public void testStoppedLeaderIsDemotedAfterReassignmentCompletesEvenIfNoNewEligibleLeaders() {
+        // Set up PartitionRegistration as if there's an ongoing reassignment from [0, 1] to [2, 3]
+        int[] replicas = new int[] {2, 3, 0, 1};
+        // The ISR starts off with the old replicas
+        int[] isr = new int[] {0, 1};
+        // We're removing [0, 1]
+        int[] removingReplicas = new int[] {0, 1};
+        // And adding [2, 3]
+        int[] addingReplicas = new int[] {2, 3};
+        // The leader is 0, one of the replicas we're removing
+        int leader = 0;
+        LeaderRecoveryState leaderRecoveryState = LeaderRecoveryState.RECOVERED;
+        int leaderEpoch = 0;
+        int partitionEpoch = 0;
+        PartitionRegistration part = new PartitionRegistration(
+            replicas,
+            isr,
+            removingReplicas,
+            addingReplicas,
+            leader,
+            leaderRecoveryState,
+            leaderEpoch,
+            partitionEpoch
+        );
+
+        Uuid topicId = Uuid.randomUuid();
+        // Always return false for valid leader. This is so none of the new replicas are valid leaders. This is so we
+        // test what happens when the previous leader is a replica being "stopped" ie removed from the replicas list
+        // and none of the adding replicas can be a leader. We want to make sure we do not leave the previous replica
+        // being stopped as leader.
+        IntPredicate isValidLeader = l -> false;
+
+        PartitionChangeBuilder partitionChangeBuilder =
+            new PartitionChangeBuilder(
+                part,
+                topicId,
+                0,
+                isValidLeader,
+                false
+            );
+
+        // Before we build the new PartitionChangeBuilder, confirm the current leader is 0.
+        assertEquals(0, part.leader);
+        // The important part is that the new leader is NO_LEADER.
+        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+                setTopicId(topicId).
+                setPartitionId(0).
+                setReplicas(Arrays.asList(2, 3)).
+                setIsr(Arrays.asList(2, 3)).
+                setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).
+                setLeader(NO_LEADER),
+                PARTITION_CHANGE_RECORD.highestSupportedVersion())),
+            partitionChangeBuilder.setTargetIsr(Arrays.asList(0, 1, 2, 3)).
+                build());
+    }
+
+
 }

@@ -426,6 +426,11 @@ class CachingWindowStore
     }
 
     @Override
+    public void clearCache() {
+        context.cache().clear(cacheName);
+    }
+
+    @Override
     public synchronized void close() {
         final LinkedList<RuntimeException> suppressed = executeAll(
             () -> context.cache().flush(cacheName),
