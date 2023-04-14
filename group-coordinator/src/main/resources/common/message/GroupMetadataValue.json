@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Version 4 is the first flexible version.
 {
   "type": "data",
   "name": "GroupMetadataValue",
+  // Version 4 is the first flexible version.
   // KIP-915: bumping the version will no longer make this record backward compatible.
   // We suggest to add/remove only tagged fields to maintain backward compatibility.
   "validVersions": "0-4",
@@ -32,7 +32,7 @@
   "commonStructs": [
     {
       "name": "MemberMetadata",
-      "versions": "0-3",
+      "versions": "0+",
       "fields": [
         { "name": "memberId", "versions": "0+", "type": "string" },
         { "name": "groupInstanceId", "versions": "3+", "type": "string", "default": "null", "nullableVersions": "3+", "ignorable": true},

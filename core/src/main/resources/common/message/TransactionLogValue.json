@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Version 1 is the first flexible version.
-// ONLY USED FOR TESTING
 {
   "type": "data",
   "name": "TransactionLogValue",
+  // Version 1 is the first flexible version.
   // KIP-915: bumping the version will no longer make this record backward compatible.
   // We suggest to add/remove only tagged fields to maintain backward compatibility.
   "validVersions": "0-1",

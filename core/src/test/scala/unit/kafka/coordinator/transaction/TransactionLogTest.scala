@@ -17,10 +17,12 @@
 package kafka.coordinator.transaction
 
 
-import kafka.internals.generated.TransactionLogValueWithUnknownTaggedFields
+import kafka.internals.generated.TransactionLogValue
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.MessageUtil
+import org.apache.kafka.common.protocol.ByteBufferAccessor
+import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
+import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
@@ -147,19 +149,79 @@ class TransactionLogTest {
 
   @Test
   def testDeserializeTransactionLogValueWithUnknownTaggedFields(): Unit = {
-    val transactionLogValue = new TransactionLogValueWithUnknownTaggedFields()
-      .setProducerId(1000L)
-      .setTransactionStatus(CompleteCommit.id)
-      .setUnknownTaggedField1("unknown tagged field")
-      .setUnknownTaggedField2(2000L)
+    // Copy of TransactionLogValue.PartitionsSchema.SCHEMA_1 with a few
+    // additional tagged fields.
+    val futurePartitionsSchema = new Schema(
+      new Field("topic", Type.COMPACT_STRING, ""),
+      new Field("partition_ids", new CompactArrayOf(Type.INT32), ""),
+      TaggedFieldsSection.of(
+        0, new Field("partition_foo", Type.STRING, ""),
+        1, new Field("partition_foo", Type.INT32, "")
+      )
+    )
 
-    val serialized = MessageUtil.toVersionPrefixedBytes(1, transactionLogValue)
+    // create TransactionLogValue.PartitionsSchema with tagged fields
+    val txnPartitions = new Struct(futurePartitionsSchema)
+    txnPartitions.set("topic", "topic")
+    txnPartitions.set("partition_ids", Array(Integer.valueOf(1)))
+    val txnPartitionsTaggedFields = new java.util.TreeMap[Integer, Any]()
+    txnPartitionsTaggedFields.put(0, "foo")
+    txnPartitionsTaggedFields.put(1, 4000)
+    txnPartitions.set("_tagged_fields", txnPartitionsTaggedFields)
 
-    val transactionMetadata = TransactionLog.readTxnRecordValue("transaction",
-      ByteBuffer.wrap(serialized)).get
+    // Copy of TransactionLogValue.SCHEMA_1 with a few
+    // additional tagged fields.
+    val futureTransactionLogValueSchema = new Schema(
+      new Field("producer_id", Type.INT64, ""),
+      new Field("producer_epoch", Type.INT16, ""),
+      new Field("transaction_timeout_ms", Type.INT32, ""),
+      new Field("transaction_status", Type.INT8, ""),
+      new Field("transaction_partitions", CompactArrayOf.nullable(futurePartitionsSchema), ""),
+      new Field("transaction_last_update_timestamp_ms", Type.INT64, ""),
+      new Field("transaction_start_timestamp_ms", Type.INT64, ""),
+      TaggedFieldsSection.of(
+        0, new Field("txn_foo", Type.STRING, ""),
+        1, new Field("txn_bar", Type.INT32, "")
+      )
+    )
 
-    assertEquals(1000L, transactionMetadata.producerId)
-    assertEquals(CompleteCommit, transactionMetadata.state)
+    // create TransactionLogValue with tagged fields
+    val transactionLogValue = new Struct(futureTransactionLogValueSchema)
+    transactionLogValue.set("producer_id", 1000L)
+    transactionLogValue.set("producer_epoch", 100.toShort)
+    transactionLogValue.set("transaction_timeout_ms", 1000)
+    transactionLogValue.set("transaction_status", CompleteCommit.id)
+    transactionLogValue.set("transaction_partitions", Array(txnPartitions))
+    transactionLogValue.set("transaction_last_update_timestamp_ms", 2000L)
+    transactionLogValue.set("transaction_start_timestamp_ms", 3000L)
+    val txnLogValueTaggedFields = new java.util.TreeMap[Integer, Any]()
+    txnLogValueTaggedFields.put(0, "foo")
+    txnLogValueTaggedFields.put(1, 4000)
+    transactionLogValue.set("_tagged_fields", txnLogValueTaggedFields)
+
+    // Prepare the buffer.
+    val buffer = ByteBuffer.allocate(transactionLogValue.sizeOf() + 2)
+    buffer.put(0.toByte)
+    buffer.put(1.toByte) // Add 1 as version.
+    transactionLogValue.writeTo(buffer)
+    buffer.flip()
+
+    // Read the buffer with the real schema and verify that tagged
+    // fields were read but ignored.
+    buffer.getShort() // Skip version.
+    val value = new TransactionLogValue(new ByteBufferAccessor(buffer), 1.toShort)
+    assertEquals(Seq(0, 1), value.unknownTaggedFields().asScala.map(_.tag))
+
+    // Read the buffer with readTxnRecordValue.
+    buffer.rewind()
+    val txnMetadata = TransactionLog.readTxnRecordValue("transaction-id", buffer).get
+    assertEquals(1000L, txnMetadata.producerId)
+    assertEquals(100, txnMetadata.producerEpoch)
+    assertEquals(1000L, txnMetadata.txnTimeoutMs)
+    assertEquals(CompleteCommit, txnMetadata.state)
+    assertEquals(Set(new TopicPartition("topic", 1)), txnMetadata.topicPartitions)
+    assertEquals(2000L, txnMetadata.txnLastUpdateTimestamp)
+    assertEquals(3000L, txnMetadata.txnStartTimestamp)
   }
 
 }

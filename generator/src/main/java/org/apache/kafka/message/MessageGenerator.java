@@ -217,7 +217,7 @@ public final class MessageGenerator {
 
     public static void processDirectories(String packageName,
                                           String outputDir,
-                                          String inputDirs,
+                                          String inputDir,
                                           List<String> typeClassGeneratorTypes,
                                           List<String> messageClassGeneratorTypes) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
@@ -226,28 +226,26 @@ public final class MessageGenerator {
         List<TypeClassGenerator> typeClassGenerators =
                 createTypeClassGenerators(packageName, typeClassGeneratorTypes);
         HashSet<String> outputFileNames = new HashSet<>();
-        for (String inputDir : inputDirs.split(",")) {
-            try (DirectoryStream<Path> directoryStream = Files
-                    .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
-                for (Path inputPath : directoryStream) {
-                    try {
-                        MessageSpec spec = JSON_SERDE.
-                                readValue(inputPath.toFile(), MessageSpec.class);
-                        List<MessageClassGenerator> generators =
-                                createMessageClassGenerators(packageName, messageClassGeneratorTypes);
-                        for (MessageClassGenerator generator : generators) {
-                            String name = generator.outputName(spec) + JAVA_SUFFIX;
-                            outputFileNames.add(name);
-                            Path outputPath = Paths.get(outputDir, name);
-                            try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-                                generator.generateAndWrite(spec, writer);
-                            }
+        try (DirectoryStream<Path> directoryStream = Files
+                .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
+            for (Path inputPath : directoryStream) {
+                try {
+                    MessageSpec spec = JSON_SERDE.
+                            readValue(inputPath.toFile(), MessageSpec.class);
+                    List<MessageClassGenerator> generators =
+                            createMessageClassGenerators(packageName, messageClassGeneratorTypes);
+                    for (MessageClassGenerator generator : generators) {
+                        String name = generator.outputName(spec) + JAVA_SUFFIX;
+                        outputFileNames.add(name);
+                        Path outputPath = Paths.get(outputDir, name);
+                        try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
+                            generator.generateAndWrite(spec, writer);
                         }
-                        numProcessed++;
-                        typeClassGenerators.forEach(generator -> generator.registerMessageType(spec));
-                    } catch (Exception e) {
-                        throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                     }
+                    numProcessed++;
+                    typeClassGenerators.forEach(generator -> generator.registerMessageType(spec));
+                } catch (Exception e) {
+                    throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }
             }
         }
