@@ -24,6 +24,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
 public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final KTableImpl<KIn, ?, VIn> parent;
@@ -129,10 +131,13 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
             }
 
             if (queryableName != null) {
-                store.put(key, newValue, record.timestamp());
-                tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
+                final long putReturnCode = store.put(key, newValue, record.timestamp());
+                // if not put to store, do not forward downstream either
+                if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
+                    tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
+                }
             } else {
-                context.forward(record.withValue(new Change<>(newValue, oldValue)));
+                context.forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)));
             }
         }
 
