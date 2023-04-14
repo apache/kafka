@@ -20,7 +20,6 @@ package org.apache.kafka.controller.metrics;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
@@ -200,8 +199,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         return this.metadataErrorCount.get();
     }
 
-    public void setZkMigrationState(ZkMigrationState migrationState) {
-        this.zkMigrationState.set(migrationState.value());
+    public void setZkMigrationState(byte migrationStateValue) {
+        this.zkMigrationState.set(migrationStateValue);
     }
 
     public byte zkMigrationState() {

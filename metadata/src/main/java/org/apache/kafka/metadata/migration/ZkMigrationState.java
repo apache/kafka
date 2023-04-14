@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import java.util.Optional;
 
 /**
@@ -69,6 +72,13 @@ public enum ZkMigrationState {
 
     public byte value() {
         return value;
+    }
+
+    public ApiMessageAndVersion toRecord() {
+        return new ApiMessageAndVersion(
+            new ZkMigrationStateRecord().setZkMigrationState(value()),
+            (short) 0
+        );
     }
 
     public static ZkMigrationState of(byte value) {

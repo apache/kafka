@@ -18,7 +18,6 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
@@ -90,7 +89,7 @@ public final class FeaturesImage {
         }
 
         if (options.metadataVersion().isMigrationSupported()) {
-            writer.write(0, new ZkMigrationStateRecord().setZkMigrationState(zkMigrationState.value()));
+            writer.write(0, zkMigrationState.toRecord().message());
         } else {
             if (!zkMigrationState.equals(ZkMigrationState.NONE)) {
                 options.handleLoss("the ZK Migration state which was " + zkMigrationState);

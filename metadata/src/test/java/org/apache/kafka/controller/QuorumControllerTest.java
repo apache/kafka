@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.RequestHeaderData;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
@@ -92,6 +94,7 @@ import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
@@ -105,6 +108,7 @@ import org.apache.kafka.snapshot.FileRawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -1372,5 +1376,99 @@ public class QuorumControllerTest {
             return active.appendReadEvent("read migration state", OptionalLong.empty(),
                 () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    public void testUpgradeMigrationStateFrom34() throws Exception {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()) {
+            // In 3.4, we only wrote a PRE_MIGRATION to the log. In that software version, we defined this
+            // as enum value 1. In 3.5+ software, this enum value is redefined as MIGRATION
+            BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test");
+            List<ApiMessageAndVersion> initialRecords = new ArrayList<>(bootstrapMetadata.records());
+            initialRecords.add(ZkMigrationState.of((byte) 1).toRecord());
+            logEnv.appendInitialRecords(initialRecords);
+            try (
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                    setControllerBuilderInitializer(controllerBuilder -> {
+                        controllerBuilder.setZkMigrationEnabled(true);
+                    }).
+                    setBootstrapMetadata(bootstrapMetadata).
+                    build();
+            ) {
+                QuorumController active = controlEnv.activeController();
+                assertEquals(active.featureControl().zkMigrationState(), ZkMigrationState.MIGRATION);
+                assertFalse(active.featureControl().inPreMigrationMode());
+            }
+        }
+    }
+
+    FeatureControlManager getActivationRecords(
+            MetadataVersion metadataVersion,
+            boolean emptyLog,
+            boolean zkMigrationEnabled
+    ) {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
+                .setSnapshotRegistry(snapshotRegistry)
+                .setMetadataVersion(metadataVersion)
+                .build();
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        QuorumController.generateActivationRecords(
+            log,
+            emptyLog,
+            zkMigrationEnabled,
+            BootstrapMetadata.fromVersion(metadataVersion, "test"),
+            featureControlManager,
+            records::add);
+        RecordTestUtils.replayAll(featureControlManager, records);
+        return featureControlManager;
+    }
+
+    @Test
+    public void testActivationRecords33() {
+        FeatureControlManager featureControl;
+
+        assertEquals(
+            "Invalid value true for configuration zookeeper.metadata.migration.enable: " +
+                "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations, cannot continue with ZK migrations enabled.",
+            assertThrows(ConfigException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, true, true)).getMessage()
+        );
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, true, false);
+        assertEquals(MetadataVersion.IBP_3_3_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
+
+        assertEquals(
+            "Invalid value true for configuration zookeeper.metadata.migration.enable: " +
+                "Should not have ZK migrations enabled on a cluster running metadata.version 3.3-IV0",
+            assertThrows(ConfigException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, false, true)).getMessage()
+        );
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, false, false);
+        assertEquals(MetadataVersion.IBP_3_3_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
+    }
+
+    @Test
+    public void testActivationRecords34() {
+        FeatureControlManager featureControl;
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, true, true);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, true, false);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
+
+        assertEquals(
+            "Invalid value true for configuration zookeeper.metadata.migration.enable: Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
+            assertThrows(ConfigException.class, () -> getActivationRecords(MetadataVersion.IBP_3_4_IV0, false, true)).getMessage()
+        );
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, false, false);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
     }
 }

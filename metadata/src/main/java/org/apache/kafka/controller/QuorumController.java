@@ -684,8 +684,7 @@ public final class QuorumController implements Controller {
             if (!isActiveController(controllerEpoch)) {
                 throw newNotControllerException();
             }
-            if (featureControl.inPreMigrationMode(featureControl.metadataVersion()) &&
-                    !flags.contains(RUNS_IN_PREMIGRATION)) {
+            if (featureControl.inPreMigrationMode() && !flags.contains(RUNS_IN_PREMIGRATION)) {
                 log.info("Cannot run write operation {} in pre-migration mode. Returning NOT_CONTROLLER.", name);
                 throw newNotControllerException();
             }
@@ -913,9 +912,7 @@ public final class QuorumController implements Controller {
             // TODO use KIP-868 transaction
             ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Complete ZK Migration",
                 new MigrationWriteOperation(
-                    Collections.singletonList(
-                        FeatureControlManager.buildZkMigrationRecord(ZkMigrationState.MIGRATION)
-                    )),
+                    Collections.singletonList(ZkMigrationState.MIGRATION.toRecord())),
                 EnumSet.of(RUNS_IN_PREMIGRATION));
             queue.append(event);
             return event.future.thenApply(__ -> highestMigrationRecordOffset);
@@ -1177,7 +1174,12 @@ public final class QuorumController implements Controller {
         }
     }
 
-    public static void generateBootstrapRecords(
+    /**
+     * Generate the set of activation records. Until KIP-868 transactions are supported, these records
+     * are committed to the log as an atomic batch. The records will include the bootstrap metadata records
+     * (including the bootstrap "metadata.version") and may include a ZK migration record.
+     */
+    public static void generateActivationRecords(
         Logger log,
         boolean isLogEmpty,
         boolean zkMigrationEnabled,
@@ -1190,33 +1192,41 @@ public final class QuorumController implements Controller {
             // This will include the new metadata.version, as well as things like SCRAM
             // initialization, etc.
             log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
-                            "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
-                    bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
+                "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
+                bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
             bootstrapMetadata.records().forEach(recordConsumer);
 
             if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
                 if (zkMigrationEnabled) {
-                    log.info("Writing ZkMigrationState of PRE_MIGRATION to the log, since migrations are enabled.");
-                    recordConsumer.accept(FeatureControlManager.buildZkMigrationRecord(ZkMigrationState.PRE_MIGRATION));
+                    log.info("Appending ZkMigrationState of PRE_MIGRATION to the log, since migrations are enabled.");
+                    recordConsumer.accept(ZkMigrationState.PRE_MIGRATION.toRecord());
                 } else {
-                    log.debug("Writing ZkMigrationState of NONE to the log, since migrations are not enabled.");
-                    recordConsumer.accept(FeatureControlManager.buildZkMigrationRecord(ZkMigrationState.NONE));
+                    log.debug("Appending ZkMigrationState of NONE to the log, since migrations are not enabled.");
+                    recordConsumer.accept(ZkMigrationState.NONE.toRecord());
+                }
+            } else {
+                if (zkMigrationEnabled) {
+                    throw new ConfigException("zookeeper.metadata.migration.enable", "true",
+                        "The bootstrap metadata.version " + bootstrapMetadata.metadataVersion() + " does not support " +
+                        "ZK migrations, cannot continue with ZK migrations enabled.");
                 }
             }
         } else {
             // Logs have been replayed. We need to initialize some things here if upgrading from older KRaft versions
             if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
                 log.info("No metadata.version feature level record was found in the log. " +
-                        "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
+                    "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
             }
 
             if (featureControl.metadataVersion().isMigrationSupported()) {
+                log.info("Loaded ZK migration state of {}", featureControl.zkMigrationState());
                 switch (featureControl.zkMigrationState()) {
                     case NONE:
-                        // There may, or may not, be a NONE in the log. Since this is the default state, it will
-                        // be persisted in a snapshot, so we don't need to explicitly write it here.
+                        // Since this is the default state there may or may not be an actual NONE in the log. Regardless,
+                        // it will eventually be persisted in a snapshot, so we don't need to explicitly write it here.
                         if (zkMigrationEnabled) {
-                            throw new ConfigException("Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
+                            throw new ConfigException("zookeeper.metadata.migration.enable", "true",
+                                "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
                         }
                         break;
                     case PRE_MIGRATION:
@@ -1226,6 +1236,11 @@ public final class QuorumController implements Controller {
                         // These states need more context, so they will be handled by KRaftMigrationDriver
                         break;
                 }
+            } else {
+                if (zkMigrationEnabled) {
+                    throw new ConfigException("zookeeper.metadata.migration.enable", "true",
+                        "Should not have ZK migrations enabled on a cluster running metadata.version " + featureControl.metadataVersion());
+                }
             }
         }
     }
@@ -1233,7 +1248,7 @@ public final class QuorumController implements Controller {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() throws Exception {
             List<ApiMessageAndVersion> records = new ArrayList<>();
-            generateBootstrapRecords(log, logReplayTracker.empty(), zkMigrationEnabled, bootstrapMetadata, featureControl, records::add);
+            generateActivationRecords(log, logReplayTracker.empty(), zkMigrationEnabled, bootstrapMetadata, featureControl, records::add);
             return ControllerResult.atomicOf(records, null);
         }
 
