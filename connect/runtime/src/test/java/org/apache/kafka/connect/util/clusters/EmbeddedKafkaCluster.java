@@ -209,25 +209,29 @@ public class EmbeddedKafkaCluster {
         }
 
         for (KafkaServer broker : brokers) {
-            try {
-                broker.shutdown();
-            } catch (Throwable t) {
-                String msg = String.format("Could not shutdown broker at %s", address(broker));
-                log.error(msg, t);
-                throw new RuntimeException(msg, t);
+            if (broker != null) {
+                try {
+                    broker.shutdown();
+                } catch (Throwable t) {
+                    String msg = String.format("Could not shutdown broker at %s", address(broker));
+                    log.error(msg, t);
+                    throw new RuntimeException(msg, t);
+                }
             }
         }
 
         if (deleteLogDirs) {
             for (KafkaServer broker : brokers) {
-                try {
-                    log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
-                    CoreUtils.delete(broker.config().logDirs());
-                } catch (Throwable t) {
-                    String msg = String.format("Could not clean up log dirs for broker at %s",
-                            address(broker));
-                    log.error(msg, t);
-                    throw new RuntimeException(msg, t);
+                if (broker != null) {
+                    try {
+                        log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
+                        CoreUtils.delete(broker.config().logDirs());
+                    } catch (Throwable t) {
+                        String msg = String.format("Could not clean up log dirs for broker at %s",
+                                address(broker));
+                        log.error(msg, t);
+                        throw new RuntimeException(msg, t);
+                    }
                 }
             }
         }
