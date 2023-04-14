@@ -190,8 +190,8 @@ public class RecordCollectorImpl implements RecordCollector {
                             final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
-        byte[] keyBytes = null;
-        byte[] valBytes = null;
+        final byte[] keyBytes;
+        final byte[] valBytes;
         try {
             keyBytes = keySerializer.serialize(topic, headers, key);
             valBytes = valueSerializer.serialize(topic, headers, value);
