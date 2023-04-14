@@ -51,6 +51,7 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.storage.PrivilegedWriteException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -291,6 +292,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
+        // Thread factory uses String.format and '%' is handled as a placeholder
+        // need to escape if the client.id contains an actual % character
+        String escapedClientIdForThreadNameFormat = clientId.replace("%", "%%");
         LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + this.workerGroupId + "] ");
         log = logContext.logger(DistributedHerder.class);
 
@@ -303,17 +307,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 TimeUnit.MILLISECONDS,
                 new LinkedBlockingDeque<>(1),
                 ThreadUtils.createThreadFactory(
-                        this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
+                        this.getClass().getSimpleName() + "-" + escapedClientIdForThreadNameFormat + "-%d", false));
 
         this.forwardRequestExecutor = forwardRequestExecutor != null
                 ? forwardRequestExecutor
                 : Executors.newFixedThreadPool(
                         1,
-                        ThreadUtils.createThreadFactory("ForwardRequestExecutor-" + clientId + "-%d", false)
+                        ThreadUtils.createThreadFactory("ForwardRequestExecutor-" + escapedClientIdForThreadNameFormat + "-%d", false)
                 );
         this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE,
                 ThreadUtils.createThreadFactory(
-                        "StartAndStopExecutor-" + clientId + "-%d", false));
+                        "StartAndStopExecutor-" + escapedClientIdForThreadNameFormat + "-%d", false));
         this.config = config;
 
         stopping = new AtomicBoolean(false);
@@ -1091,6 +1095,38 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public void stopConnector(final String connName, final Callback<Void> callback) {
+        log.trace("Submitting request to transition connector {} to STOPPED state", connName);
+
+        addRequest(
+                () -> {
+                    if (!configState.contains(connName))
+                        throw new NotFoundException("Unknown connector " + connName);
+
+                    // We only allow the leader to handle this request since it involves writing task configs to the config topic
+                    if (!isLeader()) {
+                        callback.onCompletion(new NotLeaderException("Only the leader can transition connectors to the STOPPED state.", leaderUrl()), null);
+                        return null;
+                    }
+
+                    // We write the task configs first since, if we fail between then and writing the target state, the
+                    // cluster is still kept in a healthy state. A RUNNING connector with zero tasks is acceptable (although,
+                    // if the connector is reassigned during the ensuing rebalance, it is likely that it will immediately generate
+                    // a non-empty set of task configs). A STOPPED connector with a non-empty set of tasks is less acceptable
+                    // and likely to confuse users.
+                    writeTaskConfigs(connName, Collections.emptyList());
+                    configBackingStore.putTargetState(connName, TargetState.STOPPED);
+                    // Force a read of the new target state for the connector
+                    refreshConfigSnapshot(workerSyncTimeoutMs);
+
+                    callback.onCompletion(null, null);
+                    return null;
+                },
+                forwardErrorCallback(callback)
+        );
+    }
+
+    @Override
     public void requestTaskReconfiguration(final String connName) {
         log.trace("Submitting connector task reconfiguration request {}", connName);
 
@@ -1147,7 +1183,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 else if (!configState.contains(connName))
                     callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                 else {
-                    writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, configs));
+                    writeTaskConfigs(connName, configs);
                     callback.onCompletion(null, null);
                 }
                 return null;
@@ -1477,6 +1513,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Restarted {} of {} tasks for {} as requested", assignedIdsToRestart.size(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
+    }
+
+    @Override
+    public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        log.trace("Submitting offset fetch request for connector: {}", connName);
+        // Handle this in the tick thread to avoid concurrent calls to the Worker
+        addRequest(
+                () -> {
+                    super.connectorOffsets(connName, cb);
+                    return null;
+                },
+                forwardErrorCallback(cb)
+        );
     }
 
     // Should only be called from work thread, so synchronization should not be needed
@@ -1946,6 +1995,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (!worker.isRunning(connName)) {
                 log.info("Skipping reconfiguration of connector {} since it is not running", connName);
                 return;
+            } else if (configState.targetState(connName) != TargetState.STARTED) {
+                log.info("Skipping reconfiguration of connector {} since its target state is {}", connName, configState.targetState(connName));
+                return;
             }
 
             Map<String, String> configs = configState.connectorConfig(connName);
@@ -1958,50 +2010,64 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
 
             final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
-            if (taskConfigsChanged(configState, connName, taskProps)) {
-                List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
-                if (isLeader()) {
-                    writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
-                    cb.onCompletion(null, null);
-                } else if (restClient == null) {
-                    throw new NotLeaderException("This worker is not able to communicate with the leader of the cluster, "
-                            + "which is required for dynamically-reconfiguring connectors. If running MirrorMaker 2 "
-                            + "in dedicated mode, consider enabling inter-worker communication via the "
-                            + "'dedicated.mode.enable.internal.rest' property.",
-                            leaderUrl()
-                    );
-                } else {
-                    // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
-                    // addition or removal. If we blocked waiting for the response from leader, we may be kicked out of the worker group.
-                    forwardRequestExecutor.submit(() -> {
-                        try {
-                            String leaderUrl = leaderUrl();
-                            if (Utils.isBlank(leaderUrl)) {
-                                cb.onCompletion(new ConnectException("Request to leader to " +
-                                        "reconfigure connector tasks failed " +
-                                        "because the URL of the leader's REST interface is empty!"), null);
-                                return;
-                            }
-                            String reconfigUrl = namespacedUrl(leaderUrl)
-                                    .path("connectors")
-                                    .path(connName)
-                                    .path("tasks")
-                                    .build()
-                                    .toString();
-                            log.trace("Forwarding task configurations for connector {} to leader", connName);
-                            restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
-                            cb.onCompletion(null, null);
-                            log.trace("Request to leader to reconfigure connector tasks succeeded");
-                        } catch (ConnectException e) {
-                            log.error("Request to leader to reconfigure connector tasks failed", e);
-                            cb.onCompletion(e, null);
-                        }
-                    });
-                }
-            }
+            publishConnectorTaskConfigs(connName, taskProps, cb);
         } catch (Throwable t) {
             cb.onCompletion(t, null);
         }
+    }
+
+    private void publishConnectorTaskConfigs(String connName, List<Map<String, String>> taskProps, Callback<Void> cb) {
+        if (!taskConfigsChanged(configState, connName, taskProps)) {
+            return;
+        }
+
+        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
+        if (isLeader()) {
+            writeTaskConfigs(connName, rawTaskProps);
+            cb.onCompletion(null, null);
+        } else if (restClient == null) {
+            throw new NotLeaderException("This worker is not able to communicate with the leader of the cluster, "
+                    + "which is required for dynamically-reconfiguring connectors. If running MirrorMaker 2 "
+                    + "in dedicated mode, consider enabling inter-worker communication via the "
+                    + "'dedicated.mode.enable.internal.rest' property.",
+                    leaderUrl()
+            );
+        } else {
+            // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
+            // addition or removal. If we blocked waiting for the response from leader, we may be kicked out of the worker group.
+            forwardRequestExecutor.submit(() -> {
+                try {
+                    String leaderUrl = leaderUrl();
+                    if (Utils.isBlank(leaderUrl)) {
+                        cb.onCompletion(new ConnectException("Request to leader to " +
+                                "reconfigure connector tasks failed " +
+                                "because the URL of the leader's REST interface is empty!"), null);
+                        return;
+                    }
+                    String reconfigUrl = namespacedUrl(leaderUrl)
+                            .path("connectors")
+                            .path(connName)
+                            .path("tasks")
+                            .build()
+                            .toString();
+                    log.trace("Forwarding task configurations for connector {} to leader", connName);
+                    restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
+                    cb.onCompletion(null, null);
+                } catch (ConnectException e) {
+                    log.error("Request to leader to reconfigure connector tasks failed", e);
+                    cb.onCompletion(e, null);
+                }
+            });
+        }
+    }
+
+    private void writeTaskConfigs(String connName, List<Map<String, String>> taskConfigs) {
+        if (!taskConfigs.isEmpty()) {
+            if (configState.targetState(connName) == TargetState.STOPPED)
+                throw new BadRequestException("Cannot submit non-empty set of task configs for stopped connector " + connName);
+        }
+
+        writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, taskConfigs));
     }
 
     // Invoked by exactly-once worker source tasks after they have successfully initialized their transactional

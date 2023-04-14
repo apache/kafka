@@ -23,7 +23,7 @@ import java.nio.file.Files
 import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.tools.RecordReader
+import org.apache.kafka.tools.api.RecordReader
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
