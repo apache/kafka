@@ -104,7 +104,7 @@ public class KafkaBasedLog<K, V> {
     private boolean stopRequested;
     public Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
-    public AtomicBoolean unexpectedExceptionCaught;
+    public AtomicBoolean unexpectedExceptionCaught = new AtomicBoolean();
     public Throwable exception;
 
     /**
