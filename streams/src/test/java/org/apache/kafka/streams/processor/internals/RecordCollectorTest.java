@@ -93,7 +93,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class RecordCollectorTest {
 
@@ -1391,21 +1390,57 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void testCollectorFlush_ThrowsStreamsExceptionUsingDefaultExceptionHandler() {
-        final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
-        final RecordCollector collector = newRecordCollector(new DefaultProductionExceptionHandler());
-        collector.initialize();
-        collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context);
-        assertThrows(StreamsException.class, collector::flush);
+    public void shouldThrowStreamsExceptionUsingDefaultExceptionHandler() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new DefaultProductionExceptionHandler());
+            collector.initialize();
+
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () -> collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context)
+            );
+
+            assertThat(error.getCause(), instanceOf(SerializationException.class));
+        }
     }
 
     @Test
-    public void testCollectorFlush_DoesNotThrowStreamsExceptionUsingAlwaysContinueExceptionHandler() {
-        final ErrorStringSerializer errorSerializer = new ErrorStringSerializer();
-        final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
-        collector.initialize();
-        collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
-        assertDoesNotThrow(collector::flush);
+    public void shouldDropRecordExceptionUsingAlwaysContinueExceptionHandler() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
+            collector.initialize();
+
+            collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
+
+            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            assertThat(
+                streamsMetrics.metrics().get(new MetricName(
+                    "dropped-records-total",
+                    "stream-task-metrics",
+                    "The total number of dropped records",
+                    mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", taskId.toString())
+                    ))).metricValue(),
+                equalTo(1.0)
+            );
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldNotCallProductionExceptionHandlerOnClassCastException() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
+            collector.initialize();
+
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () -> collector.send(topic, true, "val", null, 0, null, (Serializer) errorSerializer, stringSerializer, sinkNodeName, context)
+            );
+
+            assertThat(error.getCause(), instanceOf(ClassCastException.class));
+        }
     }
 
     private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {

@@ -212,11 +212,11 @@ public class RecordCollectorImpl implements RecordCollector {
                     keyClass,
                     valueClass),
                 exception);
-        } catch (final SerializationException exception) {
+        } catch (final Exception exception) {
             final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
             final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
 
-            log.debug("Error serializing record to topic {} due to {}", topic, exception);
+            log.debug(String.format("Error serializing record to topic %s", topic), exception);
 
             try {
                 response = productionExceptionHandler.handleSerializationException(record, exception);
@@ -227,20 +227,25 @@ public class RecordCollectorImpl implements RecordCollector {
             }
 
             if (response == ProductionExceptionHandlerResponse.FAIL) {
-                log.error("Fatal due to SerializationException.", exception);
-                droppedRecordsSensor.record();
-                throw exception;
+                throw new StreamsException(
+                    String.format(
+                        "Unable to serialize record. ProducerRecord(topic=[%s], partition=[%d], timestamp=[%d]",
+                        topic,
+                        partition,
+                        timestamp),
+                    exception
+                );
             }
 
             log.warn("Unable to serialize record, continue processing. " +
-                    "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
-                topic,
-                partition,
-                timestamp);
+                            "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
+                    topic,
+                    partition,
+                    timestamp);
 
-        } catch (final RuntimeException exception) {
-            final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
-            throw new StreamsException(errorMessage, exception);
+            droppedRecordsSensor.record();
+
+            return;
         }
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
