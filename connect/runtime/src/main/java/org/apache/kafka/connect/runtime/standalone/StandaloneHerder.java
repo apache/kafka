@@ -385,17 +385,7 @@ public class StandaloneHerder extends AbstractHerder {
             return;
         }
 
-        try {
-            if (worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets)) {
-                cb.onCompletion(null, new Message("The offsets for this connector have been altered successfully"));
-            } else {
-                cb.onCompletion(null, new Message("The Connect framework managed offsets for this connector have been " +
-                        "altered successfully. However, if this connector manages offsets externally, they will need to be " +
-                        "manually altered in the system that the connector uses."));
-            }
-        } catch (Throwable t) {
-            cb.onCompletion(t, null);
-        }
+        worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, cb);
     }
 
     private void startConnector(String connName, Callback<TargetState> onStart) {

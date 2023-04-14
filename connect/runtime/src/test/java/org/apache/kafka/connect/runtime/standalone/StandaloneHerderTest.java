@@ -1022,8 +1022,13 @@ public class StandaloneHerderTest {
 
     @Test
     public void testAlterConnectorOffsets() throws Exception {
-        EasyMock.expect(worker.alterConnectorOffsets(eq(CONNECTOR_NAME), eq(connectorConfig(SourceSink.SOURCE)), anyObject(Map.class)))
-                .andReturn(true);
+        Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
+        Message msg = new Message("The offsets for this connector have been altered successfully");
+        worker.alterConnectorOffsets(eq(CONNECTOR_NAME), eq(connectorConfig(SourceSink.SOURCE)), anyObject(Map.class), capture(workerCallbackCapture));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            workerCallbackCapture.getValue().onCompletion(null, msg);
+            return null;
+        });
         PowerMock.replayAll();
 
         herder.configState = new ClusterConfigState(
@@ -1040,8 +1045,7 @@ public class StandaloneHerderTest {
         );
         FutureCallback<Message> alterOffsetsCallback = new FutureCallback<>();
         herder.alterConnectorOffsets(CONNECTOR_NAME, new HashMap<>(), alterOffsetsCallback);
-        Message msg = alterOffsetsCallback.get();
-        assertEquals("The offsets for this connector have been altered successfully", msg.message());
+        assertEquals(msg, alterOffsetsCallback.get(1000, TimeUnit.MILLISECONDS));
         PowerMock.verifyAll();
     }
 

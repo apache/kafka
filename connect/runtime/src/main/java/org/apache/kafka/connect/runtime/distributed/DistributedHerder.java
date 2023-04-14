@@ -1565,15 +1565,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (!alterConnectorOffsetsChecks(connName, callback)) {
                 return null;
             }
-            // The alter offsets request needs to be processed synchronously for the same reason that it needs to be done on the
-            // leader - to ensure that no new tasks are spun up before the offsets are altered.
-            if (worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets)) {
-                callback.onCompletion(null, new Message("The offsets for this connector have been altered successfully"));
-            } else {
-                callback.onCompletion(null, new Message("The Connect framework managed offsets for this connector have been " +
-                        "altered successfully. However, if this connector manages offsets externally, they will need to be " +
-                        "manually altered in the system that the connector uses."));
-            }
+            worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
             return null;
         };
     }
@@ -1602,10 +1594,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             return false;
         }
         if (!isLeader()) {
-            // Alter offsets requests need to be handled by the leader in order to ensure that the connector's set of task configs is
-            // empty before altering offsets. Since task configs can only be written to the config store by the leader, we can be sure
-            // that new tasks aren't spun up in the interim between checking the set of tasks for a connector and actually processing
-            // the alter offsets request.
             callback.onCompletion(new NotLeaderException("Only the leader can process alter offsets requests", leaderUrl()), null);
             return false;
         }

@@ -4248,8 +4248,13 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.alterConnectorOffsets(CONN1, CONN1_CONFIG, offsets))
-                .andReturn(true);
+        Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
+        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
+        Message msg = new Message("The offsets for this connector have been altered successfully");
+        EasyMock.expectLastCall().andAnswer(() -> {
+            workerCallbackCapture.getValue().onCompletion(null, msg);
+            return null;
+        });
 
         PowerMock.replayAll();
 
@@ -4257,7 +4262,7 @@ public class DistributedHerderTest {
         FutureCallback<Message> callback = new FutureCallback<>();
         herder.alterConnectorOffsets(CONN1, offsets, callback);
         herder.tick();
-        Message msg = callback.get(1000L, TimeUnit.MILLISECONDS);
+        assertEquals(msg, callback.get(1000L, TimeUnit.MILLISECONDS));
         assertEquals("The offsets for this connector have been altered successfully", msg.message());
 
         PowerMock.verifyAll();
@@ -4305,7 +4310,14 @@ public class DistributedHerderTest {
                 return null;
             });
         }
-        EasyMock.expect(worker.alterConnectorOffsets(CONN1, CONN1_CONFIG, offsets)).andReturn(true);
+
+        Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
+        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
+        Message msg = new Message("The offsets for this connector have been altered successfully");
+        EasyMock.expectLastCall().andAnswer(() -> {
+            workerCallbackCapture.getValue().onCompletion(null, msg);
+            return null;
+        });
 
         // Handle the second alter connector offsets request. No zombie fencing request to the worker is expected now since we
         // already did a round of zombie fencing last time and no new tasks came up in the meanwhile. The config snapshot is
@@ -4313,7 +4325,12 @@ public class DistributedHerderTest {
         // whether zombie fencing is required.
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1_FENCED);
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1_FENCED);
-        EasyMock.expect(worker.alterConnectorOffsets(CONN1, CONN1_CONFIG, offsets)).andReturn(true);
+        Capture<Callback<Message>> workerCallbackCapture2 = Capture.newInstance();
+        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture2));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            workerCallbackCapture2.getValue().onCompletion(null, msg);
+            return null;
+        });
 
         PowerMock.replayAll(workerFencingFuture, herderFencingFuture);
 
@@ -4324,14 +4341,12 @@ public class DistributedHerderTest {
         herder.tick();
         // Process the alter offsets request
         herder.tick();
-        Message msg = callback.get(1000L, TimeUnit.MILLISECONDS);
-        assertEquals("The offsets for this connector have been altered successfully", msg.message());
+        assertEquals(msg, callback.get(1000L, TimeUnit.MILLISECONDS));
 
         FutureCallback<Message> callback2 = new FutureCallback<>();
         herder.alterConnectorOffsets(CONN1, offsets, callback2);
         herder.tick();
-        msg = callback2.get(1000L, TimeUnit.MILLISECONDS);
-        assertEquals("The offsets for this connector have been altered successfully", msg.message());
+        assertEquals(msg, callback.get(1000L, TimeUnit.MILLISECONDS));
 
         PowerMock.verifyAll();
     }
