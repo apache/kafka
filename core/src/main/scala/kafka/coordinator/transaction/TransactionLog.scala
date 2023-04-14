@@ -162,10 +162,8 @@ object TransactionLog {
           output.write(producerIdMetadata.getOrElse("NULL").toString.getBytes(StandardCharsets.UTF_8))
           output.write("\n".getBytes(StandardCharsets.UTF_8))
 
-        case _: UnknownKey => // Only print if this message is a transaction record
-
-        case unexpectedKey =>
-          throw new IllegalStateException(s"Found unexpected key $unexpectedKey while reading transaction log.")
+        case unknownKey: UnknownKey =>
+          output.write(s"unknown::version=${unknownKey.version}\n".getBytes(StandardCharsets.UTF_8))
       }
     }
   }
@@ -191,17 +189,14 @@ object TransactionLog {
 
         (Some(keyString), Some(valueString))
 
-      case _: UnknownKey =>
-        (Some("<UNKNOWN>"), Some("<UNKNOWN>"))
-
-      case unexpectedKey =>
-        throw new IllegalStateException(s"Found unexpected key $unexpectedKey while formatting transaction log.")
+      case unknownKey: UnknownKey =>
+        (Some(s"unknown::version=${unknownKey.version}"), None)
     }
   }
 
 }
 
-trait BaseKey{
+sealed trait BaseKey{
   def version: Short
   def transactionalId: String
 }

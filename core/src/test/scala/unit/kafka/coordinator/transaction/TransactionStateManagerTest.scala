@@ -1088,7 +1088,6 @@ class TransactionStateManagerTest {
     assertTrue(partitionLoadTime( "partition-load-time-avg") >= 0)
   }
 
-
   @Test
   def testIgnoreUnknownRecordType(): Unit = {
     txnMetadata1.state = PrepareCommit

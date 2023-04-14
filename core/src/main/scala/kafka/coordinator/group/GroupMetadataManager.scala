@@ -576,10 +576,7 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  // Visible for testing
-  private[group] def doLoadGroupsAndOffsets(topicPartition: TopicPartition,
-                                            onGroupLoaded: GroupMetadata => Unit): Unit = {
-
+  private def doLoadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit): Unit = {
     def logEndOffset: Long = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     replicaManager.getLog(topicPartition) match {
@@ -690,9 +687,6 @@ class GroupMetadataManager(brokerId: Int,
                     warn(s"Unknown message key with version ${unknownKey.version}" +
                       s" while loading offsets and group metadata. Ignoring it. " +
                       s"It could be a left over from an aborted upgrade.")
-
-                  case unexpectedKey =>
-                    throw new IllegalStateException(s"Unexpected message key $unexpectedKey while loading offsets and group metadata")
                 }
               }
             }
@@ -1285,8 +1279,7 @@ object GroupMetadataManager {
       GroupMetadataManager.readMessageKey(record.key) match {
           case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
           case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
-          case unknownKey: UnknownKey => (Some(s"UNKNOWN(version=${unknownKey.version})"), None)
-          case _ => throw new KafkaException("Failed to decode message using offset topic decoder (message had an invalid key)")
+          case unknownKey: UnknownKey => (Some(s"unknown::version=${unknownKey.version}"), None)
       }
     }
   }
@@ -1364,7 +1357,7 @@ case class GroupTopicPartition(group: String, topicPartition: TopicPartition) {
     "[%s,%s,%d]".format(group, topicPartition.topic, topicPartition.partition)
 }
 
-trait BaseKey{
+sealed trait BaseKey{
   def version: Short
   def key: Any
 }

@@ -483,9 +483,6 @@ class TransactionStateManager(brokerId: Int,
                     warn(s"Unknown message key with version ${unknownKey.version}" +
                       s" while loading transaction state. Ignoring it. " +
                       s"It could be a left over from an aborted upgrade.")
-
-                  case unexpectedKey =>
-                    throw new IllegalStateException(s"Found unexpected key $unexpectedKey while reading transaction log.")
                 }
               }
             }
