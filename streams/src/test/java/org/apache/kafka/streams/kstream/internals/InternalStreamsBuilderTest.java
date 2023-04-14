@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -188,7 +189,7 @@ public class InternalStreamsBuilderTest {
                 );
 
         assertThrows(
-            IllegalArgumentException.class,
+            TopologyException.class,
             () -> builder.globalTable(
                 "table",
                 consumed,

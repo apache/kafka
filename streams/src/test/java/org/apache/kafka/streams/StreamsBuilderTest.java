@@ -437,7 +437,7 @@ public class StreamsBuilderTest {
     public void shouldThrowOnVersionedStoreSupplierForGlobalTable() {
         final String topic = "topic";
         assertThrows(
-            IllegalArgumentException.class,
+            TopologyException.class,
             () -> builder.globalTable(
                 topic,
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
