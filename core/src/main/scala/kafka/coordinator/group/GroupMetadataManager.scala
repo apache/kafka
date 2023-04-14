@@ -1277,9 +1277,9 @@ object GroupMetadataManager {
       throw new KafkaException("Failed to decode message using offset topic decoder (message had a missing key)")
     } else {
       GroupMetadataManager.readMessageKey(record.key) match {
-          case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
-          case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
-          case unknownKey: UnknownKey => (Some(s"unknown::version=${unknownKey.version}"), None)
+        case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
+        case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
+        case unknownKey: UnknownKey => (Some(s"unknown::version=${unknownKey.version}"), None)
       }
     }
   }

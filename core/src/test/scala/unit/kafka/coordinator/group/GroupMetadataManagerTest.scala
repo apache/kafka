@@ -2776,5 +2776,4 @@ class GroupMetadataManagerTest {
     val key = GroupMetadataManager.readMessageKey(ByteBuffer.wrap(unknownRecord))
     assertEquals(UnknownKey(Short.MaxValue), key)
   }
-
 }

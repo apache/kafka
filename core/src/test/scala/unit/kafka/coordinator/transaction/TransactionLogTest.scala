@@ -145,5 +145,4 @@ class TransactionLogTest {
     val key = TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))
     assertEquals(UnknownKey(Short.MaxValue), key)
   }
-
 }
