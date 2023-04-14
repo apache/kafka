@@ -23,6 +23,8 @@ notifications:
 
 jenkins:
   github_whitelist:
+    - aliehsaeedii
     - ConcurrencyPractitioner
-    - ableegoldman
-    - cadonna
+    - lihaosky
+    - lucasbru
+    - vcrfxia
