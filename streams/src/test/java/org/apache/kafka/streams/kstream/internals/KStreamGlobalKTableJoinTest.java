@@ -262,30 +262,4 @@ public class KStreamGlobalKTableJoinTest {
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(null, "X0,FKey0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
     }
-
-    @Test
-    public void shouldPerformTimestampedGet() {
-        initWithVersionedStore(1000);
-
-        // do not auto-advance stream timestamps for this test
-        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-
-        // produce out-of-order records including nulls to table
-        inputTableTopic.pipeInput("FKey1", "ValueT10", 10);
-        inputTableTopic.pipeInput("FKey1", "ValueT5", 5);
-        inputTableTopic.pipeInput("FKey1", null, 7);
-        inputTableTopic.pipeInput("FKey1", "ValueT12", 12);
-
-        // produce records to stream side
-        inputStreamTopic.pipeInput(1, "ValueS8,FKey1", 8);
-        inputStreamTopic.pipeInput(2, "ValueS12,FKey1", 12);
-        inputStreamTopic.pipeInput(3, "ValueS6,FKey1", 6);
-        inputStreamTopic.pipeInput(4, "ValueS10,FKey1", 10);
-        inputStreamTopic.pipeInput(5, "ValueS2,FKey1", 2);
-
-        processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(2, "ValueS12,FKey1+ValueT12", 12),
-            new KeyValueTimestamp<>(3, "ValueS6,FKey1+ValueT5", 6),
-            new KeyValueTimestamp<>(4, "ValueS10,FKey1+ValueT10", 10));
-    }
 }

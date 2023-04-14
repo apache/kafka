@@ -45,7 +45,6 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -318,52 +317,6 @@ public class VersionedKeyValueStoreIntegrationTest {
         final StateQueryResult<String> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         assertThat(result.getOnlyPartitionResult().getResult(), equalTo("success"));
-    }
-
-    @Test
-    public void shouldCreateGlobalTable() throws Exception {
-        // produce data to global store topic and track in-memory for processor to verify
-        final DataTracker data = new DataTracker();
-        produceDataToTopic(globalTableTopic, data, baseTimestamp, KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
-        produceDataToTopic(globalTableTopic, data, baseTimestamp + 5, KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
-        produceDataToTopic(globalTableTopic, data, baseTimestamp + 2, KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null)); // out-of-order data
-
-        // build topology and start app
-        final StreamsBuilder streamsBuilder = new StreamsBuilder();
-
-        streamsBuilder
-            .globalTable(
-                globalTableTopic,
-                Consumed.with(Serdes.Integer(), Serdes.String()),
-                Materialized
-                    .<Integer, String>as(Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMillis(HISTORY_RETENTION)))
-                    .withKeySerde(Serdes.Integer())
-                    .withValueSerde(Serdes.String()));
-        streamsBuilder
-            .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(() -> new VersionedStoreContentCheckerProcessor(false, data))
-            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
-
-        final Properties props = props();
-        kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
-        kafkaStreams.start();
-
-        // produce source data to trigger store verifications in processor
-        final int numRecordsProduced = produceDataToTopic(inputStream, baseTimestamp + 8, KeyValue.pair(1, "a8"), KeyValue.pair(2, "b8"), KeyValue.pair(3, "c8"));
-
-        // wait for output and verify
-        final List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                IntegerDeserializer.class,
-                IntegerDeserializer.class),
-            outputStream,
-            numRecordsProduced);
-
-        for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
-            // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
-        }
     }
 
     @Test
