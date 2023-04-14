@@ -21,6 +21,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -29,6 +31,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +52,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     private final Supplier<String> foreignKeySerdeTopicSupplier;
     private final Supplier<String> valueSerdeTopicSupplier;
     private final boolean leftJoin;
+    private final KTableValueGetterSupplier<K, V> primaryKeyValueGetterSupplier;
     private Serializer<KO> foreignKeySerializer;
     private Serializer<V> valueSerializer;
 
@@ -57,18 +61,20 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                                                         final Supplier<String> valueSerdeTopicSupplier,
                                                         final Serde<KO> foreignKeySerde,
                                                         final Serializer<V> valueSerializer,
-                                                        final boolean leftJoin) {
+                                                        final boolean leftJoin,
+                                                        final KTableValueGetterSupplier<K, V> primaryKeyValueGetterSupplier) {
         this.foreignKeyExtractor = foreignKeyExtractor;
         this.foreignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
         this.valueSerdeTopicSupplier = valueSerdeTopicSupplier;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
+        this.primaryKeyValueGetterSupplier = primaryKeyValueGetterSupplier;
         foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
     }
 
     @Override
     public Processor<K, Change<V>, KO, SubscriptionWrapper<K>> get() {
-        return new UnbindChangeProcessor();
+        return new UnbindChangeProcessor(primaryKeyValueGetterSupplier.get());
     }
 
     private class UnbindChangeProcessor extends ContextualProcessor<K, Change<V>, KO, SubscriptionWrapper<K>> {
@@ -76,6 +82,11 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
         private Sensor droppedRecordsSensor;
         private String foreignKeySerdeTopic;
         private String valueSerdeTopic;
+        private final KTableValueGetter<K, V> primaryKeyValueGetter;
+
+        private UnbindChangeProcessor(final KTableValueGetter<K, V> primaryKeyValueGetter) {
+            this.primaryKeyValueGetter = primaryKeyValueGetter;
+        }
 
         @SuppressWarnings("unchecked")
         @Override
@@ -95,10 +106,25 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics()
             );
+            primaryKeyValueGetter.init(context);
         }
 
         @Override
         public void process(final Record<K, Change<V>> record) {
+            // drop out-of-order records from versioned tables (cf. KIP-914)
+            if (primaryKeyValueGetter.isVersioned()) {
+                // key-value stores do not contain data for null keys, so skip the check
+                // if the key is null
+                if (record.key() != null) {
+                    final ValueAndTimestamp<V> latestValueAndTimestamp = primaryKeyValueGetter.get(record.key());
+                    if (latestValueAndTimestamp != null && latestValueAndTimestamp.timestamp() > record.timestamp()) {
+                        LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
+                        droppedRecordsSensor.record();
+                        return;
+                    }
+                }
+            }
+
             final long[] currentHash = record.value().newValue == null ?
                 null :
                 Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));
@@ -107,37 +133,13 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             if (record.value().oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(record.value().oldValue);
                 if (oldForeignKey == null) {
-                    if (context().recordMetadata().isPresent()) {
-                        final RecordMetadata recordMetadata = context().recordMetadata().get();
-                        LOG.warn(
-                            "Skipping record due to null foreign key. "
-                                + "topic=[{}] partition=[{}] offset=[{}]",
-                            recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                        );
-                    } else {
-                        LOG.warn(
-                            "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                        );
-                    }
-                    droppedRecordsSensor.record();
+                    logSkippedRecordDueToNullForeignKey();
                     return;
                 }
                 if (record.value().newValue != null) {
                     final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                     if (newForeignKey == null) {
-                        if (context().recordMetadata().isPresent()) {
-                            final RecordMetadata recordMetadata = context().recordMetadata().get();
-                            LOG.warn(
-                                "Skipping record due to null foreign key. "
-                                    + "topic=[{}] partition=[{}] offset=[{}]",
-                                recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                            );
-                        } else {
-                            LOG.warn(
-                                "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                            );
-                        }
-                        droppedRecordsSensor.record();
+                        logSkippedRecordDueToNullForeignKey();
                         return;
                     }
 
@@ -193,19 +195,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 }
                 final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                 if (newForeignKey == null) {
-                    if (context().recordMetadata().isPresent()) {
-                        final RecordMetadata recordMetadata = context().recordMetadata().get();
-                        LOG.warn(
-                            "Skipping record due to null foreign key. "
-                                + "topic=[{}] partition=[{}] offset=[{}]",
-                            recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                        );
-                    } else {
-                        LOG.warn(
-                            "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                        );
-                    }
-                    droppedRecordsSensor.record();
+                    logSkippedRecordDueToNullForeignKey();
                 } else {
                     context().forward(
                         record.withKey(newForeignKey)
@@ -216,6 +206,27 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                                 partition)));
                 }
             }
+        }
+
+        @Override
+        public void close() {
+            primaryKeyValueGetter.close();
+        }
+
+        private void logSkippedRecordDueToNullForeignKey() {
+            if (context().recordMetadata().isPresent()) {
+                final RecordMetadata recordMetadata = context().recordMetadata().get();
+                LOG.warn(
+                    "Skipping record due to null foreign key. "
+                        + "topic=[{}] partition=[{}] offset=[{}]",
+                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                );
+            } else {
+                LOG.warn(
+                    "Skipping record due to null foreign key. Topic, partition, and offset not known."
+                );
+            }
+            droppedRecordsSensor.record();
         }
     }
 }

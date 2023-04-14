@@ -209,4 +209,13 @@ public final class ConnectUtils {
         }
         return result + "-";
     }
+
+    /**
+     * Get the class name for an object in a null-safe manner.
+     * @param o the object whose class name is to be returned
+     * @return "null" if the object is null; or else the object's class name
+     */
+    public static String className(Object o) {
+        return o != null ? o.getClass().getName() : "null";
+    }
 }

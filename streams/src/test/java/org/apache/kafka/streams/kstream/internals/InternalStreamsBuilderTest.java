@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -32,11 +34,15 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableFilterNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableRepartitionMapNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.MockValueJoiner;
@@ -705,12 +711,304 @@ public class InternalStreamsBuilderTest {
         assertEquals(count.get(), 2);
     }
 
+    @Test
+    public void shouldSetUseVersionedSemanticsOnTableFilter() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, materializedInternal);
+        table1.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, true);
+    }
+
+    @Test
+    public void shouldSetUseVersionedSemanticsWithIntermediateNode() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = table1.mapValues(v -> v != null ? v + v : null);
+        table2.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, true);
+    }
+
+    @Test
+    public void shouldNotSetUseVersionedSemanticsWithMaterializedIntermediateNode() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> unversionedMaterialize =
+            new MaterializedInternal<>(Materialized.as("unversioned"), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = table1.mapValues(v -> v != null ? v + v : null, unversionedMaterialize);
+        table2.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, false);
+    }
+
+    @Test
+    public void shouldSetUseVersionedSemanticsWithIntermediateNodeMaterializedAsVersioned() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize2 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned2", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = table1.mapValues(v -> v != null ? v + v : null, versionedMaterialize2);
+        table2.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, true);
+    }
+
+    @Test
+    public void shouldNotSetUseVersionedSemanticsWithIntermediateAggregation() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, Long> table2 = table1.groupBy(KeyValue::new).count();
+        table2.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, false);
+    }
+
+    @Test
+    public void shouldSetUseVersionedSemanticsWithIntermediateAggregationMaterializedAsVersioned() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, Long, KeyValueStore<Bytes, byte[]>> versionedMaterialize2 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned2", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, Long> table2 = table1.groupBy(KeyValue::new).count(versionedMaterialize2);
+        table2.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, true);
+    }
+
+    @Test
+    public void shouldNotSetUseVersionedSemanticsWithIntermediateJoin() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize2 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned2", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = builder.table("t2", consumed, versionedMaterialize2);
+        final KTable<String, String> table3 = table1.join(table2, (v1, v2) -> v1 + v2);
+        table3.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, false);
+    }
+
+    // not recommended to materialize join result as versioned since semantics are not correct,
+    // but this test is included anyway for completeness
+    @Test
+    public void shouldSetUseVersionedSemanticsWithIntermediateJoinMaterializedAsVersioned() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize2 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned2", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize3 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned3", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = builder.table("t2", consumed, versionedMaterialize2);
+        final KTable<String, String> table3 = table1.join(table2, (v1, v2) -> v1 + v2, versionedMaterialize3);
+        table3.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, true);
+    }
+
+    @Test
+    public void shouldNotSetUseVersionedSemanticsWithIntermediateForeignKeyJoin() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize2 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned2", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = builder.table("t2", consumed, versionedMaterialize2);
+        final KTable<String, String> table3 = table1.join(table2, v -> v, (v1, v2) -> v1 + v2);
+        table3.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, false);
+    }
+
+    // not recommended to materialize join result as versioned since semantics are not correct,
+    // but this test is included anyway for completeness
+    @Test
+    public void shouldSetUseVersionedSemanticsWithIntermediateForeignKeyJoinMaterializedAsVersioned() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize2 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned2", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize3 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned3", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = builder.table("t2", consumed, versionedMaterialize2);
+        final KTable<String, String> table3 = table1.join(table2, v -> v, (v1, v2) -> v1 + v2, versionedMaterialize3);
+        table3.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, true);
+    }
+
+    @Test
+    public void shouldNotSetUseVersionedSemanticsWithToStreamAndBack() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = table1.toStream().toTable();
+        table2.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, false);
+    }
+
+    @Test
+    public void shouldSetUseVersionedSemanticsWithToStreamAndBackIfMaterializedAsVersioned() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize2 =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned2", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = table1.toStream().toTable(versionedMaterialize2);
+        table2.filter((k, v) -> v != null);
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode filter = getNodeByType(builder.root, TableFilterNode.class, new HashSet<>());
+        assertNotNull(filter);
+        verifyVersionedSemantics((TableFilterNode<?, ?>) filter, true);
+    }
+
+    @Test
+    public void shouldSetUseVersionedSemanticsOnTableRepartitionMap() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        table1.groupBy(KeyValue::new).count();
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode repartitionMap = getNodeByType(builder.root, TableRepartitionMapNode.class, new HashSet<>());
+        assertNotNull(repartitionMap);
+        verifyVersionedSemantics((TableRepartitionMapNode<?, ?>) repartitionMap, true);
+    }
+
+    @Test
+    public void shouldSetUseVersionedSemanticsOnTableRepartitionMapWithIntermediateNodes() {
+        // Given:
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
+            new MaterializedInternal<>(Materialized.as(Stores.persistentVersionedKeyValueStore("versioned", Duration.ofMinutes(5))), builder, storePrefix);
+        final KTable<String, String> table1 = builder.table("t1", consumed, versionedMaterialize);
+        final KTable<String, String> table2 = table1.filter((k, v) -> v != null).mapValues(v -> v + v);
+        table2.groupBy(KeyValue::new).count();
+
+        // When:
+        builder.buildAndOptimizeTopology();
+
+        // Then:
+        final GraphNode repartitionMap = getNodeByType(builder.root, TableRepartitionMapNode.class, new HashSet<>());
+        assertNotNull(repartitionMap);
+        verifyVersionedSemantics((TableRepartitionMapNode<?, ?>) repartitionMap, true);
+    }
+
+    private void verifyVersionedSemantics(final TableFilterNode<?, ?> filterNode, final boolean expectedValue) {
+        final ProcessorSupplier<?, ?, ?, ?> processorSupplier = filterNode.processorParameters().processorSupplier();
+        assertTrue(processorSupplier instanceof KTableFilter);
+        final KTableFilter<?, ?> tableFilter = (KTableFilter<?, ?>) processorSupplier;
+        assertEquals(expectedValue, tableFilter.isUseVersionedSemantics());
+    }
+
+    private void verifyVersionedSemantics(final TableRepartitionMapNode<?, ?> repartitionMapNode, final boolean expectedValue) {
+        final ProcessorSupplier<?, ?, ?, ?> processorSupplier = repartitionMapNode.processorParameters().processorSupplier();
+        assertTrue(processorSupplier instanceof KTableRepartitionMap);
+        final KTableRepartitionMap<?, ?, ?, ?> repartitionMap = (KTableRepartitionMap<?, ?, ?, ?>) processorSupplier;
+        assertEquals(expectedValue, repartitionMap.isUseVersionedSemantics());
+    }
+
     private GraphNode getNodeByType(
         final GraphNode currentNode,
         final Class<? extends GraphNode> clazz,
         final Set<GraphNode> visited) {
 
-        if (currentNode.getClass().isAssignableFrom(clazz)) {
+        if (clazz.isAssignableFrom(currentNode.getClass())) {
             return currentNode;
         }
         for (final GraphNode child: currentNode.children()) {
@@ -731,7 +1029,7 @@ public class InternalStreamsBuilderTest {
         final Set<GraphNode> visited,
         final List<GraphNode> result) {
 
-        if (currentNode.getClass().isAssignableFrom(clazz)) {
+        if (clazz.isAssignableFrom(currentNode.getClass())) {
             result.add(currentNode);
         }
         for (final GraphNode child: currentNode.children()) {

@@ -17,10 +17,6 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.core.HttpHeaders;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -32,6 +28,7 @@ import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -45,6 +42,7 @@ import javax.servlet.ServletContext;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -53,19 +51,19 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
-
 import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.Translator;
 import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.IdentityTranslator;
+import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.Translator;
 
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
@@ -156,35 +154,29 @@ public class ConnectorsResource implements ConnectResource {
     @GET
     @Path("/{connector}")
     @Operation(summary = "Get the details for the specified connector")
-    public ConnectorInfo getConnector(final @PathParam("connector") String connector,
-                                      final @Context HttpHeaders headers,
-                                      final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+    public ConnectorInfo getConnector(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "GET", headers, null, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
     @Path("/{connector}/config")
     @Operation(summary = "Get the configuration for the specified connector")
-    public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector,
-                                                  final @Context HttpHeaders headers,
-                                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+    public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
     @Path("/{connector}/tasks-config")
     @Operation(summary = "Get the configuration of all tasks for the specified connector")
     public Map<ConnectorTaskId, Map<String, String>> getTasksConfig(
-            final @PathParam("connector") String connector,
-            final @Context HttpHeaders headers,
-            final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+            final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
         herder.tasksConfig(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks-config", "GET", headers, null, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
@@ -275,6 +267,19 @@ public class ConnectorsResource implements ConnectResource {
     }
 
     @PUT
+    @Path("/{connector}/stop")
+    @Operation(summary = "Stop the specified connector",
+               description = "This operation is idempotent and has no effects if the connector is already stopped")
+    public void stopConnector(
+            @PathParam("connector") String connector,
+            final @Context HttpHeaders headers,
+            final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.stopConnector(connector, cb);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/stop", "PUT", headers, null, forward);
+    }
+
+    @PUT
     @Path("/{connector}/pause")
     @Operation(summary = "Pause the specified connector",
                description = "This operation is idempotent and has no effects if the connector is already paused")
@@ -295,12 +300,10 @@ public class ConnectorsResource implements ConnectResource {
     @GET
     @Path("/{connector}/tasks")
     @Operation(summary = "List all tasks for the specified connector")
-    public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector,
-                                         final @Context HttpHeaders headers,
-                                         final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+    public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", headers, null, new TypeReference<List<TaskInfo>>() { }, forward);
+        return requestHandler.completeRequest(cb);
     }
 
     @GET
@@ -334,6 +337,15 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
         requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
+    }
+
+    @GET
+    @Path("/{connector}/offsets")
+    @Operation(summary = "Get the current offsets for the specified connector")
+    public ConnectorOffsets getOffsets(final @PathParam("connector") String connector) throws Throwable {
+        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
+        herder.connectorOffsets(connector, cb);
+        return requestHandler.completeRequest(cb);
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig

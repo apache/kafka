@@ -123,7 +123,7 @@ class StandbyTaskCreator {
         }
 
         streamTask.prepareRecycle();
-        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY);
+        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY, getLogContext(streamTask.id));
 
         final StandbyTask task = new StandbyTask(
             streamTask.id,

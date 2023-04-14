@@ -25,6 +25,8 @@ abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
     private final KTableImpl<K, ?, V2> table2;
     final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
     final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
+    final KTableValueGetter<K, V1> valueGetter1;
+    final KTableValueGetter<K, V2> valueGetter2;
     final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner;
 
     boolean sendOldValues = false;
@@ -36,6 +38,8 @@ abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
         this.table2 = table2;
         this.valueGetterSupplier1 = table1.valueGetterSupplier();
         this.valueGetterSupplier2 = table2.valueGetterSupplier();
+        this.valueGetter1 = valueGetterSupplier1.get();
+        this.valueGetter2 = valueGetterSupplier2.get();
         this.joiner = joiner;
     }
 

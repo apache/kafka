@@ -43,11 +43,13 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Offset = offset of the first message in each epoch.
  */
 public class LeaderEpochFileCache {
+    private final TopicPartition topicPartition;
     private final LeaderEpochCheckpoint checkpoint;
     private final Logger log;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final TreeMap<Integer, EpochEntry> epochs = new TreeMap<>();
+
 
     /**
      * @param topicPartition the associated topic partition
@@ -55,6 +57,7 @@ public class LeaderEpochFileCache {
      */
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint) {
         this.checkpoint = checkpoint;
+        this.topicPartition = topicPartition;
         LogContext logContext = new LogContext("[LeaderEpochCache " + topicPartition + "] ");
         log = logContext.logger(LeaderEpochFileCache.class);
         checkpoint.read().forEach(this::assign);
@@ -145,6 +148,11 @@ public class LeaderEpochFileCache {
         }
 
         return removedEpochs;
+    }
+
+    public LeaderEpochFileCache cloneWithLeaderEpochCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        flushTo(leaderEpochCheckpoint);
+        return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
     }
 
     public boolean nonEmpty() {
@@ -358,6 +366,16 @@ public class LeaderEpochFileCache {
         }
     }
 
+    public LeaderEpochFileCache writeTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        lock.readLock().lock();
+        try {
+            leaderEpochCheckpoint.write(epochEntries());
+            return new LeaderEpochFileCache(topicPartition, leaderEpochCheckpoint);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     /**
      * Delete all entries.
      */
@@ -390,13 +408,16 @@ public class LeaderEpochFileCache {
         }
     }
 
-    private void flush() {
+    private void flushTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
         lock.readLock().lock();
         try {
-            checkpoint.write(epochs.values());
+            leaderEpochCheckpoint.write(epochs.values());
         } finally {
             lock.readLock().unlock();
         }
     }
 
+    private void flush() {
+        flushTo(this.checkpoint);
+    }
 }

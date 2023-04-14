@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
@@ -76,6 +78,12 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
 
     @Override
     public synchronized void destroy() {
+        if (id < 0) {
+            throw new IllegalStateException("Negative segment ID indicates a reserved segment, "
+                + "which should not be destroyed. Reserved segments are cleaned up only when "
+                + "an entire store is closed, via the close() method rather than destroy().");
+        }
+
         final Bytes keyPrefix = prefixKeyFormatter.getPrefix();
 
         // this deleteRange() call deletes all entries with the given prefix, because the
@@ -176,7 +184,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         // with empty bytes from the returned iterator. this filtering is accomplished by
         // passing the prefix filter into StrippedPrefixKeyValueIteratorAdapter().
         final Bytes toBound = to == null
-            ? Bytes.increment(prefixKeyFormatter.getPrefix())
+            ? incrementWithoutOverflow(prefixKeyFormatter.getPrefix())
             : prefixKeyFormatter.addPrefix(to);
         final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.range(
             fromBound,

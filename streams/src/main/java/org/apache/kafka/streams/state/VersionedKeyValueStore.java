@@ -41,6 +41,9 @@ import org.apache.kafka.streams.processor.StateStore;
  */
 public interface VersionedKeyValueStore<K, V> extends StateStore {
 
+    long PUT_RETURN_CODE_VALID_TO_UNDEFINED = -1L;
+    long PUT_RETURN_CODE_NOT_PUT = Long.MIN_VALUE;
+
     /**
      * Add a new record version associated with the specified key and timestamp.
      * <p>
@@ -51,9 +54,14 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * @param key       The key
      * @param value     The value, it can be {@code null}. {@code null} is interpreted as a delete.
      * @param timestamp The timestamp for this record version
+     * @return The validTo timestamp of the newly put record. Two special values, {@code -1} and
+     *         {@code Long.MIN_VALUE} carry specific meanings. {@code -1} indicates that the
+     *         record that was put is the latest record version for its key, and therefore the
+     *         validTo timestamp is undefined. {@code Long.MIN_VALUE} indicates that the record
+     *         was not put, due to grace period having been exceeded.
      * @throws NullPointerException If {@code null} is used for key.
      */
-    void put(K key, V value, long timestamp);
+    long put(K key, V value, long timestamp);
 
     /**
      * Delete the value associated with this key from the store, at the specified timestamp
