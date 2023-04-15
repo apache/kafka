@@ -1324,7 +1324,7 @@ public class Worker {
                         .map(Map.Entry::getKey)
                         .collect(Collectors.toSet());
 
-                KafkaFuture<Void> kafkaFuture = KafkaFuture.completedFuture(null);
+                KafkaFuture<Void> adminFuture = KafkaFuture.completedFuture(null);
 
                 Admin admin = adminFactory.apply(adminConfig);
 
@@ -1337,10 +1337,10 @@ public class Worker {
                         AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = admin.alterConsumerGroupOffsets(groupId, offsetsToAlter,
                                 alterConsumerGroupOffsetsOptions);
 
-                        kafkaFuture = alterConsumerGroupOffsetsResult.all();
+                        adminFuture = alterConsumerGroupOffsetsResult.all();
                     }
 
-                    kafkaFuture.whenComplete((ignored, error) -> {
+                    adminFuture.whenComplete((ignored, error) -> {
                         if (error != null) {
                             Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
                             // When a consumer group is non-empty, only group members can commit offsets. The above attempt to alter offsets via the admin
@@ -1833,6 +1833,7 @@ public class Worker {
                 );
             }
         } else {
+            Utils.closeQuietly(producer, "Unused producer for offset store");
             return ConnectorOffsetBackingStore.withOnlyWorkerStore(
                     () -> LoggingContext.forConnector(connName),
                     globalOffsetBackingStore,
