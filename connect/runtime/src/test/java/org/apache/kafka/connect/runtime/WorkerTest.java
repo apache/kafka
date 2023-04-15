@@ -2199,6 +2199,41 @@ public class WorkerTest {
         verifyKafkaClusterId();
     }
 
+    @Test
+    public void testAlterOffsetsSinkConnectorSynchronousError() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+
+        when(admin.alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class)))
+                .thenThrow(new RuntimeException("Test Exception"));
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+                Thread.currentThread().getContextClassLoader(), cb);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(ConnectException.class, e.getCause().getClass());
+
+        verify(admin).close();
+        verifyNoMoreInteractions(admin);
+        verifyKafkaClusterId();
+    }
+
     private void assertStatusMetrics(long expected, String metricName) {
         MetricGroup statusMetrics = worker.connectorStatusMetricsGroup().metricGroup(TASK_ID.connector());
         if (expected == 0L) {

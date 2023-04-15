@@ -1307,7 +1307,6 @@ public class Worker {
                         kafkaClusterId,
                         ConnectorType.SINK);
 
-                Admin admin = adminFactory.apply(adminConfig);
                 SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, connectorConfig);
                 String groupId = (String) baseConsumerConfigs(
                         connName, "connector-consumer-", config, sinkConnectorConfig,
@@ -1327,69 +1326,76 @@ public class Worker {
 
                 KafkaFuture<Void> kafkaFuture = KafkaFuture.completedFuture(null);
 
-                if (!offsetsToAlter.isEmpty()) {
-                    log.debug("Committing the following consumer group topic partition offsets using an admin client for sink connector {}: {}.",
-                            connName, offsetsToAlter);
-                    AlterConsumerGroupOffsetsOptions alterConsumerGroupOffsetsOptions = new AlterConsumerGroupOffsetsOptions().timeoutMs(
-                            (int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
-                    AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = admin.alterConsumerGroupOffsets(groupId, offsetsToAlter,
-                            alterConsumerGroupOffsetsOptions);
+                Admin admin = adminFactory.apply(adminConfig);
 
-                    kafkaFuture = alterConsumerGroupOffsetsResult.all();
-                }
-
-                kafkaFuture.whenComplete((ignored, error) -> {
-                    if (error != null) {
-                        Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
-                        // When a consumer group is non-empty, only group members can commit offsets. The above attempt to alter offsets via the admin
-                        // client will result in an UnknownMemberIdException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped
-                        // completely or if the connector is resumed while the alter offsets request is being processed)
-                        if (error instanceof UnknownMemberIdException) {
-                            cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName + " either because its tasks " +
-                                    "haven't stopped completely yet or the connector was resumed before the request to alter its offsets could be successfully " +
-                                    "completed. If the connector is in a stopped state, this operation can be safely retried. If it doesn't eventually succeed, the " +
-                                    "Connect cluster may need to be restarted to get rid of the zombie sink tasks."),
-                                    null);
-                        } else {
-                            cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for topic partitions " + offsetsToAlter.keySet() + " for " +
-                                            "connector " + connName, error),
-                                    null);
-                        }
-                    } else if (!partitionsToReset.isEmpty()) {
-                        log.debug("Deleting the consumer group offsets for the following topic partitions using an admin client for sink connector {}: {}.",
-                                connName, partitionsToReset);
-                        DeleteConsumerGroupOffsetsOptions deleteConsumerGroupOffsetsOptions = new DeleteConsumerGroupOffsetsOptions().timeoutMs(
+                try {
+                    if (!offsetsToAlter.isEmpty()) {
+                        log.debug("Committing the following consumer group topic partition offsets using an admin client for sink connector {}: {}.",
+                                connName, offsetsToAlter);
+                        AlterConsumerGroupOffsetsOptions alterConsumerGroupOffsetsOptions = new AlterConsumerGroupOffsetsOptions().timeoutMs(
                                 (int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
-                        DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = admin.deleteConsumerGroupOffsets(groupId, partitionsToReset,
-                                deleteConsumerGroupOffsetsOptions);
-                        deleteConsumerGroupOffsetsResult.all().whenComplete((ignored2, error2) -> {
-                            Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
-                            if (error2 != null) {
-                                // The attempt to delete offsets for certain topic partitions via the admin client will result in a
-                                // GroupSubscribedToTopicException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped completely
-                                // or if the connector is resumed while the alter offsets request is being processed).
-                                if (error2 instanceof GroupSubscribedToTopicException) {
-                                    cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName + " either because its tasks " +
-                                                    "haven't stopped completely yet or the connector was resumed before the request to alter its offsets could be successfully " +
-                                                    "completed. If the connector is in a stopped state, this operation can be safely retried. If it doesn't eventually succeed, the " +
-                                                    "Connect cluster may need to be restarted to get rid of the zombie sink tasks."),
-                                            null);
-                                } else {
-                                    cb.onCompletion(new ConnectException("Failed to delete consumer group offsets for topic partitions " + partitionsToReset + " for connector "
-                                            + connName, error2),
-                                            null);
-                                }
-                            } else {
-                                completeAlterOffsetsCallback(alterOffsetsResult, cb);
-                            }
-                        });
-                    } else {
-                        Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
-                        completeAlterOffsetsCallback(alterOffsetsResult, cb);
+                        AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = admin.alterConsumerGroupOffsets(groupId, offsetsToAlter,
+                                alterConsumerGroupOffsetsOptions);
+
+                        kafkaFuture = alterConsumerGroupOffsetsResult.all();
                     }
-                });
+
+                    kafkaFuture.whenComplete((ignored, error) -> {
+                        if (error != null) {
+                            Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
+                            // When a consumer group is non-empty, only group members can commit offsets. The above attempt to alter offsets via the admin
+                            // client will result in an UnknownMemberIdException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped
+                            // completely or if the connector is resumed while the alter offsets request is being processed)
+                            if (error instanceof UnknownMemberIdException) {
+                                cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName + " either because its tasks " +
+                                                "haven't stopped completely yet or the connector was resumed before the request to alter its offsets could be successfully " +
+                                                "completed. If the connector is in a stopped state, this operation can be safely retried. If it doesn't eventually succeed, the " +
+                                                "Connect cluster may need to be restarted to get rid of the zombie sink tasks."),
+                                        null);
+                            } else {
+                                cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for topic partitions " + offsetsToAlter.keySet() + " for " +
+                                                "connector " + connName, error),
+                                        null);
+                            }
+                        } else if (!partitionsToReset.isEmpty()) {
+                            log.debug("Deleting the consumer group offsets for the following topic partitions using an admin client for sink connector {}: {}.",
+                                    connName, partitionsToReset);
+                            DeleteConsumerGroupOffsetsOptions deleteConsumerGroupOffsetsOptions = new DeleteConsumerGroupOffsetsOptions().timeoutMs(
+                                    (int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+                            DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = admin.deleteConsumerGroupOffsets(groupId, partitionsToReset,
+                                    deleteConsumerGroupOffsetsOptions);
+                            deleteConsumerGroupOffsetsResult.all().whenComplete((ignored2, error2) -> {
+                                Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
+                                if (error2 != null) {
+                                    // The attempt to delete offsets for certain topic partitions via the admin client will result in a
+                                    // GroupSubscribedToTopicException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped completely
+                                    // or if the connector is resumed while the alter offsets request is being processed).
+                                    if (error2 instanceof GroupSubscribedToTopicException) {
+                                        cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName + " either because its tasks " +
+                                                        "haven't stopped completely yet or the connector was resumed before the request to alter its offsets could be successfully " +
+                                                        "completed. If the connector is in a stopped state, this operation can be safely retried. If it doesn't eventually succeed, the " +
+                                                        "Connect cluster may need to be restarted to get rid of the zombie sink tasks."),
+                                                null);
+                                    } else {
+                                        cb.onCompletion(new ConnectException("Failed to delete consumer group offsets for topic partitions " + partitionsToReset + " for connector "
+                                                        + connName, error2),
+                                                null);
+                                    }
+                                } else {
+                                    completeAlterOffsetsCallback(alterOffsetsResult, cb);
+                                }
+                            });
+                        } else {
+                            Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
+                            completeAlterOffsetsCallback(alterOffsetsResult, cb);
+                        }
+                    });
+                } catch (Throwable t) {
+                    Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
+                    throw t;
+                }
             } catch (Throwable t) {
-                cb.onCompletion(t, null);
+                cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to alter offsets for sink connector " + connName), null);
             }
         }));
     }
@@ -1475,7 +1481,7 @@ public class Worker {
                 completeAlterOffsetsCallback(alterOffsetsResult, cb);
             } catch (Throwable t) {
                 log.error("Failed to alter offsets for source connector {}", connName, t);
-                cb.onCompletion(t, null);
+                cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to alter offsets for source connector " + connName), null);
             }
         }));
     }
