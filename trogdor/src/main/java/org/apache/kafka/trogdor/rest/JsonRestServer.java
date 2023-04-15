@@ -138,11 +138,15 @@ public class JsonRestServer {
                     log.info("Stopping REST server");
                     jettyServer.stop();
                     jettyServer.join();
-                    jettyServer.destroy();
                     log.info("REST server stopped");
                 } catch (Exception e) {
                     log.error("Unable to stop REST server", e);
                 } finally {
+                    try {
+                        jettyServer.destroy();
+                    } catch (Exception e) {
+                        log.error("Unable to destroy REST server", e);
+                    }
                     shutdownExecutor.shutdown();
                 }
                 return null;
