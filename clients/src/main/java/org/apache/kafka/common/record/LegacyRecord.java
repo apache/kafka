@@ -76,7 +76,7 @@ public final class LegacyRecord {
      * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
      * compression
      */
-    private static final int COMPRESSION_CODEC_MASK = 0x07;
+    private static final byte COMPRESSION_CODEC_MASK = 0x07;
 
     /**
      * Specify the mask of timestamp type: 0 for CreateTime, 1 for LogAppendTime.
@@ -497,7 +497,7 @@ public final class LegacyRecord {
     public static byte computeAttributes(byte magic, CompressionType type, TimestampType timestampType) {
         byte attributes = 0;
         if (type.id > 0)
-            attributes |= COMPRESSION_CODEC_MASK & type.id;
+            attributes |= (byte) (COMPRESSION_CODEC_MASK & type.id);
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
                 throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for " +
