@@ -126,7 +126,7 @@ versions += [
   swaggerJaxrs2: "2.2.8",
   zinc: "1.8.0",
   zookeeper: "3.6.4",
-  zstd: "1.5.2-1"
+  zstd: "1.5.5-1"
 ]
 libs += [
   activation: "javax.activation:activation:$versions.activation",
