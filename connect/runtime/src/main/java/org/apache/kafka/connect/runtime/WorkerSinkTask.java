@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -64,6 +65,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -151,7 +154,8 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
-        Map<String, Object> adminProps = new HashMap<>(workerConfig.originals());
+        Map<String, Object> adminProps = new HashMap<>();
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, workerConfig.bootstrapServers());
         adminProps.put(CLIENT_ID_CONFIG, id + "-admin");
         this.topicAdmin = new TopicAdmin(adminProps);
     }
@@ -705,29 +709,27 @@ class WorkerSinkTask extends WorkerTask {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             log.debug("{} Partitions assigned {}", WorkerSinkTask.this, partitions);
-            Map<String, TopicDescription> topics = topicAdmin.describeTopics(partitions
-                    .stream()
-                    .map(TopicPartition::topic)
-                    .toArray(String[]::new));
+            Set<String> deletedTopics = new HashSet<>();
             for (TopicPartition tp : partitions) {
-                if (!topics.containsKey(tp.topic())) {
-                    log.info("Not committing offsets for Topic Partition {}. This could be because the topic is deleted", tp);
+                if (deletedTopics.contains(tp.topic())) {
+                    log.debug("Not Committing offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
                     continue;
                 }
                 long pos;
                 try {
                     pos = consumer.position(tp);
                 } catch (TimeoutException e) {
-                    // There could be a race condition where describeTopics reports a topic to be present
-                    // but when the call comes to position(), the topic might not exist. This could happen when
-                    // users issue a mass delete of topics for example. We need to do this because there's no atomic
-                    // way of fetching topic and the position. For such cases, we will not commit offsets
-                    // and also remove the topic from existing topics map so that future partitions for that topic
-                    // can simply exit out.
                     log.error("TimeoutException occurred when fetching position for topic partition {}. " +
-                            "The offsets for this topic partition will not be committed", tp);
-                    topics.remove(tp.topic());
-                    continue;
+                            "Checking if the topic {} exists", tp, tp.topic());
+                    Map<String, TopicDescription> topic = topicAdmin.describeTopics(tp.topic());
+                    if (topic.isEmpty()) {
+                        log.debug("Not Committing offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
+                        deletedTopics.add(tp.topic());
+                        continue;
+                    } else {
+                        // Topic exists but fetchPosition threw TimeoutException.
+                        throw e;
+                    }
                 }
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
