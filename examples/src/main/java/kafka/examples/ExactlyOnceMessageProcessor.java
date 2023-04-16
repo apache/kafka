@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 import java.util.ArrayList;
@@ -115,7 +116,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                         processedRecords += records.count();
                     }
                 } catch (AuthorizationException | UnsupportedVersionException | ProducerFencedException
-                         | FencedInstanceIdException | OutOfOrderSequenceException e) {
+                         | FencedInstanceIdException | OutOfOrderSequenceException | SerializationException e) {
                     Utils.printErr(e.getMessage());
                     // we can't recover from these exceptions
                     shutdown();
