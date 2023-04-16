@@ -25,9 +25,11 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -79,61 +81,66 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
 
     @Override
     public void run() {
-        // it is recommended to have a relatively short txn timeout in order to clear pending offsets faster
-        int transactionTimeoutMs = 10_000;
-        KafkaProducer<Integer, String> producer =
-            new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
-
-        // consumer must be in read_committed mode, which means it won't be able to read uncommitted data
-        boolean readCommitted = true;
-        KafkaConsumer<Integer, String> consumer =
-            new Consumer(inputTopic, "Eos-consumer", Optional.of(groupInstanceId), readCommitted, -1, null).get();
-
-        // called first and once to fence zombies and abort any pending transaction
-        producer.initTransactions();
-
-        consumer.subscribe(singleton(inputTopic), this);
-
         int processedRecords = 0;
         long remainingRecords = Long.MAX_VALUE;
-        Utils.printOut("Processing new records");
-        while (!closed && remainingRecords > 0) {
-            try {
-                ConsumerRecords<Integer, String> records = consumer.poll(ofMillis(200));
-                if (!records.isEmpty()) {
-                    // begin a new transaction session
-                    producer.beginTransaction();
+        try {
+            // it is recommended to have a relatively short txn timeout in order to clear pending offsets faster
+            int transactionTimeoutMs = 10_000;
+            KafkaProducer<Integer, String> producer =
+                new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
 
-                    for (ConsumerRecord<Integer, String> record : records) {
-                        // process the record and send downstream
-                        ProducerRecord<Integer, String> newRecord =
-                            new ProducerRecord<>(outputTopic, record.key(), record.value() + "-ok");
-                        producer.send(newRecord);
+            // consumer must be in read_committed mode, which means it won't be able to read uncommitted data
+            boolean readCommitted = true;
+            KafkaConsumer<Integer, String> consumer =
+                new Consumer(inputTopic, "Eos-consumer", Optional.of(groupInstanceId), readCommitted, -1, null).get();
+
+            // called first and once to fence zombies and abort any pending transaction
+            producer.initTransactions();
+
+            consumer.subscribe(singleton(inputTopic), this);
+
+            Utils.printOut("Processing new records");
+            while (!closed && remainingRecords > 0) {
+                try {
+                    ConsumerRecords<Integer, String> records = consumer.poll(ofMillis(200));
+                    if (!records.isEmpty()) {
+                        // begin a new transaction session
+                        producer.beginTransaction();
+
+                        for (ConsumerRecord<Integer, String> record : records) {
+                            // process the record and send downstream
+                            ProducerRecord<Integer, String> newRecord =
+                                new ProducerRecord<>(outputTopic, record.key(), record.value() + "-ok");
+                            producer.send(newRecord);
+                        }
+
+                        // checkpoint the progress by sending offsets to group coordinator broker
+                        // note that this API is only available for broker >= 2.5
+                        producer.sendOffsetsToTransaction(getOffsetsToCommit(consumer), consumer.groupMetadata());
+
+                        // commit the transaction including offsets
+                        producer.commitTransaction();
+                        processedRecords += records.count();
                     }
-
-                    // checkpoint the progress by sending offsets to group coordinator broker
-                    // note that this API is only available for broker >= 2.5
-                    producer.sendOffsetsToTransaction(getOffsetsToCommit(consumer), consumer.groupMetadata());
-
-                    // commit the transaction including offsets
-                    producer.commitTransaction();
-                    processedRecords += records.count();
+                } catch (AuthorizationException | UnsupportedVersionException | ProducerFencedException
+                         | FencedInstanceIdException | OutOfOrderSequenceException e) {
+                    Utils.printErr(e.getMessage());
+                    // we can't recover from these exceptions
+                    shutdown();
+                } catch (KafkaException e) {
+                    // abort the transaction and try to continue
+                    Utils.printOut("Aborting transaction: %s", e);
+                    producer.abortTransaction();
                 }
-            } catch (ProducerFencedException | OutOfOrderSequenceException | FencedInstanceIdException e) {
-                // we can't recover from these exceptions
-                e.printStackTrace();
-                shutdown();
-            } catch (KafkaException e) {
-                // abort the transaction and try to continue
-                Utils.printOut("Aborting transaction: %s", e);
-                producer.abortTransaction();
+                remainingRecords = getRemainingRecords(consumer);
+                if (remainingRecords != Long.MAX_VALUE) {
+                    Utils.printOut("Remaining records: %d", remainingRecords);
+                }
             }
-            remainingRecords = getRemainingRecords(consumer);
-            if (remainingRecords != Long.MAX_VALUE) {
-                Utils.printOut("Remaining records: %d", remainingRecords);
-            }
+        } catch (Throwable e) {
+            Utils.printOut("Unhandled exception");
+            e.printStackTrace();
         }
-
         Utils.printOut("Processed %d records", processedRecords);
         shutdown();
     }
