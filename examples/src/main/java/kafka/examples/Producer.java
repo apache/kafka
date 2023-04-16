@@ -21,6 +21,13 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
@@ -81,7 +88,7 @@ public class Producer extends Thread {
                 sentRecords++;
             }
         } catch (Throwable e) {
-            Utils.printOut("Fatal error");
+            Utils.printOut("Unhandled exception");
             e.printStackTrace();
         }
         Utils.printOut("Sent %d records", sentRecords);
@@ -119,10 +126,19 @@ public class Producer extends Thread {
 
     private RecordMetadata syncSend(KafkaProducer<Integer, String> producer, int key, String value)
             throws ExecutionException, InterruptedException {
-        // add your application retry strategy here
-        RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
-        Utils.maybePrintRecord(numRecords, key, value, metadata);
-        return metadata;
+        try {
+            RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
+            Utils.maybePrintRecord(numRecords, key, value, metadata);
+            return metadata;
+        } catch (AuthorizationException | UnsupportedVersionException | ProducerFencedException
+                 | FencedInstanceIdException | OutOfOrderSequenceException | SerializationException e) {
+            Utils.printErr(e.getMessage());
+            // we can't recover from these exceptions
+            shutdown();
+        } catch (KafkaException e) {
+            Utils.printErr(e.getMessage());
+        }
+        return null;
     }
 
     class ProducerCallback implements Callback {
@@ -135,9 +151,17 @@ public class Producer extends Thread {
         }
 
         public void onCompletion(RecordMetadata metadata, Exception e) {
-            // add your stateful application retry strategy here
             if (e != null) {
                 Utils.printErr(e.getMessage());
+                if (e instanceof AuthorizationException
+                    || e instanceof UnsupportedVersionException
+                    || e instanceof ProducerFencedException
+                    || e instanceof FencedInstanceIdException
+                    || e instanceof OutOfOrderSequenceException
+                    || e instanceof SerializationException) {
+                    // we can't recover from these exceptions
+                    shutdown();
+                }
             } else {
                 Utils.maybePrintRecord(numRecords, key, value, metadata);
             }

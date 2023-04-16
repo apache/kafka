@@ -21,7 +21,11 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
@@ -82,14 +86,19 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
                         Utils.maybePrintRecord(numRecords, record);
                     }
                     remainingRecords -= records.count();
-                } catch (Throwable e) {
-                    // add your application retry strategy here
+                } catch (AuthorizationException | UnsupportedVersionException
+                         | RecordDeserializationException e) {
+                    // we can't recover from these exceptions
                     Utils.printErr(e.getMessage());
-                    break;
+                    shutdown();
+                } catch (KafkaException e) {
+                    // log the exception and try to continue
+                    // you can add your application retry strategy here
+                    Utils.printErr(e.getMessage());
                 }
             }
         } catch (Throwable e) {
-            Utils.printOut("Fatal error");
+            Utils.printOut("Unhandled exception");
             e.printStackTrace();
         }
         Utils.printOut("Fetched %d records", numRecords - remainingRecords);
