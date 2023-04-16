@@ -16,6 +16,7 @@
  */
 package kafka.log
 
+import kafka.common.LogSegmentOffsetOverflowException
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
@@ -63,6 +64,21 @@ class LogSegmentTest {
   def teardown(): Unit = {
     segments.foreach(_.close())
     Utils.delete(logDir)
+  }
+
+  /**
+   * If the maximum offset beyond index, appended to the log section, it throws LogSegmentOffsetOverflowException
+   */
+  @Test
+  def testAppendForLogSegmentOffsetOverflowException(): Unit = {
+    val seg = createSegment(0)
+    val largestOffset: Long = Integer.MAX_VALUE + 1
+    val largestTimestamp: Long = Time.SYSTEM.milliseconds()
+    val shallowOffsetOfMaxTimestamp: Long = 0
+    val memoryRecords: MemoryRecords = records(0, "hello")
+    assertThrows(classOf[LogSegmentOffsetOverflowException], () => {
+      seg.append(largestOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, memoryRecords)
+    })
   }
 
   /**
