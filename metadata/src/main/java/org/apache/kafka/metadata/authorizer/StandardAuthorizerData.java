@@ -33,16 +33,12 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
-import org.apache.kafka.server.immutable.ImmutableMap;
-import org.apache.kafka.server.immutable.ImmutableNavigableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
 
@@ -185,27 +181,13 @@ public class StandardAuthorizerData {
             superUsers,
             noAclRule.result,
             aclCache);
-        log.info("Initialized with {} acl(s).", aclCache.aclsById.size());
+        log.info("Initialized with {} acl(s).", aclCache.count());
         return newData;
     }
 
     void addAcl(Uuid id, StandardAcl acl) {
-        AclCache aclCacheSnapshot = aclCache;
         try {
-            StandardAcl prevAcl = aclCacheSnapshot.aclsById.get(id);
-            if (prevAcl != null) {
-                throw new RuntimeException("An ACL with ID " + id + " already exists.");
-            }
-
-            ImmutableMap<Uuid, StandardAcl> aclsById = aclCacheSnapshot.aclsById.updated(id, acl);
-
-            if (aclCacheSnapshot.aclsByResource.contains(acl)) {
-                throw new RuntimeException("Unable to add the ACL with ID " + id +
-                    " to aclsByResource");
-            }
-
-            ImmutableNavigableSet<StandardAcl> aclsByResource = aclCacheSnapshot.aclsByResource.added(acl);
-            aclCache = new AclCache(aclsByResource, aclsById);
+            aclCache = aclCache.addAcl(id, acl);
             log.trace("Added ACL {}: {}", id, acl);
         } catch (Throwable e) {
             log.error("addAcl error", e);
@@ -214,23 +196,10 @@ public class StandardAuthorizerData {
     }
 
     void removeAcl(Uuid id) {
-        AclCache aclCacheSnapshot = aclCache;
         try {
-            StandardAcl acl = aclCacheSnapshot.aclsById.get(id);
-            if (acl == null) {
-                throw new RuntimeException("ID " + id + " not found in aclsById.");
-            }
-            ImmutableMap<Uuid, StandardAcl> aclsById = aclCacheSnapshot.aclsById.removed(id);
-
-            if (!aclCacheSnapshot.aclsByResource.contains(acl)) {
-                throw new RuntimeException("Unable to remove the ACL with ID " + id +
-                    " from aclsByResource");
-            }
-
-            ImmutableNavigableSet<StandardAcl> aclsByResource = aclCacheSnapshot.aclsByResource.removed(acl);
-
-            aclCache = new AclCache(aclsByResource, aclsById);
-            log.trace("Removed ACL {}: {}", id, acl);
+            AclCache aclCacheSnapshot = aclCache.removeAcl(id);
+            log.trace("Removed ACL {}: {}", id, aclCacheSnapshot.getAcl(id));
+            aclCache = aclCacheSnapshot;
         } catch (Throwable e) {
             log.error("removeAcl error", e);
             throw e;
@@ -246,7 +215,7 @@ public class StandardAuthorizerData {
     }
 
     int aclCount() {
-        return aclCache.aclsById.size();
+        return aclCache.count();
     }
 
     /**
@@ -420,7 +389,7 @@ public class StandardAuthorizerData {
             MatchingRuleBuilder matchingRuleBuilder
     ) {
         String resourceName = action.resourcePattern().name();
-        NavigableSet<StandardAcl> tailSet = aclCacheSnapshot.aclsByResource.tailSet(exemplar, true);
+        NavigableSet<StandardAcl> tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
         Iterator<StandardAcl> iterator = tailSet.iterator();
         while (iterator.hasNext()) {
             StandardAcl acl = iterator.next();
@@ -450,7 +419,7 @@ public class StandardAuthorizerData {
                     exemplar.host(),
                     exemplar.operation(),
                     exemplar.permissionType());
-                tailSet = aclCacheSnapshot.aclsByResource.tailSet(exemplar, true);
+                tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
                 iterator = tailSet.iterator();
                 continue;
             }
@@ -564,14 +533,7 @@ public class StandardAuthorizerData {
      * @return Iterable over AclBindings matching the filter.
      */
     Iterable<AclBinding> acls(AclBindingFilter filter) {
-        List<AclBinding> aclBindingList = new ArrayList<>();
-        aclCache.aclsByResource.forEach(acl -> {
-            AclBinding aclBinding = acl.toBinding();
-            if (filter.matches(aclBinding)) {
-                aclBindingList.add(aclBinding);
-            }
-        });
-        return aclBindingList;
+        return aclCache.acls(filter);
     }
 
     private interface MatchingRule {
@@ -660,26 +622,5 @@ public class StandardAuthorizerData {
 
     AclCache getAclCache() {
         return aclCache;
-    }
-
-    private static class AclCache {
-        /**
-         * Contains all of the current ACLs sorted by (resource type, resource name).
-         */
-        private final ImmutableNavigableSet<StandardAcl> aclsByResource;
-
-        /**
-         * Contains all of the current ACLs indexed by UUID.
-         */
-        private final ImmutableMap<Uuid, StandardAcl> aclsById;
-
-        private AclCache() {
-            this(ImmutableNavigableSet.empty(), ImmutableMap.empty());
-        }
-
-        private AclCache(final ImmutableNavigableSet<StandardAcl> aclsByResource, final ImmutableMap<Uuid, StandardAcl> aclsById) {
-            this.aclsByResource = aclsByResource;
-            this.aclsById = aclsById;
-        }
     }
 }
