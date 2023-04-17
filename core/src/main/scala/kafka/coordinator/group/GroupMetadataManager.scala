@@ -683,10 +683,9 @@ class GroupMetadataManager(brokerId: Int,
                     }
 
                   case unknownKey: UnknownKey =>
-                    // Unknown versions may exist when a downgraded coordinator is reading records from the log.
                     warn(s"Unknown message key with version ${unknownKey.version}" +
-                      s" while loading offsets and group metadata. Ignoring it. " +
-                      s"It could be a left over from an aborted upgrade.")
+                      s" while loading offsets and group metadata from $topicPartition. Ignoring it. " +
+                      "It could be a left over from an aborted upgrade.")
                 }
               }
             }

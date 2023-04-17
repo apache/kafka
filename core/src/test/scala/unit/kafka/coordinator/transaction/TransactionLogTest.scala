@@ -139,7 +139,7 @@ class TransactionLogTest {
   }
 
   @Test
-  def testReadUnknownMessageKeyVersion(): Unit = {
+  def testReadTxnRecordKeyCanReadUnknownMessage(): Unit = {
     val record = new TransactionLogKey()
     val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
     val key = TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))

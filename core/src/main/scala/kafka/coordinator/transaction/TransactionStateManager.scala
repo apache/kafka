@@ -481,8 +481,8 @@ class TransactionStateManager(brokerId: Int,
 
                   case unknownKey: UnknownKey =>
                     warn(s"Unknown message key with version ${unknownKey.version}" +
-                      s" while loading transaction state. Ignoring it. " +
-                      s"It could be a left over from an aborted upgrade.")
+                      s" while loading transaction state from $topicPartition. Ignoring it. " +
+                      "It could be a left over from an aborted upgrade.")
                 }
               }
             }
