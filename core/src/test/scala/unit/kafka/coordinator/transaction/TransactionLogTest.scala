@@ -20,11 +20,11 @@ package kafka.coordinator.transaction
 import kafka.internals.generated.TransactionLogValue
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.ByteBufferAccessor
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
 import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
@@ -146,6 +146,36 @@ class TransactionLogTest {
     val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata))
     assertEquals(0, txnLogValueBuffer.getShort)
+  }
+
+  @Test
+  def testDeserializeHighestSupportedTransactionLogValue(): Unit = {
+    val txnPartitions = new TransactionLogValue.PartitionsSchema()
+      .setTopic("topic")
+      .setPartitionIds(java.util.Collections.singletonList(0))
+
+    val txnLogValue = new TransactionLogValue()
+      .setProducerId(100)
+      .setProducerEpoch(50.toShort)
+      .setTransactionStatus(CompleteCommit.id)
+      .setTransactionStartTimestampMs(750L)
+      .setTransactionLastUpdateTimestampMs(1000L)
+      .setTransactionTimeoutMs(500)
+      .setTransactionPartitions(java.util.Collections.singletonList(txnPartitions))
+
+    val serialized = MessageUtil.toVersionPrefixedByteBuffer(1, txnLogValue)
+    val deserialized = TransactionLog.readTxnRecordValue("transactionId", serialized).get
+
+    assertEquals(100, deserialized.producerId)
+    assertEquals(50, deserialized.producerEpoch)
+    assertEquals(CompleteCommit, deserialized.state)
+    assertEquals(750L, deserialized.txnStartTimestamp)
+    assertEquals(1000L, deserialized.txnLastUpdateTimestamp)
+    assertEquals(500, deserialized.txnTimeoutMs)
+
+    val actualTxnPartitions = deserialized.topicPartitions
+    assertEquals(1, actualTxnPartitions.size)
+    assertTrue(actualTxnPartitions.contains(new TopicPartition("topic", 0)))
   }
 
   @Test
