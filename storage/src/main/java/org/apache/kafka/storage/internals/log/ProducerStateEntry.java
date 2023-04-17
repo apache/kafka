@@ -41,18 +41,27 @@ public class ProducerStateEntry {
     private int coordinatorEpoch;
     private long lastTimestamp;
     private OptionalLong currentTxnFirstOffset;
-
-    public static ProducerStateEntry empty(long producerId) {
-        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty());
+    
+    private VerificationState verificationState;
+    
+    public enum VerificationState {
+        EMPTY,
+        VERIFYING,
+        VERIFIED
     }
 
-    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata) {
+    public static ProducerStateEntry empty(long producerId) {
+        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY);
+    }
+
+    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata, VerificationState verificationState) {
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
         this.lastTimestamp = lastTimestamp;
         this.currentTxnFirstOffset = currentTxnFirstOffset;
         firstBatchMetadata.ifPresent(batchMetadata::add);
+        this.verificationState = verificationState;
     }
 
     public int firstSeq() {
@@ -85,7 +94,7 @@ public class ProducerStateEntry {
      */
     public ProducerStateEntry withProducerIdAndBatchMetadata(long producerId, Optional<BatchMetadata> batchMetadata) {
         return new ProducerStateEntry(producerId, this.producerEpoch(), this.coordinatorEpoch, this.lastTimestamp,
-            this.currentTxnFirstOffset, batchMetadata);
+            this.currentTxnFirstOffset, batchMetadata, this.verificationState);
     }
 
     public void addBatch(short producerEpoch, int lastSeq, long lastOffset, int offsetDelta, long timestamp) {
@@ -108,23 +117,32 @@ public class ProducerStateEntry {
         if (batchMetadata.size() == ProducerStateEntry.NUM_BATCHES_TO_RETAIN) batchMetadata.removeFirst();
         batchMetadata.add(batch);
     }
+    
+    public boolean compareAndSetVerificationState(VerificationState expectedVerificationState, VerificationState newVerificationState) {
+        if (verificationState == expectedVerificationState) {
+            this.verificationState = newVerificationState;
+            return true;
+        }
+        return false;
+    }
 
     public void update(ProducerStateEntry nextEntry) {
-        update(nextEntry.producerEpoch, nextEntry.coordinatorEpoch, nextEntry.lastTimestamp, nextEntry.batchMetadata, nextEntry.currentTxnFirstOffset);
+        update(nextEntry.producerEpoch, nextEntry.coordinatorEpoch, nextEntry.lastTimestamp, nextEntry.batchMetadata, nextEntry.currentTxnFirstOffset, nextEntry.verificationState);
     }
 
     public void update(short producerEpoch, int coordinatorEpoch, long lastTimestamp) {
-        update(producerEpoch, coordinatorEpoch, lastTimestamp, new ArrayDeque<>(0), OptionalLong.empty());
+        update(producerEpoch, coordinatorEpoch, lastTimestamp, new ArrayDeque<>(0), OptionalLong.empty(), VerificationState.EMPTY);
     }
 
     private void update(short producerEpoch, int coordinatorEpoch, long lastTimestamp, Deque<BatchMetadata> batchMetadata,
-                        OptionalLong currentTxnFirstOffset) {
+                        OptionalLong currentTxnFirstOffset, VerificationState verificationState) {
         maybeUpdateProducerEpoch(producerEpoch);
         while (!batchMetadata.isEmpty())
             addBatchMetadata(batchMetadata.removeFirst());
         this.coordinatorEpoch = coordinatorEpoch;
         this.currentTxnFirstOffset = currentTxnFirstOffset;
         this.lastTimestamp = lastTimestamp;
+        this.verificationState = verificationState;
     }
 
     public void setCurrentTxnFirstOffset(long firstOffset) {
@@ -164,6 +182,10 @@ public class ProducerStateEntry {
 
     public OptionalLong currentTxnFirstOffset() {
         return currentTxnFirstOffset;
+    }
+    
+    public VerificationState verificationState() {
+        return verificationState;
     }
 
     @Override

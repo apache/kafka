@@ -42,7 +42,7 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
 import java.nio.ByteBuffer
-import java.util.Optional
+import java.util.{Optional, OptionalLong}
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
@@ -55,7 +55,7 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -3246,6 +3246,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  // REDO THIS TEST!
   def testHasOngoingTransaction(): Unit = {
     val controllerEpoch = 0
     val leaderEpoch = 5
@@ -3264,7 +3265,6 @@ class PartitionTest extends AbstractPartitionTest {
       .setReplicas(replicas)
       .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
-    assertFalse(partition.hasOngoingTransaction(producerId))
 
     val idempotentRecords = createIdempotentRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -3273,8 +3273,10 @@ class PartitionTest extends AbstractPartitionTest {
       baseOffset = 0L,
       producerId = producerId)
     partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
-    assertFalse(partition.hasOngoingTransaction(producerId))
+    assertEquals(OptionalLong.empty(), txnFirstOffset(producerId))
+    assertEquals(ProducerStateEntry.VerificationState.EMPTY, verificationState(producerId))
 
+    partition.transactionNeedsVerifying(producerId)
     val transactionRecords = createTransactionalRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
@@ -3283,7 +3285,16 @@ class PartitionTest extends AbstractPartitionTest {
       baseSequence = 3,
       producerId = producerId)
     partition.appendRecordsToLeader(transactionRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
-    assertTrue(partition.hasOngoingTransaction(producerId))
+    assertEquals(OptionalLong.of(3), txnFirstOffset(producerId))
+    assertEquals(ProducerStateEntry.VerificationState.VERIFIED, verificationState(producerId))
+  }
+  
+  private def verificationState(producerId: Long): ProducerStateEntry.VerificationState = {
+    partition.log.get.producerStateManager.activeProducers().get(producerId).verificationState()
+  }
+
+  private def txnFirstOffset(producerId: Long): OptionalLong = {
+    partition.log.get.producerStateManager.activeProducers().get(producerId).currentTxnFirstOffset()
   }
 
   private def makeLeader(

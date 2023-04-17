@@ -638,9 +638,10 @@ public class ProducerStateManager {
                 long currentTxnFirstOffset = producerEntryStruct.getLong(CURRENT_TXN_FIRST_OFFSET_FIELD);
 
                 OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
+                ProducerStateEntry.VerificationState verificationState = currentTxnFirstOffsetVal.isPresent() ? ProducerStateEntry.VerificationState.VERIFIED : ProducerStateEntry.VerificationState.EMPTY;
                 Optional<BatchMetadata> batchMetadata =
                         (offset >= 0) ? Optional.of(new BatchMetadata(seq, offset, offsetDelta, timestamp)) : Optional.empty();
-                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata));
+                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata, verificationState));
             }
 
             return entries;

@@ -44,7 +44,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateEntry}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{Map, Seq}
@@ -575,8 +575,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def hasOngoingTransaction(producerId: Long): Boolean = {
-    leaderLogIfLocal.exists(leaderLog => leaderLog.hasOngoingTransaction(producerId))
+  def transactionNeedsVerifying(producerId: Long): Boolean = {
+    leaderLogIfLocal.exists(leaderLog => leaderLog.transactionNeedsVerifying(producerId))
+  }
+  
+  def compareAndSetVerificationState(producerId: Long, expectedVerificationState: ProducerStateEntry.VerificationState, newVerficationState: ProducerStateEntry.VerificationState): Unit = {
+    leaderLogIfLocal.foreach(leaderLog => leaderLog.compareAndSetVerificationState(producerId, expectedVerificationState, newVerficationState))
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition

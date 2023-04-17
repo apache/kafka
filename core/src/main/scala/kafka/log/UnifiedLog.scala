@@ -40,7 +40,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -579,9 +579,24 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     result
   }
 
-  def hasOngoingTransaction(producerId: Long): Boolean = lock synchronized {
+  def transactionNeedsVerifying(producerId: Long): Boolean = lock synchronized {
     val entry = producerStateManager.activeProducers.get(producerId)
-    entry != null && entry.currentTxnFirstOffset.isPresent
+    (entry != null && !entry.currentTxnFirstOffset.isPresent) &&
+      (entry.compareAndSetVerificationState(ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFYING) ||
+        entry.verificationState() == ProducerStateEntry.VerificationState.VERIFYING)
+  }
+  
+  def compareAndSetVerificationState(producerId: Long,
+                                     expectedVerificationState: ProducerStateEntry.VerificationState,
+                                     newVerificationState: ProducerStateEntry.VerificationState): Unit = { lock synchronized {
+      val entry = producerStateManager.activeProducers.get(producerId)
+      if (entry != null) {
+        if (!entry.compareAndSetVerificationState(expectedVerificationState, newVerificationState))
+          warn("The expected state did not match the current verification state, so the verification state was not updated.")
+      } else {
+        warn("The given producer ID did not have an entry in the producer state manager, so it's verification state was not updated.")
+      }
+    }
   }
 
   /**
@@ -981,6 +996,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
         }
+        // verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
+        // otherwise throw error? not sure yet how to handle.
 
         // We cache offset metadata for the start of each transaction. This allows us to
         // compute the last stable offset without relying on additional index lookups.
