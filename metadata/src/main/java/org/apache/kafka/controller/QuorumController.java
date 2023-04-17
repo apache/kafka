@@ -1198,10 +1198,11 @@ public final class QuorumController implements Controller {
 
             if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
                 if (zkMigrationEnabled) {
-                    log.info("Appending ZkMigrationState of PRE_MIGRATION to the log, since migrations are enabled.");
+                    log.info("Putting the controller into pre-migration mode. No metadata updates will be allowed until " +
+                        "the ZK metadata has been migrated");
                     recordConsumer.accept(ZkMigrationState.PRE_MIGRATION.toRecord());
                 } else {
-                    log.debug("Appending ZkMigrationState of NONE to the log, since migrations are not enabled.");
+                    log.debug("Setting the ZK migration state to NONE since this is a de-novo KRaft cluster.");
                     recordConsumer.accept(ZkMigrationState.NONE.toRecord());
                 }
             } else {
@@ -1232,8 +1233,18 @@ public final class QuorumController implements Controller {
                     case PRE_MIGRATION:
                         throw new IllegalStateException("Detected an failed migration state during bootstrap, cannot continue.");
                     case MIGRATION:
+                        if (!zkMigrationEnabled) {
+                            log.info("Completing the ZK migration since this controller was configured with " +
+                                "'zookeeper.metadata.migration.enable' set to 'false'.");
+                            recordConsumer.accept(ZkMigrationState.POST_MIGRATION.toRecord());
+                        } else {
+                            log.info("Staying in the ZK migration since 'zookeeper.metadata.migration.enable' is still 'true'.");
+                        }
                     case POST_MIGRATION:
-                        // These states need more context, so they will be handled by KRaftMigrationDriver
+                        if (zkMigrationEnabled) {
+                            log.info("Ignoring 'zookeeper.metadata.migration.enable' value of 'true' since the ZK migration" +
+                                "has been completed.");
+                        }
                         break;
                 }
             } else {
