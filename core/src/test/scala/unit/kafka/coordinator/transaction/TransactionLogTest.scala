@@ -191,7 +191,7 @@ class TransactionLogTest {
       )
     )
 
-    // create TransactionLogValue.PartitionsSchema with tagged fields
+    // Create TransactionLogValue.PartitionsSchema with tagged fields
     val txnPartitions = new Struct(futurePartitionsSchema)
     txnPartitions.set("topic", "topic")
     txnPartitions.set("partition_ids", Array(Integer.valueOf(1)))
@@ -216,7 +216,7 @@ class TransactionLogTest {
       )
     )
 
-    // create TransactionLogValue with tagged fields
+    // Create TransactionLogValue with tagged fields
     val transactionLogValue = new Struct(futureTransactionLogValueSchema)
     transactionLogValue.set("producer_id", 1000L)
     transactionLogValue.set("producer_epoch", 100.toShort)
