@@ -36,18 +36,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RangeAssignorTest {
-
     private final RangeAssignor assignor = new RangeAssignor();
-
-    private final String topic1Name = "topic1";
     private final Uuid topic1Uuid = Uuid.randomUuid();
-
-    private final String topic2Name = "topic2";
     private final Uuid topic2Uuid = Uuid.randomUuid();
-
-    private final String topic3Name = "topic3";
     private final Uuid topic3Uuid = Uuid.randomUuid();
-
     private final String consumerA = "A";
     private final String consumerB = "B";
     private final String consumerC = "C";
@@ -55,9 +47,24 @@ public class RangeAssignorTest {
     @Test
     public void testOneConsumerNoTopic() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         List<Uuid> subscribedTopics = new ArrayList<>();
+        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopics, new HashMap<>()));
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
+        GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
+
+        assertTrue(groupAssignment.members().isEmpty());
+    }
+
+    @Test
+    public void testOneConsumerNonExistentTopic() {
+        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        List<Uuid> subscribedTopics = new ArrayList<>();
+        subscribedTopics.add(topic2Uuid);
         members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopics, new HashMap<>()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
@@ -71,8 +78,8 @@ public class RangeAssignorTest {
         // A -> T1, T3 // B -> T1, T3 // T1 -> 3 Partitions // T3 -> 2 Partitions
         // Topics
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
         // Members
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -101,9 +108,9 @@ public class RangeAssignorTest {
         // A -> T1, T2 // B -> T3 // C -> T2, T3 // T1 -> 3 Partitions // T2 -> 3 Partitions // T3 -> 2 Partitions
         // Topics
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
-        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
         // Members
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -136,9 +143,9 @@ public class RangeAssignorTest {
     public void testFirstAssignmentNumConsumersGreaterThanNumPartitions() {
         // Topics
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         // Topic 3 has 2 partitions but three consumers subscribed to it - one of them will not get an assignment
-        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
         // Members
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -170,8 +177,8 @@ public class RangeAssignorTest {
     public void testReassignmentNumConsumersGreaterThanNumPartitionsWhenOneConsumerAdded() {
         // Topics
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 2));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 2));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(2));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(2));
         // Members
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Add a new consumer to trigger a re-assignment
@@ -202,6 +209,10 @@ public class RangeAssignorTest {
         expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(0)));
         expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(1)));
 
+        // Test for stickiness
+        assertEquals(computedAssignment.members().get(consumerA).targetPartitions(), new HashMap<>(currentAssignmentForA), "Stickiness test failed for Consumer A");
+        assertEquals(computedAssignment.members().get(consumerB).targetPartitions(), new HashMap<>(currentAssignmentForB), "Stickiness test failed for Consumer B");
+
         // Consumer C shouldn't get any assignment, due to stickiness A, B retain their assignments
         assertNull(computedAssignment.members().get(consumerC));
         assertAssignment(expectedAssignment, computedAssignment);
@@ -228,8 +239,8 @@ public class RangeAssignorTest {
 
         // Simulating adding a partition - originally T1 -> 3 Partitions and T2 -> 3 Partitions
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 4));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 4));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(4));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(4));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
@@ -242,6 +253,10 @@ public class RangeAssignorTest {
         expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Arrays.asList(0, 1)));
         expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Arrays.asList(2, 3)));
 
+        // Test for stickiness
+        assertEquals(computedAssignment.members().get(consumerA).targetPartitions(), new HashMap<>(currentAssignmentForA), "Stickiness test failed for Consumer A");
+        // Implicitly B also retained its partitions since the other set of assigned partitions is (2,3)
+
         assertAssignment(expectedAssignment, computedAssignment);
         assertCoPartitionJoinProperty(computedAssignment);
     }
@@ -249,8 +264,8 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentWhenOneConsumerAddedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -283,6 +298,11 @@ public class RangeAssignorTest {
         expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(2)));
         expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(1)));
 
+        // Test for stickiness
+        assertEquals(computedAssignment.members().get(consumerB).targetPartitions(), new HashMap<>(currentAssignmentForB), "Stickiness test failed for Consumer B");
+        assertTrue(computedAssignment.members().get(consumerA).targetPartitions().get(topic1Uuid).contains(0), "Stickiness test failed for Consumer A");
+        // Co-partition join property test ensures that A retained the same partition for all topics.
+
         assertAssignment(expectedAssignment, computedAssignment);
         assertCoPartitionJoinProperty(computedAssignment);
     }
@@ -290,8 +310,8 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentWhenOneConsumerRemovedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A was removed
@@ -320,9 +340,9 @@ public class RangeAssignorTest {
     public void testReassignmentWhenMultipleSubscriptionsRemovedAfterInitialAssignmentWithThreeConsumersTwoTopics() {
 
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
-        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
 
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
@@ -360,6 +380,10 @@ public class RangeAssignorTest {
         expectedAssignment.computeIfAbsent(topic2Uuid, k -> new HashSet<>()).add(new HashSet<>(Collections.singletonList(2)));
         // Topic 3 Partitions Assignment
         expectedAssignment.computeIfAbsent(topic3Uuid, k -> new HashSet<>()).add(new HashSet<>(Arrays.asList(0, 1)));
+
+        // Test for stickiness
+        assertTrue(computedAssignment.members().get(consumerC).targetPartitions().get(topic2Uuid).contains(2), "Stickiness test failed for Consumer C");
+        assertTrue(computedAssignment.members().get(consumerA).targetPartitions().get(topic1Uuid).containsAll(Arrays.asList(0, 1)), "Stickiness test failed for Consumer A");
 
         assertAssignment(expectedAssignment, computedAssignment);
     }

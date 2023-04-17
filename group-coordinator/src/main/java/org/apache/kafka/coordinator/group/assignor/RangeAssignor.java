@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -60,6 +62,8 @@ import static java.lang.Math.min;
  */
 public class RangeAssignor implements PartitionAssignor {
 
+    private static final Logger log = LoggerFactory.getLogger(RangeAssignor.class);
+
     public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override
@@ -93,7 +97,12 @@ public class RangeAssignor implements PartitionAssignor {
         membersData.forEach((memberId, memberMetadata) -> {
             Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
             for (Uuid topicId: topics) {
-                membersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberId);
+                // Only topics that are present in both the subscribed topics list and the topic metadata should be considered for assignment.
+                if (assignmentSpec.topics().containsKey(topicId)) {
+                    membersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberId);
+                } else {
+                    log.info(memberId + " subscribed to topic " + topicId + " which doesn't exist in the topic metadata");
+                }
             }
         });
 

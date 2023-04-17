@@ -16,16 +16,10 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import java.util.Objects;
-
 /**
  * Metadata of a topic.
  */
 public class AssignmentTopicMetadata {
-    /**
-     * The topic name.
-     */
-    private final String topicName;
 
     /**
      * The number of partitions.
@@ -33,19 +27,9 @@ public class AssignmentTopicMetadata {
     private final int numPartitions;
 
     public AssignmentTopicMetadata(
-        String topicName,
-        int numPartitions
+            int numPartitions
     ) {
-        Objects.requireNonNull(topicName);
-        this.topicName = topicName;
         this.numPartitions = numPartitions;
-    }
-
-    /**
-     * @return The topic name.
-     */
-    public String topicName() {
-        return topicName;
     }
 
     /**
@@ -59,24 +43,17 @@ public class AssignmentTopicMetadata {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         AssignmentTopicMetadata that = (AssignmentTopicMetadata) o;
-
-        if (numPartitions != that.numPartitions) return false;
-        return topicName.equals(that.topicName);
+        return numPartitions == that.numPartitions;
     }
 
     @Override
     public int hashCode() {
-        int result = topicName.hashCode();
-        result = 31 * result + numPartitions;
-        return result;
+        return numPartitions;
     }
 
     @Override
     public String toString() {
-        return "AssignmentTopicMetadata(topicName=" + topicName +
-            ", numPartitions=" + numPartitions +
-            ')';
+        return "AssignmentTopicMetadata(numPartitions=" + numPartitions + ')';
     }
 }
