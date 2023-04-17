@@ -174,7 +174,7 @@ public enum MetadataVersion {
     IBP_3_5_IV1(10, "3.5", "IV1", false),
 
     // Support for SCRAM 
-    IBP_3_5_IV2(11, "3.5", "IV2", false);
+    IBP_3_5_IV2(11, "3.5", "IV2", true);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";
