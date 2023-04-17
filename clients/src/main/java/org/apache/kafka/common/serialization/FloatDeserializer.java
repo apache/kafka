@@ -17,6 +17,12 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+import static java.nio.ByteOrder.BIG_ENDIAN;
 
 public class FloatDeserializer implements Deserializer<Float> {
     @Override
@@ -33,5 +39,23 @@ public class FloatDeserializer implements Deserializer<Float> {
             value |= b & 0xFF;
         }
         return Float.intBitsToFloat(value);
+    }
+
+    @Override
+    public Float deserialize(String topic, Headers headers, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+
+        if (data.remaining() != 4) {
+            throw new SerializationException("Size of data received by Deserializer is not 4");
+        }
+
+        final ByteOrder srcOrder = data.order();
+        data.order(BIG_ENDIAN);
+
+        final float value = data.getFloat(data.position());
+        data.order(srcOrder);
+        return value;
     }
 }

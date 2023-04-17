@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.Stack;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.kafka.common.utils.Utils.wrapNullable;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,8 +72,17 @@ public class SerializationTest {
         for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
             try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
                 for (Object value : test.getValue()) {
-                    assertEquals(value, serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)),
+                    final byte[] serialized = serde.serializer().serialize(topic, value);
+                    assertEquals(value, serde.deserializer().deserialize(topic, serialized),
                         "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+
+                    if (value instanceof byte[]) {
+                        assertArrayEquals((byte[]) value, (byte[]) serde.deserializer().deserialize(topic, null, (byte[]) value),
+                                "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+                    } else {
+                        assertEquals(value, serde.deserializer().deserialize(topic, null, wrapNullable(serialized)),
+                                "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+                    }
                 }
             }
         }

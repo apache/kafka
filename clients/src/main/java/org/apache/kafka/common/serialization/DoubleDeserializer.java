@@ -17,6 +17,12 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+import static java.nio.ByteOrder.BIG_ENDIAN;
 
 public class DoubleDeserializer implements Deserializer<Double> {
 
@@ -34,5 +40,23 @@ public class DoubleDeserializer implements Deserializer<Double> {
             value |= b & 0xFF;
         }
         return Double.longBitsToDouble(value);
+    }
+
+    @Override
+    public Double deserialize(String topic, Headers headers, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+
+        if (data.remaining() != 8) {
+            throw new SerializationException("Size of data received by DoubleDeserializer is not 8");
+        }
+
+        final ByteOrder srcOrder = data.order();
+        data.order(BIG_ENDIAN);
+
+        final double value = data.getDouble(data.position());
+        data.order(srcOrder);
+        return value;
     }
 }
