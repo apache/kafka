@@ -35,14 +35,14 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
+public class SubscriptionReceiveProcessorSupplier<K, KO>
     implements ProcessorSupplier<KO, SubscriptionWrapper<K>, CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
-    private static final Logger LOG = LoggerFactory.getLogger(SubscriptionStoreReceiveProcessorSupplier.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SubscriptionReceiveProcessorSupplier.class);
 
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
     private final CombinedKeySchema<KO, K> keySchema;
 
-    public SubscriptionStoreReceiveProcessorSupplier(
+    public SubscriptionReceiveProcessorSupplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
         final CombinedKeySchema<KO, K> keySchema) {
 
