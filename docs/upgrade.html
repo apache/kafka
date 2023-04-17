@@ -27,6 +27,11 @@
         See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889%3A+Versioned+State+Stores">KIP-889</a>
         for more details.
     </li>
+    <li>MirrorMaker now uses incrementalAlterConfigs API by default to synchronize topic configurations instead of the deprecated alterConfigs API.
+        A new settings called <code>use.incremental.alter.configs</code> is introduced to allow users to control which API to use.
+        This new setting is marked deprecated and will be removed in the next major release when incrementalAlterConfigs API is always used.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-894%3A+Use+incrementalAlterConfigs+API+for+syncing+topic+configurations">KIP-894</a> for more details.
+    </li>
 </ul>
 
 <h4><a id="upgrade_3_4_0" href="#upgrade_3_4_0">Upgrading to 3.4.0 from any version 0.8.x through 3.3.x</a></h4>
