@@ -42,18 +42,18 @@ import java.util.function.Supplier;
  * @param <VO> Type of foreign values
  * @param <VR> Type of joined result of primary and foreign values
  */
-public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>, K, VR> {
+public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>, K, VR> {
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> constructionTimeValueSerializer;
     private final Supplier<String> valueHashSerdePseudoTopicSupplier;
     private final ValueJoiner<V, VO, VR> joiner;
     private final boolean leftJoin;
 
-    public SubscriptionResolverJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
-                                                     final Serializer<V> valueSerializer,
-                                                     final Supplier<String> valueHashSerdePseudoTopicSupplier,
-                                                     final ValueJoiner<V, VO, VR> joiner,
-                                                     final boolean leftJoin) {
+    public ResponseJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
+                                         final Serializer<V> valueSerializer,
+                                         final Supplier<String> valueHashSerdePseudoTopicSupplier,
+                                         final ValueJoiner<V, VO, VR> joiner,
+                                         final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         constructionTimeValueSerializer = valueSerializer;
         this.valueHashSerdePseudoTopicSupplier = valueHashSerdePseudoTopicSupplier;

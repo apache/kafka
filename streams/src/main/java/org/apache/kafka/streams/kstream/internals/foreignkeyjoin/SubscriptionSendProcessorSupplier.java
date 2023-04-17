@@ -45,8 +45,8 @@ import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.Subscrip
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 
-public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>, KO, SubscriptionWrapper<K>> {
-    private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionSendProcessorSupplier.class);
+public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>, KO, SubscriptionWrapper<K>> {
+    private static final Logger LOG = LoggerFactory.getLogger(SubscriptionSendProcessorSupplier.class);
 
     private final Function<V, KO> foreignKeyExtractor;
     private final Supplier<String> foreignKeySerdeTopicSupplier;
@@ -56,13 +56,13 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     private Serializer<KO> foreignKeySerializer;
     private Serializer<V> valueSerializer;
 
-    public ForeignJoinSubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
-                                                        final Supplier<String> foreignKeySerdeTopicSupplier,
-                                                        final Supplier<String> valueSerdeTopicSupplier,
-                                                        final Serde<KO> foreignKeySerde,
-                                                        final Serializer<V> valueSerializer,
-                                                        final boolean leftJoin,
-                                                        final KTableValueGetterSupplier<K, V> primaryKeyValueGetterSupplier) {
+    public SubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
+                                             final Supplier<String> foreignKeySerdeTopicSupplier,
+                                             final Supplier<String> valueSerdeTopicSupplier,
+                                             final Serde<KO> foreignKeySerde,
+                                             final Serializer<V> valueSerializer,
+                                             final boolean leftJoin,
+                                             final KTableValueGetterSupplier<K, V> primaryKeyValueGetterSupplier) {
         this.foreignKeyExtractor = foreignKeyExtractor;
         this.foreignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
         this.valueSerdeTopicSupplier = valueSerdeTopicSupplier;

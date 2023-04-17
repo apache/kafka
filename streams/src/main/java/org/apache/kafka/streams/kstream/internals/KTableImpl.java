@@ -39,13 +39,13 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKey;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchema;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignJoinSubscriptionProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignJoinSubscriptionSendProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionJoinForeignProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResolverJoinProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoinProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionSendProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionJoinProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapper;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerde;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionStoreReceiveProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionReceiveProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerde;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
@@ -1139,9 +1139,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
 
         final KTableValueGetterSupplier<K, V> primaryKeyValueGetter = valueGetterSupplier();
-        final StatefulProcessorNode<K, Change<V>> subscriptionNode = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<K, Change<V>> subscriptionSendNode = new StatefulProcessorNode<>(
             new ProcessorParameters<>(
-                new ForeignJoinSubscriptionSendProcessorSupplier<>(
+                new SubscriptionSendProcessorSupplier<>(
                     foreignKeyExtractor,
                     subscriptionForeignKeySerdePseudoTopic,
                     valueHashSerdePseudoTopic,
@@ -1155,7 +1155,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             Collections.emptySet(),
             Collections.singleton(primaryKeyValueGetter)
         );
-        builder.addGraphNode(graphNode, subscriptionNode);
+        builder.addGraphNode(graphNode, subscriptionSendNode);
 
         final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner =
                 tableJoinedInternal.otherPartitioner() == null
@@ -1167,7 +1167,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             new StaticTopicNameExtractor<>(subscriptionTopicName),
             new ProducedInternal<>(Produced.with(foreignKeySerde, subscriptionWrapperSerde, subscriptionSinkPartitioner))
         );
-        builder.addGraphNode(subscriptionNode, subscriptionSink);
+        builder.addGraphNode(subscriptionSendNode, subscriptionSink);
 
         final StreamSourceNode<KO, SubscriptionWrapper<K>> subscriptionSource = new StreamSourceNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-source", builder, SOURCE_NAME),
@@ -1197,7 +1197,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StatefulProcessorNode<KO, SubscriptionWrapper<K>> subscriptionReceiveNode =
             new StatefulProcessorNode<>(
                 new ProcessorParameters<>(
-                    new SubscriptionStoreReceiveProcessorSupplier<>(subscriptionStore, combinedKeySchema),
+                    new SubscriptionReceiveProcessorSupplier<>(subscriptionStore, combinedKeySchema),
                     renamed.suffixWithOrElseGet("-subscription-receive", builder, SUBSCRIPTION_PROCESSOR)
                 ),
                 Collections.singleton(subscriptionStore),
@@ -1206,10 +1206,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(subscriptionSource, subscriptionReceiveNode);
 
         final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetter = ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueGetterSupplier();
-        final StatefulProcessorNode<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> subscriptionJoinForeignNode =
+        final StatefulProcessorNode<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> subscriptionJoinNode =
             new StatefulProcessorNode<>(
                 new ProcessorParameters<>(
-                    new SubscriptionJoinForeignProcessorSupplier<>(
+                    new SubscriptionJoinProcessorSupplier<>(
                         foreignKeyValueGetter
                     ),
                     renamed.suffixWithOrElseGet("-subscription-join-foreign", builder, SUBSCRIPTION_PROCESSOR)
@@ -1217,17 +1217,17 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 Collections.emptySet(),
                 Collections.singleton(foreignKeyValueGetter)
             );
-        builder.addGraphNode(subscriptionReceiveNode, subscriptionJoinForeignNode);
+        builder.addGraphNode(subscriptionReceiveNode, subscriptionJoinNode);
 
-        final StatefulProcessorNode<KO, Change<VO>> foreignJoinSubscriptionNode = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<KO, Change<VO>> foreignTableJoinNode = new StatefulProcessorNode<>(
             new ProcessorParameters<>(
-                new ForeignJoinSubscriptionProcessorSupplier<>(subscriptionStore, combinedKeySchema, foreignKeyValueGetter),
+                new ForeignTableJoinProcessorSupplier<>(subscriptionStore, combinedKeySchema, foreignKeyValueGetter),
                 renamed.suffixWithOrElseGet("-foreign-join-subscription", builder, SUBSCRIPTION_PROCESSOR)
             ),
             Collections.singleton(subscriptionStore),
             Collections.singleton(foreignKeyValueGetter)
         );
-        builder.addGraphNode(((KTableImpl<KO, VO, ?>) foreignKeyTable).graphNode, foreignJoinSubscriptionNode);
+        builder.addGraphNode(((KTableImpl<KO, VO, ?>) foreignKeyTable).graphNode, foreignTableJoinNode);
 
 
         final String finalRepartitionTopicName = renamed.suffixWithOrElseGet("-subscription-response", builder, SUBSCRIPTION_RESPONSE) + TOPIC_SUFFIX;
@@ -1244,8 +1244,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 new StaticTopicNameExtractor<>(finalRepartitionTopicName),
                 new ProducedInternal<>(Produced.with(keySerde, responseWrapperSerde, foreignResponseSinkPartitioner))
             );
-        builder.addGraphNode(subscriptionJoinForeignNode, foreignResponseSink);
-        builder.addGraphNode(foreignJoinSubscriptionNode, foreignResponseSink);
+        builder.addGraphNode(subscriptionJoinNode, foreignResponseSink);
+        builder.addGraphNode(foreignTableJoinNode, foreignResponseSink);
 
         final StreamSourceNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSource = new StreamSourceNode<>(
             renamed.suffixWithOrElseGet("-subscription-response-source", builder, SOURCE_NAME),
@@ -1259,22 +1259,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         resultSourceNodes.add(foreignResponseSource.nodeName());
         builder.internalTopologyBuilder.copartitionSources(resultSourceNodes);
 
-        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier = new SubscriptionResolverJoinProcessorSupplier<>(
-            primaryKeyValueGetter,
-            valueSerde == null ? null : valueSerde.serializer(),
-            valueHashSerdePseudoTopic,
-            joiner,
-            leftJoin
-        );
-        final StatefulProcessorNode<K, SubscriptionResponseWrapper<VO>> resolverNode = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<K, SubscriptionResponseWrapper<VO>> responseJoinNode = new StatefulProcessorNode<>(
             new ProcessorParameters<>(
-                resolverProcessorSupplier,
+                new ResponseJoinProcessorSupplier<>(
+                        primaryKeyValueGetter,
+                        valueSerde == null ? null : valueSerde.serializer(),
+                        valueHashSerdePseudoTopic,
+                        joiner,
+                        leftJoin
+                ),
                 renamed.suffixWithOrElseGet("-subscription-response-resolver", builder, SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR)
             ),
             Collections.emptySet(),
             Collections.singleton(primaryKeyValueGetter)
         );
-        builder.addGraphNode(foreignResponseSource, resolverNode);
+        builder.addGraphNode(foreignResponseSource, responseJoinNode);
 
         final String resultProcessorName = renamed.suffixWithOrElseGet("-result", builder, FK_JOIN_OUTPUT_NAME);
 
@@ -1308,7 +1307,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             resultStore
         );
         resultNode.setOutputVersioned(materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
-        builder.addGraphNode(resolverNode, resultNode);
+        builder.addGraphNode(responseJoinNode, resultNode);
 
         return new KTableImpl<K, V, VR>(
             resultProcessorName,
