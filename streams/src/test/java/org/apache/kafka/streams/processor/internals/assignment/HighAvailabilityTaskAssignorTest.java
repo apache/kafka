@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -33,6 +34,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -54,12 +56,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithOneStandbysAndLagAndWarmups;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithOneStandbysAndWarmups;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithZeroStandbysAndWarmups;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithZeroStandbysAndZeroLagAndWarmups;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getDefaultConfigsWithOneStandbys;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getDefaultConfigsWithZeroStandbys;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasAssignedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
@@ -71,7 +67,23 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.fail;
 
-public class HighAvailabilityTaskAssignorTest {    
+public class HighAvailabilityTaskAssignorTest {
+    private final AssignmentConfigs configWithoutStandbys = new AssignmentConfigs(
+        /*acceptableRecoveryLag*/ 100L,
+        /*maxWarmupReplicas*/ 2,
+        /*numStandbyReplicas*/ 0,
+        /*probingRebalanceIntervalMs*/ 60 * 1000L,
+        /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+    );
+
+    private final AssignmentConfigs configWithStandbys = new AssignmentConfigs(
+        /*acceptableRecoveryLag*/ 100L,
+        /*maxWarmupReplicas*/ 2,
+        /*numStandbyReplicas*/ 1,
+        /*probingRebalanceIntervalMs*/ 60 * 1000L,
+        /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+    );
+
     @Test
     public void shouldBeStickyForActiveAndStandbyTasksWhileWarmingUp() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
@@ -89,7 +101,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndLagAndWarmups(11L, 2)
+            new AssignmentConfigs(11L, 2, 1, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
@@ -118,7 +130,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndLagAndWarmups(Long.MAX_VALUE, 1)
+            new AssignmentConfigs(Long.MAX_VALUE, 1, 1, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(clientState1, hasAssignedTasks(6));
@@ -139,7 +151,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -160,7 +172,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -180,7 +192,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(unstable, is(false));
@@ -202,7 +214,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(unstable, is(false));
@@ -231,7 +243,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(unstable, is(false));
@@ -253,7 +265,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(unstable, is(false));
@@ -278,7 +290,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(allTaskIds.size() / 3 + 1)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(unstable, is(true));
@@ -308,7 +320,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(allTaskIds.size() / 3 + 1)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(unstable, is(false));
@@ -329,7 +341,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(unstable, is(false));
@@ -349,7 +361,7 @@ public class HighAvailabilityTaskAssignorTest {
         final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(clientStates,
                                                                                          allTasks,
                                                                                          singleton(TASK_0_0),
-                                                                                         getDefaultConfigsWithZeroStandbys());
+                                                                                         configWithoutStandbys);
 
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(client1, hasActiveTasks(2));
@@ -372,7 +384,7 @@ public class HighAvailabilityTaskAssignorTest {
         final boolean probingRebalanceNeeded = new HighAvailabilityTaskAssignor().assign(clientStates,
                                                                                          allTasks,
                                                                                          statefulTasks,
-                                                                                         getDefaultConfigsWithOneStandbys());
+                                                                                         configWithStandbys);
 
         assertThat(clientStates.get(UUID_2).standbyTasks(), not(empty()));
         assertThat(probingRebalanceNeeded, is(false));
@@ -394,7 +406,7 @@ public class HighAvailabilityTaskAssignorTest {
         );
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithZeroStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
 
         assertThat(clientStates.get(UUID_1).activeTasks(), is(singleton(TASK_0_1)));
         assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_0)));
@@ -421,7 +433,7 @@ public class HighAvailabilityTaskAssignorTest {
         );
 
         final boolean probingRebalanceNeeded =
-                new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithOneStandbys());
+                new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
 
         assertThat(clientStates.get(UUID_1).activeTasks(), is(emptySet()));
         assertThat(clientStates.get(UUID_2).activeTasks(), is(emptySet()));
@@ -448,7 +460,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithOneStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
 
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0)));
@@ -468,7 +480,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithOneStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
 
 
         assertThat(client1.activeTaskCount(), equalTo(1));
@@ -486,7 +498,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithZeroStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
 
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
@@ -509,7 +521,13 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithZeroStandbysAndWarmups(1)
+            new AssignmentConfigs(
+                /*acceptableRecoveryLag*/ 100L,
+                /*maxWarmupReplicas*/ 1,
+                /*numStandbyReplicas*/ 0,
+                /*probingRebalanceIntervalMs*/ 60 * 1000L,
+                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+            )
         );
 
 
@@ -532,7 +550,13 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithOneStandbysAndWarmups(1)
+            new AssignmentConfigs(
+                /*acceptableRecoveryLag*/ 100L,
+                /*maxWarmupReplicas*/ 1,
+                /*numStandbyReplicas*/ 1,
+                /*probingRebalanceIntervalMs*/ 60 * 1000L,
+                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+            )
         );
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
@@ -550,7 +574,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithOneStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
@@ -566,7 +590,7 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithOneStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
         assertThat(probingRebalanceNeeded, is(false));
@@ -583,7 +607,7 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithOneStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
 
         assertValidAssignment(
             1,
@@ -608,7 +632,7 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithOneStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
         assertValidAssignment(
             1,
             2,
@@ -641,7 +665,7 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithZeroStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
 
         assertThat(client1.activeTasks(), not(empty()));
         assertThat(client2.activeTasks(), not(empty()));
@@ -658,7 +682,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithZeroStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
 
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(client1.activeTasks(), equalTo(client1.prevActiveTasks()));
@@ -674,7 +698,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithZeroStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
         assertThat(probingRebalanceNeeded, is(false));
         assertHasNoStandbyTasks(client1, client2);
     }
@@ -688,7 +712,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
-            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, getDefaultConfigsWithZeroStandbys());
+            new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithoutStandbys);
         assertThat(probingRebalanceNeeded, is(true));
         assertThat(client2.standbyTaskCount(), equalTo(1));
     }
@@ -710,7 +734,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertValidAssignment(
@@ -741,7 +765,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertValidAssignment(
@@ -772,7 +796,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertValidAssignment(
@@ -803,7 +827,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertValidAssignment(

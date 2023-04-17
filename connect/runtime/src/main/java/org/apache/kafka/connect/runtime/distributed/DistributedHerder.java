@@ -2044,7 +2044,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                 "because the URL of the leader's REST interface is empty!"), null);
                         return;
                     }
-                    String reconfigUrl = UriBuilder.fromUri(leaderUrl)
+                    String reconfigUrl = namespacedUrl(leaderUrl)
                             .path("connectors")
                             .path(connName)
                             .path("tasks")

@@ -145,7 +145,7 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
                 oldValue = joiner.apply(record.value().oldValue, value2);
             }
 
-            context().forward(record.withValue(new Change<>(newValue, oldValue)).withTimestamp(resultTimestamp));
+            context().forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)).withTimestamp(resultTimestamp));
         }
 
         @Override
