@@ -158,26 +158,19 @@ class TestMigration(ProduceConsumeValidateTest):
             node.version = DEV_BRANCH
             self.logger.info("Restarting controller node %s" % node.account.hostname)
             self.kafka.controller_quorum.start_node(node)
-            self.wait_until_rejoin()
-            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
-        for node in self.kafka.nodes:
-            self.logger.info("Stopping broker node %s" % node.account.hostname)
-            self.kafka.stop_node(node)
-            node.version = DEV_BRANCH
-            self.logger.info("Restarting broker node %s" % node.account.hostname)
-            self.kafka.start_node(node)
-            self.wait_until_rejoin()
-            self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
+            # Controller should crash
 
         # Check the controller's logs for the error message about the migration state
         saw_expected_error = False
         for node in self.kafka.controller_quorum.nodes:
+            wait_until(lambda: not self.kafka.controller_quorum.alive(node), timeout_sec=60,
+                       backoff_sec=1, err_msg="Controller did not halt in the expected amount of time")
             with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
                 monitor.offset = 0
                 try:
                     # Shouldn't have to wait too long to see this log message after startup
                     monitor.wait_until(
-                        "ZkMigrationState is NONE which means this cluster should not be migrated from ZooKeeper",
+                        "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
                         timeout_sec=10.0, backoff_sec=.25,
                         err_msg=""
                     )
@@ -186,7 +179,7 @@ class TestMigration(ProduceConsumeValidateTest):
                 except TimeoutError:
                     continue
 
-        assert saw_expected_error, "Did not see expected ERROR log for ZkMigrationState = NONE in the controller logs"
+        assert saw_expected_error, "Did not see expected ERROR log in the controller logs"
 
     def test_upgrade_after_3_4_migration(self):
         """
@@ -232,7 +225,8 @@ class TestMigration(ProduceConsumeValidateTest):
         }
         self.kafka.create_topic(topic_cfg)
 
-        # Now we're in dual-write mode. Upgrade the controller to 3.5+
+        # Now we're in dual-write mode. The 3.4 controller will have written a PRE_MIGRATION record (1) into the log.
+        # We now upgrade the controller to 3.5+ where 1 is redefined as MIGRATION.
         for node in controller.nodes:
             self.logger.info("Stopping controller node %s" % node.account.hostname)
             self.kafka.controller_quorum.stop_node(node)
@@ -242,21 +236,21 @@ class TestMigration(ProduceConsumeValidateTest):
             self.wait_until_rejoin()
             self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
 
-        # Check the controller's logs for the error message about the migration state
-        saw_expected_error = False
+        # Check the controller's logs for the INFO message that we're still in the migration state
+        saw_expected_log = False
         for node in self.kafka.controller_quorum.nodes:
             with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
                 monitor.offset = 0
                 try:
                     # Shouldn't have to wait too long to see this log message after startup
                     monitor.wait_until(
-                        "read a ZkMigrationState of PRE_MIGRATION from a ZK migration on Apache Kafka 3.4.",
+                        "Staying in the ZK migration",
                         timeout_sec=10.0, backoff_sec=.25,
                         err_msg=""
                     )
-                    saw_expected_error = True
+                    saw_expected_log = True
                     break
                 except TimeoutError:
                     continue
 
-        assert saw_expected_error, "Did not see expected INFO log for detecting upgrade after 3.4 migration"
+        assert saw_expected_log, "Did not see expected INFO log after upgrading from a 3.4 migration"

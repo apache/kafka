@@ -22,7 +22,6 @@ import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
@@ -1166,9 +1165,15 @@ public final class QuorumController implements Controller {
             // Prepend the activate event. It is important that this event go at the beginning
             // of the queue rather than the end (hence prepend rather than append). It's also
             // important not to use prepend for anything else, to preserve the ordering here.
-            queue.prepend(new ControllerWriteEvent<>("completeActivation[" + epoch + "]",
-                new CompleteActivationEvent(),
-                EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION)));
+            ControllerWriteEvent<Void> activationEvent = new ControllerWriteEvent<>("completeActivation[" + epoch + "]",
+                    new CompleteActivationEvent(),
+                    EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
+            activationEvent.future.whenComplete((__, t) -> {
+                if (t != null) {
+                    fatalFaultHandler.handleFault("exception while activating controller", t);
+                }
+            });
+            queue.prepend(activationEvent);
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while claiming leadership", e);
         }
@@ -1207,9 +1212,8 @@ public final class QuorumController implements Controller {
                 }
             } else {
                 if (zkMigrationEnabled) {
-                    throw new ConfigException("zookeeper.metadata.migration.enable", "true",
-                        "The bootstrap metadata.version " + bootstrapMetadata.metadataVersion() + " does not support " +
-                        "ZK migrations, cannot continue with ZK migrations enabled.");
+                    throw new RuntimeException("The bootstrap metadata.version " + bootstrapMetadata.metadataVersion() +
+                        " does not support ZK migrations. Cannot continue with ZK migrations enabled.");
                 }
             }
         } else {
@@ -1226,12 +1230,11 @@ public final class QuorumController implements Controller {
                         // Since this is the default state there may or may not be an actual NONE in the log. Regardless,
                         // it will eventually be persisted in a snapshot, so we don't need to explicitly write it here.
                         if (zkMigrationEnabled) {
-                            throw new ConfigException("zookeeper.metadata.migration.enable", "true",
-                                "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
+                            throw new RuntimeException("Should not have ZK migrations enabled on a cluster that was created in KRaft mode.");
                         }
                         break;
                     case PRE_MIGRATION:
-                        throw new IllegalStateException("Detected an failed migration state during bootstrap, cannot continue.");
+                        throw new RuntimeException("Detected an failed migration state during bootstrap, cannot continue.");
                     case MIGRATION:
                         if (!zkMigrationEnabled) {
                             log.info("Completing the ZK migration since this controller was configured with " +
@@ -1240,6 +1243,7 @@ public final class QuorumController implements Controller {
                         } else {
                             log.info("Staying in the ZK migration since 'zookeeper.metadata.migration.enable' is still 'true'.");
                         }
+                        break;
                     case POST_MIGRATION:
                         if (zkMigrationEnabled) {
                             log.info("Ignoring 'zookeeper.metadata.migration.enable' value of 'true' since the ZK migration" +
@@ -1249,15 +1253,14 @@ public final class QuorumController implements Controller {
                 }
             } else {
                 if (zkMigrationEnabled) {
-                    throw new ConfigException("zookeeper.metadata.migration.enable", "true",
-                        "Should not have ZK migrations enabled on a cluster running metadata.version " + featureControl.metadataVersion());
+                    throw new RuntimeException("Should not have ZK migrations enabled on a cluster running metadata.version " + featureControl.metadataVersion());
                 }
             }
         }
     }
     class CompleteActivationEvent implements ControllerWriteOperation<Void> {
         @Override
-        public ControllerResult<Void> generateRecordsAndResult() throws Exception {
+        public ControllerResult<Void> generateRecordsAndResult() {
             List<ApiMessageAndVersion> records = new ArrayList<>();
             generateActivationRecords(log, logReplayTracker.empty(), zkMigrationEnabled, bootstrapMetadata, featureControl, records::add);
             return ControllerResult.atomicOf(records, null);
