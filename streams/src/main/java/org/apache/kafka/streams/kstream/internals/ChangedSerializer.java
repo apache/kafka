@@ -28,7 +28,7 @@ import java.util.Map;
 
 public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, Void, T> {
 
-    private static final int NEW_OLD_FLAG_SIZE = 1;
+    private static final int ENCODING_FLAG_SIZE = 1;
     private static final int MAX_VARINT_LENGTH = 5;
     private Serializer<T> inner;
     private boolean isUpgrade;
@@ -104,37 +104,40 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
         final int oldDataLength = oldValueIsNotNull ? oldData.length : 0;
 
         // The serialization format is:
-        // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
-        // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
-        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
-        final ByteBuffer buf;
+        // {BYTE_ARRAY oldValue}{BYTE encodingFlag=0}
+        // {BYTE_ARRAY newValue}{BYTE encodingFlag=1}
+        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE encodingFlag=2}
         if (newValueIsNotNull && oldValueIsNotNull) {
             if (isUpgrade) {
                 throw new StreamsException("Both old and new values are not null (" + data.oldValue
                         + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
             } else {
-                final int capacity = MAX_VARINT_LENGTH + newDataLength + oldDataLength + NEW_OLD_FLAG_SIZE;
-                buf = ByteBuffer.allocate(capacity);
+                final int capacity = MAX_VARINT_LENGTH + newDataLength + oldDataLength + ENCODING_FLAG_SIZE;
+                final ByteBuffer buf = ByteBuffer.allocate(capacity);
                 ByteUtils.writeVarint(newDataLength, buf);
                 buf.put(newData).put(oldData).put((byte) 2);
+
+                final byte[] serialized = new byte[buf.position()];
+                buf.position(0);
+                buf.get(serialized);
+
+                return serialized;
             }
         } else if (newValueIsNotNull) {
-            final int capacity = newDataLength + NEW_OLD_FLAG_SIZE;
-            buf = ByteBuffer.allocate(capacity);
+            final int capacity = newDataLength + ENCODING_FLAG_SIZE;
+            final ByteBuffer buf = ByteBuffer.allocate(capacity);
             buf.put(newData).put((byte) 1);
+
+            return buf.array();
         } else if (oldValueIsNotNull) {
-            final int capacity = oldDataLength + NEW_OLD_FLAG_SIZE;
-            buf = ByteBuffer.allocate(capacity);
+            final int capacity = oldDataLength + ENCODING_FLAG_SIZE;
+            final ByteBuffer buf = ByteBuffer.allocate(capacity);
             buf.put(oldData).put((byte) 0);
+
+            return buf.array();
         } else {
             throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
         }
-
-        final byte[] serialized = new byte[buf.position()];
-        buf.position(0);
-        buf.get(serialized);
-
-        return serialized;
     }
 
     @Override

@@ -141,9 +141,9 @@ public class ChangedSerdeTest {
         final int oldDataLength = oldValueIsNotNull ? oldData.length : 0;
 
         // The serialization format is:
-        // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=3}
-        // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE newOldFlag=4}
-        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=5}
+        // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=3}
+        // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE encodingFlag=4}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=5}
         final ByteBuffer buf;
         final byte isLatest = data.isLatest ? (byte) 1 : (byte) 0;
         if (newValueIsNotNull && oldValueIsNotNull) {
