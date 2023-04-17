@@ -1217,7 +1217,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         // If there is remote data, we will read remote data, instead of waiting for new data.
         val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo.get,
-          fetchPartitionStatus, params, logReadResults, this, quota, responseCallback)
+          fetchPartitionStatus, params, logReadResults, this, responseCallback)
 
         delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))
       } else {
@@ -1418,7 +1418,7 @@ class ReplicaManager(val config: KafkaConfig,
     result
   }
 
-  def createLogReadResult(highWatermark: Long,
+  private def createLogReadResult(highWatermark: Long,
                           leaderLogStartOffset: Long,
                           leaderLogEndOffset: Long,
                           e: Throwable) = {
@@ -1433,7 +1433,7 @@ class ReplicaManager(val config: KafkaConfig,
       exception = Some(e))
   }
 
-  def createLogReadResult(e: Throwable) = {
+  def createLogReadResult(e: Throwable): LogReadResult = {
     LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
       divergingEpoch = None,
       highWatermark = UnifiedLog.UnknownOffset,

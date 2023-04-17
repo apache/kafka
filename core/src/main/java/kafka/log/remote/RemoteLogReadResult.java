@@ -21,7 +21,6 @@ import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import java.util.Optional;
 
 public class RemoteLogReadResult {
-
     public final Optional<FetchDataInfo> fetchDataInfo;
     public final Optional<Throwable> error;
 
@@ -29,5 +28,4 @@ public class RemoteLogReadResult {
         this.fetchDataInfo = fetchDataInfo;
         this.error = error;
     }
-
 }

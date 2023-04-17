@@ -37,7 +37,6 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
                          fetchParams: FetchParams,
                          localReadResults: Seq[(TopicIdPartition, LogReadResult)],
                          replicaManager: ReplicaManager,
-                         quota: ReplicaQuota,
                          responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(fetchParams.maxWaitMs) {
 
@@ -48,7 +47,6 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
    * Case b: This broker does not know the partition it tries to fetch
    * Case c: The remote storage read request completed (succeeded or failed)
    * Case d: The partition is in an offline log directory on this broker
-   * Case e: This broker is the leader, but the requested epoch is now fenced
    *
    * Upon completion, should return whatever data is available for each valid partition
    */
@@ -56,7 +54,6 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
     fetchPartitionStatus.foreach {
       case (topicPartition, fetchStatus) =>
         val fetchOffset = fetchStatus.startOffsetMetadata
-        val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
         try {
           if (fetchOffset != LogOffsetMetadata.UNKNOWN_OFFSET_METADATA) {
             replicaManager.getPartitionOrException(topicPartition.topicPartition())
@@ -68,12 +65,8 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
           case _: UnknownTopicOrPartitionException => // Case b
             debug(s"Broker no longer knows of partition $topicPartition, satisfy $fetchParams immediately")
             return forceComplete()
-          case _: FencedLeaderEpochException => // Case e
-            debug(s"Broker is the leader of partition $topicPartition, but the requested epoch " +
-              s"$fetchLeaderEpoch is fenced by the latest leader epoch, satisfy $fetchParams immediately")
-            return forceComplete()
           case _: NotLeaderOrFollowerException =>  // Case a
-            debug("Broker is no longer the leader of %s, satisfy %s immediately".format(topicPartition, fetchParams))
+            debug("Broker is no longer the leader or follower of %s, satisfy %s immediately".format(topicPartition, fetchParams))
             return forceComplete()
         }
     }

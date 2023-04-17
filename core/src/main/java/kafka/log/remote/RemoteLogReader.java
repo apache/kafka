@@ -27,7 +27,6 @@ import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 public class RemoteLogReader implements Callable<Void> {
-
     private final Logger logger;
     private final RemoteStorageFetchInfo fetchInfo;
     private final RemoteLogManager rlm;

@@ -19,7 +19,6 @@ package kafka.log.remote;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.concurrent.LinkedBlockingQueue;
@@ -31,11 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private final Logger logger;
 
-    public RemoteStorageThreadPool(String name,
-                                   String threadNamePrefix,
+    public RemoteStorageThreadPool(String threadNamePrefix,
                                    int numThreads,
-                                   int maxPendingTasks,
-                                   Time time) {
+                                   int maxPendingTasks) {
         super(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(maxPendingTasks),
                 new RemoteStorageThreadFactory(threadNamePrefix));
         logger = new LogContext() {

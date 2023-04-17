@@ -36,4 +36,14 @@ public class RemoteStorageFetchInfo {
         this.fetchIsolation = fetchIsolation;
     }
 
+    @Override
+    public String toString() {
+        return "RemoteStorageFetchInfo{" +
+                "fetchMaxBytes=" + fetchMaxBytes +
+                ", minOneMessage=" + minOneMessage +
+                ", topicPartition=" + topicPartition +
+                ", fetchInfo=" + fetchInfo +
+                ", fetchIsolation=" + fetchIsolation +
+                '}';
+    }
 }

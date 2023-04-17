@@ -75,7 +75,6 @@ import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -164,11 +163,10 @@ public class RemoteLogManager implements Closeable {
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
         remoteStorageReaderThreadPool = new RemoteStorageThreadPool(
-                REMOTE_LOG_READER_THREAD_POOL_NAME,
                 REMOTE_LOG_READER_THREAD_NAME_PREFIX,
                 rlmConfig.remoteLogReaderThreads(),
-                rlmConfig.remoteLogReaderMaxPendingTasks(),
-                time);
+                rlmConfig.remoteLogReaderMaxPendingTasks()
+        );
     }
 
     private <T> T createDelegate(ClassLoader classLoader, String className) {
@@ -469,7 +467,7 @@ public class RemoteLogManager implements Closeable {
             leaderEpoch = -1;
         }
 
-        private void maybeUpdateReadOffset() throws RemoteStorageException {
+        private void maybeUpdateReadOffset(UnifiedLog log) throws RemoteStorageException {
             if (!copiedOffsetOption.isPresent()) {
                 logger.info("Find the highest remote offset for partition: {} after becoming leader, leaderEpoch: {}", topicIdPartition, leaderEpoch);
 
@@ -477,23 +475,17 @@ public class RemoteLogManager implements Closeable {
                 // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
                 // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
                 // epoch cache then it starts copying the segments from the earliest epoch entry's offset.
-                copiedOffsetOption = OptionalLong.of(findHighestRemoteOffset(topicIdPartition));
+                copiedOffsetOption = OptionalLong.of(findHighestRemoteOffset(topicIdPartition, log));
             }
         }
 
-        public void copyLogSegmentsToRemote() throws InterruptedException {
+        public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException {
             if (isCancelled())
                 return;
 
             try {
-                maybeUpdateReadOffset();
+                maybeUpdateReadOffset(log);
                 long copiedOffset = copiedOffsetOption.getAsLong();
-                Optional<UnifiedLog> maybeLog = fetchLog.apply(topicIdPartition.topicPartition());
-                if (!maybeLog.isPresent()) {
-                    return;
-                }
-
-                UnifiedLog log = maybeLog.get();
 
                 // LSO indicates the offset below are ready to be consumed (high-watermark or committed)
                 long lso = log.lastStableOffset();
@@ -600,9 +592,15 @@ public class RemoteLogManager implements Closeable {
                 return;
 
             try {
+                Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(topicIdPartition.topicPartition());
+
+                if (!unifiedLogOptional.isPresent()) {
+                    return;
+                }
+
                 if (isLeader()) {
                     // Copy log segments to remote storage
-                    copyLogSegmentsToRemote();
+                    copyLogSegmentsToRemote(unifiedLogOptional.get());
                 }
             } catch (InterruptedException ex) {
                 if (!isCancelled()) {
@@ -642,21 +640,22 @@ public class RemoteLogManager implements Closeable {
             }
         }
 
-        Optional<RemoteLogSegmentMetadata> rlsMetadata = epoch.isPresent()
+        Optional<RemoteLogSegmentMetadata> rlsMetadataOptional = epoch.isPresent()
                 ? fetchRemoteLogSegmentMetadata(tp, epoch.getAsInt(), offset)
                 : Optional.empty();
 
-        if (!rlsMetadata.isPresent()) {
+        if (!rlsMetadataOptional.isPresent()) {
             String epochStr = (epoch.isPresent()) ? Integer.toString(epoch.getAsInt()) : "NOT AVAILABLE";
             throw new OffsetOutOfRangeException("Received request for offset " + offset + " for leader epoch "
                     + epochStr + " and partition " + tp + " which does not exist in remote tier.");
         }
 
-        int startPos = lookupPositionForOffset(rlsMetadata.get(), offset);
+        RemoteLogSegmentMetadata remoteLogSegmentMetadata = rlsMetadataOptional.get();
+        int startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
         InputStream remoteSegInputStream = null;
         try {
             // Search forward for the position of the last offset that is greater than or equal to the target offset
-            remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(rlsMetadata.get(), startPos);
+            remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
             RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream);
 
             RecordBatch firstBatch = findFirstBatch(remoteLogInputStream, offset);
@@ -676,7 +675,6 @@ public class RemoteLogManager implements Closeable {
             remainingBytes -= firstBatch.sizeInBytes();
 
             if (remainingBytes > 0) {
-                // input stream is read till (startPos - 1) while getting the batch of records earlier.
                 // read the input stream until min of (EOF stream or buffer's remaining capacity).
                 Utils.readFully(remoteSegInputStream, buffer);
             }
@@ -684,7 +682,7 @@ public class RemoteLogManager implements Closeable {
 
             FetchDataInfo fetchDataInfo = new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.readableRecords(buffer));
             if (includeAbortedTxns) {
-                fetchDataInfo = addAbortedTransactions(firstBatch.baseOffset(), rlsMetadata.get(), fetchDataInfo);
+                fetchDataInfo = addAbortedTransactions(firstBatch.baseOffset(), remoteLogSegmentMetadata, fetchDataInfo, logOptional.get());
             }
 
             return fetchDataInfo;
@@ -698,8 +696,9 @@ public class RemoteLogManager implements Closeable {
     }
 
     private FetchDataInfo addAbortedTransactions(long startOffset,
-                                         RemoteLogSegmentMetadata segmentMetadata,
-                                         FetchDataInfo fetchInfo) throws RemoteStorageException {
+                                                 RemoteLogSegmentMetadata segmentMetadata,
+                                                 FetchDataInfo fetchInfo,
+                                                 UnifiedLog unifiedLog) throws RemoteStorageException {
         int fetchSize = fetchInfo.records.sizeInBytes();
         OffsetPosition startOffsetPosition = new OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
                 fetchInfo.fetchOffsetMetadata.relativePositionInSegment);
@@ -714,7 +713,7 @@ public class RemoteLogManager implements Closeable {
                 abortedTxns -> abortedTransactions.addAll(abortedTxns.stream()
                         .map(AbortedTxn::asAbortedTransaction).collect(Collectors.toList()));
 
-        collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator);
+        collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator, unifiedLog);
 
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
                 fetchInfo.records,
@@ -723,14 +722,11 @@ public class RemoteLogManager implements Closeable {
     }
 
     private void collectAbortedTransactions(long startOffset,
-                                    long upperBoundOffset,
-                                    RemoteLogSegmentMetadata segmentMetadata,
-                                    Consumer<List<AbortedTxn>> accumulator) throws RemoteStorageException {
-        TopicPartition topicPartition = segmentMetadata.topicIdPartition().topicPartition();
-        Iterator<LogSegment> localLogSegments = fetchLog.apply(topicPartition)
-                .map(log -> JavaConverters.asJavaCollection(log.logSegments()))
-                .map(Collection::iterator)
-                .orElse(Collections.emptyIterator());
+                                            long upperBoundOffset,
+                                            RemoteLogSegmentMetadata segmentMetadata,
+                                            Consumer<List<AbortedTxn>> accumulator,
+                                            UnifiedLog log) throws RemoteStorageException {
+        Iterator<LogSegment> localLogSegments = JavaConverters.asJavaIterator(log.logSegments().iterator());
 
         boolean searchInLocalLog = false;
         Optional<RemoteLogSegmentMetadata> nextSegmentMetadataOpt = Optional.of(segmentMetadata);
@@ -741,7 +737,7 @@ public class RemoteLogManager implements Closeable {
             accumulator.accept(searchResult.abortedTransactions);
             if (!searchResult.isComplete) {
                 if (!searchInLocalLog) {
-                    nextSegmentMetadataOpt = findNextSegmentMetadata(nextSegmentMetadataOpt.get());
+                    nextSegmentMetadataOpt = findNextSegmentMetadata(nextSegmentMetadataOpt.get(), log);
 
                     txnIndexOpt = nextSegmentMetadataOpt.map(x -> indexCache.getIndexEntry(x).txnIndex());
                     if (!txnIndexOpt.isPresent()) {
@@ -758,20 +754,17 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
+    private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata, UnifiedLog log) throws RemoteStorageException {
         TopicPartition topicPartition = segmentMetadata.topicIdPartition().topicPartition();
         long nextSegmentBaseOffset = segmentMetadata.endOffset() + 1;
         OptionalInt epoch = OptionalInt.of(segmentMetadata.segmentLeaderEpochs().lastEntry().getKey());
         Optional<RemoteLogSegmentMetadata> result = Optional.empty();
-        Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(topicPartition);
-        if (unifiedLogOptional.isPresent()) {
-            Option<LeaderEpochFileCache> leaderEpochFileCacheOption = unifiedLogOptional.get().leaderEpochCache();
-            if (leaderEpochFileCacheOption.isDefined()) {
-                LeaderEpochFileCache leaderEpochFileCache = leaderEpochFileCacheOption.get();
-                while (!result.isPresent() && epoch.isPresent()) {
-                    result = fetchRemoteLogSegmentMetadata(topicPartition, epoch.getAsInt(), nextSegmentBaseOffset);
-                    epoch = leaderEpochFileCache.nextEpoch(epoch.getAsInt());
-                }
+        Option<LeaderEpochFileCache> leaderEpochFileCacheOption = log.leaderEpochCache();
+        if (leaderEpochFileCacheOption.isDefined()) {
+            LeaderEpochFileCache leaderEpochFileCache = leaderEpochFileCacheOption.get();
+            while (!result.isPresent() && epoch.isPresent()) {
+                result = fetchRemoteLogSegmentMetadata(topicPartition, epoch.getAsInt(), nextSegmentBaseOffset);
+                epoch = leaderEpochFileCache.nextEpoch(epoch.getAsInt());
             }
         }
 
@@ -792,19 +785,16 @@ public class RemoteLogManager implements Closeable {
         return nextBatch;
     }
 
-    long findHighestRemoteOffset(TopicIdPartition topicIdPartition) throws RemoteStorageException {
+    long findHighestRemoteOffset(TopicIdPartition topicIdPartition, UnifiedLog log) throws RemoteStorageException {
         Optional<Long> offset = Optional.empty();
-        Optional<UnifiedLog> maybeLog = fetchLog.apply(topicIdPartition.topicPartition());
-        if (maybeLog.isPresent()) {
-            UnifiedLog log = maybeLog.get();
-            Option<LeaderEpochFileCache> maybeLeaderEpochFileCache = log.leaderEpochCache();
-            if (maybeLeaderEpochFileCache.isDefined()) {
-                LeaderEpochFileCache cache = maybeLeaderEpochFileCache.get();
-                OptionalInt epoch = cache.latestEpoch();
-                while (!offset.isPresent() && epoch.isPresent()) {
-                    offset = remoteLogMetadataManager.highestOffsetForEpoch(topicIdPartition, epoch.getAsInt());
-                    epoch = cache.previousEpoch(epoch.getAsInt());
-                }
+
+        Option<LeaderEpochFileCache> maybeLeaderEpochFileCache = log.leaderEpochCache();
+        if (maybeLeaderEpochFileCache.isDefined()) {
+            LeaderEpochFileCache cache = maybeLeaderEpochFileCache.get();
+            OptionalInt epoch = cache.latestEpoch();
+            while (!offset.isPresent() && epoch.isPresent()) {
+                offset = remoteLogMetadataManager.highestOffsetForEpoch(topicIdPartition, epoch.getAsInt());
+                epoch = cache.previousEpoch(epoch.getAsInt());
             }
         }
 
