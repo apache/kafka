@@ -17,10 +17,9 @@
 
 package kafka.server
 
-import kafka.log.remote.RemoteLogReadResult
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
-import org.apache.kafka.storage.internals.log.{FetchParams, FetchPartitionData, LogOffsetMetadata, RemoteStorageFetchInfo}
+import org.apache.kafka.storage.internals.log.{FetchParams, FetchPartitionData, LogOffsetMetadata, RemoteLogReadResult, RemoteStorageFetchInfo}
 
 import java.util.concurrent.{CompletableFuture, Future}
 import java.util.{Optional, OptionalInt, OptionalLong}

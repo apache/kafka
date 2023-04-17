@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
-
-import org.apache.kafka.storage.internals.log.FetchDataInfo;
+package org.apache.kafka.storage.internals.log;
 
 import java.util.Optional;
 
@@ -24,8 +22,9 @@ public class RemoteLogReadResult {
     public final Optional<FetchDataInfo> fetchDataInfo;
     public final Optional<Throwable> error;
 
-    RemoteLogReadResult(Optional<FetchDataInfo> fetchDataInfo, Optional<Throwable> error) {
+    public RemoteLogReadResult(Optional<FetchDataInfo> fetchDataInfo, Optional<Throwable> error) {
         this.fetchDataInfo = fetchDataInfo;
         this.error = error;
     }
 }
+

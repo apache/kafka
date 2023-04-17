@@ -57,7 +57,9 @@ import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.OffsetPosition;
+import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
+import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
 import org.slf4j.Logger;
@@ -110,7 +112,6 @@ import java.util.stream.Stream;
 public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
-    private static final String REMOTE_LOG_READER_THREAD_POOL_NAME = "Remote Log Reader Thread Pool";
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
 
     private final RemoteLogManagerConfig rlmConfig;

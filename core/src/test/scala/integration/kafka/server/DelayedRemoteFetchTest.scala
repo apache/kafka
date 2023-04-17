@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.log.remote.RemoteLogReadResult
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
