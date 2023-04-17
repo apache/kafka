@@ -231,9 +231,9 @@ public final class MessageGenerator {
             for (Path inputPath : directoryStream) {
                 try {
                     MessageSpec spec = JSON_SERDE.
-                            readValue(inputPath.toFile(), MessageSpec.class);
+                        readValue(inputPath.toFile(), MessageSpec.class);
                     List<MessageClassGenerator> generators =
-                            createMessageClassGenerators(packageName, messageClassGeneratorTypes);
+                        createMessageClassGenerators(packageName, messageClassGeneratorTypes);
                     for (MessageClassGenerator generator : generators) {
                         String name = generator.outputName(spec) + JAVA_SUFFIX;
                         outputFileNames.add(name);

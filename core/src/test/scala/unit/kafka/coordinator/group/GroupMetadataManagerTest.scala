@@ -37,7 +37,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics => kMetrics}
 import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
 import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
-import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors}
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, MessageUtil}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -2498,7 +2498,56 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testDeserializeOffsetCommitValueWithUnknownTaggedFields(): Unit = {
+  def testDeserializeHighestSupportedGroupMetadataValueVersion(): Unit = {
+    val member = new GroupMetadataValue.MemberMetadata()
+      .setMemberId("member")
+      .setClientId("client")
+      .setClientHost("host")
+
+    val generation = 935
+    val protocolType = "consumer"
+    val protocol = "range"
+    val leader = "leader"
+    val groupMetadataValue = new GroupMetadataValue()
+      .setProtocolType(protocolType)
+      .setGeneration(generation)
+      .setProtocol(protocol)
+      .setLeader(leader)
+      .setMembers(java.util.Collections.singletonList(member))
+
+    val deserialized = GroupMetadataManager.readGroupMessageValue("groupId",
+      MessageUtil.toVersionPrefixedByteBuffer(4, groupMetadataValue), time)
+
+    assertEquals(generation, deserialized.generationId)
+    assertEquals(protocolType, deserialized.protocolType.get)
+    assertEquals(protocol, deserialized.protocolName.get)
+    assertEquals(leader, deserialized.leaderOrNull)
+
+    val actualMember = deserialized.allMemberMetadata.head
+    assertEquals(member.memberId, actualMember.memberId)
+    assertEquals(member.clientId, actualMember.clientId)
+    assertEquals(member.clientHost, actualMember.clientHost)
+  }
+
+  @Test
+  def testDeserializeHighestSupportedOffsetCommitValueVersion(): Unit = {
+    val offsetCommitValue = new OffsetCommitValue()
+      .setOffset(1000L)
+      .setMetadata("metadata")
+      .setCommitTimestamp(1500L)
+      .setLeaderEpoch(1)
+
+    val serialized = MessageUtil.toVersionPrefixedByteBuffer(4, offsetCommitValue)
+    val deserialized = GroupMetadataManager.readOffsetMessageValue(serialized)
+
+    assertEquals(1000L, deserialized.offset)
+    assertEquals("metadata", deserialized.metadata)
+    assertEquals(1500L, deserialized.commitTimestamp)
+    assertEquals(1, deserialized.leaderEpoch.get)
+  }
+
+  @Test
+  def testDeserializeFutureOffsetCommitValue(): Unit = {
     // Copy of OffsetCommitValue.SCHEMA_4 with a few
     // additional tagged fields.
     val futureOffsetCommitSchema = new Schema(
@@ -2546,7 +2595,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testDeserializeGroupMetadataValueWithUnknownTaggedFields(): Unit = {
+  def testDeserializeFutureGroupMetadataValue(): Unit = {
     // Copy of GroupMetadataValue.MemberMetadata.SCHEMA_4 with a few
     // additional tagged fields.
     val futureMemberSchema = new Schema(
@@ -2781,8 +2830,7 @@ class GroupMetadataManagerTest {
                                                memberId: String,
                                                assignmentBytes: Array[Byte] = Array.emptyByteArray,
                                                metadataVersion: MetadataVersion = MetadataVersion.latest): SimpleRecord = {
-    val subscription = new Subscription(List("topic").asJava)
-    val memberProtocols = List((protocol, ConsumerProtocol.serializeSubscription(subscription).array()))
+    val memberProtocols = List((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, Some(groupInstanceId), "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
       if (metadataVersion.isAtLeast(IBP_2_1_IV0)) Some(time.milliseconds()) else None, Seq(member), time)

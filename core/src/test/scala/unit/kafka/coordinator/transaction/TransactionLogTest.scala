@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
@@ -148,7 +149,7 @@ class TransactionLogTest {
   }
 
   @Test
-  def testDeserializeTransactionLogValueWithUnknownTaggedFields(): Unit = {
+  def testDeserializeFutureTransactionLogValue(): Unit = {
     // Copy of TransactionLogValue.PartitionsSchema.SCHEMA_1 with a few
     // additional tagged fields.
     val futurePartitionsSchema = new Schema(
@@ -211,6 +212,7 @@ class TransactionLogTest {
     buffer.getShort() // Skip version.
     val value = new TransactionLogValue(new ByteBufferAccessor(buffer), 1.toShort)
     assertEquals(Seq(0, 1), value.unknownTaggedFields().asScala.map(_.tag))
+    assertEquals(Seq(0, 1), value.transactionPartitions().get(0).unknownTaggedFields().asScala.map(_.tag))
 
     // Read the buffer with readTxnRecordValue.
     buffer.rewind()
