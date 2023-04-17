@@ -131,7 +131,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         );
     }
 
-    public static <T> SnapshotWriter<T> createWithHeader(
+    public static <T> RecordsSnapshotWriter<T> createWithHeader(
         RawSnapshotWriter rawSnapshotWriter,
         int maxBatchSize,
         MemoryPool memoryPool,

@@ -4866,7 +4866,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void maybeRecordRestored(final Time time, final long numRecords) {
+        public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
             // do nothing
         }
 

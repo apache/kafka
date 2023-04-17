@@ -27,6 +27,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -35,7 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
+import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
@@ -54,6 +55,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.{Map, Seq}
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 
@@ -249,6 +251,10 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
+      val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+      val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, addPartitionsToTxnNetworkClient, time)
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -264,7 +270,8 @@ class BrokerServer(
         isShuttingDown = isShuttingDown,
         zkClient = None,
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
+        addPartitionsToTxnManager = Some(addPartitionsToTxnManager)
       )
 
       /* start token manager */
@@ -513,7 +520,8 @@ class BrokerServer(
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
       }
 
-      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
+      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head, time,
+        (tp: TopicPartition) => logManager.getLog(tp).asJava));
     } else {
       None
     }

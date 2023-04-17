@@ -465,7 +465,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldReturnFalseForRestoreActiveTasksIfTaskPaused() throws Exception {
+    public void shouldReturnTrueForRestoreActiveTasksIfTaskPaused() throws Exception {
         final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0))
             .inState(State.RESTORING).build();
         when(changelogReader.completedChangelogs())
@@ -482,7 +482,7 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks();
         verifyPausedTasks(task);
 
-        assertFalse(stateUpdater.restoresActiveTasks());
+        assertTrue(stateUpdater.restoresActiveTasks());
     }
 
     @Test

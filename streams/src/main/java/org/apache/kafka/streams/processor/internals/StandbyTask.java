@@ -96,7 +96,11 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void maybeRecordRestored(final Time time, final long numRecords) {
+    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+        if (initRemaining) {
+            throw new IllegalStateException("Standby task would not record remaining records to restore");
+        }
+
         maybeRecordSensor(numRecords, time, updateSensor);
     }
 

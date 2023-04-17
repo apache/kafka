@@ -27,7 +27,7 @@ public class AssignmentTopicMetadata {
     private final int numPartitions;
 
     public AssignmentTopicMetadata(
-            int numPartitions
+        int numPartitions
     ) {
         this.numPartitions = numPartitions;
     }

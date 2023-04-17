@@ -77,10 +77,10 @@ public class AssignmentMemberSpec {
     }
 
     public AssignmentMemberSpec(
-            Optional<String> instanceId,
-            Optional<String> rackId,
-            Collection<Uuid> subscribedTopicIds,
-            Map<Uuid, Set<Integer>> assignedPartitions
+        Optional<String> instanceId,
+        Optional<String> rackId,
+        Collection<Uuid> subscribedTopicIds,
+        Map<Uuid, Set<Integer>> assignedPartitions
     ) {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
@@ -119,5 +119,6 @@ public class AssignmentMemberSpec {
                 ", subscribedTopicIds=" + subscribedTopicIds +
                 ", assignedPartitions=" + assignedPartitions +
                 ')';
+
     }
 }

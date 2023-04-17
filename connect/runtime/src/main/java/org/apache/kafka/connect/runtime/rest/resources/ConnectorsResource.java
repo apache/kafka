@@ -267,6 +267,19 @@ public class ConnectorsResource implements ConnectResource {
     }
 
     @PUT
+    @Path("/{connector}/stop")
+    @Operation(summary = "Stop the specified connector",
+               description = "This operation is idempotent and has no effects if the connector is already stopped")
+    public void stopConnector(
+            @PathParam("connector") String connector,
+            final @Context HttpHeaders headers,
+            final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herder.stopConnector(connector, cb);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/stop", "PUT", headers, null, forward);
+    }
+
+    @PUT
     @Path("/{connector}/pause")
     @Operation(summary = "Pause the specified connector",
                description = "This operation is idempotent and has no effects if the connector is already paused")

@@ -251,6 +251,7 @@
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.quota" />
+    <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.image" />
@@ -348,7 +349,9 @@
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.requests" />
+      <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.image"/>
+      <allow pkg="org.apache.kafka.server.common"/>
       <allow pkg="org.apache.kafka.server.util"/>
     </subpackage>
   </subpackage>

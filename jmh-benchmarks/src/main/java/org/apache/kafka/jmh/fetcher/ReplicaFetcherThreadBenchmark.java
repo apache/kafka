@@ -178,7 +178,7 @@ public class ReplicaFetcherThreadBenchmark {
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
             Partition partition = new Partition(tp, 100, MetadataVersion.latest(),
-                    0, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
+                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
