@@ -34,14 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OptimizedUniformAssignorTest {
     private final UniformAssignor assignor = new UniformAssignor();
-
-    private final String topic1Name = "topic1";
     private final Uuid topic1Uuid = Uuid.fromString("T1-A4s3VTwiI5CTbEp6POw");
-
-    private final String topic2Name = "topic2";
     private final Uuid topic2Uuid = Uuid.fromString("T2-B4s3VTwiI5YHbPp6YUe");
-
-    private final String topic3Name = "topic3";
     private final Uuid topic3Uuid = Uuid.fromString("T3-CU8fVTLCz5YMkLoDQsa");
 
     private final String consumerA = "A";
@@ -51,7 +45,7 @@ public class OptimizedUniformAssignorTest {
     @Test
     public void testOneConsumerNoTopicSubscription() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         List<Uuid> subscribedTopics = new ArrayList<>();
         members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopics, new HashMap<>()));
@@ -65,7 +59,7 @@ public class OptimizedUniformAssignorTest {
     @Test
     public void testOneConsumerNonexistentTopic() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         List<Uuid> subscribedTopics = new ArrayList<>();
         subscribedTopics.add(topic2Uuid);
@@ -82,8 +76,8 @@ public class OptimizedUniformAssignorTest {
         // A -> T1, T3 // B -> T1, T3 // T1 -> 3 Partitions // T3 -> 2 Partitions
         // Topics
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
         // Members
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -113,7 +107,7 @@ public class OptimizedUniformAssignorTest {
         // Topics
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
         // Topic 3 has 2 partitions but three consumers subscribed to it - one of them will not get an assignment
-        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 2));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
         // Members
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -161,16 +155,16 @@ public class OptimizedUniformAssignorTest {
 
         // No changes in topicMetadata
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         // Consumer A
-        assertStickinessForMember(3, members.get(consumerA).currentAssignmentPerTopic, computedAssignment.members().get(consumerA).assignmentPerTopic());
+        assertStickinessForMember(3, members.get(consumerA).assignedPartitions(), computedAssignment.members().get(consumerA).targetPartitions());
         // Consumer B
-        assertStickinessForMember(2, members.get(consumerB).currentAssignmentPerTopic, computedAssignment.members().get(consumerB).assignmentPerTopic());
+        assertStickinessForMember(2, members.get(consumerB).assignedPartitions(), computedAssignment.members().get(consumerB).targetPartitions());
 
         checkValidityAndBalance(members, computedAssignment);
     }
@@ -195,16 +189,16 @@ public class OptimizedUniformAssignorTest {
 
         // Simulating adding a partition to T1 - originally T1 -> 3 Partitions and T2 -> 3 Partitions
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 4));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic1Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(4));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         // Consumer A
-        assertStickinessForMember(3, members.get(consumerA).currentAssignmentPerTopic, computedAssignment.members().get(consumerA).assignmentPerTopic());
+        assertStickinessForMember(3, members.get(consumerA).assignedPartitions(), computedAssignment.members().get(consumerA).targetPartitions());
         // Consumer B
-        assertStickinessForMember(3, members.get(consumerB).currentAssignmentPerTopic, computedAssignment.members().get(consumerB).assignmentPerTopic());
+        assertStickinessForMember(3, members.get(consumerB).assignedPartitions(), computedAssignment.members().get(consumerB).targetPartitions());
 
         checkValidityAndBalance(members, computedAssignment);
     }
@@ -212,8 +206,8 @@ public class OptimizedUniformAssignorTest {
     @Test
     public void testReassignmentWhenOneConsumerAddedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -237,9 +231,9 @@ public class OptimizedUniformAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         // Consumer A
-        assertStickinessForMember(2, members.get(consumerA).currentAssignmentPerTopic, computedAssignment.members().get(consumerA).assignmentPerTopic());
+        assertStickinessForMember(2, members.get(consumerA).assignedPartitions(), computedAssignment.members().get(consumerA).targetPartitions());
         // Consumer B
-        assertStickinessForMember(2, members.get(consumerB).currentAssignmentPerTopic, computedAssignment.members().get(consumerB).assignmentPerTopic());
+        assertStickinessForMember(2, members.get(consumerB).assignedPartitions(), computedAssignment.members().get(consumerB).targetPartitions());
 
         checkValidityAndBalance(members, computedAssignment);
     }
@@ -247,8 +241,8 @@ public class OptimizedUniformAssignorTest {
     @Test
     public void testReassignmentWhenOneConsumerRemovedAfterInitialAssignmentWithThreeConsumersTwoTopics() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 3));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
@@ -269,9 +263,9 @@ public class OptimizedUniformAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         // Consumer A
-        assertStickinessForMember(2, members.get(consumerA).currentAssignmentPerTopic, computedAssignment.members().get(consumerA).assignmentPerTopic());
+        assertStickinessForMember(2, members.get(consumerA).assignedPartitions(), computedAssignment.members().get(consumerA).targetPartitions());
         // Consumer B
-        assertStickinessForMember(2, members.get(consumerB).currentAssignmentPerTopic, computedAssignment.members().get(consumerB).assignmentPerTopic());
+        assertStickinessForMember(2, members.get(consumerB).assignedPartitions(), computedAssignment.members().get(consumerB).targetPartitions());
 
         checkValidityAndBalance(members, computedAssignment);
     }
@@ -279,8 +273,8 @@ public class OptimizedUniformAssignorTest {
     @Test
     public void testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 2));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 2));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(2));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(2));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
 
@@ -303,9 +297,9 @@ public class OptimizedUniformAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         // Consumer A
-        assertStickinessForMember(1, members.get(consumerA).currentAssignmentPerTopic, computedAssignment.members().get(consumerA).assignmentPerTopic());
+        assertStickinessForMember(1, members.get(consumerA).assignedPartitions(), computedAssignment.members().get(consumerA).targetPartitions());
         // Consumer B
-        assertStickinessForMember(1, members.get(consumerB).currentAssignmentPerTopic, computedAssignment.members().get(consumerB).assignmentPerTopic());
+        assertStickinessForMember(1, members.get(consumerB).assignedPartitions(), computedAssignment.members().get(consumerB).targetPartitions());
 
         checkValidityAndBalance(members, computedAssignment);
     }
@@ -313,9 +307,9 @@ public class OptimizedUniformAssignorTest {
     @Test
     public void testReassignmentWhenOneSubscriptionAddedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
-        topics.put(topic1Uuid, new AssignmentTopicMetadata(topic1Name, 2));
-        topics.put(topic2Uuid, new AssignmentTopicMetadata(topic2Name, 2));
-        topics.put(topic3Uuid, new AssignmentTopicMetadata(topic3Name, 3));
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(2));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(2));
+        topics.put(topic3Uuid, new AssignmentTopicMetadata(3));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
 
@@ -338,9 +332,9 @@ public class OptimizedUniformAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         // Consumer A
-        assertStickinessForMember(2, members.get(consumerA).currentAssignmentPerTopic, computedAssignment.members().get(consumerA).assignmentPerTopic());
+        assertStickinessForMember(2, members.get(consumerA).assignedPartitions(), computedAssignment.members().get(consumerA).targetPartitions());
         // Consumer B
-        assertStickinessForMember(2, members.get(consumerB).currentAssignmentPerTopic, computedAssignment.members().get(consumerB).assignmentPerTopic());
+        assertStickinessForMember(2, members.get(consumerB).assignedPartitions(), computedAssignment.members().get(consumerB).targetPartitions());
 
         checkValidityAndBalance(members, computedAssignment);
     }
@@ -362,25 +356,25 @@ public class OptimizedUniformAssignorTest {
         int numConsumers = consumers.size();
         List<Integer> totalAssignmentSizesOfAllConsumers = new ArrayList<>(consumers.size());
         for (String consumer : consumers) {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(consumer).assignmentPerTopic();
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(consumer).targetPartitions();
             int sum = computedAssignmentForMember.values().stream().mapToInt(Set::size).sum();
             totalAssignmentSizesOfAllConsumers.add(sum);
         }
 
         for (int i = 0; i < numConsumers; i++) {
             String consumerId = consumers.get(i);
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(consumerId).assignmentPerTopic();
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(consumerId).targetPartitions();
             // Each consumer is subscribed to topics of all the partitions assigned to it
             for (Uuid topicId : computedAssignmentForMember.keySet()) {
                 // Check if the topic exists in the subscription
-                assertTrue(members.get(consumerId).subscribedTopics.contains(topicId),
+                assertTrue(members.get(consumerId).subscribedTopicIds().contains(topicId),
                         "Error: Partitions for topic " + topicId + " are assigned to consumer " + consumerId +
                                 " but it is not part of the consumers subscription ");
             }
 
             for (int j = i + 1; j < numConsumers; j++) {
                 String otherConsumerId = consumers.get(j);
-                Map<Uuid, Set<Integer>> computedAssignmentForOtherMember = computedGroupAssignment.members().get(otherConsumerId).assignmentPerTopic();
+                Map<Uuid, Set<Integer>> computedAssignmentForOtherMember = computedGroupAssignment.members().get(otherConsumerId).targetPartitions();
                 // Each partition should be assigned to at most one member
                 for (Uuid topicId : computedAssignmentForMember.keySet()) {
                     Set<Integer> intersection = new HashSet<>();
@@ -420,7 +414,7 @@ public class OptimizedUniformAssignorTest {
     // We have a set of sets with the partitions that should be distributed amongst the consumers, if it exists then remove it from the set.
     private void assertAssignment(Map<Uuid, Set<Set<Integer>>> expectedAssignment, GroupAssignment computedGroupAssignment) {
         for (MemberAssignment member : computedGroupAssignment.members().values()) {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = member.assignmentPerTopic();
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = member.targetPartitions();
             for (Map.Entry<Uuid, Set<Integer>> assignmentForTopic : computedAssignmentForMember.entrySet()) {
                 Uuid topicId = assignmentForTopic.getKey();
                 Set<Integer> assignmentPartitionsSet = assignmentForTopic.getValue();
@@ -433,7 +427,7 @@ public class OptimizedUniformAssignorTest {
     private void assertEmptyAssignmentForExpectedMembers(int expectedNumMembersWithEmptyAssignment, GroupAssignment computedAssignment) {
         int numMembersWithEmptyAssignment = 0;
         for (String member : computedAssignment.members().keySet()) {
-            if (computedAssignment.members().get(member).assignmentPerTopic().isEmpty()) {
+            if (computedAssignment.members().get(member).targetPartitions().isEmpty()) {
                 numMembersWithEmptyAssignment++;
             }
         }

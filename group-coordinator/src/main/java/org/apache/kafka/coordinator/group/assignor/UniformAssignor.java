@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -40,21 +41,21 @@ public class UniformAssignor implements PartitionAssignor {
     @Override
     public GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException {
         AbstractAssignmentBuilder assignmentBuilder;
-        if (allSubscriptionsEqual(assignmentSpec.members)) {
+        if (allSubscriptionsEqual(assignmentSpec.members())) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                     + "optimized assignment algorithm");
             assignmentBuilder = new OptimizedAssignmentBuilder(assignmentSpec);
         } else {
             assignmentBuilder = new GeneralAssignmentBuilder(assignmentSpec);
         }
-        return assignmentInCorrectFormat(assignmentSpec.members.keySet(), assignmentBuilder.build());
+        return assignmentInCorrectFormat(assignmentSpec.members().keySet(), assignmentBuilder.build());
     }
 
     private boolean allSubscriptionsEqual(Map<String, AssignmentMemberSpec> members) {
         boolean areAllSubscriptionsEqual = true;
-        List<Uuid> firstSubscriptionList = members.values().iterator().next().subscribedTopics;
+        Collection<Uuid> firstSubscriptionList = members.values().iterator().next().subscribedTopicIds();
         for (AssignmentMemberSpec memberSpec : members.values()) {
-            if (!firstSubscriptionList.equals(memberSpec.subscribedTopics)) {
+            if (!firstSubscriptionList.equals(memberSpec.subscribedTopicIds())) {
                 areAllSubscriptionsEqual = false;
                 break;
             }
@@ -87,8 +88,8 @@ public class UniformAssignor implements PartitionAssignor {
         final Map<String, AssignmentMemberSpec> metadataPerMember;
 
         AbstractAssignmentBuilder(AssignmentSpec assignmentSpec) {
-            this.metadataPerTopic = assignmentSpec.topics;
-            this.metadataPerMember = assignmentSpec.members;
+            this.metadataPerTopic = assignmentSpec.topics();
+            this.metadataPerMember = assignmentSpec.members();
         }
 
         /**
@@ -101,7 +102,7 @@ public class UniformAssignor implements PartitionAssignor {
         protected List<RackAwareTopicIdPartition> getAllTopicPartitions(List<Uuid> listAllTopics) {
             List<RackAwareTopicIdPartition> allPartitions = new ArrayList<>();
             for (Uuid topic : listAllTopics) {
-                int partitionCount = metadataPerTopic.get(topic).numPartitions;
+                int partitionCount = metadataPerTopic.get(topic).numPartitions();
                 for (int i = 0; i < partitionCount; ++i) {
                     allPartitions.add(new RackAwareTopicIdPartition(topic, i, null));
                 }
