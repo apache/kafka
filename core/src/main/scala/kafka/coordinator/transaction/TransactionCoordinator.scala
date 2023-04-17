@@ -398,7 +398,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             Left(Errors.PRODUCER_FENCED)
           } else if (txnMetadata.pendingTransitionInProgress) {
             // If we are in the produce path, we want to avoid OutOfOrderSequence errors if the added partition is pending.
-            // TODO: Part 2 of KIP-890 will always start transactions with sequence 0, so we enforce that and avoid this workaround.
+            // Part 2 of KIP-890 will always start transactions with sequence 0, so we enforce that and avoid this workaround.
             if (verifyOnly && txnMetadata.pendingState == Some(Ongoing) && partitions.subsetOf(txnMetadata.topicPartitions)) {
               Left(Errors.NONE)
             } else {
