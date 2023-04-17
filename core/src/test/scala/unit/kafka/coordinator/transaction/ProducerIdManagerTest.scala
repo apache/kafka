@@ -52,11 +52,11 @@ class ProducerIdManagerTest {
     val idLen: Int,
     var error: Errors = Errors.NONE,
     val isErroneousBlock: Boolean = false,
-    val time: Time = Time.SYSTEM
+    val time: Time = Time.SYSTEM,
+    var remainingRetries: Int = 1
   ) extends RPCProducerIdManager(brokerId, time, () => 1, brokerToController) {
 
     private val brokerToControllerRequestExecutor = Executors.newSingleThreadExecutor()
-    private var remainingRetries = 1
     val capturedFailure: AtomicBoolean = new AtomicBoolean(false)
 
     override private[transaction] def sendRequest(): Unit = {
@@ -216,7 +216,7 @@ class ProducerIdManagerTest {
   def testRetryBackoff(): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1,
-      error = Errors.UNKNOWN_SERVER_ERROR, time = time)
+      error = Errors.UNKNOWN_SERVER_ERROR, time = time, remainingRetries = 2)
 
     val nowMs = time.milliseconds
     verifyFailure(manager)

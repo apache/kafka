@@ -169,6 +169,7 @@ class RPCProducerIdManager(brokerId: Int,
   private val currentProducerIdBlock: AtomicReference[ProducerIdsBlock] = new AtomicReference(ProducerIdsBlock.EMPTY)
   private val requestInFlight = new AtomicBoolean(false)
   private val blockCount = new AtomicLong(0)
+  private val shouldBackoff = new AtomicBoolean(false)
 
   override def hasValidBlock: Boolean = {
     nextProducerIdBlock.get != null
@@ -176,35 +177,33 @@ class RPCProducerIdManager(brokerId: Int,
 
   override def generateProducerId(): Try[Long] = {
     val currentBlockCount = blockCount.get
-    currentProducerIdBlock.get.claimNextId().asScala match {
-      case None =>
-        // Check the next block if current block is full
-        val block = nextProducerIdBlock.getAndSet(null)
-        if (block == null) {
-          // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
-          // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
-          maybeRequestNextBlock(currentBlockCount)
-          Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
-        } else {
-          // Fence other threads from sending another AllocateProducerIdsRequest
-          blockCount.incrementAndGet()
-          currentProducerIdBlock.set(block)
-          block.claimNextId().asScala match {
-            case Some(nextProducerId) =>
-              Success(nextProducerId.toLong)
-            case None =>
-              throw new IllegalStateException("Newly allocated producer id block should not be empty.")
+    var result: Try[Long] = null
+    while (result == null) {
+      currentProducerIdBlock.get.claimNextId().asScala match {
+        case None =>
+          // Check the next block if current block is full
+          val block = nextProducerIdBlock.getAndSet(null)
+          if (block == null) {
+            // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
+            // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
+            maybeRequestNextBlock(currentBlockCount)
+            result = Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
+          } else {
+            // Fence other threads from sending another AllocateProducerIdsRequest
+            blockCount.incrementAndGet()
+            currentProducerIdBlock.set(block)
           }
-        }
 
-      case Some(nextProducerId) =>
-        // Check if we need to prefetch the next block
-        val prefetchTarget = currentProducerIdBlock.get.firstProducerId + (currentProducerIdBlock.get.size * ProducerIdManager.PidPrefetchThreshold).toLong
-        if (nextProducerId == prefetchTarget) {
-          maybeRequestNextBlock(currentBlockCount)
-        }
-        Success(nextProducerId)
+        case Some(nextProducerId) =>
+          // Check if we need to prefetch the next block
+          val prefetchTarget = currentProducerIdBlock.get.firstProducerId + (currentProducerIdBlock.get.size * ProducerIdManager.PidPrefetchThreshold).toLong
+          if (nextProducerId == prefetchTarget) {
+            maybeRequestNextBlock(currentBlockCount)
+          }
+          result = Success(nextProducerId)
+      }
     }
+    result
   }
 
 
@@ -213,6 +212,10 @@ class RPCProducerIdManager(brokerId: Int,
     if (nextProducerIdBlock.get == null &&
       currentBlockCount == blockCount.get &&
       requestInFlight.compareAndSet(false, true) ) {
+
+      if (shouldBackoff.compareAndSet(true, false)) {
+        time.sleep(RetryBackoffMs)
+      }
       sendRequest()
     }
   }
@@ -258,9 +261,9 @@ class RPCProducerIdManager(brokerId: Int,
       case e: Errors =>
         error(s"Had an unknown error from the controller: ${e.exception}")
     }
+    shouldBackoff.set(!successfulResponse)
     requestInFlight.set(false)
     if (!successfulResponse) {
-      time.sleep(RetryBackoffMs)
       maybeRequestNextBlock(blockCount.get)
     }
   }
