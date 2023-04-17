@@ -26,7 +26,7 @@ public class GroupAssignment {
     /**
      * The member assignments keyed by member id.
      */
-    private final Map<String, MemberAssignment> members;
+    final Map<String, MemberAssignment> members;
 
     public GroupAssignment(
         Map<String, MemberAssignment> members
@@ -35,11 +35,8 @@ public class GroupAssignment {
         this.members = members;
     }
 
-    /**
-     * @return Member assignments keyed by member Ids.
-     */
-    public Map<String, MemberAssignment> members() {
-        return members;
+    public Map<String, MemberAssignment> getMembers() {
+        return this.members;
     }
 
     @Override

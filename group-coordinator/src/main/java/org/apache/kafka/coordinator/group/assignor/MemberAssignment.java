@@ -22,25 +22,22 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+
 /**
  * The partition assignment for a consumer group member.
  */
 public class MemberAssignment {
-    /**
-     * The target partitions assigned to this member keyed by topicId.
-     */
-    private final Map<Uuid, Set<Integer>> targetPartitions;
 
-    public MemberAssignment(Map<Uuid, Set<Integer>> targetPartitions) {
-        Objects.requireNonNull(targetPartitions);
-        this.targetPartitions = targetPartitions;
+    private final Map<Uuid, Set<Integer>> assignmentPerTopic;
+
+
+    public MemberAssignment(Map<Uuid, Set<Integer>> assignmentPerTopic) {
+        Objects.requireNonNull(assignmentPerTopic);
+        this.assignmentPerTopic = assignmentPerTopic;
     }
 
-    /**
-     * @return Target partition numbers keyed by topic Ids.
-     */
-    public Map<Uuid, Set<Integer>> targetPartitions() {
-        return this.targetPartitions;
+    public Map<Uuid, Set<Integer>> getAssignmentPerTopic() {
+        return this.assignmentPerTopic;
     }
 
     @Override
@@ -50,16 +47,16 @@ public class MemberAssignment {
 
         MemberAssignment that = (MemberAssignment) o;
 
-        return targetPartitions.equals(that.targetPartitions);
+        return assignmentPerTopic.equals(that.assignmentPerTopic);
     }
 
     @Override
     public int hashCode() {
-        return targetPartitions.hashCode();
+        return assignmentPerTopic.hashCode();
     }
 
     @Override
     public String toString() {
-        return "MemberAssignment (Target partitions = " + targetPartitions + ')';
+        return "MemberAssignment(targetPartitions=" + assignmentPerTopic + ')';
     }
 }
