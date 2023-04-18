@@ -324,7 +324,7 @@ public class WorkerSourceTaskTest {
         // In this test, we don't flush, so nothing goes any further than the offset writer
 
         expectTopicCreation(TOPIC);
-        expectOffsetFlush(true, true);
+        expectOffsetFlush(true);
 
         sourceTask.stop();
 
