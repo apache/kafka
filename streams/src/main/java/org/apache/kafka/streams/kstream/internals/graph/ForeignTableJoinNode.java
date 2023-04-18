@@ -22,11 +22,11 @@ import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoi
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class ForeignJoinSubscriptionNode<K, V> extends StatefulProcessorNode<K, V> implements VersionedSemanticsGraphNode {
+public class ForeignTableJoinNode<K, V> extends StatefulProcessorNode<K, V> implements VersionedSemanticsGraphNode {
 
-    public ForeignJoinSubscriptionNode(final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                       final Set<StoreBuilder<?>> preRegisteredStores,
-                                       final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
+    public ForeignTableJoinNode(final ProcessorParameters<K, V, ?, ?> processorParameters,
+                                final Set<StoreBuilder<?>> preRegisteredStores,
+                                final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
         super(processorParameters, preRegisteredStores, valueGetterSuppliers);
     }
 
