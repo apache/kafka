@@ -1250,7 +1250,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Stores the owned partitions in a temporary collection before revocation when encountering the REBALANCE_IN_PROGRESS error.
      */
-    abstract void resendOwnedPartitions();
+    void resendOwnedPartitions() { }
 
     protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
         CoordinatorResponseHandler(final Generation generation) {
