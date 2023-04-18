@@ -76,11 +76,11 @@ public class KStreamKStreamIntegrationTest {
     @BeforeAll
     public static void startCluster() throws Exception {
         CLUSTER.start();
-        //Use multiple partitions to ensure distribution of keys.
 
+        //Use multiple partitions to ensure distribution of keys.
         CLUSTER.createTopic(STREAM_1, 4, 1);
         CLUSTER.createTopic(STREAM_2, 4, 1);
-        CLUSTER.createTopic(OUTPUT, 1, 1);
+        CLUSTER.createTopic(OUTPUT, 4, 1);
 
         CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "result-consumer");
@@ -112,13 +112,13 @@ public class KStreamKStreamIntegrationTest {
 
     @Test
     public void shouldOuterJoin() throws Exception {
-        final Set<KeyValue<String, String>> expectedOne = new HashSet<>();
-        expectedOne.add(new KeyValue<>("Key-1", "value1=left-1,value2=null"));
-        expectedOne.add(new KeyValue<>("Key-2", "value1=left-2,value2=null"));
-        expectedOne.add(new KeyValue<>("Key-3", "value1=left-3,value2=null"));
-        expectedOne.add(new KeyValue<>("Key-4", "value1=left-4,value2=null"));
+        final Set<KeyValue<String, String>> expected = new HashSet<>();
+        expected.add(new KeyValue<>("Key-1", "value1=left-1a,value2=null"));
+        expected.add(new KeyValue<>("Key-2", "value1=left-2a,value2=null"));
+        expected.add(new KeyValue<>("Key-3", "value1=left-3a,value2=null"));
+        expected.add(new KeyValue<>("Key-4", "value1=left-4a,value2=null"));
 
-        verifyKStreamKStreamOuterJoin(expectedOne);
+        verifyKStreamKStreamOuterJoin(expected);
     }
 
     private void verifyKStreamKStreamOuterJoin(final Set<KeyValue<String, String>> expectedResult) throws Exception {
@@ -131,24 +131,23 @@ public class KStreamKStreamIntegrationTest {
         PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-        final List<KeyValue<String, String>> stream1 = asList(
-                new KeyValue<>("Key-1", "left-1"),
-                new KeyValue<>("Key-2", "left-2"),
-                new KeyValue<>("Key-3", "left-3"),
-                new KeyValue<>("Key-4", "left-4")
+        final List<KeyValue<String, String>> left1 = asList(
+                new KeyValue<>("Key-1", "left-1a"),
+                new KeyValue<>("Key-2", "left-2a"),
+                new KeyValue<>("Key-3", "left-3a"),
+                new KeyValue<>("Key-4", "left-4a")
         );
 
-        final List<KeyValue<String, String>> stream2 = asList(
-                new KeyValue<>("Key-1", "right-1"),
-                new KeyValue<>("Key-2", "right-2"),
-                new KeyValue<>("Key-3", "right-3"),
-                new KeyValue<>("Key-4", "right-4")
+        final List<KeyValue<String, String>> left2 = asList(
+                new KeyValue<>("Key-1", "left-1b"),
+                new KeyValue<>("Key-2", "left-2b"),
+                new KeyValue<>("Key-3", "left-3b"),
+                new KeyValue<>("Key-4", "left-4b")
         );
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(STREAM_1, stream1, PRODUCER_CONFIG, MOCK_TIME);
-        MOCK_TIME.sleep(11000);
-        Thread.sleep(11000);
-        IntegrationTestUtils.produceKeyValuesSynchronously(STREAM_1, stream2, PRODUCER_CONFIG, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(STREAM_1, left1, PRODUCER_CONFIG, MOCK_TIME);
+        MOCK_TIME.sleep(10000);
+        IntegrationTestUtils.produceKeyValuesSynchronously(STREAM_1, left2, PRODUCER_CONFIG, MOCK_TIME);
 
         final Set<KeyValue<String, String>> result = new HashSet<>(waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
