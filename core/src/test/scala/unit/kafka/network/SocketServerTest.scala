@@ -1901,18 +1901,27 @@ class SocketServerTest {
   }
 
   @Test
-  def testControlPlaneAcceptingSocketUsesReuseAddress(): Unit = {
+  def testControlAndDataPlaneAcceptingSocketsUseReuseAddress(): Unit = {
     shutdownServerAndMetrics(server)
     val testProps = new Properties
     testProps ++= props
+    // Use port 0 so that the system will assign an available port from the ephemeral range
     testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROL_PLANE://localhost:0")
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROL_PLANE:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROL_PLANE")
     val config = KafkaConfig.fromProps(testProps)
     val testServer = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
-    val channel = testServer.controlPlaneAcceptorOpt.get.serverChannel
-    verifySocketUsesReuseAddress(channel)
-    shutdownServerAndMetrics(testServer)
+    try {
+      val dataPlaneAcceptor = testServer.dataPlaneAcceptor(listener)
+      val dataPlaneChannel = dataPlaneAcceptor.get.serverChannel
+      verifySocketUsesReuseAddress(dataPlaneChannel)
+
+      val controlPlaneAcceptor = testServer.controlPlaneAcceptorOpt.get
+      val acceptingChannel = controlPlaneAcceptor.serverChannel
+      verifySocketUsesReuseAddress(acceptingChannel)
+    } finally {
+      shutdownServerAndMetrics(testServer)
+    }
   }
 
   private def verifySocketUsesReuseAddress(channel: ServerSocketChannel): Unit = {
