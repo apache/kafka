@@ -20,7 +20,7 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels.{SelectionKey, SocketChannel}
+import java.nio.channels.{SelectionKey, ServerSocketChannel, SocketChannel}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, ExecutionException, Executors, TimeUnit}
@@ -1891,6 +1891,33 @@ class SocketServerTest {
         assertTrue(connect(testableServer).isConnected)
       }
     }, false)
+  }
+
+  @Test
+  def testDataPlaneAcceptingSocketUsesReuseAddress(): Unit = {
+    val acceptor = server.dataPlaneAcceptor(listener)
+    val channel = acceptor.get.serverChannel
+    verifySocketUsesReuseAddress(channel)
+  }
+
+  @Test
+  def testControlPlaneAcceptingSocketUsesReuseAddress(): Unit = {
+    shutdownServerAndMetrics(server)
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROL_PLANE://localhost:0")
+    testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROL_PLANE:PLAINTEXT")
+    testProps.put("control.plane.listener.name", "CONTROL_PLANE")
+    val config = KafkaConfig.fromProps(testProps)
+    val testServer = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
+    val channel = testServer.controlPlaneAcceptorOpt.get.serverChannel
+    verifySocketUsesReuseAddress(channel)
+    shutdownServerAndMetrics(testServer)
+  }
+
+  private def verifySocketUsesReuseAddress(channel: ServerSocketChannel): Unit = {
+    assertTrue(channel.socket().isBound, "Listening channel not bound")
+    assertTrue(channel.socket().getReuseAddress, "Listening socket reuseAddress in unexpected state")
   }
 
   /**
