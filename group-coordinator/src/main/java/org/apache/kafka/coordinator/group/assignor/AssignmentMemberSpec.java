@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The assignment specification for a consumer group member.
@@ -29,58 +31,84 @@ public class AssignmentMemberSpec {
     /**
      * The instance ID if provided.
      */
-    final Optional<String> instanceId;
+    private final Optional<String> instanceId;
 
     /**
      * The rack ID if provided.
      */
-    final Optional<String> rackId;
+    private final Optional<String> rackId;
 
     /**
-     * The topics that the member is subscribed to.
+     * Topics Ids that the member is subscribed to.
      */
-    final Collection<String> subscribedTopics;
+    private final Collection<Uuid> subscribedTopicIds;
 
     /**
-     * The current target partitions of the member.
+     * Partitions assigned keyed by topicId.
      */
-    final Collection<TopicPartition> targetPartitions;
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
+
+    /**
+     * @return The instance ID as an Optional.
+     */
+    public Optional<String> instanceId() {
+        return instanceId;
+    }
+
+    /**
+     * @return The rack ID as an Optional.
+     */
+    public Optional<String> rackId() {
+        return rackId;
+    }
+
+    /**
+     * @return Collection of subscribed topic Ids.
+     */
+    public Collection<Uuid> subscribedTopicIds() {
+        return subscribedTopicIds;
+    }
+
+    /**
+     * @return Assigned partitions keyed by topic Ids.
+     */
+    public Map<Uuid, Set<Integer>> assignedPartitions() {
+        return assignedPartitions;
+    }
 
     public AssignmentMemberSpec(
         Optional<String> instanceId,
         Optional<String> rackId,
-        Collection<String> subscribedTopics,
-        Collection<TopicPartition> targetPartitions
+        Collection<Uuid> subscribedTopicIds,
+        Map<Uuid, Set<Integer>> assignedPartitions
     ) {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
-        Objects.requireNonNull(subscribedTopics);
-        Objects.requireNonNull(targetPartitions);
+        Objects.requireNonNull(subscribedTopicIds);
+        Objects.requireNonNull(assignedPartitions);
         this.instanceId = instanceId;
         this.rackId = rackId;
-        this.subscribedTopics = subscribedTopics;
-        this.targetPartitions = targetPartitions;
+        this.subscribedTopicIds = subscribedTopicIds;
+        this.assignedPartitions = assignedPartitions;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         AssignmentMemberSpec that = (AssignmentMemberSpec) o;
-
         if (!instanceId.equals(that.instanceId)) return false;
         if (!rackId.equals(that.rackId)) return false;
-        if (!subscribedTopics.equals(that.subscribedTopics)) return false;
-        return targetPartitions.equals(that.targetPartitions);
+        if (!subscribedTopicIds.equals(that.subscribedTopicIds)) return false;
+        return assignedPartitions.equals(that.assignedPartitions);
     }
 
     @Override
     public int hashCode() {
         int result = instanceId.hashCode();
         result = 31 * result + rackId.hashCode();
-        result = 31 * result + subscribedTopics.hashCode();
-        result = 31 * result + targetPartitions.hashCode();
+        result = 31 * result + subscribedTopicIds.hashCode();
+        result = 31 * result + assignedPartitions.hashCode();
         return result;
     }
 
@@ -88,8 +116,8 @@ public class AssignmentMemberSpec {
     public String toString() {
         return "AssignmentMemberSpec(instanceId=" + instanceId +
             ", rackId=" + rackId +
-            ", subscribedTopics=" + subscribedTopics +
-            ", targetPartitions=" + targetPartitions +
+            ", subscribedTopicIds=" + subscribedTopicIds +
+            ", assignedPartitions=" + assignedPartitions +
             ')';
     }
 }

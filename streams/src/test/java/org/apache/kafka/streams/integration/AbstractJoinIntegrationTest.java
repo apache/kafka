@@ -88,31 +88,35 @@ public abstract class AbstractJoinIntegrationTest {
     StreamsBuilder builder;
 
     private final List<Input<String>> input = Arrays.asList(
-        new Input<>(INPUT_TOPIC_LEFT, null),
-        new Input<>(INPUT_TOPIC_RIGHT, null),
-        new Input<>(INPUT_TOPIC_LEFT, "A"),
-        new Input<>(INPUT_TOPIC_RIGHT, "a"),
-        new Input<>(INPUT_TOPIC_LEFT, "B"),
-        new Input<>(INPUT_TOPIC_RIGHT, "b"),
-        new Input<>(INPUT_TOPIC_LEFT, null),
-        new Input<>(INPUT_TOPIC_RIGHT, null),
-        new Input<>(INPUT_TOPIC_LEFT, "C"),
-        new Input<>(INPUT_TOPIC_RIGHT, "c"),
-        new Input<>(INPUT_TOPIC_RIGHT, null),
-        new Input<>(INPUT_TOPIC_LEFT, null),
-        new Input<>(INPUT_TOPIC_RIGHT, null),
-        new Input<>(INPUT_TOPIC_RIGHT, "d"),
-        new Input<>(INPUT_TOPIC_LEFT, "D")
+        new Input<>(INPUT_TOPIC_LEFT, null, 1),
+        new Input<>(INPUT_TOPIC_RIGHT, null, 2),
+        new Input<>(INPUT_TOPIC_LEFT, "A", 3),
+        new Input<>(INPUT_TOPIC_RIGHT, "a", 4),
+        new Input<>(INPUT_TOPIC_LEFT, "B", 5),
+        new Input<>(INPUT_TOPIC_RIGHT, "b", 6),
+        new Input<>(INPUT_TOPIC_LEFT, null, 7),
+        new Input<>(INPUT_TOPIC_RIGHT, null, 8),
+        new Input<>(INPUT_TOPIC_LEFT, "C", 9),
+        new Input<>(INPUT_TOPIC_RIGHT, "c", 10),
+        new Input<>(INPUT_TOPIC_RIGHT, null, 11),
+        new Input<>(INPUT_TOPIC_LEFT, null, 12),
+        new Input<>(INPUT_TOPIC_RIGHT, null, 13),
+        new Input<>(INPUT_TOPIC_RIGHT, "d", 14),
+        new Input<>(INPUT_TOPIC_LEFT, "D", 15),
+        new Input<>(INPUT_TOPIC_LEFT, "E", 4), // out-of-order data
+        new Input<>(INPUT_TOPIC_RIGHT, "e", 3),
+        new Input<>(INPUT_TOPIC_RIGHT, "f", 7),
+        new Input<>(INPUT_TOPIC_LEFT, "F", 8)
     );
 
     private final List<Input<String>> leftInput = Arrays.asList(
-        new Input<>(INPUT_TOPIC_LEFT, null),
-        new Input<>(INPUT_TOPIC_LEFT, "A"),
-        new Input<>(INPUT_TOPIC_LEFT, "B"),
-        new Input<>(INPUT_TOPIC_LEFT, null),
-        new Input<>(INPUT_TOPIC_LEFT, "C"),
-        new Input<>(INPUT_TOPIC_LEFT, null),
-        new Input<>(INPUT_TOPIC_LEFT, "D")
+        new Input<>(INPUT_TOPIC_LEFT, null, 1),
+        new Input<>(INPUT_TOPIC_LEFT, "A", 2),
+        new Input<>(INPUT_TOPIC_LEFT, "B", 3),
+        new Input<>(INPUT_TOPIC_LEFT, null, 4),
+        new Input<>(INPUT_TOPIC_LEFT, "C", 5),
+        new Input<>(INPUT_TOPIC_LEFT, null, 6),
+        new Input<>(INPUT_TOPIC_LEFT, "D", 7)
     );
 
 
@@ -156,17 +160,16 @@ public abstract class AbstractJoinIntegrationTest {
 
             TestRecord<Long, String> expectedFinalResult = null;
 
-            final long firstTimestamp = time.milliseconds();
-            long eventTimestamp = firstTimestamp;
+            final long baseTimestamp = time.milliseconds();
             final Iterator<List<TestRecord<Long, String>>> resultIterator = expectedResult.iterator();
             for (final Input<String> singleInputRecord : input) {
-                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++eventTimestamp);
+                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, baseTimestamp + singleInputRecord.timestamp);
 
                 final List<TestRecord<Long, String>> expected = resultIterator.next();
                 if (expected != null) {
                     final List<TestRecord<Long, String>> updatedExpected = new LinkedList<>();
                     for (final TestRecord<Long, String> record : expected) {
-                        updatedExpected.add(new TestRecord<>(record.key(), record.value(), null, firstTimestamp + record.timestamp()));
+                        updatedExpected.add(new TestRecord<>(record.key(), record.value(), null, baseTimestamp + record.timestamp()));
                     }
 
                     final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
@@ -191,11 +194,10 @@ public abstract class AbstractJoinIntegrationTest {
             testInputTopicMap.put(INPUT_TOPIC_RIGHT, right);
             testInputTopicMap.put(INPUT_TOPIC_LEFT, left);
 
-            final long firstTimestamp = time.milliseconds();
-            long eventTimestamp = firstTimestamp;
+            final long baseTimestamp = time.milliseconds();
 
             for (final Input<String> singleInputRecord : input) {
-                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++eventTimestamp);
+                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, baseTimestamp + singleInputRecord.timestamp);
             }
 
             final TestRecord<Long, String> updatedExpectedFinalResult =
@@ -203,7 +205,7 @@ public abstract class AbstractJoinIntegrationTest {
                     expectedFinalResult.key(),
                     expectedFinalResult.value(),
                     null,
-                    firstTimestamp + expectedFinalResult.timestamp());
+                    baseTimestamp + expectedFinalResult.timestamp());
 
             final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
 
@@ -259,10 +261,12 @@ public abstract class AbstractJoinIntegrationTest {
     private static final class Input<V> {
         String topic;
         KeyValue<Long, V> record;
+        long timestamp;
 
-        Input(final String topic, final V value) {
+        Input(final String topic, final V value, final long timestamp) {
             this.topic = topic;
             record = KeyValue.pair(ANY_UNIQUE_KEY, value);
+            this.timestamp = timestamp;
         }
     }
 }

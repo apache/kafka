@@ -55,6 +55,7 @@ object RequestChannel extends Logging {
 
   sealed trait BaseRequest
   case object ShutdownRequest extends BaseRequest
+  case object WakeupRequest extends BaseRequest
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
@@ -79,6 +80,9 @@ object RequestChannel extends Logging {
     }
   }
 
+  case class CallbackRequest(fun: () => Unit,
+                             originalRequest: Request) extends BaseRequest
+
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
@@ -96,6 +100,8 @@ object RequestChannel extends Logging {
     @volatile var apiThrottleTimeMs = 0L
     @volatile var temporaryMemoryBytes = 0L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
+    @volatile var callbackRequestDequeueTimeNanos: Option[Long] = None
+    @volatile var callbackRequestCompleteTimeNanos: Option[Long] = None
 
     val session = Session(context.principal, context.clientAddress)
 
@@ -227,8 +233,9 @@ object RequestChannel extends Logging {
       }
 
       val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-      val apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos)
+      val callbackRequestTimeNanos = callbackRequestCompleteTimeNanos.getOrElse(0L) - callbackRequestDequeueTimeNanos.getOrElse(0L)
+      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos + callbackRequestTimeNanos)
+      val apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos - callbackRequestTimeNanos)
       val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
       val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
@@ -354,6 +361,7 @@ class RequestChannel(val queueSize: Int,
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
+  private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
   metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
 
@@ -444,6 +452,9 @@ class RequestChannel(val queueSize: Int,
         request.responseCompleteTimeNanos = timeNanos
         if (request.apiLocalCompleteTimeNanos == -1L)
           request.apiLocalCompleteTimeNanos = timeNanos
+        // If this callback was executed after KafkaApis returned we will need to adjust the callback completion time here.
+        if (request.callbackRequestDequeueTimeNanos.isDefined && request.callbackRequestCompleteTimeNanos.isEmpty)
+          request.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
       // For a given request, these may happen in addition to one in the previous section, skip updating the metrics
       case _: StartThrottlingResponse | _: EndThrottlingResponse => ()
     }
@@ -456,9 +467,21 @@ class RequestChannel(val queueSize: Int,
     }
   }
 
-  /** Get the next request or block until specified time has elapsed */
-  def receiveRequest(timeout: Long): RequestChannel.BaseRequest =
-    requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+  /** Get the next request or block until specified time has elapsed 
+   *  Check the callback queue and execute first if present since these
+   *  requests have already waited in line. */
+  def receiveRequest(timeout: Long): RequestChannel.BaseRequest = {
+    val callbackRequest = callbackQueue.poll()
+    if (callbackRequest != null)
+      callbackRequest
+    else {
+      val request = requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+      request match {
+        case WakeupRequest => callbackQueue.poll()
+        case _ => request
+      }
+    }
+  }
 
   /** Get the next request or block until there is one */
   def receiveRequest(): RequestChannel.BaseRequest =
@@ -472,6 +495,7 @@ class RequestChannel(val queueSize: Int,
 
   def clear(): Unit = {
     requestQueue.clear()
+    callbackQueue.clear()
   }
 
   def shutdown(): Unit = {
@@ -480,6 +504,12 @@ class RequestChannel(val queueSize: Int,
   }
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+
+  def sendCallbackRequest(request: CallbackRequest): Unit = {
+    callbackQueue.put(request)
+    if (!requestQueue.offer(RequestChannel.WakeupRequest))
+      trace("Wakeup request could not be added to queue. This means queue is full, so we will still process callback.")
+  }
 
 }
 

@@ -1184,11 +1184,24 @@ class PartitionTest extends AbstractPartitionTest {
     builder.build()
   }
 
-  def createTransactionalRecords(records: Iterable[SimpleRecord],
-                                 baseOffset: Long): MemoryRecords = {
-    val producerId = 1L
+  def createIdempotentRecords(records: Iterable[SimpleRecord], 
+                              baseOffset: Long,
+                              baseSequence: Int = 0,
+                              producerId: Long = 1L): MemoryRecords = {
     val producerEpoch = 0.toShort
-    val baseSequence = 0
+    val isTransactional = false
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val builder = MemoryRecords.builder(buf, CompressionType.NONE, baseOffset, producerId,
+      producerEpoch, baseSequence, isTransactional)
+    records.foreach(builder.append)
+    builder.build()
+  }
+
+  def createTransactionalRecords(records: Iterable[SimpleRecord],
+                                 baseOffset: Long,
+                                 baseSequence: Int = 0,
+                                 producerId: Long = 1L): MemoryRecords = {
+    val producerEpoch = 0.toShort
     val isTransactional = true
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(buf, CompressionType.NONE, baseOffset, producerId,
@@ -3230,6 +3243,47 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     listener.verify(expectedHighWatermark = partition.localLogOrException.logEndOffset)
+  }
+
+  @Test
+  def testHasOngoingTransaction(): Unit = {
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val replicas = List[Integer](brokerId, brokerId + 1).asJava
+    val isr = replicas
+    val producerId = 22L
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+    assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(brokerId)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(isr)
+      .setPartitionEpoch(1)
+      .setReplicas(replicas)
+      .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
+    assertEquals(leaderEpoch, partition.getLeaderEpoch)
+    assertFalse(partition.hasOngoingTransaction(producerId))
+
+    val idempotentRecords = createIdempotentRecords(List(
+      new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes),
+      new SimpleRecord("k3".getBytes, "v3".getBytes)),
+      baseOffset = 0L,
+      producerId = producerId)
+    partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
+    assertFalse(partition.hasOngoingTransaction(producerId))
+
+    val transactionRecords = createTransactionalRecords(List(
+      new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes),
+      new SimpleRecord("k3".getBytes, "v3".getBytes)),
+      baseOffset = 0L,
+      baseSequence = 3,
+      producerId = producerId)
+    partition.appendRecordsToLeader(transactionRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
+    assertTrue(partition.hasOngoingTransaction(producerId))
   }
 
   private def makeLeader(

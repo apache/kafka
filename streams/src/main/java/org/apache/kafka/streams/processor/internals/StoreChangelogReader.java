@@ -456,8 +456,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
+                final Task task = tasks.get(taskId);
+
                 try {
-                    final Task task = tasks.get(taskId);
                     final ChangelogMetadata changelogMetadata = changelogs.get(partition);
                     totalRestored += restoreChangelog(task, changelogMetadata);
                 } catch (final TimeoutException timeoutException) {
@@ -644,20 +645,19 @@ public class StoreChangelogReader implements ChangelogReader {
         final int numRecords = changelogMetadata.bufferedLimitIndex;
 
         if (numRecords != 0) {
-            final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>(changelogMetadata.bufferedRecords.subList(0, numRecords));
+            final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
             stateManager.restore(storeMetadata, records);
 
             // NOTE here we use removeRange of ArrayList in order to achieve efficiency with range shifting,
             // otherwise one-at-a-time removal or addition would be very costly; if all records are restored
             // then we can further optimize to save the array-shift but just set array elements to null
             if (numRecords < changelogMetadata.bufferedRecords.size()) {
-                // TODO: should optimize this
-                changelogMetadata.bufferedRecords.removeAll(records);
+                records.clear();
             } else {
                 changelogMetadata.bufferedRecords.clear();
             }
 
-            task.maybeRecordRestored(time, records.size());
+            task.recordRestoration(time, numRecords, false);
 
             final Long currentOffset = storeMetadata.offset();
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
@@ -691,7 +691,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        if (task != null && (numRecords > 0 || changelogMetadata.state().equals(ChangelogState.COMPLETED))) {
+        if (numRecords > 0 || changelogMetadata.state().equals(ChangelogState.COMPLETED)) {
             task.clearTaskTimeout();
         }
 
@@ -747,6 +747,11 @@ public class StoreChangelogReader implements ChangelogReader {
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("Failed to retrieve committed offsets for %s", partitions), e);
         }
+    }
+
+    private void filterNewPartitionsToRestore(final Map<TaskId, Task> tasks, final Set<ChangelogMetadata> newPartitionsToRestore) {
+        newPartitionsToRestore.removeIf(changelogMetadata ->
+            !tasks.containsKey(changelogs.get(changelogMetadata.storeMetadata.changelogPartition()).stateManager.taskId()));
     }
 
     private Map<TopicPartition, Long> endOffsetForChangelogs(final Map<TaskId, Task> tasks, final Set<TopicPartition> partitions) {
@@ -806,6 +811,11 @@ public class StoreChangelogReader implements ChangelogReader {
         if (newPartitionsToRestore.isEmpty()) {
             return;
         }
+
+        // for those changelog partitions whose tasks are not included, in means those tasks
+        // are paused at the moment, and hence we should not try to initialize those
+        // changelogs yet
+        filterNewPartitionsToRestore(tasks, newPartitionsToRestore);
 
         // for active changelogs, we need to find their end offset before transit to restoring
         // if the changelog is on source topic, then its end offset should be the minimum of
@@ -880,6 +890,9 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void addChangelogsToRestoreConsumer(final Set<TopicPartition> partitions) {
+        if (partitions.isEmpty())
+            return;
+
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
         // the current assignment should not contain any of the new partitions
@@ -907,6 +920,10 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> partitions) {
+        if (partitions.isEmpty()) {
+            return;
+        }
+
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
 
         // the current assignment should contain all the partitions to remove
@@ -988,6 +1005,14 @@ public class StoreChangelogReader implements ChangelogReader {
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
+
+                final TaskId taskId = changelogMetadata.stateManager.taskId();
+                final Task task = tasks.get(taskId);
+                // if the log is truncated between when we get the log end offset and when we get the
+                // consumer position, then it's possible that the difference become negative and there's actually
+                // no records to restore; in this case we just initialize the sensor to zero
+                final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
+                task.recordRestoration(time, recordsToRestore, true);
             }
         }
     }

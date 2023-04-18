@@ -106,7 +106,8 @@
         <div class="section" id="querying-local-state-stores-for-an-app-instance">
             <span id="streams-developer-guide-interactive-queries-local-stores"></span><h2><a class="toc-backref" href="#id3">Querying local state stores for an app instance</a><a class="headerlink" href="#querying-local-state-stores-for-an-app-instance" title="Permalink to this headline"></a></h2>
             <p>A Kafka Streams application typically runs on multiple instances.  The state that is locally available on any given instance is only a subset of the <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">application&#8217;s entire state</span></a>.  Querying the local stores on an instance will only return data locally available on that particular instance.</p>
-            <p>The method <code class="docutils literal"><span class="pre">KafkaStreams#store(...)</span></code> finds an application instance&#8217;s local state stores by name and type.</p>
+            <p>The method <code class="docutils literal"><span class="pre">KafkaStreams#store(...)</span></code> finds an application instance&#8217;s local state stores by name and type.
+                Note that interactive queries are not supported for <a class="reference internal" href="processor-api.html#streams-developer-guide-state-store-versioned"><span class="std std-ref">versioned state stores</span></a> at this time.</p>
             <div class="figure align-center" id="id1">
                 <img class="centered" src="/{{version}}/images/streams-interactive-queries-api-01.png">
                 <p class="caption"><span class="caption-text">Every application instance can directly query any of its local state stores.</span></p>

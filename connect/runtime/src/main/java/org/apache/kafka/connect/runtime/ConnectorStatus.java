@@ -46,6 +46,12 @@ public class ConnectorStatus extends AbstractStatus<String> {
         void onFailure(String connector, Throwable cause);
 
         /**
+         * Invoked when the connector is stopped through the REST API
+         * @param connector The connector name
+         */
+        void onStop(String connector);
+
+        /**
          * Invoked when the connector is paused through the REST API
          * @param connector The connector name
          */

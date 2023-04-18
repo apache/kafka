@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import java.util.List;
 import java.util.Objects;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -50,11 +49,9 @@ import org.apache.kafka.streams.state.VersionedRecord;
  */
 public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore {
     private static final Serde<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERDE
-        = new NullableValueAndTimestampSerde<>(new ByteArraySerde());
+        = new ValueAndTimestampSerde<>(new ByteArraySerde());
     private static final Serializer<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERIALIZER
         = VALUE_AND_TIMESTAMP_SERDE.serializer();
-    private static final Deserializer<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_DESERIALIZER
-        = VALUE_AND_TIMESTAMP_SERDE.deserializer();
 
     final VersionedKeyValueStore<Bytes, byte[]> inner;
 
@@ -63,17 +60,8 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
-    public void put(final Bytes key, final byte[] rawValueAndTimestamp) {
-        if (rawValueAndTimestamp == null) {
-            throw new IllegalArgumentException("Put to versioned store must always include timestamp, including for tombstones.");
-        }
-        final ValueAndTimestamp<byte[]> valueAndTimestamp
-            = VALUE_AND_TIMESTAMP_DESERIALIZER.deserialize(null, rawValueAndTimestamp);
-        inner.put(
-            key,
-            valueAndTimestamp.value(),
-            valueAndTimestamp.timestamp()
-        );
+    public long put(final Bytes key, final byte[] value, final long timestamp) {
+        return inner.put(key, value, timestamp);
     }
 
     @Override
@@ -138,6 +126,11 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     @Override
     public Position getPosition() {
         return inner.getPosition();
+    }
+
+    @Override
+    public void put(final Bytes key, final byte[] rawValueAndTimestamp) {
+        throw new UnsupportedOperationException("Versioned key-value stores should use put(key, value, timestamp) instead");
     }
 
     @Override
