@@ -202,7 +202,7 @@ public class RemoteLogManagerTest {
     }
 
     // This test creates 2 log segments, 1st one has start offset of 0, 2nd one (and active one) has start offset of 150.
-    // The leader epochs are [0->0, 1->100, 2->200]. We are verifying：
+    // The leader epochs are [0->0, 1->100, 2->200]. We are verifying:
     // 1. There's only 1 segment copied to remote storage
     // 2. The segment got copied to remote storage is the old segment, not the active one
     // 3. The log segment metadata stored into remoteLogMetadataManager is what we expected, both before and after copying the log segments
