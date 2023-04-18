@@ -38,8 +38,8 @@ import java.util.Optional;
  * Whether there is an existing coordinator.
  * Whether there is an inflight request.
  * Whether the backoff timer has expired.
- * The {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} contains either a wait timer
- * or a singleton list of {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}.
+ * The {@link NetworkClientDelegate.PollResult} contains either a wait timer or a singleton list of
+ * {@link NetworkClientDelegate.UnsentRequest}.
  *
  * The {@link FindCoordinatorRequest} will be handled by the {@link #onResponse(long, FindCoordinatorResponse)}  callback, which
  * subsequently invokes {@code onResponse} to handle the exception and response. Note that the coordinator node will be
@@ -57,13 +57,11 @@ public class CoordinatorRequestManager implements RequestManager {
     private long totalDisconnectedMin = 0;
     private Node coordinator;
 
-    public CoordinatorRequestManager(
-        final Time time,
-        final LogContext logContext,
-        final long retryBackoffMs,
-        final ErrorEventHandler errorHandler,
-        final String groupId
-    ) {
+    public CoordinatorRequestManager(final Time time,
+                                     final LogContext logContext,
+                                     final long retryBackoffMs,
+                                     final ErrorEventHandler errorHandler,
+                                     final String groupId) {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());

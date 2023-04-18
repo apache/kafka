@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.Deserializers;
 import org.apache.kafka.clients.consumer.internals.FetchConfig;
 import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
@@ -2679,8 +2680,7 @@ public class KafkaConsumerTest {
                 maxPollRecords,
                 checkCrcs,
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                keyDeserializer,
-                deserializer,
+                new Deserializers<>(keyDeserializer, deserializer),
                 isolationLevel);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,

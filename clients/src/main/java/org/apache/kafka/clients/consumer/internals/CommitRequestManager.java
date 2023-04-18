@@ -53,7 +53,7 @@ public class CommitRequestManager implements RequestManager {
     // TODO: current in ConsumerConfig but inaccessible in the internal package.
     private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
     // TODO: We will need to refactor the subscriptionState
-    private final SubscriptionState subscriptionState;
+    private final SubscriptionState subscriptions;
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
@@ -62,13 +62,12 @@ public class CommitRequestManager implements RequestManager {
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
 
-    public CommitRequestManager(
-            final Time time,
-            final LogContext logContext,
-            final SubscriptionState subscriptionState,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final GroupState groupState) {
+    public CommitRequestManager(final Time time,
+                                final LogContext logContext,
+                                final SubscriptionState subscriptions,
+                                final ConsumerConfig config,
+                                final CoordinatorRequestManager coordinatorRequestManager,
+                                final GroupState groupState) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
@@ -81,7 +80,7 @@ public class CommitRequestManager implements RequestManager {
         }
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.groupState = groupState;
-        this.subscriptionState = subscriptionState;
+        this.subscriptions = subscriptions;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
     }
@@ -111,7 +110,7 @@ public class CommitRequestManager implements RequestManager {
             return;
         }
 
-        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptionState.allConsumed();
+        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
         sendAutoCommit(allConsumedOffsets);
         autocommit.resetTimer();
         autocommit.setInflightCommitStatus(true);
