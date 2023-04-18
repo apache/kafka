@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.metadata.ScramCredentialData;
 
 import java.util.Collections;
 import java.util.List;

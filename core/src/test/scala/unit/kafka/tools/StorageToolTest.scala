@@ -325,7 +325,7 @@ Found problem:
     try {
       assertEquals(1, StorageTool.main(args))
     } catch {
-      case e: StorageToolTestException => assertEquals(s"SCRAM is only supported in metadataVersion IBP_3_5_IV0 or later.", exitString)
+      case e: StorageToolTestException => assertEquals(s"SCRAM is only supported in metadataVersion IBP_3_5_IV2 or later.", exitString)
     } finally {
       Exit.resetExitProcedure()
     }
