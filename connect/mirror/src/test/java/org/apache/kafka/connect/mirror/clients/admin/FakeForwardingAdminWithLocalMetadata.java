@@ -38,8 +38,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /** Customised ForwardingAdmin for testing only.
  * The class create/alter topics, partitions and ACLs in Kafka then store metadata in {@link FakeLocalMetadataStore}.
@@ -47,7 +45,6 @@ import java.util.concurrent.TimeoutException;
 
 public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
     private static final Logger log = LoggerFactory.getLogger(FakeForwardingAdminWithLocalMetadata.class);
-    private final long timeout = 1000L;
 
     public FakeForwardingAdminWithLocalMetadata(Map<String, Object> configs) {
         super(configs);
@@ -60,14 +57,14 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
             try {
                 log.info("Add topic '{}' to cluster and metadata store", newTopic);
                 // Wait for topic to be created before edit the fake local store
-                createTopicsResult.values().get(newTopic.name()).get(timeout, TimeUnit.MILLISECONDS);
+                createTopicsResult.values().get(newTopic.name()).get();
                 FakeLocalMetadataStore.addTopicToLocalMetadataStore(newTopic);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            } catch (InterruptedException | ExecutionException e) {
                 if (e.getCause() instanceof TopicExistsException) {
                     log.warn("Topic '{}' already exists. Update the local metadata store if absent", newTopic.name());
                     FakeLocalMetadataStore.addTopicToLocalMetadataStore(newTopic);
                 } else
-                    log.error(e.getMessage());
+                    log.error("Unable to intercept admin client operation", e);
             }
         });
         return createTopicsResult;
@@ -79,10 +76,10 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
         newPartitions.forEach((topic, newPartition) -> {
             try {
                 // Wait for topic partition to be created before edit the fake local store
-                createPartitionsResult.values().get(topic).get(timeout, TimeUnit.MILLISECONDS);
+                createPartitionsResult.values().get(topic).get();
                 FakeLocalMetadataStore.updatePartitionCount(topic, newPartition.totalCount());
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                log.error(e.getMessage());
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("Unable to intercept admin client operation", e);
             }
         });
         return createPartitionsResult;
@@ -96,11 +93,11 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
             try {
                 if (configResource.type() == ConfigResource.Type.TOPIC) {
                     // Wait for config to be altered before edit the fake local store
-                    alterConfigsResult.values().get(configResource).get(timeout, TimeUnit.MILLISECONDS);
+                    alterConfigsResult.values().get(configResource).get();
                     FakeLocalMetadataStore.updateTopicConfig(configResource.name(), newConfigs);
                 }
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                log.error(e.getMessage());
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("Unable to intercept admin client operation", e);
             }
         });
         return alterConfigsResult;
@@ -112,12 +109,12 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
         CreateAclsResult aclsResult = super.createAcls(acls, options);
         try {
             // Wait for acls to be created before edit the fake local store
-            aclsResult.all().get(timeout, TimeUnit.MILLISECONDS);
+            aclsResult.all().get();
             acls.forEach(aclBinding -> {
                 FakeLocalMetadataStore.addACLs(aclBinding.entry().principal(), aclBinding);
             });
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            log.error(e.getMessage());
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Unable to intercept admin client operation", e);
         }
         return aclsResult;
     }
