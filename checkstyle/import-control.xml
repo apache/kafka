@@ -49,9 +49,6 @@
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
 
-  <!-- persistent collection factories/non-library-specific wrappers -->
-  <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
-
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
     <allow class="org.apache.kafka.common.message.ApiMessageType" exact-match="true" />
