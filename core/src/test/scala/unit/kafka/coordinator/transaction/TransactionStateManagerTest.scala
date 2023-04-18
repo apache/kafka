@@ -16,6 +16,8 @@
  */
 package kafka.coordinator.transaction
 
+import kafka.internals.generated.TransactionLogKey
+
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
@@ -28,7 +30,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{Errors, MessageUtil}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
@@ -1145,5 +1147,41 @@ class TransactionStateManagerTest {
 
     assertTrue(partitionLoadTime("partition-load-time-max") >= 0)
     assertTrue(partitionLoadTime( "partition-load-time-avg") >= 0)
+  }
+
+  @Test
+  def testIgnoreUnknownRecordType(): Unit = {
+    txnMetadata1.state = PrepareCommit
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
+      new TopicPartition("topic1", 1)))
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
+    val startOffset = 0L
+
+    val unknownKey = new TransactionLogKey()
+    val unknownMessage = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
+    val unknownRecord = new SimpleRecord(unknownMessage, unknownMessage)
+
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      (Seq(unknownRecord) ++ txnRecords).toArray: _*)
+
+    prepareTxnLog(topicPartition, 0, records)
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => ())
+    assertEquals(0, transactionManager.loadingPartitions.size)
+    assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
+    val txnMetadataPool = transactionManager.transactionMetadataCache(partitionId).metadataPerTransactionalId
+    assertFalse(txnMetadataPool.isEmpty)
+    assertTrue(txnMetadataPool.contains(transactionalId1))
+    val txnMetadata = txnMetadataPool.get(transactionalId1)
+    assertEquals(txnMetadata1.transactionalId, txnMetadata.transactionalId)
+    assertEquals(txnMetadata1.producerId, txnMetadata.producerId)
+    assertEquals(txnMetadata1.lastProducerId, txnMetadata.lastProducerId)
+    assertEquals(txnMetadata1.producerEpoch, txnMetadata.producerEpoch)
+    assertEquals(txnMetadata1.lastProducerEpoch, txnMetadata.lastProducerEpoch)
+    assertEquals(txnMetadata1.txnTimeoutMs, txnMetadata.txnTimeoutMs)
+    assertEquals(txnMetadata1.state, txnMetadata.state)
+    assertEquals(txnMetadata1.topicPartitions, txnMetadata.topicPartitions)
+    assertEquals(1, transactionManager.transactionMetadataCache(partitionId).coordinatorEpoch)
   }
 }
