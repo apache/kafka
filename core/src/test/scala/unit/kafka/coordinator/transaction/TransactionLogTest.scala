@@ -186,8 +186,8 @@ class TransactionLogTest {
       new Field("topic", Type.COMPACT_STRING, ""),
       new Field("partition_ids", new CompactArrayOf(Type.INT32), ""),
       TaggedFieldsSection.of(
-        0, new Field("partition_foo", Type.STRING, ""),
-        1, new Field("partition_foo", Type.INT32, "")
+        Int.box(0), new Field("partition_foo", Type.STRING, ""),
+        Int.box(1), new Field("partition_foo", Type.INT32, "")
       )
     )
 
@@ -211,8 +211,8 @@ class TransactionLogTest {
       new Field("transaction_last_update_timestamp_ms", Type.INT64, ""),
       new Field("transaction_start_timestamp_ms", Type.INT64, ""),
       TaggedFieldsSection.of(
-        0, new Field("txn_foo", Type.STRING, ""),
-        1, new Field("txn_bar", Type.INT32, "")
+        Int.box(0), new Field("txn_foo", Type.STRING, ""),
+        Int.box(1), new Field("txn_bar", Type.INT32, "")
       )
     )
 

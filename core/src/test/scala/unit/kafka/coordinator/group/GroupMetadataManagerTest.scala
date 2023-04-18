@@ -2556,8 +2556,8 @@ class GroupMetadataManagerTest {
       new Field("metadata", Type.COMPACT_STRING, ""),
       new Field("commit_timestamp", Type.INT64, ""),
       TaggedFieldsSection.of(
-        0, new Field("offset_foo", Type.STRING, ""),
-        1, new Field("offset_bar", Type.INT32, "")
+        Int.box(0), new Field("offset_foo", Type.STRING, ""),
+        Int.box(1), new Field("offset_bar", Type.INT32, "")
       )
     )
 
@@ -2608,8 +2608,8 @@ class GroupMetadataManagerTest {
       new Field("subscription", Type.COMPACT_BYTES, ""),
       new Field("assignment", Type.COMPACT_BYTES, ""),
       TaggedFieldsSection.of(
-        0, new Field("member_foo", Type.STRING, ""),
-        1, new Field("member_foo", Type.INT32, "")
+        Int.box(0), new Field("member_foo", Type.STRING, ""),
+        Int.box(1), new Field("member_foo", Type.INT32, "")
       )
     )
 
@@ -2623,8 +2623,8 @@ class GroupMetadataManagerTest {
       new Field("current_state_timestamp", Type.INT64, ""),
       new Field("members", new CompactArrayOf(futureMemberSchema), ""),
       TaggedFieldsSection.of(
-        0, new Field("group_foo", Type.STRING, ""),
-        1, new Field("group_bar", Type.INT32, "")
+        Int.box(0), new Field("group_foo", Type.STRING, ""),
+        Int.box(1), new Field("group_bar", Type.INT32, "")
       )
     )
 
