@@ -76,13 +76,14 @@ class LogSegmentTest {
     "0, -2147483648",
     "0, 2147483648",
     "1, 0",
+    "100, 10",
     "2147483648, 0",
     "-2147483648, 0",
   ))
-  def testAppendForLogSegmentOffsetOverflowException(baseOffset:Long ,largestOffset: Long): Unit = {
+  def testAppendForLogSegmentOffsetOverflowException(baseOffset: Long, largestOffset: Long): Unit = {
     val seg = createSegment(baseOffset)
-    val currentTime: Long = Time.SYSTEM.milliseconds()
-    val shallowOffsetOfMaxTimestamp: Long = 0
+    val currentTime = Time.SYSTEM.milliseconds()
+    val shallowOffsetOfMaxTimestamp = 0
     val memoryRecords = records(0, "hello")
     assertThrows(classOf[LogSegmentOffsetOverflowException], () => {
       seg.append(largestOffset, currentTime, shallowOffsetOfMaxTimestamp, memoryRecords)
