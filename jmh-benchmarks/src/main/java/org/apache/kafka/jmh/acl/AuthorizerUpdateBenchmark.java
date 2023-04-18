@@ -61,15 +61,15 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 public class AuthorizerUpdateBenchmark {
     @Param({"25000", "50000", "75000", "100000"})
     private int aclCount;
-    private static final String resourceNamePrefix = "foo-bar35_resource-";
-    private static final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+    private final String resourceNamePrefix = "foo-bar35_resource-";
+    private static final KafkaPrincipal PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     private StandardAuthorizer authorizer;
     private final Set<Uuid> ids = new HashSet<>();
 
     private List<StandardAclWithId> aclsToAdd = prepareAcls();
 
     int index = 0;
-    private static final Random rand = new Random(System.currentTimeMillis());
+    private static final Random RANDOM = new Random(System.currentTimeMillis());
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
@@ -91,7 +91,7 @@ public class AuthorizerUpdateBenchmark {
     private List<StandardAclWithId> prepareAcls() {
         return IntStream.range(0, 10000)
             .mapToObj(i -> {
-                ResourceType resourceType = rand.nextInt(10) > 7? ResourceType.GROUP: ResourceType.TOPIC;
+                ResourceType resourceType = RANDOM.nextInt(10) > 7 ? ResourceType.GROUP : ResourceType.TOPIC;
                 String resourceName = resourceNamePrefix + i;
                 ResourcePattern resourcePattern = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL);
                 return aclsForResource(resourcePattern);
@@ -101,9 +101,9 @@ public class AuthorizerUpdateBenchmark {
     }
 
     private List<StandardAclWithId> aclsForResource(ResourcePattern pattern) {
-        return IntStream.range(1,256)
+        return IntStream.range(1, 256)
             .mapToObj(i -> {
-                String p = principal.toString() + rand.nextInt(100);
+                String p = PRINCIPAL.toString() + RANDOM.nextInt(100);
                 String h = "127.0.0." + i;
                 return new StandardAcl(pattern.resourceType(), pattern.name(), pattern.patternType(), p, h, READ, ALLOW);
             })
@@ -113,7 +113,7 @@ public class AuthorizerUpdateBenchmark {
 
     private StandardAclWithId withId(StandardAcl acl) {
         Uuid id = new Uuid(acl.hashCode(), acl.hashCode());
-        while (ids.contains(id)){
+        while (ids.contains(id)) {
             id = Uuid.randomUuid();
         }
         ids.add(id);
