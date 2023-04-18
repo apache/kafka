@@ -1434,6 +1434,7 @@ public class RecordCollectorTest {
             final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
             collector.initialize();
 
+            assertThat(mockProducer.history().isEmpty(), equalTo(true));
             final StreamsException error = assertThrows(
                 StreamsException.class,
                 () -> collector.send(topic, true, "val", null, 0, null, (Serializer) errorSerializer, stringSerializer, sinkNodeName, context)

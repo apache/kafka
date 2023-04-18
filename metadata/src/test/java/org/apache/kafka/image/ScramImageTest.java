@@ -25,6 +25,7 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -61,6 +62,7 @@ public class ScramImageTest {
         return new ScramCredentialData(
             randomBuffer(random, 1024),
             randomBuffer(random, 1024),
+            randomBuffer(random, 1024),
             1024 + random.nextInt(1024));
     }
 
@@ -89,9 +91,10 @@ public class ScramImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UserScramCredentialRecord().
                 setName("alpha").
                 setMechanism(SCRAM_SHA_256.type()).
-                setIterations(secondAlpha256Credential.iterations()).
                 setSalt(secondAlpha256Credential.salt()).
-                setSaltedPassword(secondAlpha256Credential.saltedPassword()), (short) 0));
+                setStoredKey(secondAlpha256Credential.storedKey()).
+                setServerKey(secondAlpha256Credential.serverKey()).
+                setIterations(secondAlpha256Credential.iterations()), (short) 0));
         DELTA1 = new ScramDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 

@@ -99,12 +99,10 @@ public class ControllerMetricsTestUtils {
     public static TopicsImage fakeTopicsImage(
         TopicImage... topics
     ) {
-        Map<Uuid, TopicImage> topicsById = new HashMap<>();
-        Map<String, TopicImage> topicsByName = new HashMap<>();
+        TopicsImage image = TopicsImage.EMPTY;
         for (TopicImage topic : topics) {
-            topicsById.put(topic.id(), topic);
-            topicsByName.put(topic.name(), topic);
+            image = image.including(topic);
         }
-        return new TopicsImage(topicsById, topicsByName);
+        return image;
     }
 }

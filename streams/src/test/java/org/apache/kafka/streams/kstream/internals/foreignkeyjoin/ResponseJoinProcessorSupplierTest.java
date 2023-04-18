@@ -37,7 +37,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.IsEmptyCollection.empty;
 
-public class SubscriptionResolverJoinProcessorSupplierTest {
+public class ResponseJoinProcessorSupplierTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final ValueJoiner<String, String, String> JOINER =
         (value1, value2) -> "(" + value1 + "," + value2 + ")";
@@ -79,8 +79,8 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
-        final SubscriptionResolverJoinProcessorSupplier<String, String, String, String> processorSupplier =
-            new SubscriptionResolverJoinProcessorSupplier<>(
+        final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
+            new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
                 () -> "value-hash-dummy-topic",
@@ -104,8 +104,8 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
-        final SubscriptionResolverJoinProcessorSupplier<String, String, String, String> processorSupplier =
-            new SubscriptionResolverJoinProcessorSupplier<>(
+        final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
+            new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
                 () -> "value-hash-dummy-topic",
@@ -129,8 +129,8 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
-        final SubscriptionResolverJoinProcessorSupplier<String, String, String, String> processorSupplier =
-            new SubscriptionResolverJoinProcessorSupplier<>(
+        final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
+            new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
                 () -> "value-hash-dummy-topic",
@@ -155,8 +155,8 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = false;
-        final SubscriptionResolverJoinProcessorSupplier<String, String, String, String> processorSupplier =
-            new SubscriptionResolverJoinProcessorSupplier<>(
+        final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
+            new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
                 () -> "value-hash-dummy-topic",
@@ -181,8 +181,8 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = true;
-        final SubscriptionResolverJoinProcessorSupplier<String, String, String, String> processorSupplier =
-            new SubscriptionResolverJoinProcessorSupplier<>(
+        final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
+            new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
                 () -> "value-hash-dummy-topic",
@@ -207,8 +207,8 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         final TestKTableValueGetterSupplier<String, String> valueGetterSupplier =
             new TestKTableValueGetterSupplier<>();
         final boolean leftJoin = true;
-        final SubscriptionResolverJoinProcessorSupplier<String, String, String, String> processorSupplier =
-            new SubscriptionResolverJoinProcessorSupplier<>(
+        final ResponseJoinProcessorSupplier<String, String, String, String> processorSupplier =
+            new ResponseJoinProcessorSupplier<>(
                 valueGetterSupplier,
                 STRING_SERIALIZER,
                 () -> "value-hash-dummy-topic",

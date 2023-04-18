@@ -40,14 +40,14 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
+public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
     ProcessorSupplier<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
-    private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionProcessorSupplier.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ForeignTableJoinProcessorSupplier.class);
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
     private final CombinedKeySchema<KO, K> keySchema;
     private final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetterSupplier;
 
-    public ForeignJoinSubscriptionProcessorSupplier(
+    public ForeignTableJoinProcessorSupplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
         final CombinedKeySchema<KO, K> keySchema,
         final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetterSupplier) {

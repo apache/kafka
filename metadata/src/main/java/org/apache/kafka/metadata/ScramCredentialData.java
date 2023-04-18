@@ -15,17 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.image;
+package org.apache.kafka.metadata;
 
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 
-import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Objects;
-
 
 /**
  * Represents the ACLs in the metadata image.
@@ -34,25 +31,29 @@ import java.util.Objects;
  */
 public final class ScramCredentialData {
     private final byte[] salt;
-    private final byte[] saltedPassword;
+    private final byte[] storedKey;
+    private final byte[] serverKey;
     private final int iterations;
 
-    static ScramCredentialData fromRecord(
+    public static ScramCredentialData fromRecord(
         UserScramCredentialRecord record
     ) {
         return new ScramCredentialData(
                 record.salt(),
-                record.saltedPassword(),
+                record.storedKey(),
+                record.serverKey(),
                 record.iterations());
     }
 
     public ScramCredentialData(
         byte[] salt,
-        byte[] saltedPassword,
+        byte[] storedKey,
+        byte[] serverKey,
         int iterations
     ) {
         this.salt = salt;
-        this.saltedPassword = saltedPassword;
+        this.storedKey = storedKey;
+        this.serverKey = serverKey;
         this.iterations = iterations;
     }
 
@@ -60,8 +61,12 @@ public final class ScramCredentialData {
         return salt;
     }
 
-    public byte[] saltedPassword() {
-        return saltedPassword;
+    public byte[] storedKey() {
+        return storedKey;
+    }
+
+    public byte[] serverKey() {
+        return serverKey;
     }
 
     public int iterations() {
@@ -76,25 +81,18 @@ public final class ScramCredentialData {
                 setName(userName).
                 setMechanism(mechanism.type()).
                 setSalt(salt).
-                setSaltedPassword(saltedPassword).
+                setStoredKey(storedKey).
+                setServerKey(serverKey).
                 setIterations(iterations);
     }
 
-    public ScramCredential toCredential(
-        ScramMechanism mechanism
-    ) throws GeneralSecurityException {
-        org.apache.kafka.common.security.scram.internals.ScramMechanism internalMechanism =
-                org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(mechanism.mechanismName());
-        ScramFormatter formatter = new ScramFormatter(internalMechanism);
-        return new ScramCredential(salt,
-                formatter.storedKey(formatter.clientKey(saltedPassword)),
-                formatter.serverKey(saltedPassword),
-                iterations);
+    public ScramCredential toCredential(ScramMechanism mechanism) {
+        return new ScramCredential(salt, storedKey, serverKey, iterations);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(salt, saltedPassword, iterations);
+        return Objects.hash(salt, storedKey, serverKey, iterations);
     }
 
     @Override
@@ -103,7 +101,8 @@ public final class ScramCredentialData {
         if (!o.getClass().equals(ScramCredentialData.class)) return false;
         ScramCredentialData other = (ScramCredentialData) o;
         return Arrays.equals(salt, other.salt) &&
-                Arrays.equals(saltedPassword, other.saltedPassword) &&
+                Arrays.equals(storedKey, other.storedKey) &&
+                Arrays.equals(serverKey, other.serverKey) &&
                 iterations == other.iterations;
     }
 
@@ -111,7 +110,8 @@ public final class ScramCredentialData {
     public String toString() {
         return "ScramCredentialData" +
             "(salt=" + "[hidden]" +
-            ", saltedPassword=" + "[hidden]" +
+            ", storedKey=" + "[hidden]" +
+            ", serverKey=" + "[hidden]" +
             ", iterations=" + "[hidden]" +
             ")";
     }
