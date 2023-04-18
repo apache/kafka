@@ -2561,7 +2561,7 @@ class GroupMetadataManagerTest {
       )
     )
 
-    // create OffsetCommitValue with tagged fields
+    // Create OffsetCommitValue with tagged fields
     val offsetCommit = new Struct(futureOffsetCommitSchema)
     offsetCommit.set("offset", 1000L)
     offsetCommit.set("leader_epoch", 100)
