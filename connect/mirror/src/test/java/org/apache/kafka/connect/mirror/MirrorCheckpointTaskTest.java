@@ -219,7 +219,8 @@ public class MirrorCheckpointTaskTest {
         // the task normally does this, but simulate it here
         checkpointsPerConsumerGroup.put("g1", checkpoints);
 
-        // Emit syncs 2-5 which will the store to drop syncs 1 and 2, forcing translation to fall back to 0.
+        // Emit syncs 2-6 which will cause the store to drop sync 1, forcing translation to fall back to 0.
+        offsetSyncStore.sync(tp, upstream++, downstream++);
         offsetSyncStore.sync(tp, upstream++, downstream++);
         offsetSyncStore.sync(tp, upstream++, downstream++);
         offsetSyncStore.sync(tp, upstream++, downstream++);
