@@ -80,6 +80,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
@@ -701,7 +702,7 @@ public class RemoteLogManager implements Closeable {
     private FetchDataInfo addAbortedTransactions(long startOffset,
                                                  RemoteLogSegmentMetadata segmentMetadata,
                                                  FetchDataInfo fetchInfo,
-                                                 UnifiedLog unifiedLog) throws RemoteStorageException {
+                                                 UnifiedLog log) throws RemoteStorageException {
         int fetchSize = fetchInfo.records.sizeInBytes();
         OffsetPosition startOffsetPosition = new OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
                 fetchInfo.fetchOffsetMetadata.relativePositionInSegment);
@@ -710,18 +711,18 @@ public class RemoteLogManager implements Closeable {
         long upperBoundOffset = offsetIndex.fetchUpperBoundOffset(startOffsetPosition, fetchSize)
                 .map(x -> x.offset).orElse(segmentMetadata.endOffset() + 1);
 
-        final List<FetchResponseData.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        final Set<FetchResponseData.AbortedTransaction> abortedTransactions = new HashSet<>();
 
         Consumer<List<AbortedTxn>> accumulator =
                 abortedTxns -> abortedTransactions.addAll(abortedTxns.stream()
                         .map(AbortedTxn::asAbortedTransaction).collect(Collectors.toList()));
 
-        collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator, unifiedLog);
+        collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator, log);
 
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
                 fetchInfo.records,
                 fetchInfo.firstEntryIncomplete,
-                Optional.of(abortedTransactions));
+                Optional.of(abortedTransactions.isEmpty() ? Collections.emptyList() : new ArrayList<>(abortedTransactions)));
     }
 
     private void collectAbortedTransactions(long startOffset,
@@ -758,17 +759,19 @@ public class RemoteLogManager implements Closeable {
     }
 
     private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata, UnifiedLog log) throws RemoteStorageException {
+        Option<LeaderEpochFileCache> leaderEpochFileCacheOption = log.leaderEpochCache();
+        if (leaderEpochFileCacheOption.isEmpty()) {
+            return Optional.empty();
+        }
+
         TopicPartition topicPartition = segmentMetadata.topicIdPartition().topicPartition();
         long nextSegmentBaseOffset = segmentMetadata.endOffset() + 1;
         OptionalInt epoch = OptionalInt.of(segmentMetadata.segmentLeaderEpochs().lastEntry().getKey());
         Optional<RemoteLogSegmentMetadata> result = Optional.empty();
-        Option<LeaderEpochFileCache> leaderEpochFileCacheOption = log.leaderEpochCache();
-        if (leaderEpochFileCacheOption.isDefined()) {
-            LeaderEpochFileCache leaderEpochFileCache = leaderEpochFileCacheOption.get();
-            while (!result.isPresent() && epoch.isPresent()) {
-                result = fetchRemoteLogSegmentMetadata(topicPartition, epoch.getAsInt(), nextSegmentBaseOffset);
-                epoch = leaderEpochFileCache.nextEpoch(epoch.getAsInt());
-            }
+        LeaderEpochFileCache leaderEpochFileCache = leaderEpochFileCacheOption.get();
+        while (!result.isPresent() && epoch.isPresent()) {
+            result = fetchRemoteLogSegmentMetadata(topicPartition, epoch.getAsInt(), nextSegmentBaseOffset);
+            epoch = leaderEpochFileCache.nextEpoch(epoch.getAsInt());
         }
 
         return result;
