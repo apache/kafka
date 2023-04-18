@@ -115,4 +115,12 @@ public class ApplicationEventProcessor {
         metadata.requestUpdateForNewTopics();
         return true;
     }
+
+    private boolean process(final UnsubscribeApplicationEvent event) {
+        /*
+                this.coordinator.onLeavePrepare();
+                this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
+         */
+        return true;
+    }
 }

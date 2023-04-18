@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -567,7 +568,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void unsubscribe() {
-        throw new KafkaException("method not implemented");
+        // fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
+        eventHandler.add(new UnsubscribeApplicationEvent());
+        this.subscriptions.unsubscribe();
     }
 
     @Override
