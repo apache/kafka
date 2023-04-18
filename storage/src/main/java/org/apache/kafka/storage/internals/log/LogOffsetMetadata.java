@@ -23,6 +23,11 @@ import org.apache.kafka.common.KafkaException;
  *  1. the message offset
  *  2. the base message offset of the located segment
  *  3. the physical position on the located segment
+ *
+ * messageOffset：消息位移值，这是最重要的信息。我们总说高水位值，其实指的就是这个变量的值。
+ * segmentBaseOffset：保存该位移值所在日志段的起始位移。日志段起始位移值辅助计算两条消息在物理磁盘文件中位置的差值，即两条消息彼此隔了多少字节。这个计算有个前提条件，即两条消息必须处在同一个日志段对象上，不能跨日志段对象。否则它们就位于不同的物理文件上，计算这个值就没有意义了。
+ * 这里的 segmentBaseOffset，就是用来判断两条消息是否处于同一个日志段的。
+ * relativePositionSegment：保存该位移值所在日志段的物理磁盘位置。这个字段在计算两个位移值之间的物理磁盘位置差值时非常有用。你可以想一想，Kafka 什么时候需要计算位置之间的字节数呢？答案就是在读取日志的时候。假设每次读取时只能读 1MB 的数据，那么，源码肯定需要关心两个位移之间所有消息的总字节数是否超过了 1MB。
  */
 public final class LogOffsetMetadata {
 
