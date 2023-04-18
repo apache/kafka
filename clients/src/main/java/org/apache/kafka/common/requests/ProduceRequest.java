@@ -24,7 +24,10 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.*;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -244,7 +247,6 @@ public class ProduceRequest extends AbstractRequest {
 
     public static void validateRecords(short version, BaseRecords baseRecords) {
         if (version >= 3) {
-            long producerId = -1L;
             if (baseRecords instanceof Records) {
                 Records records = (Records) baseRecords;
                 Iterator<? extends RecordBatch> iterator = records.batches().iterator();
