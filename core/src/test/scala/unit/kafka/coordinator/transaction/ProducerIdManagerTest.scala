@@ -80,12 +80,12 @@ class ProducerIdManagerTest {
       capturedFailure.set(nextProducerIdBlock.get == null)
     }
 
-    override private[transaction] def maybeRequestNextBlock(currentBlockCount: Long): Unit = {
+    override private[transaction] def maybeRequestNextBlock(): Unit = {
       if (error == Errors.NONE && !isErroneousBlock) {
-        super.maybeRequestNextBlock(currentBlockCount)
+        super.maybeRequestNextBlock()
       } else {
         if (remainingRetries > 0) {
-          super.maybeRequestNextBlock(currentBlockCount)
+          super.maybeRequestNextBlock()
           remainingRetries -= 1
         }
       }
@@ -179,9 +179,10 @@ class ProducerIdManagerTest {
     requestHandlerThreadPool.shutdown()
 
     assertEquals(idBlockLen * 3, pidMap.size)
-    for (pid <- pidMap.keys) {
-      assertEquals(1, pidMap.getOrElse(pid, 0))
-      assertTrue(pid < 4 * idBlockLen, s"Unexpected pid $pid; non-contiguous blocks generated")
+    pidMap.foreach { case (pid, count) =>
+      assertEquals(1, count)
+      assertTrue(pid < (3 * idBlockLen) + numThreads, s"Unexpected pid $pid; " +
+        s"non-contiguous blocks generated or did not fully exhaust blocks.")
     }
   }
 

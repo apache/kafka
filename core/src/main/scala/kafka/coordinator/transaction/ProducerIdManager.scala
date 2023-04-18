@@ -28,7 +28,7 @@ import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocatePro
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.ProducerIdsBlock
 
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.util.{Failure, Success, Try}
 
@@ -168,7 +168,6 @@ class RPCProducerIdManager(brokerId: Int,
   private[transaction] var nextProducerIdBlock = new AtomicReference[ProducerIdsBlock](null)
   private val currentProducerIdBlock: AtomicReference[ProducerIdsBlock] = new AtomicReference(ProducerIdsBlock.EMPTY)
   private val requestInFlight = new AtomicBoolean(false)
-  private val blockCount = new AtomicLong(0)
   private val shouldBackoff = new AtomicBoolean(false)
 
   override def hasValidBlock: Boolean = {
@@ -176,7 +175,6 @@ class RPCProducerIdManager(brokerId: Int,
   }
 
   override def generateProducerId(): Try[Long] = {
-    val currentBlockCount = blockCount.get
     var result: Try[Long] = null
     while (result == null) {
       currentProducerIdBlock.get.claimNextId().asScala match {
@@ -186,19 +184,18 @@ class RPCProducerIdManager(brokerId: Int,
           if (block == null) {
             // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
             // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
-            maybeRequestNextBlock(currentBlockCount)
+            maybeRequestNextBlock()
             result = Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
           } else {
-            // Fence other threads from sending another AllocateProducerIdsRequest
-            blockCount.incrementAndGet()
             currentProducerIdBlock.set(block)
+            requestInFlight.set(false)
           }
 
         case Some(nextProducerId) =>
           // Check if we need to prefetch the next block
           val prefetchTarget = currentProducerIdBlock.get.firstProducerId + (currentProducerIdBlock.get.size * ProducerIdManager.PidPrefetchThreshold).toLong
           if (nextProducerId == prefetchTarget) {
-            maybeRequestNextBlock(currentBlockCount)
+            maybeRequestNextBlock()
           }
           result = Success(nextProducerId)
       }
@@ -208,9 +205,8 @@ class RPCProducerIdManager(brokerId: Int,
 
 
   // Visible for testing
-  private[transaction] def maybeRequestNextBlock(currentBlockCount: Long): Unit = {
+  private[transaction] def maybeRequestNextBlock(): Unit = {
     if (nextProducerIdBlock.get == null &&
-      currentBlockCount == blockCount.get &&
       requestInFlight.compareAndSet(false, true) ) {
 
       if (shouldBackoff.compareAndSet(true, false)) {
@@ -262,15 +258,16 @@ class RPCProducerIdManager(brokerId: Int,
         error(s"Had an unknown error from the controller: ${e.exception}")
     }
     shouldBackoff.set(!successfulResponse)
-    requestInFlight.set(false)
+
     if (!successfulResponse) {
-      maybeRequestNextBlock(blockCount.get)
+      requestInFlight.set(false)
+      maybeRequestNextBlock()
     }
   }
 
   private def handleTimeout(): Unit = {
     warn("Timed out when requesting AllocateProducerIds from the controller.")
     requestInFlight.set(false)
-    maybeRequestNextBlock(blockCount.get)
+    maybeRequestNextBlock()
   }
 }
