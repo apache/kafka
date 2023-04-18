@@ -70,14 +70,24 @@ class MigrationPropagator(
 
   override def publishMetadata(image: MetadataImage): Unit = {
     val oldImage = _image
-    val addedBrokers = new util.HashSet[Integer](image.cluster().brokers().keySet())
-    addedBrokers.removeAll(oldImage.cluster().brokers().keySet())
-    val removedBrokers = new util.HashSet[Integer](oldImage.cluster().brokers().keySet())
-    removedBrokers.removeAll(image.cluster().brokers().keySet())
+    val prevBrokers = oldImage.cluster().brokers().values().asScala
+      .filter(_.isMigratingZkBroker)
+      .filterNot(_.fenced)
+      .map(Broker.fromBrokerRegistration)
+      .toSet
 
-    removedBrokers.asScala.foreach(id => channelManager.removeBroker(id))
-    addedBrokers.asScala.foreach(id =>
-      channelManager.addBroker(Broker.fromBrokerRegistration(image.cluster().broker(id))))
+    val aliveBrokers = image.cluster().brokers().values().asScala
+      .filter(_.isMigratingZkBroker)
+      .filterNot(_.fenced)
+      .map(Broker.fromBrokerRegistration)
+      .toSet
+
+    val addedBrokers = aliveBrokers -- prevBrokers
+    val removedBrokers = prevBrokers -- aliveBrokers
+
+    stateChangeLogger.logger.debug(s"Adding brokers $addedBrokers, removing brokers $removedBrokers.")
+    removedBrokers.foreach(broker => channelManager.removeBroker(broker.id))
+    addedBrokers.foreach(broker => channelManager.addBroker(broker))
     _image = image
   }
 
