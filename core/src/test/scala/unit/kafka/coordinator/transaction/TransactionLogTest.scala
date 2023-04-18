@@ -17,6 +17,7 @@
 package kafka.coordinator.transaction
 
 
+import kafka.internals.generated.TransactionLogKey
 import kafka.internals.generated.TransactionLogValue
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -256,4 +257,11 @@ class TransactionLogTest {
     assertEquals(3000L, txnMetadata.txnStartTimestamp)
   }
 
+  @Test
+  def testReadTxnRecordKeyCanReadUnknownMessage(): Unit = {
+    val record = new TransactionLogKey()
+    val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
+    val key = TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))
+    assertEquals(UnknownKey(Short.MaxValue), key)
+  }
 }

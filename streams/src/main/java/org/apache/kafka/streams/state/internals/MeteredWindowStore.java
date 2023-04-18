@@ -182,7 +182,8 @@ public class MeteredWindowStore<K, V>
                     record.withKey(WindowKeySchema.fromStoreKey(record.key(), windowSizeMs, serdes.keyDeserializer(), serdes.topic()))
                         .withValue(new Change<>(
                             record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().isLatest
                         ))
                 ),
                 sendOldValues);

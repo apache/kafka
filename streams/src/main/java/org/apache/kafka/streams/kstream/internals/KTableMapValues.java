@@ -24,6 +24,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
 
 class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VIn, KIn, VOut> {
@@ -128,10 +130,13 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
             final VOut oldValue = computeOldValue(record.key(), record.value());
 
             if (queryableName != null) {
-                store.put(record.key(), newValue, record.timestamp());
-                tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
+                final long putReturnCode = store.put(record.key(), newValue, record.timestamp());
+                // if not put to store, do not forward downstream either
+                if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
+                    tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
+                }
             } else {
-                context.forward(record.withValue(new Change<>(newValue, oldValue)));
+                context.forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)));
             }
         }
 
@@ -162,6 +167,16 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         @Override
         public ValueAndTimestamp<VOut> get(final KIn key) {
             return computeValueAndTimestamp(key, parentGetter.get(key));
+        }
+
+        @Override
+        public ValueAndTimestamp<VOut> get(final KIn key, final long asOfTimestamp) {
+            return computeValueAndTimestamp(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
         }
 
         @Override

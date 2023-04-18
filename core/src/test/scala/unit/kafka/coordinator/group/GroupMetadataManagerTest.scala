@@ -643,6 +643,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
+
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
@@ -1182,6 +1183,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1217,6 +1220,8 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1292,6 +1297,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1331,6 +1338,8 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1390,6 +1399,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1437,6 +1448,8 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1588,6 +1601,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1692,6 +1707,8 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager, times(2)).getMagic(any())
@@ -2798,6 +2815,8 @@ class GroupMetadataManagerTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     capturedArgument
   }
@@ -2812,6 +2831,8 @@ class GroupMetadataManagerTest {
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     ).thenAnswer(_ => {
@@ -2975,5 +2996,61 @@ class GroupMetadataManagerTest {
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), now - diff)
     assertTrue(partitionLoadTime("partition-load-time-max") >= diff)
     assertTrue(partitionLoadTime("partition-load-time-avg") >= diff)
+  }
+
+  @Test
+  def testReadMessageKeyCanReadUnknownMessage(): Unit = {
+    val record = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
+    val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
+    val key = GroupMetadataManager.readMessageKey(ByteBuffer.wrap(unknownRecord))
+    assertEquals(UnknownKey(Short.MaxValue), key)
+  }
+
+  @Test
+  def testLoadGroupsAndOffsetsWillIgnoreUnknownMessage(): Unit = {
+    val generation = 935
+    val protocolType = "consumer"
+    val protocol = "range"
+    val startOffset = 15L
+    val committedOffsets = Map(
+      new TopicPartition("foo", 0) -> 23L,
+      new TopicPartition("foo", 1) -> 455L,
+      new TopicPartition("bar", 0) -> 8992L
+    )
+
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
+    val memberId = "98098230493"
+    val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
+
+    // Should ignore unknown record
+    val unknownKey = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
+    val lowestUnsupportedVersion = (org.apache.kafka.coordinator.group.generated.GroupMetadataKey
+      .HIGHEST_SUPPORTED_VERSION + 1).toShort
+
+    val unknownMessage1 = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
+    val unknownMessage2 = MessageUtil.toVersionPrefixedBytes(lowestUnsupportedVersion, unknownKey)
+    val unknownRecord1 = new SimpleRecord(unknownMessage1, unknownMessage1)
+    val unknownRecord2 = new SimpleRecord(unknownMessage2, unknownMessage2)
+
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      (offsetCommitRecords ++ Seq(unknownRecord1, unknownRecord2) ++ Seq(groupMetadataRecord)).toArray: _*)
+
+    expectGroupMetadataLoad(groupTopicPartition, startOffset, records)
+
+    groupMetadataManager.loadGroupsAndOffsets(groupTopicPartition, 1, _ => (), 0L)
+
+    val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
+    assertEquals(groupId, group.groupId)
+    assertEquals(Stable, group.currentState)
+    assertEquals(memberId, group.leaderOrNull)
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertEquals(protocol, group.protocolName.orNull)
+    assertEquals(Set(memberId), group.allMembers)
+    assertEquals(committedOffsets.size, group.allOffsets.size)
+    committedOffsets.foreach { case (topicPartition, offset) =>
+      assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+      assertTrue(group.offset(topicPartition).map(_.expireTimestamp).contains(None))
+    }
   }
 }
