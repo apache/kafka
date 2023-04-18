@@ -114,7 +114,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractCoordinator implements Closeable {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
     public static final int JOIN_GROUP_TIMEOUT_LAPSE = 5000;
-    Set<TopicPartition> ownedPartitions = Collections.emptySet();
+    Set<TopicPartition> lastOwnedPartitions = Collections.emptySet();
 
     protected enum MemberState {
         UNJOINED,             // the client is not part of a group
@@ -838,7 +838,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
-                    resetStateAndRejoin("member missed the rebalance", true);
+                    resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, false);
                     resendOwnedPartitions();
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {

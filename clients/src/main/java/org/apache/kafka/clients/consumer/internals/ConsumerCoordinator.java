@@ -245,10 +245,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.joinedSubscription = subscriptions.subscription();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
         // join with member's old owned partitions if syncGroup failed with REBALANCE_IN_PROGRESS
-        final Set<TopicPartition> joinedPartitions = ownedPartitions.isEmpty() ?
+        final Set<TopicPartition> joinedPartitions = lastOwnedPartitions.isEmpty() ?
             subscriptions.assignedPartitions() :
-            ownedPartitions;
-        ownedPartitions.clear();
+            lastOwnedPartitions;
+        lastOwnedPartitions.clear();
 
         List<String> topics = new ArrayList<>(joinedSubscription);
         for (ConsumerPartitionAssignor assignor : assignors) {
@@ -488,7 +488,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     void resendOwnedPartitions() {
-        ownedPartitions = subscriptions.assignedPartitions();
+        lastOwnedPartitions = subscriptions.assignedPartitions();
     }
 
     void maybeUpdateSubscriptionMetadata() {
