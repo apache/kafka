@@ -347,18 +347,19 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
+  // setter method：设置高水位值
   private def updateHighWatermarkMetadata(newHighWatermark: LogOffsetMetadata): Unit = {
-    if (newHighWatermark.messageOffset < 0)
+    if (newHighWatermark.messageOffset < 0) // 高水位值不能是负数
       throw new IllegalArgumentException("High watermark offset should be non-negative")
 
-    lock synchronized {
+    lock synchronized { //保护Log对象修改的Monitor锁
       if (newHighWatermark.messageOffset < highWatermarkMetadata.messageOffset) {
         warn(s"Non-monotonic update of high watermark from $highWatermarkMetadata to $newHighWatermark")
       }
 
-      highWatermarkMetadata = newHighWatermark
-      producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
-      logOffsetsListener.onHighWatermarkUpdated(newHighWatermark.messageOffset)
+      highWatermarkMetadata = newHighWatermark //赋值新的高水位值
+      producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset) // 处理事务状态管理器的高水位值更新逻辑，忽略它…… maybeIncrementFirstUnstableOffset() // First Unstable Offset是Kafka事务机制的一部分，忽略它…… } trace(s"Setting high watermark $newHighWatermark") }
+      logOffsetsListener.onHighWatermarkUpdated(newHighWatermark.messageOffset) //First Unstable Offset是Kafka事务机制的一部分，忽略它……
       maybeIncrementFirstUnstableOffset()
     }
     trace(s"Setting high watermark $newHighWatermark")
