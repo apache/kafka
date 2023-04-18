@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -77,6 +78,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -112,6 +114,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractCoordinator implements Closeable {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
     public static final int JOIN_GROUP_TIMEOUT_LAPSE = 5000;
+    Set<TopicPartition> ownedPartitions = Collections.emptySet();
 
     protected enum MemberState {
         UNJOINED,             // the client is not part of a group
@@ -835,7 +838,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
-                    resetStateAndGeneration("member missed the rebalance", true);
+                    resetStateAndRejoin("member missed the rebalance", true);
+                    resendOwnedPartitions();
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
@@ -1242,6 +1246,11 @@ public abstract class AbstractCoordinator implements Closeable {
             }
         }
     }
+
+    /**
+     * Stores the owned partitions in a temporary collection before revocation when encountering the REBALANCE_IN_PROGRESS error.
+     */
+    abstract void resendOwnedPartitions();
 
     protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
         CoordinatorResponseHandler(final Generation generation) {
