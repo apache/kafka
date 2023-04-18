@@ -24,10 +24,7 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.*;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -88,6 +85,7 @@ public class ProduceRequest extends AbstractRequest {
                 data.topicData().forEach(tpd ->
                         tpd.partitionData().forEach(partitionProduceData ->
                                 ProduceRequest.validateRecords(version, partitionProduceData.records())));
+                validateProducerIds(version, data);
             }
             return new ProduceRequest(data, version);
         }
@@ -222,9 +220,31 @@ public class ProduceRequest extends AbstractRequest {
         partitionSizes();
         data = null;
     }
+    
+    public static void validateProducerIds(short version, ProduceRequestData data) {
+        if (version >= 3) {
+            long producerId = -1;
+            for (ProduceRequestData.TopicProduceData topicData : data.topicData()) {
+                for (ProduceRequestData.PartitionProduceData partitionData : topicData.partitionData()) {
+                    BaseRecords baseRecords = partitionData.records();
+                    if (baseRecords instanceof Records) {
+                        Records records = (Records) baseRecords;
+                        for (RecordBatch batch : records.batches()) {
+                            if (producerId == -1 && batch.hasProducerId())
+                                producerId = batch.producerId();
+                            else if (batch.hasProducerId())
+                                if (batch.producerId() != producerId)
+                                    throw new InvalidRecordException("Produce requests with producer IDs can not have differing producer IDs");
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     public static void validateRecords(short version, BaseRecords baseRecords) {
         if (version >= 3) {
+            long producerId = -1L;
             if (baseRecords instanceof Records) {
                 Records records = (Records) baseRecords;
                 Iterator<? extends RecordBatch> iterator = records.batches().iterator();

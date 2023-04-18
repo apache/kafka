@@ -65,7 +65,7 @@ import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
-import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{InvalidRecordException, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
@@ -564,6 +564,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (!isAuthorizedTransactional) {
         requestHelper.sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
         return
+      }
+      try {
+        ProduceRequest.validateProducerIds(request.header.apiVersion, produceRequest.data)
+      } catch {
+        case e: InvalidRecordException =>
+          requestHelper.sendErrorResponseMaybeThrottle(request, Errors.INVALID_RECORD.exception)
       }
     }
 

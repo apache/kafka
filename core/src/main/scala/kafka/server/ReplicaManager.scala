@@ -642,7 +642,14 @@ class ReplicaManager(val config: KafkaConfig,
           (entriesPerPartition, Map.empty)
         else
           entriesPerPartition.partition { case (topicPartition, records) =>
-            getPartitionOrException(topicPartition).hasOngoingTransaction(records.firstBatch().producerId())
+            // Produce requests (only requests that require verification) should only have one batch in "batches" but check all just to be safe.
+            val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
+            if (!transactionalBatches.isEmpty) {
+              getPartitionOrException(topicPartition).hasOngoingTransaction(transactionalBatches.head.producerId)
+            } else { 
+              // If there is no producer ID in the batches, no need to verify.
+              true
+            }
           }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
@@ -744,6 +751,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
         // map not yet verified partitions to a request object
+        // verification only occurs on produce requests and those will always have one batch for versions that support transactions.
         val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
         val notYetVerifiedTransaction = new AddPartitionsToTxnTransaction()
           .setTransactionalId(transactionalId)

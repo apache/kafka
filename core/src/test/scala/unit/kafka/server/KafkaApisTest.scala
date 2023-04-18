@@ -2381,6 +2381,42 @@ class KafkaApisTest {
         ArgumentMatchers.eq(Some(transactionCoordinatorPartition)))
     }
   }
+  
+  @Test
+  def testDifferingProducerIdsThrowError(): Unit = {
+    val topic = "topic"
+    val transactionalId = "txn1"
+
+    addTopicToMetadataCache(topic, numPartitions = 2)
+
+    val tp = new TopicPartition("topic", 0)
+    val tp1 = new TopicPartition("topic", 1)
+
+    val produceRequest = new ProduceRequest(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+        util.Arrays.asList(new ProduceRequestData.TopicProduceData()
+          .setName(tp.topic).setPartitionData(Collections.singletonList(
+          new ProduceRequestData.PartitionProduceData()
+            .setIndex(tp.partition)
+            .setRecords(MemoryRecords.withTransactionalRecords(CompressionType.NONE, 0, 0, 0, new SimpleRecord("test".getBytes))))),
+        new ProduceRequestData.TopicProduceData()
+          .setName(tp1.topic).setPartitionData(Collections.singletonList(
+          new ProduceRequestData.PartitionProduceData()
+            .setIndex(tp1.partition)
+            .setRecords(MemoryRecords.withIdempotentRecords(CompressionType.NONE, 2, 0, 0, new SimpleRecord("test".getBytes))))))
+          .iterator))
+      .setAcks(1.toShort)
+      .setTransactionalId(transactionalId)
+      .setTimeoutMs(5000), ApiKeys.PRODUCE.latestVersion)
+    val request = buildRequest(produceRequest)  
+
+    val kafkaApis = createKafkaApis()
+
+    kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    val response = verifyNoThrottling[ProduceResponse](request)
+    assertEquals(2, response.errorCounts().get(Errors.INVALID_RECORD))
+  }
 
   @Test
   def testAddPartitionsToTxnWithInvalidPartition(): Unit = {

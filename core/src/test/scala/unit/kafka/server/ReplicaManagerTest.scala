@@ -2124,11 +2124,15 @@ class ReplicaManagerTest {
       callback(Map(tp -> Errors.INVALID_RECORD).toMap)
       assertEquals(Errors.INVALID_RECORD, result.assertFired.error)
 
-      // If we don't supply a transaction coordinator partition, we do not verify, so counter stays the same.
-      val transactionalRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
+      // If we supply no transactional ID and idempotent records, we do not verify, so counter stays the same.
+      val idempotentRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord(s"message $sequence".getBytes))
-      appendRecords(replicaManager, tp, transactionalRecords2)
+      appendRecords(replicaManager, tp, idempotentRecords2)
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
+      
+      // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
+      appendRecordsToMultipleTopics(replicaManager, Map(tp -> transactionalRecords, new TopicPartition(topic, 1) -> idempotentRecords2), transactionalId, Some(0))
+      verify(addPartitionsToTxnManager, times(2)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
     } finally {
       replicaManager.shutdown()
     }
@@ -2504,6 +2508,27 @@ class ReplicaManagerTest {
       transactionStatePartition = transactionStatePartition)
 
     result
+  }
+
+  private def appendRecordsToMultipleTopics(replicaManager: ReplicaManager,
+                                            entriesToAppend: Map[TopicPartition, MemoryRecords],
+                                            transactionalId: String,
+                                            transactionStatePartition: Option[Int],
+                                            origin: AppendOrigin = AppendOrigin.CLIENT,
+                                            requiredAcks: Short = -1): Unit = {
+    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+      responses.foreach( response => responses.get(response._1).isDefined)
+    }
+
+    replicaManager.appendRecords(
+      timeout = 1000,
+      requiredAcks = requiredAcks,
+      internalTopicsAllowed = false,
+      origin = origin,
+      entriesPerPartition = entriesToAppend,
+      responseCallback = appendCallback,
+      transactionalId = transactionalId,
+      transactionStatePartition = transactionStatePartition)
   }
 
   private def fetchPartitionAsConsumer(
