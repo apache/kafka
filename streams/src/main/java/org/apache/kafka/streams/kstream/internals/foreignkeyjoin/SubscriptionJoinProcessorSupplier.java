@@ -39,12 +39,12 @@ import java.util.Objects;
  * @param <KO> Type of foreign key
  * @param <VO> Type of foreign value
  */
-public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
+public class SubscriptionJoinProcessorSupplier<K, KO, VO>
     implements ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>> {
 
     private final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier;
 
-    public SubscriptionJoinForeignProcessorSupplier(final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier) {
+    public SubscriptionJoinProcessorSupplier(final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier) {
         this.foreignValueGetterSupplier = foreignValueGetterSupplier;
     }
 
