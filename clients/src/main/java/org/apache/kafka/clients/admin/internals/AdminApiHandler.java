@@ -81,6 +81,7 @@ public interface AdminApiHandler<K, V> {
      * the returned map.
      */
     default Map<K, Throwable> handleUnsupportedVersionException(
+        int brokerId,
         UnsupportedVersionException exception,
         Set<K> keys
     ) {

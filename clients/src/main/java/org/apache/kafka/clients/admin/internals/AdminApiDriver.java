@@ -263,8 +263,10 @@ public class AdminApiDriver<K, V> {
             retryLookup(keysToUnmap);
         } else if (t instanceof UnsupportedVersionException) {
             if (spec.scope instanceof FulfillmentScope) {
+                int brokerId = ((FulfillmentScope) spec.scope).destinationBrokerId;
                 Map<K, Throwable> unrecoverableFailures =
                     handler.handleUnsupportedVersionException(
+                        brokerId,
                         (UnsupportedVersionException) t,
                         spec.keys);
                 completeExceptionally(unrecoverableFailures);
