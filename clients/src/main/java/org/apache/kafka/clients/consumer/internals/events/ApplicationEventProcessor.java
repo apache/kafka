@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.RequestManager;
 import org.apache.kafka.common.KafkaException;
@@ -29,12 +30,15 @@ import java.util.concurrent.BlockingQueue;
 public class ApplicationEventProcessor {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final Map<RequestManager.Type, Optional<RequestManager>> registry;
+    private final ConsumerMetadata metadata;
 
     public ApplicationEventProcessor(
-            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-            final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry) {
+        final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+        final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry,
+        final ConsumerMetadata metadata) {
         this.backgroundEventQueue = backgroundEventQueue;
         this.registry = requestManagerRegistry;
+        this.metadata = metadata;
     }
 
     public boolean process(final ApplicationEvent event) {
@@ -48,6 +52,10 @@ public class ApplicationEventProcessor {
                 return process((PollApplicationEvent) event);
             case FETCH_COMMITTED_OFFSET:
                 return process((OffsetFetchApplicationEvent) event);
+            case METADATA_UPDATE:
+                return process((MetadataUpdateApplicationEvent) event);
+            case UNSUBSCRIBE:
+                return process((UnsubscribeApplicationEvent) event);
         }
         return false;
     }
@@ -104,6 +112,19 @@ public class ApplicationEventProcessor {
         }
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
         manager.addOffsetFetchRequest(event.partitions);
+        return true;
+    }
+
+    private boolean process(final MetadataUpdateApplicationEvent event) {
+        metadata.requestUpdateForNewTopics();
+        return true;
+    }
+
+    private boolean process(final UnsubscribeApplicationEvent event) {
+        /*
+                this.coordinator.onLeavePrepare();
+                this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
+         */
         return true;
     }
 }
