@@ -81,7 +81,9 @@ object TransactionLog {
             .setPartitionIds(partitions.map(tp => Integer.valueOf(tp.partition)).toList.asJava)
         }.toList.asJava
 
-    MessageUtil.toVersionPrefixedBytes(TransactionLogValue.HIGHEST_SUPPORTED_VERSION,
+    // Serialize with the highest supported non-flexible version
+    // until a tagged field is introduced or the version is bumped.
+    MessageUtil.toVersionPrefixedBytes(0,
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)
         .setProducerEpoch(txnMetadata.producerEpoch)
