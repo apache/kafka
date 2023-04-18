@@ -79,6 +79,7 @@ class LogSegmentTest {
     "100, 10",
     "2147483648, 0",
     "-2147483648, 0",
+    "2147483648,4294967296"
   ))
   def testAppendForLogSegmentOffsetOverflowException(baseOffset: Long, largestOffset: Long): Unit = {
     val seg = createSegment(baseOffset)
