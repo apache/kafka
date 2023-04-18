@@ -58,7 +58,7 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 @Measurement(iterations = 4)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-public class AuthorizerUpdateBenchmark {
+public class StandardAuthorizerUpdateBenchmark {
     @Param({"25000", "50000", "75000", "100000"})
     private int aclCount;
     private final String resourceNamePrefix = "foo-bar35_resource-";
