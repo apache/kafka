@@ -149,22 +149,20 @@ public class PCollectionsImmutableSetTest {
             .doFunctionDelegationCheck();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfAdd(boolean mockFunctionReturnValue) {
+    @Test
+    public void testDelegationOfAdd() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.add(eq(this)), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.add(this), identity())
-            .doFunctionDelegationCheck();
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.add(eq(this)))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.add(this))
+            .doUnsupportedFunctionDelegrationCheck();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfRemove(boolean mockFunctionReturnValue) {
+    @Test
+    public void testDelegationOfRemove() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.remove(eq(this)), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.remove(this), identity())
-            .doFunctionDelegationCheck();
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.remove(eq(this)))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.remove(this))
+            .doUnsupportedFunctionDelegrationCheck();
     }
 
     @ParameterizedTest
@@ -176,41 +174,37 @@ public class PCollectionsImmutableSetTest {
             .doFunctionDelegationCheck();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfAddAll(boolean mockFunctionReturnValue) {
+    @Test
+    public void testDelegationOfAddAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.addAll(eq(Collections.emptyList())), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.addAll(Collections.emptyList()), identity())
-            .doFunctionDelegationCheck();
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.addAll(eq(Collections.emptyList())))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.addAll(Collections.emptyList()))
+            .doUnsupportedFunctionDelegrationCheck();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfRetainAll(boolean mockFunctionReturnValue) {
+    @Test
+    public void testDelegationOfRetainAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.retainAll(eq(Collections.emptyList())), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.retainAll(Collections.emptyList()), identity())
-            .doFunctionDelegationCheck();
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.retainAll(eq(Collections.emptyList())))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.retainAll(Collections.emptyList()))
+            .doUnsupportedFunctionDelegrationCheck();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfRemoveAll(boolean mockFunctionReturnValue) {
+    @Test
+    public void testDelegationOfRemoveAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.removeAll(eq(Collections.emptyList())), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removeAll(Collections.emptyList()), identity())
-            .doFunctionDelegationCheck();
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeAll(eq(Collections.emptyList())))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeAll(Collections.emptyList()))
+            .doUnsupportedFunctionDelegrationCheck();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDelegationOfRemoveIf(boolean mockFunctionReturnValue) {
+    @Test
+    public void testDelegationOfRemoveIf() {
         final Predicate<Object> mockPredicate = mock(Predicate.class);
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.removeIf(eq(mockPredicate)), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removeIf(mockPredicate), identity())
-            .doFunctionDelegationCheck();
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeIf(eq(mockPredicate)))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeIf(mockPredicate))
+            .doUnsupportedFunctionDelegrationCheck();
     }
 
     @Test
@@ -218,7 +212,7 @@ public class PCollectionsImmutableSetTest {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForVoidMethodInvocation(MapPSet::clear)
             .defineWrapperVoidMethodInvocation(PCollectionsImmutableSet::clear)
-            .doVoidMethodDelegationCheck();
+            .doUnsupportedVoidFunctionDelegrationCheck();
     }
 
     @Test
