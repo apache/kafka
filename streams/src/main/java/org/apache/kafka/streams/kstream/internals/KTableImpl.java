@@ -1076,7 +1076,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //not be done needlessly.
         ((KTableImpl<?, ?, ?>) foreignKeyTable).enableSendingOldValues(true);
 
-        //Old values must be sent such that the ForeignJoinSubscriptionSendProcessorSupplier can propagate deletions to the correct node.
+        //Old values must be sent such that the SubscriptionSendProcessorSupplier can propagate deletions to the correct node.
         //This occurs whenever the extracted foreignKey changes values.
         enableSendingOldValues(true);
 
