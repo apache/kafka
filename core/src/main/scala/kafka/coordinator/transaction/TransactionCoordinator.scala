@@ -344,9 +344,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 Left(Errors.INVALID_PRODUCER_ID_MAPPING)
               } else if (txnMetadata.producerEpoch != producerEpoch) {
                 Left(Errors.PRODUCER_FENCED)
-              } else if (txnMetadata.pendingTransitionInProgress && !(txnMetadata.pendingState == Some(Ongoing) && txnMetadata.state == Ongoing)) {
-                // return a retriable exception to let the client backoff and retry
-                Left(Errors.CONCURRENT_TRANSACTIONS)
               } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
                 Left(Errors.CONCURRENT_TRANSACTIONS)
               } else {

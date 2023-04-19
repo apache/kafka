@@ -236,16 +236,37 @@ class TransactionCoordinatorTest {
   }
  
   @Test 
-  def shouldRespondWithNoErrorWhenVerifyingAndPendingStateIsOngoingWithPartition(): Unit = {
+  def testVerifyPartitionHandling(): Unit = {
     var errors: Map[TopicPartition, Errors] = Map.empty
 
     def verifyPartitionsInTxnCallback(result: AddPartitionsToTxnResult): Unit = {
       errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults()).asScala.toMap
     }
+    // If producer ID is not the same, return INVALID_PRODUCER_ID_MAPPING
+    val wrongPidTxnMetadata = new TransactionMetadata(transactionalId, 1, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, mutable.Set.empty, 0, 0)
+    partitions.foreach(wrongPidTxnMetadata.topicPartitions.add(_))
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, wrongPidTxnMetadata))))
+
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
+    errors.foreach { case (_, error) =>
+      assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, error)
+    }
     
-    // If the txn state is empty, we get CONCURRENT_TRANSACTIONS
-    val emptyTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Empty, mutable.Set.empty, 0, 0)
-    emptyTxnMetadata.pendingState = Some(Ongoing)
+
+    // If producer epoch is not equal, return PRODUCER_FENCED
+    val oldEpochTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, mutable.Set.empty, 0, 0)
+    partitions.foreach(oldEpochTxnMetadata.topicPartitions.add(_))
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, oldEpochTxnMetadata))))
+
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 1, partitions, verifyPartitionsInTxnCallback)
+    errors.foreach { case (_, error) =>
+      assertEquals(Errors.PRODUCER_FENCED, error)
+    }
+    
+    // If the txn state is Prepare or AbortCommit, we return CONCURRENT_TRANSACTIONS
+    val emptyTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, mutable.Set.empty, 0, 0)
     partitions.foreach(emptyTxnMetadata.topicPartitions.add(_))
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, emptyTxnMetadata))))
@@ -255,20 +276,10 @@ class TransactionCoordinatorTest {
       assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
     }
 
-    // If the txn state is Ongoing, but pending state is not, we get CONCURRENT_TRANSACTIONS
+    // If the txn state is Ongoing, it doesn't matter what pending state is.
     val ongoingTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Ongoing, mutable.Set.empty, 0, 0)
     ongoingTxnMetadata.pendingState = Some(CompleteCommit)
     partitions.foreach(ongoingTxnMetadata.topicPartitions.add(_))
-    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
-      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoingTxnMetadata))))
-
-    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
-    errors.foreach { case (_, error) =>
-      assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
-    }
-    
-    // If pending state is ongoing, we can verify with the partitions already added.
-    ongoingTxnMetadata.pendingState = Some(Ongoing)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoingTxnMetadata))))
 
