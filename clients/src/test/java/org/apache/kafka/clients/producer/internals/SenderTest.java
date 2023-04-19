@@ -728,8 +728,15 @@ public class SenderTest {
         assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
 
-        // cluster authorization is a fatal error for the producer
+        // cluster authorization can be retried
         assertSendFailure(ClusterAuthorizationException.class);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        sender.runOnce();
+        assertFalse(transactionManager.hasFatalError());
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+        // subsequent send should be successful
+        assertSuccessfulSend();
     }
 
     @Test
@@ -2166,7 +2173,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        // cluster authorization is a fatal error for the producer
+        // expecting authorization error on send
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
             body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
@@ -2175,7 +2182,7 @@ public class SenderTest {
         sender.runOnce();
         assertFutureFailure(future, ClusterAuthorizationException.class);
 
-        // cluster authorization errors are fatal, so we should continue seeing it on future sends
+        // expecting to continue to see authorization error until user permission is fixed
         assertTrue(transactionManager.hasFatalError());
         assertSendFailure(ClusterAuthorizationException.class);
     }
@@ -2189,7 +2196,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        // cluster authorization is a fatal error for the producer
+        // expecting authorization error on send
         Future<RecordMetadata> future1 = appendToAccumulator(tp0);
         sender.runOnce();
 
@@ -3240,6 +3247,22 @@ public class SenderTest {
             fail("Future should have raised " + expectedError.getSimpleName());
         } catch (ExecutionException e) {
             assertTrue(expectedError.isAssignableFrom(e.getCause().getClass()));
+        }
+    }
+
+    private void assertSuccessfulSend() throws InterruptedException {
+        Future<RecordMetadata> future = appendToAccumulator(tp0);
+        sender.runOnce(); // send request
+        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce();
+        assertTrue(future.isDone());
+        try {
+            future.get();
+        } catch (ExecutionException e) {
+            fail("Future should not have raised an exception: " + e.getCause());
         }
     }
 
