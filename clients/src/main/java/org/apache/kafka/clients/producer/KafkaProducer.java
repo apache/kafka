@@ -620,7 +620,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws IllegalStateException if no {@code transactional.id} has been configured
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
-     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     * @throws org.apache.kafka.common.errors.AuthorizationException error indicating that the configured
      *         transactional.id is not authorized, or the idempotent producer id is unavailable. See the exception for
      *         more details.  User may retry this function call after fixing the permission.
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
