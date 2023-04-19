@@ -115,9 +115,9 @@ public class AssignmentMemberSpec {
     @Override
     public String toString() {
         return "AssignmentMemberSpec(instanceId=" + instanceId +
-                ", rackId=" + rackId +
-                ", subscribedTopicIds=" + subscribedTopicIds +
-                ", assignedPartitions=" + assignedPartitions +
-                ')';
+            ", rackId=" + rackId +
+            ", subscribedTopicIds=" + subscribedTopicIds +
+            ", assignedPartitions=" + assignedPartitions +
+            ')';
     }
 }

@@ -32,7 +32,7 @@ import java.util.Set;
 import static java.lang.Math.min;
 
 /**
- * <p>The Server Side Sticky Range Assignor inherits properties of both the range assignor and the sticky assignor.
+ * The Server Side Sticky Range Assignor inherits properties of both the range assignor and the sticky assignor.
  * Properties are as follows:
  * <ol>
  * <li> Each member must get at least one partition for every topic that it is subscribed to. The only exception is when
@@ -46,8 +46,6 @@ import static java.lang.Math.min;
  *    </ul>
  * <li> Members should retain as much as their previous assignment as possible to reduce the number of partition movements during reassignment. (Sticky) </li>
  * </ol>
- * </p>
- *
  */
 public class RangeAssignor implements PartitionAssignor {
 
