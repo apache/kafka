@@ -2638,7 +2638,7 @@ class GroupMetadataManagerTest {
 
   @Test
   def testReadMessageKeyCanReadUnknownMessage(): Unit = {
-    val record = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
+    val record = new kafka.internals.generated.GroupMetadataKey()
     val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
     val key = GroupMetadataManager.readMessageKey(ByteBuffer.wrap(unknownRecord))
     assertEquals(UnknownKey(Short.MaxValue), key)
@@ -2661,8 +2661,8 @@ class GroupMetadataManagerTest {
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
 
     // Should ignore unknown record
-    val unknownKey = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
-    val lowestUnsupportedVersion = (org.apache.kafka.coordinator.group.generated.GroupMetadataKey
+    val unknownKey = new kafka.internals.generated.GroupMetadataKey()
+    val lowestUnsupportedVersion = (kafka.internals.generated.GroupMetadataKey
       .HIGHEST_SUPPORTED_VERSION + 1).toShort
 
     val unknownMessage1 = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
