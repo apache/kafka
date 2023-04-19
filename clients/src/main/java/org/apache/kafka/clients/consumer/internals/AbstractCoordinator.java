@@ -839,7 +839,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
-                    savePartitionAndGenerationState();
+                    savePreviousJoinGroupState();
                     resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, false);
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
@@ -1251,7 +1251,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Stores the owned partitions in a temporary collection before revocation when encountering the REBALANCE_IN_PROGRESS error.
      */
-    void savePartitionAndGenerationState() { }
+    void savePreviousJoinGroupState() { }
 
     protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
         CoordinatorResponseHandler(final Generation generation) {

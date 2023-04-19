@@ -1933,6 +1933,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
+        assertTrue(coordinator.lastOwnedPartitions.isEmpty());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
         assertEquals(3, coordinator.generation().generationId);
     }

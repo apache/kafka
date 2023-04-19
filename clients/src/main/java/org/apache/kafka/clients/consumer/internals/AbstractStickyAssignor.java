@@ -184,14 +184,16 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             }
 
                             if (memberGeneration > otherMemberGeneration) {
-                                log.warn("Found multiple consumers {} and {} claiming the same TopicPartition {} in " +
-                                        "different generations. The topic partition wil be assigned to the member with higher generation.",
-                                    consumer, otherConsumer, tp);
                                 // move partition from the member with an older generation to the member with the newer generation
                                 consumerToOwnedPartitions.get(consumer).add(tp);
                                 consumerToOwnedPartitions.get(otherConsumer).remove(tp);
                                 allPreviousPartitionsToOwner.put(tp, consumer);
                             }
+
+                            // if memberGeneration < otherMemberGeneration, the other member continue owns the generation
+                            log.warn("Found multiple members {} and {} claiming the same TopicPartition {} in " +
+                                    "different generations. The topic partition wil be assigned to the member with higher generation.",
+                                consumer, otherConsumer, tp);
                         }
                     }
                 }

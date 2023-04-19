@@ -490,9 +490,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    void savePartitionAndGenerationState() {
-        System.out.println("savePartitionAndGenerationState:" + this.generation().generationId);
-        System.out.println("savePartitionAndGenerationState:" + this.subscriptions.assignedPartitions());
+    void savePreviousJoinGroupState() {
         lastOwnedPartitions = subscriptions.assignedPartitions();
         lastGenerationId = this.generation().generationId;
     }
