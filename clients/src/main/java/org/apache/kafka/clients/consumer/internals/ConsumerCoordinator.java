@@ -487,7 +487,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    void resendOwnedPartitions() {
+    void maybeResendOwnedPartitions() {
         lastOwnedPartitions = subscriptions.assignedPartitions();
     }
 

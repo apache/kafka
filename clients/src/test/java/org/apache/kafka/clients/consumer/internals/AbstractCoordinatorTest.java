@@ -1652,7 +1652,7 @@ public class AbstractCoordinatorTest {
             rejoinedGeneration = 20;
             expectSyncGroup(rejoinedGeneration, memberId);
             expectJoinGroup(memberId, rejoinedGeneration, memberId);
-            verify(coordinator, times(1)).resendOwnedPartitions();
+            verify(coordinator, times(1)).maybeResendOwnedPartitions();
         } finally {
             executor.shutdownNow();
             executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
