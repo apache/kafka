@@ -243,8 +243,7 @@ class TransactionCoordinatorTest {
       errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults()).asScala.toMap
     }
     // If producer ID is not the same, return INVALID_PRODUCER_ID_MAPPING
-    val wrongPidTxnMetadata = new TransactionMetadata(transactionalId, 1, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, mutable.Set.empty, 0, 0)
-    partitions.foreach(wrongPidTxnMetadata.topicPartitions.add(_))
+    val wrongPidTxnMetadata = new TransactionMetadata(transactionalId, 1, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, partitions, 0, 0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, wrongPidTxnMetadata))))
 
@@ -255,8 +254,7 @@ class TransactionCoordinatorTest {
     
 
     // If producer epoch is not equal, return PRODUCER_FENCED
-    val oldEpochTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, mutable.Set.empty, 0, 0)
-    partitions.foreach(oldEpochTxnMetadata.topicPartitions.add(_))
+    val oldEpochTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, partitions, 0, 0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, oldEpochTxnMetadata))))
 
@@ -266,8 +264,7 @@ class TransactionCoordinatorTest {
     }
     
     // If the txn state is Prepare or AbortCommit, we return CONCURRENT_TRANSACTIONS
-    val emptyTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, mutable.Set.empty, 0, 0)
-    partitions.foreach(emptyTxnMetadata.topicPartitions.add(_))
+    val emptyTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, partitions, 0, 0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, emptyTxnMetadata))))
     
@@ -276,16 +273,15 @@ class TransactionCoordinatorTest {
       assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
     }
 
-    // If the txn state is Ongoing, it doesn't matter what pending state is.
+    // Pending state does not matter, we will just check if the partitions are in the txnMetadata.
     val ongoingTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Ongoing, mutable.Set.empty, 0, 0)
     ongoingTxnMetadata.pendingState = Some(CompleteCommit)
-    partitions.foreach(ongoingTxnMetadata.topicPartitions.add(_))
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoingTxnMetadata))))
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
-      assertEquals(Errors.NONE, error)
+      assertEquals(Errors.INVALID_TXN_STATE, error)
     }
   }
 
@@ -381,7 +377,9 @@ class TransactionCoordinatorTest {
         new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Ongoing, partitions, 0, 0)))))
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
-    assertEquals(Errors.NONE, error)
+    errors.foreach { case (_, error) =>
+      assertEquals(Errors.NONE, error)
+    }
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
   
