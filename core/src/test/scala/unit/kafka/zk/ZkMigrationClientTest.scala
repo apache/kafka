@@ -309,7 +309,6 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     assertEquals(0, brokers.size())
     assertEquals(1, batches.size())
     assertEquals(1, batches.get(0).size)
-    // assertEquals(50, migrationState.migrationZkVersion())
   }
 
   @Test
