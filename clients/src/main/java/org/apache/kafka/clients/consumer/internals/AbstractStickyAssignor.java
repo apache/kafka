@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.Utils.PartitionComparator;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +33,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.clients.consumer.internals.Utils.PartitionComparator;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Sticky assignment implementation used by {@link org.apache.kafka.clients.consumer.StickyAssignor} and
@@ -168,8 +168,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             // this partition is not owned by other consumer in the same generation
                             ownedPartitions.add(tp);
                         } else {
-                            int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
-                            int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
+                            final int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
+                            final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
                             if (memberGeneration == otherMemberGeneration) {
                                 if (subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION) == memberData.generation.orElse(DEFAULT_GENERATION)) {
