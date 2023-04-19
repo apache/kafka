@@ -26,10 +26,13 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
 /**
  * An interface for converting objects to bytes.
- *
+ * <p>
  * A class that implements this interface is expected to have a constructor with no parameter.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
+ * <p>
+ * Note that we will ultimately replace byte[] with ByteBuffer, so you can implement the {@link this#serializeToByteBuffer} and
+ * just throw an exception on {@link this#serialize} instead of implementing both.
  *
  * @param <T> Type to be serialized from.
  */
@@ -55,6 +58,8 @@ public interface Serializer<T> extends Closeable {
 
     /**
      * Convert {@code data} into a ByteBuffer.
+     * <p>
+     * Note that if Serializer implements this method, then the {@link this#serialize} will never be called.
      *
      * @param topic topic associated with data
      * @param data typed data
@@ -78,6 +83,8 @@ public interface Serializer<T> extends Closeable {
 
     /**
      * Convert {@code data} into a ByteBuffer.
+     * <p>
+     * Note that if Serializer implements this method, then the {@link this#serialize} will never be called.
      *
      * @param topic topic associated with data
      * @param headers headers associated with the record
