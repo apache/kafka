@@ -118,16 +118,16 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
         public void process(final Record<K, Change<V>> record) {
             final VOut newValue = valueTransformer.transform(record.key(), record.value().newValue);
 
-            if (queryableName == null) {
-                final VOut oldValue = sendOldValues ? valueTransformer.transform(record.key(), record.value().oldValue) : null;
-                context().forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)));
-            } else {
+            if (queryableName != null) {
                 final VOut oldValue = sendOldValues ? getValueOrNull(store.get(record.key())) : null;
                 final long putReturnCode = store.put(record.key(), newValue, record.timestamp());
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
                 }
+            } else {
+                final VOut oldValue = sendOldValues ? valueTransformer.transform(record.key(), record.value().oldValue) : null;
+                context().forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)));
             }
         }
 
