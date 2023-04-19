@@ -153,10 +153,12 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
           // safe to ignore the exception if the thread is being shutdown. We raise the exception
           // here again, because, it is ignored by ShutdownableThread if it is shutting down.
           throw ie
-        case e: Exception => {
-          error("Failed to process feature ZK node change event. The broker will eventually exit.", e)
+        case cacheUpdateException: FeatureCacheUpdateException =>
+          error("Failed to process feature ZK node change event. The broker will eventually exit.", cacheUpdateException)
           throw new FatalExitError(1)
-        }
+        case e: Exception =>
+          // do not exit for exceptions unrelated to cache change processing (e.g. ZK session expiration)
+          warn("Unexpected exception in feature ZK node change event processing; will continue processing.", e)
       }
     }
   }
