@@ -382,7 +382,7 @@ public class SerializationTest {
     }
 
     @Test
-    public void testByteBufferSerializer() {
+    public void testByteBufferSerCompatibility() {
         final byte[] bytes = "Hello".getBytes(UTF_8);
         final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
         final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
@@ -391,19 +391,25 @@ public class SerializationTest {
         final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
         try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
             assertNull(serializer.serialize(topic, null));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer0.duplicate()));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer1.duplicate()));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2.duplicate()));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0.duplicate()));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1.duplicate()));
-
             assertNull(serializer.serializeToByteBuffer(topic, null));
-            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer0.duplicate())));
-            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer1.duplicate())));
-            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer2.duplicate())));
-            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, directBuffer0.duplicate())));
-            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, directBuffer1.duplicate())));
+
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer0);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer1);
+            testByteBufferSerCompatibility0(serializer, bytes, heapBuffer2);
+            testByteBufferSerCompatibility0(serializer, bytes, directBuffer0);
+            testByteBufferSerCompatibility0(serializer, bytes, directBuffer1);
         }
+    }
+
+    private void testByteBufferSerCompatibility0(ByteBufferSerializer serializer,
+                                                 byte[] expectedBytes,
+                                                 ByteBuffer buffer) {
+        final ByteBuffer duplicatedBuf0 = buffer.duplicate();
+        final ByteBuffer duplicatedBuf1 = buffer.duplicate();
+        assertEquals(duplicatedBuf0, duplicatedBuf1);
+        assertArrayEquals(expectedBytes, serializer.serialize(topic, duplicatedBuf0));
+        assertArrayEquals(expectedBytes, Utils.toArray(serializer.serializeToByteBuffer(topic, duplicatedBuf1)));
+        assertEquals(duplicatedBuf0, duplicatedBuf1);
     }
 
     @Test
