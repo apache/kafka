@@ -43,7 +43,7 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
 
     @Override
     public Processor<K, Change<V1>, K, Change<VOut>> get() {
-        return new KTableKTableLeftJoinProcessor(valueGetter1, valueGetter2);
+        return new KTableKTableLeftJoinProcessor(valueGetterSupplier2.get());
     }
 
     @Override
@@ -66,14 +66,11 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
 
     private class KTableKTableLeftJoinProcessor extends ContextualProcessor<K, Change<V1>, K, Change<VOut>> {
 
-        private final KTableValueGetter<K, V1> thisValueGetter;
-        private final KTableValueGetter<K, V2> otherValueGetter;
+        private final KTableValueGetter<K, V2> valueGetter;
         private Sensor droppedRecordsSensor;
 
-        KTableKTableLeftJoinProcessor(final KTableValueGetter<K, V1> thisValueGetter,
-                                      final KTableValueGetter<K, V2> otherValueGetter) {
-            this.thisValueGetter = thisValueGetter;
-            this.otherValueGetter = otherValueGetter;
+        KTableKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
+            this.valueGetter = valueGetter;
         }
 
         @Override
@@ -84,8 +81,7 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics()
             );
-            thisValueGetter.init(context);
-            otherValueGetter.init(context);
+            valueGetter.init(context);
         }
 
         @Override
@@ -109,20 +105,17 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
             }
 
             // drop out-of-order records from versioned tables (cf. KIP-914)
-            if (thisValueGetter.isVersioned()) {
-                final ValueAndTimestamp<V1> valueAndTimestampLeft = thisValueGetter.get(record.key());
-                if (valueAndTimestampLeft != null && valueAndTimestampLeft.timestamp() > record.timestamp()) {
-                    LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
-                    droppedRecordsSensor.record();
-                    return;
-                }
+            if (useVersionedSemantics && !record.value().isLatest) {
+                LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
+                droppedRecordsSensor.record();
+                return;
             }
 
             VOut newValue = null;
             final long resultTimestamp;
             VOut oldValue = null;
 
-            final ValueAndTimestamp<V2> valueAndTimestampRight = otherValueGetter.get(record.key());
+            final ValueAndTimestamp<V2> valueAndTimestampRight = valueGetter.get(record.key());
             final V2 value2 = getValueOrNull(valueAndTimestampRight);
             final long timestampRight;
 
@@ -150,8 +143,7 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
 
         @Override
         public void close() {
-            thisValueGetter.close();
-            otherValueGetter.close();
+            valueGetter.close();
         }
     }
 

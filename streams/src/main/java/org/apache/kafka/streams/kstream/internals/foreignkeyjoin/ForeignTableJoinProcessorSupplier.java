@@ -21,8 +21,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -45,32 +43,33 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
     private static final Logger LOG = LoggerFactory.getLogger(ForeignTableJoinProcessorSupplier.class);
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
     private final CombinedKeySchema<KO, K> keySchema;
-    private final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetterSupplier;
+    private boolean useVersionedSemantics = false;
 
     public ForeignTableJoinProcessorSupplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
-        final CombinedKeySchema<KO, K> keySchema,
-        final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetterSupplier) {
+        final CombinedKeySchema<KO, K> keySchema) {
 
         this.storeBuilder = storeBuilder;
         this.keySchema = keySchema;
-        this.foreignKeyValueGetterSupplier = foreignKeyValueGetterSupplier;
     }
 
     @Override
     public Processor<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> get() {
-        return new KTableKTableJoinProcessor(foreignKeyValueGetterSupplier.get());
+        return new KTableKTableJoinProcessor();
     }
 
+    public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
+        this.useVersionedSemantics = useVersionedSemantics;
+    }
+
+    // VisibleForTesting
+    public boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
+    }
 
     private final class KTableKTableJoinProcessor extends ContextualProcessor<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
         private Sensor droppedRecordsSensor;
         private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> subscriptionStore;
-        private final KTableValueGetter<KO, VO> foreignKeyValueGetter;
-
-        private KTableKTableJoinProcessor(final KTableValueGetter<KO, VO> foreignKeyValueGetter) {
-            this.foreignKeyValueGetter = foreignKeyValueGetter;
-        }
 
         @Override
         public void init(final ProcessorContext<K, SubscriptionResponseWrapper<VO>> context) {
@@ -82,7 +81,6 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                 internalProcessorContext.metrics()
             );
             subscriptionStore = internalProcessorContext.getStateStore(storeBuilder);
-            foreignKeyValueGetter.init(context);
         }
 
         @Override
@@ -107,13 +105,10 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
             }
 
             // drop out-of-order records from versioned tables (cf. KIP-914)
-            if (foreignKeyValueGetter.isVersioned()) {
-                final ValueAndTimestamp<VO> latestValueAndTimestamp = foreignKeyValueGetter.get(record.key());
-                if (latestValueAndTimestamp != null && latestValueAndTimestamp.timestamp() > record.timestamp()) {
-                    LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
-                    droppedRecordsSensor.record();
-                    return;
-                }
+            if (useVersionedSemantics && !record.value().isLatest) {
+                LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
+                droppedRecordsSensor.record();
+                return;
             }
 
             final Bytes prefixBytes = keySchema.prefixBytes(record.key());
@@ -137,11 +132,6 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                     }
                 }
             }
-        }
-
-        @Override
-        public void close() {
-            foreignKeyValueGetter.close();
         }
 
         private boolean prefixEquals(final byte[] x, final byte[] y) {
