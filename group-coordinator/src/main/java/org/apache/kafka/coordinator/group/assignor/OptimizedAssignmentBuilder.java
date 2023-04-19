@@ -34,34 +34,39 @@ import java.util.Set;
 import static java.lang.Math.min;
 
 /**
- * Only used when all consumers have identical subscriptions
+ * <p>Only used when all members have identical subscriptions.
  * Steps followed to get the most sticky and balanced assignment possible :-
- * 1) In case of a reassignment where a previous assignment exists:
- *      a) Obtain a valid prev assignment by selecting the assignments that have topics present in both the topic metadata and the consumers subscriptions.
- *      b) Get sticky partitions using the newly decided quotas from the prev valid assignment.
- * 2) Get unassigned partitions from the difference between total partitions and assigned sticky partitions.
- * 3) Get a list of potentially unfilled consumers based on the minimum quotas.
- * 4) Populate the unfilled consumers map (consumer, remaining) after accounting for the additional partitions that have to be assigned.
- * 5) Allocate all unassigned partitions to the unfilled consumers first
+ * <ol>
+ * <li> In case of a reassignment i.e. when a previous assignment exists: </li>
+ *     <ul>
+ *      <li> Obtain a valid prev assignment by selecting the assignments that have topics present in both the topic metadata and the members subscriptions.</li>
+ *      <li> Get sticky partitions from the prev valid assignment using the newly decided quotas.</li>
+ *     </ul>
+ * <li> Obtain the unassigned partitions from the difference between total partitions and assigned sticky partitions.</li>
+ * <li> Obtain a list of potentially unfilled members based on the minimum quotas.</li>
+ * <li> Populate the unfilled members map (member, remaining) after accounting for the additional partitions that might have to be assigned. </li>
+ * <li> Allocate all unassigned partitions to the unfilled members. </li>
+ * </ol>
+ * </p>
  */
 
 public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignmentBuilder {
     private static final Logger log = LoggerFactory.getLogger(OptimizedAssignmentBuilder.class);
-        // Subscription list is same for all consumers
+        // Subscription list is same for all members
     private final Collection<Uuid> validSubscriptionList;
 
     private Integer totalValidPartitionsCount;
     private final int minQuota;
-        // the expected number of members receiving more than minQuota partitions (zero when minQuota == maxQuota)
+    // The expected number of members receiving one more than the minQuota partitions.
     private int expectedNumMembersWithExtraPartition;
-    // Consumers which haven't met the min quota OR have met the min Quota but could potentially get an extra partition
-    // Map<MemberId, Remaining> where Remaining = number of partitions remaining to meet the min Quota
-    private final Map<String, Integer> potentiallyUnfilledConsumers;
-    // Consumers that need to be assigning remaining number of partitions including extra partitions
-    private Map<String, Integer> unfilledConsumers;
-    // Partitions that we want to retain from the members previous assignment
+    // members that haven't met the min quota OR have met the min Quota but could potentially get an extra partition
+    // Map<MemberId, Remaining> where Remaining = number of partitions remaining to meet the min Quota.
+    private final Map<String, Integer> potentiallyUnfilledMembers;
+    // members that need to be assigning remaining number of partitions including extra partitions.
+    private Map<String, Integer> unfilledMembers;
+    // Partitions that we want to retain from the members' previous assignment.
     private final Map<String, List<RackAwareTopicIdPartition>> assignedStickyPartitionsPerMember;
-    // Partitions that are available to be assigned, computed by taking the difference between total partitions and assigned sticky partitions
+    // Partitions that are available to be assigned, computed by taking the difference between total partitions and assigned sticky partitions.
     private List<RackAwareTopicIdPartition> unassignedPartitions;
 
     private final Map<String, List<RackAwareTopicIdPartition>> fullAssignment;
@@ -85,14 +90,16 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
             totalValidPartitionsCount += assignmentSpec.topics().get(topicId).numPartitions();
         }
         System.out.println("total valid partitions count " + totalValidPartitionsCount);
-        int numberOfConsumers = metadataPerMember.size();
-        minQuota = (int) Math.floor(((double) totalValidPartitionsCount) / numberOfConsumers);
-        expectedNumMembersWithExtraPartition = totalValidPartitionsCount % numberOfConsumers;
-        potentiallyUnfilledConsumers = new HashMap<>();
-        unfilledConsumers = new HashMap<>();
+
+        int numberMembers = metadataPerMember.size();
+
+        minQuota = (int) Math.floor(((double) totalValidPartitionsCount) / numberMembers);
+        expectedNumMembersWithExtraPartition = totalValidPartitionsCount % numberMembers;
+
+        potentiallyUnfilledMembers = new HashMap<>();
+        unfilledMembers = new HashMap<>();
         assignedStickyPartitionsPerMember = new HashMap<>();
         fullAssignment = new HashMap<>();
-
     }
 
     @Override
@@ -101,10 +108,12 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
             log.debug("Performing constrained assign with MetadataPerTopic: {}, metadataPerMember: {}.",
                     metadataPerMember, metadataPerTopic);
         }
+
         if (validSubscriptionList.isEmpty()) {
             log.info("Valid subscriptions list is empty, returning empty assignment");
             return new HashMap<>();
         }
+
         List<RackAwareTopicIdPartition> allAssignedStickyPartitions = getAssignedStickyPartitions();
         System.out.println("All assigned sticky Partitions = " + allAssignedStickyPartitions);
 
@@ -114,20 +123,20 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
         unassignedPartitions = getUnassignedPartitions(allAssignedStickyPartitions);
         System.out.println("Unassigned partitions " + unassignedPartitions);
 
-        unfilledConsumers = getUnfilledConsumers();
-        System.out.println("Unfilled consumers " + unfilledConsumers);
+        unfilledMembers = getUnfilledMembers();
+        System.out.println("Unfilled members " + unfilledMembers);
 
         if (!ensureTotalUnassignedPartitionsEqualsTotalRemainingAssignments()) {
-            log.error("Number of available partitions is not equal to the total requirement");
+            log.warn("Number of available partitions is not equal to the total requirement");
         }
 
         allocateUnassignedPartitions();
         System.out.println("After filling the unfilled ones with available partitions the assignment is " + fullAssignment);
-        // assign the assignedStickyPartitions, do computeIfAbsent since unfilled doesn't have all the consumers
+
         return fullAssignment;
     }
 
-    // Keep the partitions in the assignment only if they are still part of the new topic metadata and the consumers subscriptions.
+    // Keep the partitions in the assignment only if they are still part of the new topic metadata and the members subscriptions.
     private List<RackAwareTopicIdPartition> getValidCurrentAssignment(AssignmentMemberSpec assignmentMemberSpec) {
         List<RackAwareTopicIdPartition> validCurrentAssignmentList = new ArrayList<>();
         for (Map.Entry<Uuid, Set<Integer>> currentAssignment : assignmentMemberSpec.assignedPartitions().entrySet()) {
@@ -142,8 +151,8 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
         return validCurrentAssignmentList;
     }
 
-    // Returns all the previously assigned partitions that we want to retain
-    // Fills potentially unfilled consumers based on the remaining number of partitions required to meet the minQuota
+    // Returns all the previously assigned partitions that we want to retain.
+    // Fills potentially unfilled members based on the remaining number of partitions required to meet the minQuota.
     private List<RackAwareTopicIdPartition> getAssignedStickyPartitions() {
         List<RackAwareTopicIdPartition> allAssignedStickyPartitions = new ArrayList<>();
         for (Map.Entry<String, AssignmentMemberSpec> assignmentMemberSpecEntry : metadataPerMember.entrySet()) {
@@ -170,11 +179,11 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
                 allAssignedStickyPartitions.addAll(assignedStickyListForMember);
             }
             if (remaining >= 0) {
-                potentiallyUnfilledConsumers.put(memberId, remaining);
+                potentiallyUnfilledMembers.put(memberId, remaining);
             }
 
         }
-        System.out.println(" Potentially unfilled consumers " + potentiallyUnfilledConsumers);
+        System.out.println(" Potentially unfilled members " + potentiallyUnfilledMembers);
         return allAssignedStickyPartitions;
     }
 
@@ -189,56 +198,58 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
 
     private boolean ensureTotalUnassignedPartitionsEqualsTotalRemainingAssignments() {
         int totalRemaining = 0;
-        for (Map.Entry<String, Integer> unfilledEntry  : unfilledConsumers.entrySet()) {
+        for (Map.Entry<String, Integer> unfilledEntry  : unfilledMembers.entrySet()) {
             totalRemaining += unfilledEntry.getValue();
         }
         return totalRemaining == unassignedPartitions.size();
     }
 
-    // The unfilled map has consumers mapped to the remaining partitions number = max allocation to this consumer
-    // The algorithm below assigns each consumer partitions in a round-robin fashion up to its max limit
+    // The unfilled members map has members mapped to the remaining partitions number = max allocation to this member.
+    // The algorithm below assigns each member partitions in a round-robin fashion up to its max limit
     private void allocateUnassignedPartitions() {
-        // Since the map doesn't guarantee order we need a list of consumerIds to map each consumer to a particular index
-        List<String> consumerIds = new ArrayList<>(unfilledConsumers.keySet());
-        int[] currentIndexForConsumer = new int[consumerIds.size()];
+        // Since the map doesn't guarantee order we need a list of memberIds to map each member to a particular index
+        List<String> memberIds = new ArrayList<>(unfilledMembers.keySet());
+        int[] currentIndexForMember = new int[memberIds.size()];
 
-        for (String consumerId : consumerIds) {
-            fullAssignment.computeIfAbsent(consumerId, k -> new ArrayList<>());
+        for (String memberId : memberIds) {
+            fullAssignment.computeIfAbsent(memberId, k -> new ArrayList<>());
         }
 
-        int numConsumers = unfilledConsumers.size();
+        int numMembers = unfilledMembers.size();
         for (int i = 0; i < unassignedPartitions.size(); i++) {
-            int consumerIndex = i % numConsumers;
-            int consumerLimit = unfilledConsumers.get(consumerIds.get(consumerIndex));
-            // If the current consumer has reached its limit, find a consumer that has more space available in its assignment
-            while (currentIndexForConsumer[consumerIndex] >= consumerLimit) {
-                consumerIndex = (consumerIndex + 1) % numConsumers;
-                consumerLimit = unfilledConsumers.get(consumerIds.get(consumerIndex));
+            int memberIndex = i % numMembers;
+            int memberLimit = unfilledMembers.get(memberIds.get(memberIndex));
+            // If the current member has reached its limit, find a member that has more space available in its assignment
+            while (currentIndexForMember[memberIndex] >= memberLimit) {
+                memberIndex = (memberIndex + 1) % numMembers;
+                memberLimit = unfilledMembers.get(memberIds.get(memberIndex));
             }
-            if (currentIndexForConsumer[consumerIndex] < consumerLimit) {
-                fullAssignment.get(consumerIds.get(consumerIndex)).add(currentIndexForConsumer[consumerIndex]++, unassignedPartitions.get(i));
+            if (currentIndexForMember[memberIndex] < memberLimit) {
+                fullAssignment.get(memberIds.get(memberIndex)).add(currentIndexForMember[memberIndex]++, unassignedPartitions.get(i));
             }
         }
     }
-    private Map<String, Integer> getUnfilledConsumers() {
-        Map<String, Integer> unfilledConsumers = new HashMap<>();
-        for (Map.Entry<String, Integer> potentiallyUnfilledConsumerEntry : potentiallyUnfilledConsumers.entrySet()) {
-            String memberId = potentiallyUnfilledConsumerEntry.getKey();
-            Integer remaining = potentiallyUnfilledConsumerEntry.getValue();
+
+    private Map<String, Integer> getUnfilledMembers() {
+        Map<String, Integer> unfilledMembers = new HashMap<>();
+        for (Map.Entry<String, Integer> potentiallyUnfilledMemberEntry : potentiallyUnfilledMembers.entrySet()) {
+            String memberId = potentiallyUnfilledMemberEntry.getKey();
+            Integer remaining = potentiallyUnfilledMemberEntry.getValue();
             if (expectedNumMembersWithExtraPartition > 0) {
                 remaining++;
                 expectedNumMembersWithExtraPartition--;
             }
-            // If remaining is 0 since there were no more consumers required to get an extra partition we don't add it to the unfilled list
+            // If remaining is still 0 because there were no more members required to get an extra partition, we don't add it to the unfilled list.
             if (remaining > 0) {
-                unfilledConsumers.put(memberId, remaining);
+                unfilledMembers.put(memberId, remaining);
             }
         }
-        return unfilledConsumers;
+        return unfilledMembers;
     }
+
     private List<RackAwareTopicIdPartition> getUnassignedPartitions(List<RackAwareTopicIdPartition> allAssignedStickyPartitions) {
         List<RackAwareTopicIdPartition> unassignedPartitions = new ArrayList<>();
-        // We only care about the topics that the consumers are subscribed to
+        // We only care about the topics that the members are subscribed to
         List<Uuid> sortedAllTopics = new ArrayList<>(validSubscriptionList);
         Collections.sort(sortedAllTopics);
         if (allAssignedStickyPartitions.isEmpty()) {
