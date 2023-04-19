@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -202,6 +203,9 @@ public abstract class AbstractJoinIntegrationTest {
                     final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
                     assertThat(output, equalTo(updatedExpected));
                     expectedFinalResult = updatedExpected.get(expected.size() - 1);
+                } else {
+                    final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
+                    assertThat(output, equalTo(Collections.emptyList()));
                 }
             }
 

@@ -705,11 +705,9 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
                 null,
                 null,
-                null,
-                Arrays.asList(
-                    // incorrect result `null-d` is caused by self-join of `rightTable`
-                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                // incorrect result `null-d` is caused by self-join of `rightTable`
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
             runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
@@ -775,9 +773,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
@@ -786,9 +783,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
                 Arrays.asList(
@@ -821,9 +817,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
@@ -832,9 +827,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
                 Arrays.asList(
@@ -842,10 +836,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
                 null,
-                null,
-                Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
             runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
@@ -913,9 +905,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
@@ -924,9 +915,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null, 7L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
                 Arrays.asList(
@@ -961,9 +951,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
@@ -983,11 +972,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
                 null,
-                null,
                 Arrays.asList(
                     new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
             runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
         }
