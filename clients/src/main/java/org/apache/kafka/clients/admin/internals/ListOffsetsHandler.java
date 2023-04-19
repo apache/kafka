@@ -32,8 +32,6 @@ import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -157,27 +155,24 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         List<TopicPartition> unmapped,
         Set<TopicPartition> retriable
     ) {
-        ApiException apiException = error.exception();
-        if (apiException instanceof NotLeaderOrFollowerException
-            || apiException instanceof LeaderNotAvailableException
-        ) {
+        if (error == Errors.NOT_LEADER_OR_FOLLOWER || error == Errors.LEADER_NOT_AVAILABLE) {
             log.debug(
-                "ListOffsets lookup request for topic partition {} will be retried due to invalid metadata",
+                "ListOffsets lookup request for topic partition {} will be retried due to invalid leader metadata {}",
                 topicPartition,
-                apiException);
+                error);
             unmapped.add(topicPartition);
-        } else if (apiException instanceof RetriableException) {
+        } else if (error.exception() instanceof RetriableException) {
             log.debug(
                 "ListOffsets fulfillment request for topic partition {} will be retried due to {}",
                 topicPartition,
-                apiException);
+                error);
             retriable.add(topicPartition);
         } else {
             log.error(
-                "ListOffsets request for topic partition {} failed due to an unexpected error",
+                "ListOffsets request for topic partition {} failed due to an unexpected error {}",
                 topicPartition,
-                apiException);
-            failed.put(topicPartition, apiException);
+                error);
+            failed.put(topicPartition, error.exception());
         }
     }
 
