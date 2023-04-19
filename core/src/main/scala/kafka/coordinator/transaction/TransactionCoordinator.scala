@@ -338,7 +338,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           case Some(epochAndMetadata) =>
             val txnMetadata = epochAndMetadata.transactionMetadata
 
-            // generate the new transaction metadata with added partitions
+            // Given the txnMetadata is valid, we check if the partitions are in the transaction.
+            // Pending state is not checked since there is a final validation on the append to the log.
+            // Partitions are added to metadata when the add partitions state is persisted, and removed when the end marker is persisted.
             txnMetadata.inLock {
               if (txnMetadata.producerId != producerId) {
                 Left(Errors.INVALID_PRODUCER_ID_MAPPING)
@@ -347,12 +349,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
                 Left(Errors.CONCURRENT_TRANSACTIONS)
               } else {
-                Right(partitions.map(part => 
+                Right(partitions.map { part =>
                   if (txnMetadata.topicPartitions.contains(part))
                     (part, Errors.NONE)
                   else
                     (part, Errors.INVALID_TXN_STATE)
-                ).toMap)
+                }.toMap)
               }
             }
         }
