@@ -42,6 +42,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
@@ -128,6 +129,9 @@ public class WorkerSinkTaskThreadedTest {
     @Mock private StatusBackingStore statusBackingStore;
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
 
+    @Mock
+    private TopicAdmin admin;
+
     private long recordsReturned;
 
 
@@ -145,7 +149,7 @@ public class WorkerSinkTaskThreadedTest {
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
                 valueConverter, errorHandlingMetrics, headerConverter,
                 new TransformationChain<>(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
-                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
+                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, admin);
 
         recordsReturned = 0;
     }
@@ -163,6 +167,7 @@ public class WorkerSinkTaskThreadedTest {
 
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(1L);
         expectStopTask();
+        expectAdminClose();
 
         PowerMock.replayAll();
 
@@ -210,6 +215,7 @@ public class WorkerSinkTaskThreadedTest {
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, null, null, 0, true);
         expectStopTask();
+        expectAdminClose();
 
         PowerMock.replayAll();
 
@@ -251,6 +257,7 @@ public class WorkerSinkTaskThreadedTest {
         consumer.seek(TOPIC_PARTITION3, FIRST_OFFSET);
         PowerMock.expectLastCall();
         expectStopTask();
+        expectAdminClose();
 
         PowerMock.replayAll();
 
@@ -291,6 +298,7 @@ public class WorkerSinkTaskThreadedTest {
         consumer.seek(TOPIC_PARTITION3, FIRST_OFFSET);
         PowerMock.expectLastCall();
         expectStopTask();
+        expectAdminClose();
 
         PowerMock.replayAll();
 
@@ -325,6 +333,7 @@ public class WorkerSinkTaskThreadedTest {
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetCommit(1L, null, new Exception(), 0, true);
         expectStopTask();
+        expectAdminClose();
 
         PowerMock.replayAll();
 
@@ -359,6 +368,7 @@ public class WorkerSinkTaskThreadedTest {
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
         expectOffsetCommit(2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
         expectStopTask();
+        expectAdminClose();
 
         PowerMock.replayAll();
 
@@ -431,6 +441,7 @@ public class WorkerSinkTaskThreadedTest {
         PowerMock.expectLastCall();
 
         expectStopTask();
+        expectAdminClose();
 
         PowerMock.replayAll();
 
@@ -471,6 +482,7 @@ public class WorkerSinkTaskThreadedTest {
         });
 
         expectStopTask();
+        expectAdminClose();
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -498,6 +510,7 @@ public class WorkerSinkTaskThreadedTest {
         });
 
         expectStopTask();
+        expectAdminClose();
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -508,6 +521,11 @@ public class WorkerSinkTaskThreadedTest {
         workerTask.close();
 
         PowerMock.verifyAll();
+    }
+
+    private void expectAdminClose() {
+        admin.close(Duration.ofSeconds(30));
+        PowerMock.expectLastCall();
     }
 
     private void expectInitializeTask() {

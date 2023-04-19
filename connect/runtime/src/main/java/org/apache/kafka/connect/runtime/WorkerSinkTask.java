@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -71,7 +70,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
@@ -125,7 +123,8 @@ class WorkerSinkTask extends WorkerTask {
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
-                          StatusBackingStore statusBackingStore) {
+                          StatusBackingStore statusBackingStore,
+                          TopicAdmin topicAdmin) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
 
@@ -154,10 +153,7 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
-        Map<String, Object> adminProps = new HashMap<>();
-        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, workerConfig.bootstrapServers());
-        adminProps.put(CLIENT_ID_CONFIG, id + "-admin");
-        this.topicAdmin = new TopicAdmin(adminProps);
+        this.topicAdmin = topicAdmin;
     }
 
     @Override

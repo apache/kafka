@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -53,6 +54,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
@@ -158,6 +160,9 @@ public class WorkerSinkTaskTest {
     private KafkaConsumer<byte[], byte[]> consumer;
     @Mock
     private ErrorHandlingMetrics errorHandlingMetrics;
+
+    @Mock
+    private TopicAdmin admin;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     private Capture<Pattern> topicsRegex = EasyMock.newCapture();
 
@@ -187,7 +192,7 @@ public class WorkerSinkTaskTest {
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
             keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
             transformationChain, consumer, pluginLoader, time,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, admin);
     }
 
     @After
@@ -352,6 +357,8 @@ public class WorkerSinkTaskTest {
         PowerMock.expectLastCall();
 
         headerConverter.close();
+        PowerMock.expectLastCall();
+        admin.close(Duration.ofSeconds(30));
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -619,6 +626,19 @@ public class WorkerSinkTaskTest {
         }
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testTimeoutExceptionInConsumerPosition() {
+        createTask(initialState);
+        expectTaskGetTopic(true);
+        expectPollInitialAssignment();
+
+        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andThrow(new TimeoutException());
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andThrow(new TimeoutException());
+
+        EasyMock.expect(admin.describeTopics());
+
     }
 
     @Test
