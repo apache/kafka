@@ -317,10 +317,7 @@ final class SchemaGenerator {
                         fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
-            if (nullable) {
-                throw new RuntimeException("Type " + type + " cannot be nullable.");
-            }
-            return String.format("%s.SCHEMA_%d", type.toString(),
+            return String.format("%s.SCHEMA_%d", type,
                 floorVersion(type.toString(), version));
         } else {
             throw new RuntimeException("Unsupported type " + type);

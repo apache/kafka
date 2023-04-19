@@ -113,7 +113,7 @@ object FeatureCommand {
       .help("The level to which we should upgrade the metadata. For example, 3.3-IV3.")
       .action(store())
     upgradeParser.addArgument("--feature")
-      .help("A feature upgrade we should perform, in key=value format. For example metadata.version=3.3-IV3.")
+      .help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
       .action(append())
     upgradeParser.addArgument("--dry-run")
       .help("Validate this upgrade, but do not perform it.")
@@ -127,8 +127,7 @@ object FeatureCommand {
       .help("The level to which we should downgrade the metadata. For example, 3.3-IV0.")
       .action(store())
     downgradeParser.addArgument("--feature")
-      .help("A feature downgrade we should perform, in key=value format. " +
-        "For example metadata.version=3.3-IV0.")
+      .help("A feature downgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
       .action(append())
     downgradeParser.addArgument("--unsafe")
       .help("Perform this downgrade even if it may irreversibly destroy metadata.")
@@ -156,15 +155,11 @@ object FeatureCommand {
     feature: String,
     level: Short
   ): String = {
-    if (feature.equals(MetadataVersion.FEATURE_NAME)) {
-      try {
-        MetadataVersion.fromFeatureLevel(level).version()
-      } catch {
-        case e: Throwable => s"UNKNOWN [${level}]"
-      }
-    } else {
+    if (feature.equals(MetadataVersion.FEATURE_NAME))
+      try MetadataVersion.fromFeatureLevel(level).version
+      catch { case _: Throwable => s"UNKNOWN [$level]"}
+    else
       level.toString
-    }
   }
 
   def handleDescribe(
@@ -173,8 +168,7 @@ object FeatureCommand {
   ): Unit = {
     val featureMetadata = admin.describeFeatures().featureMetadata().get()
     val featureList = new java.util.TreeSet[String](featureMetadata.supportedFeatures().keySet())
-      featureList.forEach {
-      case feature =>
+      featureList.forEach { feature =>
         val finalizedLevel = featureMetadata.finalizedFeatures().asScala.get(feature) match {
           case None => 0.toShort
           case Some(v) => v.maxVersionLevel()
@@ -219,12 +213,12 @@ object FeatureCommand {
     }
     val name = input.substring(0, equalsIndex).trim
     val levelString = input.substring(equalsIndex + 1).trim
-    val level = try {
-      levelString.toShort
-    } catch {
-      case e: Throwable => throw new TerseFailure(s"Can't parse feature=level string ${input}: " +
-        s"unable to parse ${levelString} as a short.")
-    }
+    val level =
+      try levelString.toShort
+      catch {
+        case _: Throwable => throw new TerseFailure(s"Can't parse feature=level string ${input}: " +
+          s"unable to parse ${levelString} as a short.")
+      }
     (name, level)
   }
 
@@ -240,7 +234,7 @@ object FeatureCommand {
       val version = try {
         MetadataVersion.fromVersionString(metadata)
       } catch {
-        case e: Throwable => throw new TerseFailure("Unsupported metadata version " + metadata +
+        case _: Throwable => throw new TerseFailure("Unsupported metadata version " + metadata +
           ". Supported metadata versions are " + metadataVersionsToString(
           MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latest()))
       }

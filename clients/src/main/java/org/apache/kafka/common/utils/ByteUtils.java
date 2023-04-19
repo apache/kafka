@@ -82,6 +82,16 @@ public final class ByteUtils {
     }
 
     /**
+     * Read a big-endian integer from a byte array
+     */
+    public static int readIntBE(byte[] buffer, int offset) {
+        return ((buffer[offset] & 0xFF) << 24)
+            | ((buffer[offset + 1] & 0xFF) << 16)
+            | ((buffer[offset + 2] & 0xFF) << 8)
+            | (buffer[offset + 3] & 0xFF);
+    }
+
+    /**
      * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
      *
      * @param buffer The buffer to write to

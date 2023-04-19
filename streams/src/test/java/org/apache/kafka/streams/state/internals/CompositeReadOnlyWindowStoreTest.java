@@ -25,10 +25,11 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,14 +40,17 @@ import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class CompositeReadOnlyWindowStoreTest {
 
     private static final long WINDOW_SIZE = 30_000;
@@ -172,10 +176,9 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject()))
-            .andThrow(new InvalidStateStoreException("store is unavailable"));
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any()))
+            .thenThrow(new InvalidStateStoreException("store is unavailable"));
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -188,10 +191,9 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalanceWhenBackwards() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject()))
-            .andThrow(new InvalidStateStoreException("store is unavailable"));
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any()))
+            .thenThrow(new InvalidStateStoreException("store is unavailable"));
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -239,9 +241,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyBackwardIteratorAlwaysReturnsFalse() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -257,9 +258,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyIteratorAlwaysReturnsFalse() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -275,9 +275,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyBackwardIteratorPeekNextKeyShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -292,9 +291,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyIteratorPeekNextKeyShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -309,9 +307,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyIteratorNextShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,
@@ -326,9 +323,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void emptyBackwardIteratorNextShouldThrowNoSuchElementException() {
-        final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
-        EasyMock.expect(storeProvider.stores(anyString(), anyObject())).andReturn(emptyList());
-        EasyMock.replay(storeProvider);
+        final StateStoreProvider storeProvider = mock(StateStoreProvider.class);
+        when(storeProvider.stores(anyString(), any())).thenReturn(emptyList());
 
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(
             storeProvider,

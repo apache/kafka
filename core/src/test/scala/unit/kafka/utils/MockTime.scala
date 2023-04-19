@@ -18,6 +18,7 @@
 package kafka.utils
 
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
+import org.apache.kafka.server.util.MockScheduler
 
 /**
  * A class used for unit testing things which depend on the Time interface.

@@ -18,7 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +53,11 @@ public class RetryUtil {
      * @throws ConnectException If the task exhausted all the retries
      */
     public static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs) throws Exception {
+        return retryUntilTimeout(callable, description, timeoutDuration, retryBackoffMs, Time.SYSTEM);
+    }
+
+    // visible for testing
+    static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs, Time time) throws Exception {
         // if null supplier or string is provided, the message will be default to "callabe"
         final String descriptionStr = Optional.ofNullable(description)
                 .map(Supplier::get)
@@ -73,7 +78,7 @@ public class RetryUtil {
             return callable.call();
         }
 
-        final long end = System.currentTimeMillis() + timeoutMs;
+        final long end = time.milliseconds() + timeoutMs;
         int attempt = 0;
         Throwable lastError = null;
         do {
@@ -89,14 +94,14 @@ public class RetryUtil {
             }
 
             if (retryBackoffMs > 0) {
-                long millisRemaining = Math.max(0, end - System.currentTimeMillis());
+                long millisRemaining = Math.max(0, end - time.milliseconds());
                 if (millisRemaining < retryBackoffMs) {
                     // exit when the time remaining is less than retryBackoffMs
                     break;
                 }
-                Utils.sleep(retryBackoffMs);
+                time.sleep(retryBackoffMs);
             }
-        } while (System.currentTimeMillis() < end);
+        } while (time.milliseconds() < end);
 
         throw new ConnectException("Fail to " + descriptionStr + " after " + attempt + " attempts.  Reason: " + lastError.getMessage(), lastError);
     }

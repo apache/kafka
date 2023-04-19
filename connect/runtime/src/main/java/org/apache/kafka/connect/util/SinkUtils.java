@@ -16,7 +16,22 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public final class SinkUtils {
+
+    public static final String KAFKA_TOPIC_KEY = "kafka_topic";
+    public static final String KAFKA_PARTITION_KEY = "kafka_partition";
+    public static final String KAFKA_OFFSET_KEY = "kafka_offset";
 
     private SinkUtils() {}
 
@@ -24,4 +39,17 @@ public final class SinkUtils {
         return "connect-" + connector;
     }
 
+    public static ConnectorOffsets consumerGroupOffsetsToConnectorOffsets(Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets) {
+        List<ConnectorOffset> connectorOffsets = new ArrayList<>();
+
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> topicPartitionOffset : consumerGroupOffsets.entrySet()) {
+            Map<String, Object> partition = new HashMap<>();
+            partition.put(KAFKA_TOPIC_KEY, topicPartitionOffset.getKey().topic());
+            partition.put(KAFKA_PARTITION_KEY, topicPartitionOffset.getKey().partition());
+            connectorOffsets.add(new ConnectorOffset(partition,
+                    Collections.singletonMap(KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
+        }
+
+        return new ConnectorOffsets(connectorOffsets);
+    }
 }

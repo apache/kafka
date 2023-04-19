@@ -20,6 +20,8 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -366,12 +368,12 @@ public class SerializationTest {
     }
 
     private Serde<String> getStringSerde(String encoder) {
-        Map<String, Object> serializerConfigs = new HashMap<String, Object>();
+        Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", encoder);
         Serializer<String> serializer = Serdes.String().serializer();
         serializer.configure(serializerConfigs, true);
 
-        Map<String, Object> deserializerConfigs = new HashMap<String, Object>();
+        Map<String, Object> deserializerConfigs = new HashMap<>();
         deserializerConfigs.put("key.deserializer.encoding", encoder);
         Deserializer<String> deserializer = Serdes.String().deserializer();
         deserializer.configure(deserializerConfigs, true);
@@ -420,6 +422,33 @@ public class SerializationTest {
             assertEquals(heapBuffer2.duplicate(), des.deserialize(topic, ser.serialize(topic, heapBuffer2.duplicate())));
             assertEquals(directBuffer0.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, directBuffer0.duplicate())));
             assertEquals(directBuffer1.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, directBuffer1.duplicate())));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanSerializer(Boolean dataToSerialize) {
+        byte[] testData = new byte[1];
+        testData[0] = (byte) (dataToSerialize ? 1 : 0);
+
+        Serde<Boolean> booleanSerde = Serdes.Boolean();
+        assertArrayEquals(testData, booleanSerde.serializer().serialize(topic, dataToSerialize));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanDeserializer(Boolean dataToDeserialize) {
+        byte[] testData = new byte[1];
+        testData[0] = (byte) (dataToDeserialize ? 1 : 0);
+
+        Serde<Boolean> booleanSerde = Serdes.Boolean();
+        assertEquals(dataToDeserialize, booleanSerde.deserializer().deserialize(topic, testData));
+    }
+
+    @Test
+    public void booleanDeserializerShouldThrowOnEmptyInput() {
+        try (Serde<Boolean> serde = Serdes.Boolean()) {
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
         }
     }
 }

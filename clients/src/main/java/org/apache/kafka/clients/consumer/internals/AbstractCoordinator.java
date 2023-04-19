@@ -355,6 +355,10 @@ public abstract class AbstractCoordinator implements Closeable {
         // we don't need to send heartbeats
         if (state.hasNotJoinedGroup())
             return Long.MAX_VALUE;
+        if (heartbeatThread != null && heartbeatThread.hasFailed()) {
+            // if an exception occurs in the heartbeat thread, raise it.
+            throw heartbeatThread.failureCause();
+        }
         return heartbeat.timeToNextHeartbeat(now);
     }
 
@@ -501,12 +505,18 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
 
                 if (exception instanceof UnknownMemberIdException ||
-                    exception instanceof IllegalGenerationException ||
-                    exception instanceof RebalanceInProgressException ||
-                    exception instanceof MemberIdRequiredException)
+                        exception instanceof IllegalGenerationException ||
+                        exception instanceof RebalanceInProgressException ||
+                        exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
+
+                // We need to return upon expired timer, in case if the client.poll returns immediately and the time
+                // has elapsed.
+                if (timer.isExpired()) {
+                    return false;
+                }
 
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
@@ -825,9 +835,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
-                    // consumer didn't get assignment in this generation, so we need to reset generation
-                    // to avoid joinGroup with out-of-data ownedPartitions in cooperative rebalance
-                    resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, false);
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
@@ -859,12 +866,11 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Discover the current coordinator for the group. Sends a GroupMetadata request to
-     * one of the brokers. The returned future should be polled to get the result of the request.
+     * Discover the current coordinator for the group. Sends a FindCoordinator request to
+     * the given broker node. The returned future should be polled to get the result of the request.
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
-        // initiate the group metadata request
         log.debug("Sending FindCoordinator request to broker {}", node);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(CoordinatorType.GROUP.id())
@@ -1535,6 +1541,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.failed.set(new RuntimeException(e));
             } finally {
                 log.debug("Heartbeat thread has closed");
+                this.closed = true;
             }
         }
 

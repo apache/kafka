@@ -18,10 +18,10 @@
  */
 
 def doValidation() {
+  // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
   sh """
-    ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-        --profile --no-daemon --continue -PxmlSpotBugsReport=true
+    ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean check -x test \
+        --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
   """
 }
 
@@ -31,7 +31,7 @@ def isChangeRequest(env) {
 
 def doTest(env, target = "unitTest integrationTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
-      --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
+      --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
@@ -236,9 +236,9 @@ pipeline {
   
   post {
     always {
-      node('ubuntu') {
-        script {
-          if (!isChangeRequest(env)) {
+      script {
+        if (!isChangeRequest(env)) {
+          node('ubuntu') {
             step([$class: 'Mailer',
                  notifyEveryUnstableBuild: true,
                  recipients: "dev@kafka.apache.org",

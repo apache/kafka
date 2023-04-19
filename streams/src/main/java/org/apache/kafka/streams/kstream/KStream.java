@@ -836,7 +836,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers,
-     * deserializers, and producer's {@link DefaultPartitioner}.
+     * deserializers, and producer's default partitioning strategy.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
@@ -876,7 +876,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
-     * from the auto-generated topic using default serializers, deserializers, and producer's {@link DefaultPartitioner}.
+     * from the auto-generated topic using default serializers, deserializers, and producer's default partitioning strategy.
      * The number of partitions is determined based on the upstream topics partition numbers.
      * <p>
      * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
@@ -910,7 +910,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to a topic using default serializers specified in the config and producer's
-     * {@link DefaultPartitioner}.
+     * default partitioning strategy.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
@@ -931,7 +931,7 @@ public interface KStream<K, V> {
 
     /**
      * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
-     * {@link DefaultPartitioner}.
+     * default partitioning strategy.
      * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
      *
      * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for each record

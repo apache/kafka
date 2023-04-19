@@ -36,16 +36,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.common.metadata.MetadataRecordType.CLIENT_QUOTA_RECORD;
 
 
 public class ClientQuotaControlManager {
@@ -160,7 +156,7 @@ public class ClientQuotaControlManager {
                             .setEntity(recordEntitySupplier.get())
                             .setKey(key)
                             .setRemove(true),
-                        CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                        (short) 0));
                 }
             } else {
                 ApiError validationError = validateQuotaKeyValue(configKeys, key, newValue);
@@ -175,7 +171,7 @@ public class ClientQuotaControlManager {
                                 .setEntity(recordEntitySupplier.get())
                                 .setKey(key)
                                 .setValue(newValue),
-                            CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                            (short) 0));
                     }
                 }
             }
@@ -289,46 +285,5 @@ public class ClientQuotaControlManager {
         }
 
         return ApiError.NONE;
-    }
-
-    class ClientQuotaControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final long epoch;
-        private final Iterator<Entry<ClientQuotaEntity, TimelineHashMap<String, Double>>> iterator;
-
-        ClientQuotaControlIterator(long epoch) {
-            this.epoch = epoch;
-            this.iterator = clientQuotaData.entrySet(epoch).iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            if (!hasNext()) throw new NoSuchElementException();
-            Entry<ClientQuotaEntity, TimelineHashMap<String, Double>> entry = iterator.next();
-            ClientQuotaEntity entity = entry.getKey();
-            List<ApiMessageAndVersion> records = new ArrayList<>();
-            for (Entry<String, Double> quotaEntry : entry.getValue().entrySet(epoch)) {
-                ClientQuotaRecord record = new ClientQuotaRecord();
-                for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
-                    record.entity().add(new EntityData().
-                        setEntityType(entityEntry.getKey()).
-                        setEntityName(entityEntry.getValue()));
-                }
-                record.setKey(quotaEntry.getKey());
-                record.setValue(quotaEntry.getValue());
-                record.setRemove(false);
-                records.add(new ApiMessageAndVersion(record,
-                    CLIENT_QUOTA_RECORD.highestSupportedVersion()));
-            }
-            return records;
-        }
-    }
-
-    ClientQuotaControlIterator iterator(long epoch) {
-        return new ClientQuotaControlIterator(epoch);
     }
 }

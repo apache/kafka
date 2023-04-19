@@ -46,7 +46,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The Connect metrics with JMX reporter.
+ * The Connect metrics with configurable {@link MetricsReporter}s.
  */
 public class ConnectMetrics {
 

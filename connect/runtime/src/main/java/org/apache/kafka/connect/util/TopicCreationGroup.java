@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.util;
 
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
+import org.apache.kafka.connect.runtime.TopicCreationConfig;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -31,7 +31,11 @@ import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREAT
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 
 /**
- * Utility to simplify creating and managing topics via the {@link Admin}.
+ * Represents a group of topics defined by inclusion/exclusion regex patterns along with the group's topic creation
+ * configurations.
+ *
+ * @see TopicCreationConfig
+ * @see TopicCreation
  */
 public class TopicCreationGroup {
     private final String name;
@@ -52,7 +56,7 @@ public class TopicCreationGroup {
 
     /**
      * Parses the configuration of a source connector and returns the topic creation groups
-     * defined in the given configuration as a map of group names to {@link TopicCreation} objects.
+     * defined in the given configuration as a map of group names to {@link TopicCreationGroup} objects.
      *
      * @param config the source connector configuration
      *
@@ -85,7 +89,7 @@ public class TopicCreationGroup {
 
     /**
      * Answer whether this topic creation group is configured to allow the creation of the given
-     * {@param topic} name.
+     * {@code topic} name.
      *
      * @param topic the topic name to check against the groups configuration
      *
@@ -98,7 +102,7 @@ public class TopicCreationGroup {
     }
 
     /**
-     * Return the description for a new topic with the given {@param topic} name with the topic
+     * Return the description for a new topic with the given {@code topic} name with the topic
      * settings defined for this topic creation group.
      *
      * @param topic the name of the topic to be created

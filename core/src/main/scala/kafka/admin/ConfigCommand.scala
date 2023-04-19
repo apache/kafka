@@ -20,17 +20,15 @@ package kafka.admin
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
-
 import joptsimple._
-import kafka.log.LogConfig
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging, PasswordEncoder}
+import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.internals.Topic
@@ -38,6 +36,8 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -85,7 +85,7 @@ object ConfigCommand extends Logging {
     try {
       val opts = new ConfigCommandOptions(args)
 
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or ip")
+      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or ip")
 
       opts.checkArgs()
 
@@ -133,9 +133,11 @@ object ConfigCommand extends Logging {
     val entityType = entity.root.entityType
     val entityName = entity.fullSanitizedName
     val errorMessage = s"--bootstrap-server option must be specified to update $entityType configs: {add: $configsToBeAdded, delete: $configsToBeDeleted}"
+    var isUserClientId = false
 
     if (entityType == ConfigType.User) {
-      if (!configsToBeAdded.isEmpty || !configsToBeDeleted.isEmpty) {
+      isUserClientId = entity.child.exists(e => ConfigType.Client.equals(e.entityType))
+      if (!configsToBeAdded.isEmpty || configsToBeDeleted.nonEmpty) {
         val info = "User configuration updates using ZooKeeper are only supported for SCRAM credential updates."
         val scramMechanismNames = ScramMechanism.values.map(_.mechanismName)
         // make sure every added/deleted configs are SCRAM related, other configs are not supported using zookeeper
@@ -146,7 +148,7 @@ object ConfigCommand extends Logging {
       preProcessScramCredentials(configsToBeAdded)
     } else if (entityType == ConfigType.Broker) {
       // Dynamic broker configs can be updated using ZooKeeper only if the corresponding broker is not running.
-      if (!configsToBeAdded.isEmpty || !configsToBeDeleted.isEmpty) {
+      if (!configsToBeAdded.isEmpty || configsToBeDeleted.nonEmpty) {
         validateBrokersNotRunning(entityName, adminZkClient, zkClient, errorMessage)
 
         val perBrokerConfig = entityName != ConfigEntityName.Default
@@ -165,7 +167,7 @@ object ConfigCommand extends Logging {
     configs ++= configsToBeAdded
     configsToBeDeleted.foreach(configs.remove(_))
 
-    adminZkClient.changeConfigs(entityType, entityName, configs)
+    adminZkClient.changeConfigs(entityType, entityName, configs, isUserClientId)
 
     println(s"Completed updating config for entity: $entity.")
   }
@@ -213,7 +215,7 @@ object ConfigCommand extends Logging {
       throw new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
       None,
-      encoderConfigs.get(KafkaConfig.PasswordEncoderCipherAlgorithmProp).getOrElse(Defaults.PasswordEncoderCipherAlgorithm),
+      encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderCipherAlgorithmProp, Defaults.PasswordEncoderCipherAlgorithm),
       encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderKeyLength),
       encoderConfigs.get(KafkaConfig.PasswordEncoderIterationsProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderIterations))
   }
@@ -253,7 +255,7 @@ object ConfigCommand extends Logging {
   private[admin] def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
     val entityType = configEntity.root.entityType
-    val describeAllUsers = entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
+    val describeAllUsers = entityType == ConfigType.User && configEntity.root.sanitizedName.isEmpty && configEntity.child.isEmpty
     val entityName = configEntity.fullSanitizedName
     val errorMessage = s"--bootstrap-server option must be specified to describe $entityType"
     if (entityType == ConfigType.Broker) {
@@ -291,8 +293,8 @@ object ConfigCommand extends Logging {
       //Create properties, parsing square brackets from values if necessary
       configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).replaceAll("\\[?\\]?", "").trim))
     }
-    if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
-      println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
+    if (props.containsKey(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)) {
+      println(s"WARNING: The configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG}=${props.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)} is specified. " +
         "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
         "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.")
     }
@@ -548,7 +550,7 @@ object ConfigCommand extends Logging {
 
     val (configResourceType, dynamicConfigSource) = entityType match {
       case ConfigType.Topic =>
-        if (!entityName.isEmpty)
+        if (entityName.nonEmpty)
           Topic.validate(entityName)
         (ConfigResource.Type.TOPIC, Some(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG))
       case ConfigType.Broker => entityName match {
@@ -559,7 +561,7 @@ object ConfigCommand extends Logging {
           (ConfigResource.Type.BROKER, Some(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG))
       }
       case BrokerLoggerConfigType =>
-        if (!entityName.isEmpty)
+        if (entityName.nonEmpty)
           validateBrokerId()
         (ConfigResource.Type.BROKER_LOGGER, None)
       case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
@@ -578,10 +580,10 @@ object ConfigCommand extends Logging {
       .filter(entry => configSourceFilter match {
         case Some(configSource) => entry.source == configSource
         case None => true
-      }).toSeq
+      }).toSeq.sortBy(entry => entry.name())
   }
 
-  private def describeQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+  private def describeQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]): Unit = {
     val quotaConfigs = getAllClientQuotasConfigs(adminClient, entityTypes, entityNames)
     quotaConfigs.forKeyValue { (entity, entries) =>
       val entityEntries = entity.entries.asScala
@@ -605,7 +607,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private def describeClientQuotaAndUserScramCredentialConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+  private def describeClientQuotaAndUserScramCredentialConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]): Unit = {
     describeQuotaConfigs(adminClient, entityTypes, entityNames)
     // we describe user SCRAM credentials only when we are not describing client information
     // and we are not given either --entity-default or --user-defaults
@@ -784,7 +786,7 @@ object ConfigCommand extends Logging {
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
-      "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.asScala.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
@@ -862,10 +864,10 @@ object ConfigCommand extends Logging {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
+        CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --describe, --alter")
       // check required args
-      CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
+      CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, describeOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, alterOpt, addConfig, deleteConfig)
 
       val entityTypeVals = entityTypes
       if (entityTypeVals.size != entityTypeVals.distinct.size)
@@ -889,7 +891,7 @@ object ConfigCommand extends Logging {
         (entityFlags ++ entityDefaultsFlags).exists(entity => options.has(entity._1)))
         throw new IllegalArgumentException("--entity-{type,name,default} should not be used in conjunction with specific entity flags")
 
-      val hasEntityName = entityNames.exists(!_.isEmpty)
+      val hasEntityName = entityNames.exists(_.nonEmpty)
       val hasEntityDefault = entityNames.exists(_.isEmpty)
 
       if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))

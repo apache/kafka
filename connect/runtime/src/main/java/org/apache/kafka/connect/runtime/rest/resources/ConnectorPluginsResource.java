@@ -20,7 +20,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.PredicatedTransformation;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -34,7 +33,6 @@ import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.tools.SchemaSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
-import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.FutureCallback;
 
 import javax.ws.rs.BadRequestException;
@@ -79,11 +77,6 @@ public class ConnectorPluginsResource implements ConnectResource {
             SchemaSourceConnector.class
     );
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static final List<Class<? extends Transformation<?>>> TRANSFORM_EXCLUDES = Collections.singletonList(
-            (Class) PredicatedTransformation.class
-    );
-
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
         this.connectorPlugins = new ArrayList<>();
@@ -92,7 +85,7 @@ public class ConnectorPluginsResource implements ConnectResource {
         // TODO: improve once plugins are allowed to be added/removed during runtime.
         addConnectorPlugins(herder.plugins().sinkConnectors(), SINK_CONNECTOR_EXCLUDES);
         addConnectorPlugins(herder.plugins().sourceConnectors(), SOURCE_CONNECTOR_EXCLUDES);
-        addConnectorPlugins(herder.plugins().transformations(), TRANSFORM_EXCLUDES);
+        addConnectorPlugins(herder.plugins().transformations(), Collections.emptySet());
         addConnectorPlugins(herder.plugins().predicates(), Collections.emptySet());
         addConnectorPlugins(herder.plugins().converters(), Collections.emptySet());
         addConnectorPlugins(herder.plugins().headerConverters(), Collections.emptySet());

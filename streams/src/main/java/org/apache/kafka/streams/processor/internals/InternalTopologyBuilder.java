@@ -36,6 +36,7 @@ import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -181,6 +182,14 @@ public class InternalTopologyBuilder {
             }
         }
 
+        private long historyRetention() {
+            if (builder instanceof VersionedKeyValueStoreBuilder) {
+                return ((VersionedKeyValueStoreBuilder<?, ?>) builder).historyRetention();
+            } else {
+                throw new IllegalStateException("historyRetention is not supported when not a versioned store");
+            }
+        }
+
         private Set<String> users() {
             return users;
         }
@@ -197,6 +206,10 @@ public class InternalTopologyBuilder {
             return builder instanceof WindowStoreBuilder
                 || builder instanceof TimestampedWindowStoreBuilder
                 || builder instanceof SessionStoreBuilder;
+        }
+
+        private boolean isVersionedStore() {
+            return builder instanceof VersionedKeyValueStoreBuilder;
         }
 
         // Apparently Java strips the generics from this method because we're using the raw type for builder,
@@ -224,7 +237,7 @@ public class InternalTopologyBuilder {
 
     private static class ProcessorNodeFactory<KIn, VIn, KOut, VOut> extends NodeFactory<KIn, VIn, KOut, VOut> {
         private final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier;
-        private final Set<String> stateStoreNames = new HashSet<>();
+        final Set<String> stateStoreNames = new HashSet<>();
 
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
@@ -250,17 +263,12 @@ public class InternalTopologyBuilder {
 
     private static class FixedKeyProcessorNodeFactory<KIn, VIn, VOut> extends ProcessorNodeFactory<KIn, VIn, KIn, VOut> {
         private final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier;
-        private final Set<String> stateStoreNames = new HashSet<>();
 
         FixedKeyProcessorNodeFactory(final String name,
                              final String[] predecessors,
                              final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier) {
             super(name, predecessors.clone(), null);
             this.supplier = supplier;
-        }
-
-        public void addStateStore(final String stateStoreName) {
-            stateStoreNames.add(stateStoreName);
         }
 
         @Override
@@ -1298,12 +1306,14 @@ public class InternalTopologyBuilder {
 
     private <S extends StateStore> InternalTopicConfig createChangelogTopicConfig(final StateStoreFactory<S> factory,
                                                                                   final String name) {
-        if (factory.isWindowStore()) {
-            final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig());
-            config.setRetentionMs(factory.retentionPeriod());
+        if (factory.isVersionedStore()) {
+            final VersionedChangelogTopicConfig config = new VersionedChangelogTopicConfig(name, factory.logConfig(), factory.historyRetention());
+            return config;
+        } else if (factory.isWindowStore()) {
+            final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig(), factory.retentionPeriod());
             return config;
         } else {
-            return new UnwindowedChangelogTopicConfig(name, factory.logConfig());
+            return new UnwindowedUnversionedChangelogTopicConfig(name, factory.logConfig());
         }
     }
 

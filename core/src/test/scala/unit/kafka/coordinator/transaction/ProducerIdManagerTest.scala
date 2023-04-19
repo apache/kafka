@@ -19,6 +19,7 @@ package kafka.coordinator.transaction
 import kafka.server.BrokerToControllerChannelManager
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
@@ -30,7 +31,6 @@ import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, when}
-
 import java.util.stream.IntStream
 
 class ProducerIdManagerTest {
@@ -39,10 +39,13 @@ class ProducerIdManagerTest {
   val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
 
   // Mutable test implementation that lets us easily set the idStart and error
-  class MockProducerIdManager(val brokerId: Int, var idStart: Long, val idLen: Int, var error: Errors = Errors.NONE)
+  class MockProducerIdManager(val brokerId: Int, var idStart: Long, val idLen: Int, var error: Errors = Errors.NONE, timeout: Boolean = false)
     extends RPCProducerIdManager(brokerId, () => 1, brokerToController, 100) {
 
     override private[transaction] def sendRequest(): Unit = {
+      if (timeout)
+        return
+
       if (error == Errors.NONE) {
         handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
           new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
@@ -91,6 +94,12 @@ class ProducerIdManagerTest {
 
     assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE, manager1.generateProducerId())
     assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE * 2, manager2.generateProducerId())
+  }
+
+  @Test
+  def testRPCProducerIdManagerThrowsConcurrentTransactions(): Unit = {
+    val manager1 = new MockProducerIdManager(0, 0, 0, timeout = true)
+    assertThrows(classOf[CoordinatorLoadInProgressException], () => manager1.generateProducerId())
   }
 
   @Test

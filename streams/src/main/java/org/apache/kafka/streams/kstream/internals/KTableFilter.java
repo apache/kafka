@@ -20,8 +20,8 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -88,16 +88,16 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
 
     private class KTableFilterProcessor implements Processor<KIn, Change<VIn>, KIn, Change<VIn>> {
         private ProcessorContext<KIn, Change<VIn>> context;
-        private TimestampedKeyValueStore<KIn, VIn> store;
+        private KeyValueStoreWrapper<KIn, VIn> store;
         private TimestampedTupleForwarder<KIn, VIn> tupleForwarder;
 
         @Override
         public void init(final ProcessorContext<KIn, Change<VIn>> context) {
             this.context = context;
             if (queryableName != null) {
-                store = context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.getStore(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -117,7 +117,7 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
             }
 
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(newValue, record.timestamp()));
+                store.put(key, newValue, record.timestamp());
                 tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
             } else {
                 context.forward(record.withValue(new Change<>(newValue, oldValue)));

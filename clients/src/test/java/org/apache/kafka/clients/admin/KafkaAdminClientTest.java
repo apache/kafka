@@ -229,7 +229,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -662,8 +661,8 @@ public class KafkaAdminClientTest {
             Boolean partitionCountError,
             Boolean partitionIndexError,
             Boolean emptyOptionals) {
-        String topicName = topicNameError ? "RANDOM" : Topic.METADATA_TOPIC_NAME;
-        Integer partitionIndex = partitionIndexError ? 1 : Topic.METADATA_TOPIC_PARTITION.partition();
+        String topicName = topicNameError ? "RANDOM" : Topic.CLUSTER_METADATA_TOPIC_NAME;
+        Integer partitionIndex = partitionIndexError ? 1 : Topic.CLUSTER_METADATA_TOPIC_PARTITION.partition();
         List<DescribeQuorumResponseData.TopicData> topics = new ArrayList<>();
         List<DescribeQuorumResponseData.PartitionData> partitions = new ArrayList<>();
         for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
@@ -5725,7 +5724,7 @@ public class KafkaAdminClientTest {
     }
 
     private ClientQuotaEntity newClientQuotaEntity(String... args) {
-        assertTrue(args.length % 2 == 0);
+        assertEquals(0, args.length % 2);
 
         Map<String, String> entityMap = new HashMap<>(args.length / 2);
         for (int index = 0; index < args.length; index += 2) {

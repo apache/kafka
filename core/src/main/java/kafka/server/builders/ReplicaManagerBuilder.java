@@ -19,6 +19,7 @@ package kafka.server.builders;
 
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
+import kafka.log.remote.RemoteLogManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
@@ -26,14 +27,14 @@ import kafka.server.DelayedFetch;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.DelayedProduce;
 import kafka.server.KafkaConfig;
-import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
-import kafka.utils.Scheduler;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.server.util.Scheduler;
 import scala.compat.java8.OptionConverters;
 
 import java.util.Collections;
@@ -53,12 +54,14 @@ public class ReplicaManagerBuilder {
     private AlterPartitionManager alterPartitionManager = null;
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
+    private Optional<RemoteLogManager> remoteLogManager = Optional.empty();
     private Optional<KafkaZkClient> zkClient = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedProduce>> delayedProducePurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedFetch>> delayedFetchPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedDeleteRecords>> delayedDeleteRecordsPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedElectLeader>> delayedElectLeaderPurgatory = Optional.empty();
     private Optional<String> threadNamePrefix = Optional.empty();
+    private Long brokerEpoch = -1L;
 
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
@@ -82,6 +85,11 @@ public class ReplicaManagerBuilder {
 
     public ReplicaManagerBuilder setLogManager(LogManager logManager) {
         this.logManager = logManager;
+        return this;
+    }
+
+    public ReplicaManagerBuilder setRemoteLogManager(RemoteLogManager remoteLogManager) {
+        this.remoteLogManager = Optional.ofNullable(remoteLogManager);
         return this;
     }
 
@@ -145,6 +153,11 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setBrokerEpoch(long brokerEpoch) {
+        this.brokerEpoch = brokerEpoch;
+        return this;
+    }
+
     public ReplicaManager build() {
         if (config == null) config = new KafkaConfig(Collections.emptyMap());
         if (metrics == null) metrics = new Metrics();
@@ -157,6 +170,7 @@ public class ReplicaManagerBuilder {
                              time,
                              scheduler,
                              logManager,
+                             OptionConverters.toScala(remoteLogManager),
                              quotaManagers,
                              metadataCache,
                              logDirFailureChannel,
@@ -168,6 +182,7 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedFetchPurgatory),
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),
                              OptionConverters.toScala(delayedElectLeaderPurgatory),
-                             OptionConverters.toScala(threadNamePrefix));
+                             OptionConverters.toScala(threadNamePrefix),
+                             () -> brokerEpoch);
     }
 }

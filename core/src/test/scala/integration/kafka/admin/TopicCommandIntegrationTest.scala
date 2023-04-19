@@ -33,6 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -468,6 +469,30 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     }
     topicService.deleteTopic(deleteOpts)
     TestUtils.verifyTopicDeletion(zkClientOrNull, testTopicName, 1, brokers)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTopicWithCollidingCharDeletionAndCreateAgain(quorum: String): Unit = {
+    // create the topic with colliding chars
+    val topicWithCollidingChar = "test.a"
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1",
+      "--replication-factor", "1",
+      "--topic", topicWithCollidingChar))
+    createAndWaitTopic(createOpts)
+
+    // delete the topic
+    val deleteOpts = new TopicCommandOptions(Array("--topic", topicWithCollidingChar))
+
+    if (!isKRaftTest()) {
+      val deletePath = DeleteTopicsTopicZNode.path(topicWithCollidingChar)
+      assertFalse(zkClient.pathExists(deletePath), "Delete path for topic shouldn't exist before deletion.")
+    }
+    topicService.deleteTopic(deleteOpts)
+    TestUtils.verifyTopicDeletion(zkClientOrNull, topicWithCollidingChar, 1, brokers)
+
+    val createTopic: Executable = () => createAndWaitTopic(createOpts)
+    assertDoesNotThrow(createTopic)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

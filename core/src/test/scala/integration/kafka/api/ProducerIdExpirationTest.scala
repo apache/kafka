@@ -113,7 +113,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.flush()
 
     // Ensure producer IDs are added.
-    assertEquals(1, producerState.size)
+    TestUtils.waitUntilTrue(() => producerState.size == 1, "Producer IDs were not added.")
 
     producer.abortTransaction()
 
@@ -232,9 +232,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "500")
+    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "5000")
     serverProps.put(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, "500")
-    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "2000")
+    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "10000")
     serverProps.put(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp, "500")
     serverProps
   }

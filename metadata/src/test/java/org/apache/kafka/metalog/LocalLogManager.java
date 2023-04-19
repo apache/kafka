@@ -40,19 +40,20 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
@@ -198,7 +199,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public SharedLogData(Optional<RawSnapshotReader> snapshot) {
             if (snapshot.isPresent()) {
                 RawSnapshotReader initialSnapshot = snapshot.get();
-                prevOffset = initialSnapshot.snapshotId().offset - 1;
+                prevOffset = initialSnapshot.snapshotId().offset() - 1;
                 snapshots.put(prevOffset, initialSnapshot);
             } else {
                 prevOffset = -1;
@@ -305,22 +306,22 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
          * Stores a new snapshot and notifies all threads waiting for a snapshot.
          */
         synchronized void addSnapshot(RawSnapshotReader newSnapshot) {
-            if (newSnapshot.snapshotId().offset - 1 > prevOffset) {
+            if (newSnapshot.snapshotId().offset() - 1 > prevOffset) {
                 log.error(
                     "Ignored attempt to add a snapshot {} that is greater than the latest offset {}",
                     newSnapshot,
                     prevOffset
                 );
             } else {
-                snapshots.put(newSnapshot.snapshotId().offset - 1, newSnapshot);
+                snapshots.put(newSnapshot.snapshotId().offset() - 1, newSnapshot);
                 this.notifyAll();
             }
         }
 
         /**
-         * Returns the snapshot whos last offset is the committed offset.
+         * Returns the snapshot whose last offset is the committed offset.
          *
-         * If such snapshot doesn't exists, it waits until it does.
+         * If such snapshot doesn't exist, it waits until it does.
          */
         synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
             while (true) {
@@ -344,6 +345,15 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
 
             return Objects.requireNonNull(snapshots.lastEntry()).getValue();
+        }
+
+        /**
+         * Returns the snapshot id of the latest snapshot if there is one.
+         *
+         * If a snapshot doesn't exists, it return an empty Optional.
+         */
+        synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+            return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());
         }
 
         synchronized long appendedBytes() {
@@ -370,6 +380,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         public long initialMaxReadOffset() {
             return initialMaxReadOffset;
+        }
+
+        /**
+         * Return all records in the log as a list.
+         */
+        public synchronized List<ApiMessageAndVersion> allRecords() {
+            List<ApiMessageAndVersion> allRecords = new ArrayList<>();
+            for (LocalBatch batch : batches.values()) {
+                if (batch instanceof LocalRecordBatch) {
+                    LocalRecordBatch recordBatch = (LocalRecordBatch) batch;
+                    allRecords.addAll(recordBatch.records);
+                }
+            }
+            return allRecords;
         }
     }
 
@@ -406,7 +430,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         void handleLeaderChange(long offset, LeaderAndEpoch leader) {
+            // Simulate KRaft implementation by first bumping the epoch before assigning a leader
+            listener.handleLeaderChange(new LeaderAndEpoch(OptionalInt.empty(), leader.epoch()));
             listener.handleLeaderChange(leader);
+
             notifiedLeader = leader;
             this.offset = offset;
         }
@@ -474,7 +501,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         this.nodeId = nodeId;
         this.shared = shared;
         this.maxReadOffset = shared.initialMaxReadOffset();
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, threadNamePrefix);
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
+                threadNamePrefix, new ShutdownEvent());
         shared.registerLogManager(this);
     }
 
@@ -574,7 +602,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     public void beginShutdown() {
-        eventQueue.beginShutdown("beginShutdown", () -> {
+        eventQueue.beginShutdown("beginShutdown");
+    }
+
+    class ShutdownEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
             try {
                 if (initialized && !shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
@@ -582,13 +615,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                     for (MetaLogListenerData listenerData : listeners.values()) {
                         listenerData.beginShutdown();
                     }
-                    shared.unregisterLogManager(this);
+                    shared.unregisterLogManager(LocalLogManager.this);
                 }
             } catch (Exception e) {
                 log.error("Unexpected exception while sending beginShutdown callbacks", e);
             }
             shutdown = true;
-        });
+        }
     }
 
     @Override
@@ -762,11 +795,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
-        long committedOffset,
-        int committedEpoch,
+        OffsetAndEpoch snapshotId,
         long lastContainedLogTimestamp
     ) {
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
         return RecordsSnapshotWriter.createWithHeader(
             () -> createNewSnapshot(snapshotId),
             1024,
@@ -784,6 +815,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
             })
         );
+    }
+
+    @Override
+    public synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+        return shared.latestSnapshotId();
     }
 
     @Override
