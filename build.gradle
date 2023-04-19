@@ -897,6 +897,7 @@ project(':core') {
     testImplementation project(':storage:api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
