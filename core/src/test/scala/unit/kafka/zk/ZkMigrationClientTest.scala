@@ -32,11 +32,14 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{AccessControlEntryRecord, ConfigRecord, MetadataRecordType, ProducerIdsRecord}
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
@@ -279,6 +282,34 @@ class ZkMigrationClientTest extends QuorumTestHarness {
       ConfigType.User, "user2/clients/clientA")
 
     assertEquals(2, migrationState.migrationZkVersion())
+  }
+
+  @Test
+  def testScram(): Unit = {
+    val random = new MockRandom()
+    def randomBuffer(random: MockRandom, length: Int): Array[Byte] = {
+        val buf = new Array[Byte](length)
+        random.nextBytes(buf)
+        buf
+    }
+    val scramCredential = new ScramCredential(
+        randomBuffer(random, 1024),
+        randomBuffer(random, 1024),
+        randomBuffer(random, 1024),
+        4096)
+
+    val props = new Properties()
+    props.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(scramCredential))
+    adminZkClient.changeConfigs(ConfigType.User, "alice", props)
+
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+
+    migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(0, brokers.size())
+    assertEquals(1, batches.size())
+    assertEquals(1, batches.get(0).size)
+    // assertEquals(50, migrationState.migrationZkVersion())
   }
 
   @Test
