@@ -29,7 +29,7 @@ public class GroupAssignment {
     private final Map<String, MemberAssignment> members;
 
     public GroupAssignment(
-            Map<String, MemberAssignment> members
+        Map<String, MemberAssignment> members
     ) {
         Objects.requireNonNull(members);
         this.members = members;
