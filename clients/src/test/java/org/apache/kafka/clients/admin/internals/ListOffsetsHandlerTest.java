@@ -161,7 +161,7 @@ public final class ListOffsetsHandlerTest {
         ApiResult<TopicPartition, ListOffsetsResultInfo> result =
             handleResponse(createResponse(errorsByPartition));
 
-        // Invalid metadata errors should be retried from the lookup stage as the partition-to-leader
+        // Some invalid metadata errors should be retried from the lookup stage as the partition-to-leader
         // mappings should be recalculated.
         List<TopicPartition> unmapped = new ArrayList<>();
         unmapped.add(errorPartition);

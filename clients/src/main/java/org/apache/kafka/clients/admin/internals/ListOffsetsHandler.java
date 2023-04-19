@@ -32,7 +32,8 @@ import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -157,7 +158,9 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         Set<TopicPartition> retriable
     ) {
         ApiException apiException = error.exception();
-        if (apiException instanceof InvalidMetadataException) {
+        if (apiException instanceof NotLeaderOrFollowerException
+            || apiException instanceof LeaderNotAvailableException
+        ) {
             log.debug(
                 "ListOffsets lookup request for topic partition {} will be retried due to invalid metadata",
                 topicPartition,
