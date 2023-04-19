@@ -146,25 +146,29 @@ class BrokerRegistrationRequestTest {
   }
 
   @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_3_IV3,
-    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
-  def testRegisterZkWithKRaftOldMetadataVersion(clusterInstance: ClusterInstance): Unit = {
+    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "false")))
+  def testRegisterZkWith33Controller(clusterInstance: ClusterInstance): Unit = {
+    // Verify that a controller running an old metadata.version cannot register a ZK broker
     val clusterId = clusterInstance.clusterId()
     val channelManager = brokerToControllerChannelManager(clusterInstance)
     try {
       channelManager.start()
-
+      // Invalid registration (isMigratingZkBroker, but MV does not support migrations)
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV0))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV3))))
 
+      // No features (MV) sent with registration, controller can't verify
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
         registerBroker(channelManager, clusterId, 100, Some(1), None))
 
+      // Given MV is too high for controller to support
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
         registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
 
+      // Controller supports this MV and isMigratingZkBroker is false, so this one works
       assertEquals(
         Errors.NONE,
         registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_4_IV0))))

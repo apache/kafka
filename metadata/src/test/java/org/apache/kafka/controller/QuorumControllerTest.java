@@ -43,7 +43,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.RequestHeaderData;
@@ -104,6 +103,7 @@ import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.FileRawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
@@ -1353,10 +1353,13 @@ public class QuorumControllerTest {
             checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, false));
 
         assertEquals(ZkMigrationState.NONE,
-            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true));
-
-        assertEquals(ZkMigrationState.NONE,
             checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, false));
+
+        assertEquals(
+            "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
+            assertThrows(FaultHandlerException.class, () ->
+                checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true)).getCause().getCause().getMessage()
+        );
     }
 
     public ZkMigrationState checkBootstrapZkMigrationRecord(
@@ -1430,9 +1433,8 @@ public class QuorumControllerTest {
         FeatureControlManager featureControl;
 
         assertEquals(
-            "Invalid value true for configuration zookeeper.metadata.migration.enable: " +
-                "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations, cannot continue with ZK migrations enabled.",
-            assertThrows(ConfigException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, true, true)).getMessage()
+            "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
+            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, true, true)).getMessage()
         );
 
         featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, true, false);
@@ -1440,9 +1442,8 @@ public class QuorumControllerTest {
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
 
         assertEquals(
-            "Invalid value true for configuration zookeeper.metadata.migration.enable: " +
-                "Should not have ZK migrations enabled on a cluster running metadata.version 3.3-IV0",
-            assertThrows(ConfigException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, false, true)).getMessage()
+            "Should not have ZK migrations enabled on a cluster running metadata.version 3.3-IV0",
+            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, false, true)).getMessage()
         );
 
         featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, false, false);
@@ -1463,8 +1464,8 @@ public class QuorumControllerTest {
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
 
         assertEquals(
-            "Invalid value true for configuration zookeeper.metadata.migration.enable: Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
-            assertThrows(ConfigException.class, () -> getActivationRecords(MetadataVersion.IBP_3_4_IV0, false, true)).getMessage()
+            "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
+            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_4_IV0, false, true)).getMessage()
         );
 
         featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, false, false);
