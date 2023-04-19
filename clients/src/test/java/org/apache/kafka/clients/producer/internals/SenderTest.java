@@ -727,6 +727,7 @@ public class SenderTest {
         assertFalse(transactionManager.hasProducerId());
         assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
+        assertEquals(-1, transactionManager.producerIdAndEpoch().epoch);
 
         // cluster authorization can be retried
         assertSendFailure(ClusterAuthorizationException.class);
