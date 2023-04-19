@@ -14,28 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableRepartitionMap;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionSendProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
-public class TableRepartitionMapNode<K, V> extends ProcessorGraphNode<K, V> implements VersionedSemanticsGraphNode {
+public class ForeignJoinSubscriptionSendNode<K, V> extends ProcessorGraphNode<K, V> implements VersionedSemanticsGraphNode {
 
-    public TableRepartitionMapNode(final String nodeName,
-                                   final ProcessorParameters<K, V, ?, ?> processorParameters) {
-        super(nodeName, processorParameters);
+    public ForeignJoinSubscriptionSendNode(final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        super(processorParameters);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void enableVersionedSemantics(final boolean useVersionedSemantics, final String parentNodeName) {
-        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters().processorSupplier();
-        if (!(processorSupplier instanceof KTableRepartitionMap)) {
-            throw new IllegalStateException("Unexpected processor type for table repartition map: " + processorSupplier.getClass().getName());
+        final ProcessorSupplier<?, ?, ?, ?> processorSupplier = processorParameters().processorSupplier();
+        if (!(processorSupplier instanceof SubscriptionSendProcessorSupplier)) {
+            throw new IllegalStateException("Unexpected processor type for foreign-key table-table join subscription send processor: " + processorSupplier.getClass().getName());
         }
 
-        final KTableRepartitionMap<K, V, ?, ?> tableRepartitionMap = (KTableRepartitionMap<K, V, ?, ?>) processorSupplier;
-        tableRepartitionMap.setUseVersionedSemantics(useVersionedSemantics);
+        final SubscriptionSendProcessorSupplier<?, ?, ?> subscriptionSendProcessor
+            = (SubscriptionSendProcessorSupplier<?, ?, ?>) processorSupplier;
+        subscriptionSendProcessor.setUseVersionedSemantics(useVersionedSemantics);
     }
 }
