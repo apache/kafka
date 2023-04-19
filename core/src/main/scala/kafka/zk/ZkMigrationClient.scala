@@ -216,7 +216,6 @@ class ZkMigrationClient(
         ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach { mechanism =>
           val propertyValue = props.getProperty(mechanism.mechanismName)
           if (propertyValue != null) {
-            println(s"Found ${propertyValue} for Key:${mechanism.mechanismName}")
             val scramCredentials =  ScramCredentialUtils.credentialFromString(propertyValue)
             batch.add(new ApiMessageAndVersion(new UserScramCredentialRecord()
               .setName(name)
