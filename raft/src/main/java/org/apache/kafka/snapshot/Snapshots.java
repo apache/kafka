@@ -72,7 +72,7 @@ public final class Snapshots {
         Path dir = snapshotDir(logDir);
 
         try {
-            // Create the snapshot directory if it doesn't exists
+            // Create the snapshot directory if it doesn't exist
             Files.createDirectories(dir);
             String prefix = String.format("%s-", filenameFromSnapshotId(snapshotId));
             return Files.createTempFile(dir, prefix, PARTIAL_SUFFIX);

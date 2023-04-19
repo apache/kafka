@@ -396,7 +396,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public void unregister(Listener<T> listener) {
         pendingRegistrations.add(Registration.unregister(listener));
-        // No need to wakeup the polling thread. It is a removal so the updates can be
+        // No need to wake up the polling thread. It is a removal so the updates can be
         // delayed until the polling thread wakes up for other reasons.
     }
 
