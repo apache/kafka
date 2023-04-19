@@ -313,7 +313,8 @@ argparse4j-0.7.0, see: licenses/argparse-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
 slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
-classgraph-4.8.138, see: license/classgraph-MIT
+classgraph-4.8.138, see: licenses/classgraph-MIT
+pcollections-4.0.1, see: licenses/pcollections-MIT
 
 ---------------------------------------
 BSD 2-Clause

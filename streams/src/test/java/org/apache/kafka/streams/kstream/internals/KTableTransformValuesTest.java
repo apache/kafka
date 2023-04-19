@@ -66,6 +66,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
@@ -439,11 +440,9 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "ignored1", 15L);
         inputTopic.pipeInput("A", "ignored2", 10L);
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "0", 15),
+        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "0", 15),
-                new KeyValueTimestamp<>("A", "3", 15)));
+                new KeyValueTimestamp<>("A", "3", 15))));
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
@@ -468,11 +467,9 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
-                 new KeyValueTimestamp<>("A", "0", 15),
-                 new KeyValueTimestamp<>("A", "2", 15),
-                 new KeyValueTimestamp<>("A", "0", 15),
-                 new KeyValueTimestamp<>("A", "3", 15)));
+        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
+                new KeyValueTimestamp<>("A", "2", 15),
+                new KeyValueTimestamp<>("A", "3", 15))));
     }
 
     private ArrayList<KeyValueTimestamp<String, String>> output() {

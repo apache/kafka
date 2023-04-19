@@ -1091,7 +1091,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 });
 
                 long truncationOffset = log.truncateToEndOffset(divergingOffsetAndEpoch);
-                logger.info("Truncated to offset {} from Fetch response from leader {}", truncationOffset, quorum.leaderIdOrSentinel());
+                logger.info(
+                    "Truncated to offset {} from Fetch response from leader {}",
+                    truncationOffset,
+                    quorum.leaderIdOrSentinel()
+                );
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
@@ -1120,6 +1124,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     // since this snapshot is expected to reference offsets and epochs
                     // greater than the log end offset and high-watermark
                     state.setFetchingSnapshot(log.storeSnapshot(snapshotId));
+                    logger.info(
+                        "Fetching snapshot {} from Fetch response from leader {}",
+                        snapshotId,
+                        quorum.leaderIdOrSentinel()
+                    );
                 }
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
@@ -1407,6 +1416,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             state.setFetchingSnapshot(Optional.empty());
 
             if (log.truncateToLatestSnapshot()) {
+                logger.info(
+                    "Fully truncated the log at ({}, {}) after downloading snapshot {} from leader {}",
+                    log.endOffset(),
+                    log.lastFetchedEpoch(),
+                    snapshot.snapshotId(),
+                    quorum.leaderIdOrSentinel()
+                );
+
                 updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
             } else {
                 throw new IllegalStateException(

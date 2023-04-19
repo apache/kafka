@@ -77,20 +77,8 @@ public class CheckpointFile<T> {
             // write to temp file and then swap with the existing file
             try (FileOutputStream fileOutputStream = new FileOutputStream(tempPath.toFile());
                  BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-                // Write the version
-                writer.write(Integer.toString(version));
-                writer.newLine();
-
-                // Write the entries count
-                writer.write(Integer.toString(entries.size()));
-                writer.newLine();
-
-                // Write each entry on a new line.
-                for (T entry : entries) {
-                    writer.write(formatter.toString(entry));
-                    writer.newLine();
-                }
-
+                CheckpointWriteBuffer<T> checkpointWriteBuffer = new CheckpointWriteBuffer<>(writer, version, formatter);
+                checkpointWriteBuffer.write(entries);
                 writer.flush();
                 fileOutputStream.getFD().sync();
             }
@@ -109,25 +97,28 @@ public class CheckpointFile<T> {
     }
 
     public static class CheckpointWriteBuffer<T> {
-        private BufferedWriter writer;
-        private int version;
-        private EntryFormatter<T> formatter;
+        private final BufferedWriter writer;
+        private final int version;
+        private final EntryFormatter<T> formatter;
 
         public CheckpointWriteBuffer(BufferedWriter writer,
                                      int version,
                                      EntryFormatter<T> formatter) {
-            this.version = version;
             this.writer = writer;
+            this.version = version;
             this.formatter = formatter;
         }
 
-        public void write(List<T> entries) throws IOException {
-            writer.write(String.valueOf(version));
+        public void write(Collection<T> entries) throws IOException {
+            // Write the version
+            writer.write(Integer.toString(version));
             writer.newLine();
 
-            writer.write(String.valueOf(entries.size()));
+            // Write the entries count
+            writer.write(Integer.toString(entries.size()));
             writer.newLine();
 
+            // Write each entry on a new line.
             for (T entry : entries) {
                 writer.write(formatter.toString(entry));
                 writer.newLine();

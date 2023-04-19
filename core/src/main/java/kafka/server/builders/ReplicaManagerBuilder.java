@@ -18,8 +18,8 @@
 package kafka.server.builders;
 
 import kafka.log.LogManager;
+import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
-import kafka.log.remote.RemoteLogManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
@@ -30,6 +30,7 @@ import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
+import kafka.log.remote.RemoteLogManager;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
@@ -62,6 +63,7 @@ public class ReplicaManagerBuilder {
     private Optional<DelayedOperationPurgatory<DelayedElectLeader>> delayedElectLeaderPurgatory = Optional.empty();
     private Optional<String> threadNamePrefix = Optional.empty();
     private Long brokerEpoch = -1L;
+    private Optional<AddPartitionsToTxnManager> addPartitionsToTxnManager = Optional.empty();
 
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
@@ -158,6 +160,11 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setAddPartitionsToTransactionManager(AddPartitionsToTxnManager addPartitionsToTxnManager) {
+        this.addPartitionsToTxnManager = Optional.of(addPartitionsToTxnManager);
+        return this;
+    }
+
     public ReplicaManager build() {
         if (config == null) config = new KafkaConfig(Collections.emptyMap());
         if (metrics == null) metrics = new Metrics();
@@ -183,6 +190,7 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),
                              OptionConverters.toScala(delayedElectLeaderPurgatory),
                              OptionConverters.toScala(threadNamePrefix),
-                             () -> brokerEpoch);
+                             () -> brokerEpoch,
+                             OptionConverters.toScala(addPartitionsToTxnManager));
     }
 }
