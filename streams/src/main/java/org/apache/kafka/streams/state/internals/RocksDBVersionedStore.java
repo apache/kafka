@@ -847,7 +847,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     segment.put(key, segmentValue.serialize());
                 }
             }
-            return foundTs;
         } else {
             // insert into segment corresponding to foundTs, as foundTs represents the validTo
             // timestamp of the current put.
@@ -891,8 +890,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     segment.put(key, segmentValue.serialize());
                 }
             }
-            return foundTs;
         }
+        return foundTs;
     }
 
     /**
