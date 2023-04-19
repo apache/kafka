@@ -230,7 +230,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             null,
             null,
             null,
-            null,
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null,  15L)),
             null,
             null,
@@ -489,8 +488,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null,  15L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  14L)),
                 null,
-                null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null,  14L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null,  14L)),
+                null
             );
 
             runTestWithDriver(input, expectedResult, storeName);
