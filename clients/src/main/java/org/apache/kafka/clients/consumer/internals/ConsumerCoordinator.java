@@ -244,10 +244,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
+        Set<TopicPartition> joinedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        int generationId = generation().generationId;
         // join with member's old owned partitions if syncGroup failed with REBALANCE_IN_PROGRESS
-        final Set<TopicPartition> joinedPartitions = lastOwnedPartitions.isEmpty() ?
-            subscriptions.assignedPartitions() :
-            lastOwnedPartitions;
+        if (!lastOwnedPartitions.isEmpty()) {
+            joinedPartitions = new HashSet<>(lastOwnedPartitions);
+            generationId = lastGenerationId;
+        }
         lastOwnedPartitions.clear();
 
         List<String> topics = new ArrayList<>(joinedSubscription);
@@ -255,7 +258,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             Subscription subscription = new Subscription(topics,
                 assignor.subscriptionUserData(joinedSubscription),
                 new ArrayList<>(joinedPartitions),
-                generation().generationId,
+                generationId,
                 rackId);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
 
@@ -487,8 +490,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    void maybeResendOwnedPartitions() {
+    void savePartitionAndGenerationState() {
+        System.out.println("savePartitionAndGenerationState:" + this.generation().generationId);
+        System.out.println("savePartitionAndGenerationState:" + this.subscriptions.assignedPartitions());
         lastOwnedPartitions = subscriptions.assignedPartitions();
+        lastGenerationId = this.generation().generationId;
     }
 
     void maybeUpdateSubscriptionMetadata() {

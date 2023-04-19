@@ -115,6 +115,7 @@ public abstract class AbstractCoordinator implements Closeable {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
     public static final int JOIN_GROUP_TIMEOUT_LAPSE = 5000;
     Set<TopicPartition> lastOwnedPartitions = Collections.emptySet();
+    int lastGenerationId;
 
     protected enum MemberState {
         UNJOINED,             // the client is not part of a group
@@ -838,8 +839,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
+                    savePartitionAndGenerationState();
                     resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, false);
-                    maybeResendOwnedPartitions();
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
@@ -1250,7 +1251,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Stores the owned partitions in a temporary collection before revocation when encountering the REBALANCE_IN_PROGRESS error.
      */
-    void maybeResendOwnedPartitions() { }
+    void savePartitionAndGenerationState() { }
 
     protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
         CoordinatorResponseHandler(final Generation generation) {

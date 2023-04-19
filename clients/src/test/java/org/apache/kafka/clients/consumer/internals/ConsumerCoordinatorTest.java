@@ -1886,6 +1886,58 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testJoinGroupResponseOnRebalanceInProgressOnSyncGroup() {
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // join with generation 1
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+        assertEquals(1, coordinator.generation().generationId);
+        coordinator.requestRejoin("test");
+
+        // rebalance in progress error on sync group
+        client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.REBALANCE_IN_PROGRESS));
+
+        // then let the full join/sync finish successfully
+        client.prepareResponse(body -> {
+            JoinGroupRequest join = (JoinGroupRequest) body;
+            Iterator<JoinGroupRequestData.JoinGroupRequestProtocol> protocolIterator =
+                join.data().protocols().iterator();
+            assertTrue(protocolIterator.hasNext());
+            JoinGroupRequestData.JoinGroupRequestProtocol protocolMetadata = protocolIterator.next();
+
+            ByteBuffer metadata = ByteBuffer.wrap(protocolMetadata.metadata());
+            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
+            metadata.rewind();
+            assertTrue(subscription.topics().contains(topic1));
+            if (protocol == COOPERATIVE) {
+                assertEquals(1, subscription.ownedPartitions().size());
+                assertEquals(2, subscription.generationId().orElse(-1));
+            }
+
+            // EAGER protocol should revoke all partitions prior to joining the group
+            if (protocol == EAGER) {
+                assertTrue(subscription.ownedPartitions().isEmpty());
+                assertFalse(subscription.generationId().isPresent());
+            }
+            return true;
+        }, joinGroupFollowerResponse(3, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+        assertFalse(coordinator.rejoinNeededOrPending());
+        assertEquals(singleton(t1p), subscriptions.assignedPartitions());
+        assertEquals(3, coordinator.generation().generationId);
+    }
+
+    @Test
     public void testIllegalGenerationOnSyncGroup() {
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
