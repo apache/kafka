@@ -1311,7 +1311,6 @@ public class TransactionManager {
                     error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
                 log.info("Abortable authorization error: {}.  Transition the producer state to {}", error.message(), State.ABORTABLE_ERROR);
                 lastError = error.exception();
-                epochBumpRequired = true;
                 abortableError(error.exception());
             } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
                 // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
