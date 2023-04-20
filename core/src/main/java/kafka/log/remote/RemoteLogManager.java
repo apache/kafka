@@ -666,6 +666,14 @@ public class RemoteLogManager implements Closeable {
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false,
                         includeAbortedTxns ? Optional.of(Collections.emptyList()) : Optional.empty());
 
+            // An empty record is sent instead of an incomplete batch when there is no minimum-one-message constraint
+            // and for FetchRequest version 3 and above and the first batch size is more than maximum bytes that can be sent.
+            if (!remoteStorageFetchInfo.minOneMessage &&
+                    !remoteStorageFetchInfo.hardMaxBytesLimit &&
+                    firstBatch.sizeInBytes() > maxBytes) {
+                return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
+            }
+
             int updatedFetchSize =
                     remoteStorageFetchInfo.minOneMessage && firstBatch.sizeInBytes() > maxBytes
                             ? firstBatch.sizeInBytes() : maxBytes;
@@ -780,10 +788,7 @@ public class RemoteLogManager implements Closeable {
     private RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
         RecordBatch nextBatch = null;
         // Look for the batch which has the desired offset
-        // We will always have a batch in that segment as it is a non-compacted topic. For compacted topics, we may need
-        // to read from the subsequent segments if there is no batch available for the desired offset in the current
-        // segment. That means, desired offset is more than last offset of the current segment and immediate available
-        // offset exists in the next segment which can be higher than the desired offset.
+        // We will always have a batch in that segment as it is a non-compacted topic.
         do {
             nextBatch = remoteLogInputStream.nextBatch();
         } while (nextBatch != null && nextBatch.lastOffset() < offset);

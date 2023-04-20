@@ -1367,7 +1367,8 @@ class ReplicaManager(val config: KafkaConfig,
               // For the following topic-partitions, we return an empty record set
               val fetchDataInfo =
                 new FetchDataInfo(new LogOffsetMetadata(fetchInfo.fetchOffset), MemoryRecords.EMPTY, false, Optional.empty(),
-                  Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(), fetchInfo, params.isolation)))
+                  Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
+                    fetchInfo, params.isolation, params.hardMaxBytesLimit())))
 
               LogReadResult(checkFetchDataInfo(partition, fetchDataInfo),
                 divergingEpoch = None,
