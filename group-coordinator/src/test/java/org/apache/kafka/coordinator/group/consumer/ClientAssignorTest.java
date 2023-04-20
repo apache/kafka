@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class ClientAssignorTest {
 
     @Test
-    public void testNameAndMetadataCannotBeBull() {
+    public void testNameAndMetadataCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new ClientAssignor(
             "range",
             (byte) 2,
