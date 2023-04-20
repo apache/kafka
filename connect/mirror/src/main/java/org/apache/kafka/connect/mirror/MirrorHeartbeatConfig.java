@@ -41,10 +41,6 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
         super(CONNECTOR_CONFIG_DEF, props);
     }
 
-    String connectorName() {
-        return getString(ConnectorConfig.NAME_CONFIG);
-    }
-
     String heartbeatsTopic() {
         return replicationPolicy().heartbeatsTopic();
     }

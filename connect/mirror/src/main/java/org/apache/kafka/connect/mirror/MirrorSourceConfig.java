@@ -125,10 +125,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         super(configDef, props);
     }
 
-    String connectorName() {
-        return getString(ConnectorConfig.NAME_CONFIG);
-    }
-
     Map<String, String> taskConfigForTopicPartitions(List<TopicPartition> topicPartitions, int taskIndex) {
         Map<String, String> props = originalsStrings();
         String topicPartitionsString = topicPartitions.stream()

@@ -69,11 +69,6 @@ public class MockSinkTask extends SinkTask {
     }
 
     @Override
-    public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
-
-    }
-
-    @Override
     public void stop() {
 
     }
