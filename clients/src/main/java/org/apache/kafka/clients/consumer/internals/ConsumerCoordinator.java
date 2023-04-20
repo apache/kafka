@@ -784,7 +784,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // 1. offset commit haven't done (and joinPrepareTimer not expired)
             // 2. failed with retriable exception (and joinPrepareTimer not expired)
             // Otherwise, continue to revoke partitions, ex:
-            // 1. if joinPrepareTime has expired
+            // 1. if joinPrepareTimer has expired
             // 2. if offset commit failed with non-retriable exception
             // 3. if offset commit success
             boolean onJoinPrepareAsyncCommitCompleted = true;
