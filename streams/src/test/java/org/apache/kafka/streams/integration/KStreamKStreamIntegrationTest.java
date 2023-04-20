@@ -65,9 +65,9 @@ public class KStreamKStreamIntegrationTest {
 
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final static MockTime MOCK_TIME = CLUSTER.time;
-    private final static String STREAM_1 = "stream1";
-    private final static String STREAM_2 = "stream2";
-    private final static String OUTPUT = "output-";
+    private final static String LEFT_STREAM = "leftStream";
+    private final static String RIGHT_STREAM = "rightStream";
+    private final static String OUTPUT = "output";
     private Properties streamsConfig;
     private KafkaStreams streams;
     private final static Properties CONSUMER_CONFIG = new Properties();
@@ -78,8 +78,8 @@ public class KStreamKStreamIntegrationTest {
         CLUSTER.start();
 
         //Use multiple partitions to ensure distribution of keys.
-        CLUSTER.createTopic(STREAM_1, 4, 1);
-        CLUSTER.createTopic(STREAM_2, 4, 1);
+        CLUSTER.createTopic(LEFT_STREAM, 4, 1);
+        CLUSTER.createTopic(RIGHT_STREAM, 4, 1);
         CLUSTER.createTopic(OUTPUT, 4, 1);
 
         CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -145,9 +145,9 @@ public class KStreamKStreamIntegrationTest {
                 new KeyValue<>("Key-4", "left-4b")
         );
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(STREAM_1, left1, PRODUCER_CONFIG, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_STREAM, left1, PRODUCER_CONFIG, MOCK_TIME);
         MOCK_TIME.sleep(10000);
-        IntegrationTestUtils.produceKeyValuesSynchronously(STREAM_1, left2, PRODUCER_CONFIG, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_STREAM, left2, PRODUCER_CONFIG, MOCK_TIME);
 
         final Set<KeyValue<String, String>> result = new HashSet<>(waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
@@ -172,8 +172,8 @@ public class KStreamKStreamIntegrationTest {
     private static KafkaStreams prepareTopology(final Properties streamsConfig) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> stream1 = builder.stream(STREAM_1);
-        final KStream<String, String> stream2 = builder.stream(STREAM_2);
+        final KStream<String, String> stream1 = builder.stream(LEFT_STREAM);
+        final KStream<String, String> stream2 = builder.stream(RIGHT_STREAM);
 
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
 
