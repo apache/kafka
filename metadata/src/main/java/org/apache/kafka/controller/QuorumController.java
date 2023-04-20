@@ -372,6 +372,7 @@ public final class QuorumController implements Controller {
         public void accept(ConfigResource configResource) {
             switch (configResource.type()) {
                 case BROKER_LOGGER:
+                    // BROKER_LOGGER are always allowed.
                     break;
                 case BROKER:
                     // Cluster configs are always allowed.
@@ -1635,7 +1636,7 @@ public final class QuorumController implements Controller {
     /**
      * Tracks if a snapshot generate was scheduled.
      */
-    private boolean generateSnapshotScheduled = false;
+    private final boolean generateSnapshotScheduled;
 
     /**
      * The bootstrap metadata to use for initialization if needed.
@@ -1744,6 +1745,7 @@ public final class QuorumController implements Controller {
                 build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
+        this.generateSnapshotScheduled = false;
         this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
