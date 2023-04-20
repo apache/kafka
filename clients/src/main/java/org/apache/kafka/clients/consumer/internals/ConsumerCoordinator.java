@@ -284,7 +284,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // into the subscriptions as long as they still match the subscribed pattern
 
             Set<String> addedTopics = new HashSet<>();
-            // this is a copy because its handed to listener below
+            // this is a copy because it's handed to listener below
             for (TopicPartition tp : assignedPartitions) {
                 if (!joinedSubscription.contains(tp.topic()))
                     addedTopics.add(tp.topic());
