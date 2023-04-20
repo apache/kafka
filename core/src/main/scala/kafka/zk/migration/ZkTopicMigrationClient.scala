@@ -22,7 +22,7 @@ import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
-import kafka.zk.ZkMigrationClient.wrapZkException
+import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, GetChildrenRequest, SetDataRequest}
 import org.apache.kafka.common.metadata.PartitionRecord
@@ -54,7 +54,9 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
       val topicAssignment = partitionAssignments.map { case (partition, assignment) =>
         partition.partition().asInstanceOf[Integer] -> assignment.replicas.map(Integer.valueOf).asJava
       }.toMap.asJava
-      visitor.visitTopic(topic, topicIdOpt.get, topicAssignment)
+      logAndRethrow(this, s"Error in topic consumer. Topic was $topic.") {
+        visitor.visitTopic(topic, topicIdOpt.get, topicAssignment)
+      }
       if (interests.contains(TopicVisitorInterest.PARTITIONS)) {
         val partitions = partitionAssignments.keys.toSeq
         val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
@@ -84,12 +86,16 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
                 .setPartitionEpoch(0)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
           }
-          visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(record))
+          logAndRethrow(this, s"Error in partition consumer. TopicPartition was $topicPartition.") {
+            visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(record))
+          }
         }
       }
       if (interests.contains(TopicVisitorInterest.CONFIGS)) {
         val props = topicConfigs(topic)
-        visitor.visitConfigs(topic, props)
+        logAndRethrow(this, s"Error in topic config consumer. Topic was $topic.") {
+          visitor.visitConfigs(topic, props)
+        }
       }
     }
   }

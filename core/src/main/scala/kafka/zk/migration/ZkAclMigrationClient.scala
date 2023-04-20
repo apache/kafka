@@ -20,7 +20,7 @@ package kafka.zk.migration
 import kafka.security.authorizer.AclAuthorizer.{ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.utils.Logging
-import kafka.zk.ZkMigrationClient.wrapZkException
+import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk.{KafkaZkClient, ResourceZNode, ZkAclStore, ZkVersion}
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
 import org.apache.kafka.common.acl.AccessControlEntry
@@ -109,7 +109,9 @@ class ZkAclMigrationClient(
     }
     AclAuthorizer.loadAllAcls(zkClient, this, updateAcls)
     allAcls.foreach { case (resourcePattern, versionedAcls) =>
-      aclConsumer.accept(resourcePattern, versionedAcls.acls.map(_.ace).asJava)
+      logAndRethrow(this, s"Error in ACL consumer. Resource was $resourcePattern.") {
+        aclConsumer.accept(resourcePattern, versionedAcls.acls.map(_.ace).asJava)
+      }
     }
   }
 }

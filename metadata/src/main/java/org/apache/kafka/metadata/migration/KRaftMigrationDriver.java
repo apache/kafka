@@ -179,7 +179,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private void applyMigrationOperation(String name, KRaftMigrationOperation migrationOp) {
         ZkMigrationLeadershipState beforeState = this.migrationLeadershipState;
         ZkMigrationLeadershipState afterState = migrationOp.apply(beforeState);
-        log.trace("{} transitioned from {} to {}", name, beforeState, afterState);
+        if (afterState.loggableChangeSinceState(beforeState)) {
+            log.info("{} transitioned migration state from {} to {}", name, beforeState, afterState);
+        } else if (afterState.equals(beforeState)) {
+            log.trace("{} kept migration state as {}", name, afterState);
+        } else {
+            log.trace("{} transitioned migration state from {} to {}", name, beforeState, afterState);
+
+        }
         this.migrationLeadershipState = afterState;
     }
 

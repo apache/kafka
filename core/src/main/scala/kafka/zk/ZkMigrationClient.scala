@@ -63,11 +63,22 @@ object ZkMigrationClient {
     try {
       fn
     } catch {
-      case e@(_: MigrationClientException | _: MigrationClientAuthException) => throw e
-      case e@(_: AuthFailedException | _: NoAuthException | _: SessionClosedRequireAuthException) =>
+      case e @ (_: MigrationClientException | _: MigrationClientAuthException) => throw e
+      case e @ (_: AuthFailedException | _: NoAuthException | _: SessionClosedRequireAuthException) =>
         // We don't expect authentication errors to be recoverable, so treat them differently
         throw new MigrationClientAuthException(e)
       case e: KeeperException => throw new MigrationClientException(e)
+    }
+  }
+
+  @throws(classOf[MigrationClientException])
+  def logAndRethrow[T](logger: Logging, msg: String)(fn: => T): T = {
+    try {
+      fn
+    } catch {
+      case e: Throwable =>
+        logger.error(msg, e)
+        throw e
     }
   }
 }
@@ -176,9 +187,11 @@ class ZkMigrationClient(
   }
 
   def migrateBrokerConfigs(
-    recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]],
+    brokerIdConsumer: Consumer[Integer]
   ): Unit = wrapZkException {
     configClient.iterateBrokerConfigs((broker, props) => {
+      brokerIdConsumer.accept(Integer.valueOf(broker))
       val batch = new util.ArrayList[ApiMessageAndVersion]()
       props.forEach((key, value) => {
         batch.add(new ApiMessageAndVersion(new ConfigRecord()
@@ -256,7 +269,7 @@ class ZkMigrationClient(
     brokerIdConsumer: Consumer[Integer]
   ): Unit = {
     migrateTopics(batchConsumer, brokerIdConsumer)
-    migrateBrokerConfigs(batchConsumer)
+    migrateBrokerConfigs(batchConsumer, brokerIdConsumer)
     migrateClientQuotas(batchConsumer)
     migrateProducerId(batchConsumer)
     migrateAcls(batchConsumer)

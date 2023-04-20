@@ -19,7 +19,7 @@ package kafka.zk.migration
 
 import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
 import kafka.utils.{Logging, PasswordEncoder}
-import kafka.zk.ZkMigrationClient.wrapZkException
+import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, SetDataRequest}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
@@ -43,21 +43,50 @@ class ZkConfigMigrationClient(
 
   val adminZkClient = new AdminZkClient(zkClient)
 
+
+  /**
+   * In ZK, we use the special string "&lt;default&gt;" to represent the default entity.
+   * In KRaft, we use an empty string. This method builds an EntityData that converts the special ZK string
+   * to the special KRaft string.
+   */
+  private def fromZkEntityName(entityName: String): String = {
+    if (entityName.equals(ConfigEntityName.Default)) {
+      ""
+    } else {
+      entityName
+    }
+  }
+
+  private def toZkEntityName(entityName: String): String = {
+    if (entityName.isEmpty) {
+      ConfigEntityName.Default
+    } else {
+      entityName
+    }
+  }
+
+  private def buildEntityData(entityType: String, entityName: String): EntityData = {
+    new EntityData().setEntityType(entityType).setEntityName(fromZkEntityName(entityName))
+  }
+
+
   override def iterateClientQuotas(
     quotaEntityConsumer: BiConsumer[util.List[EntityData], util.Map[String, lang.Double]]
   ): Unit = {
-    def migrateEntityType(entityType: String): Unit = {
-      adminZkClient.fetchAllEntityConfigs(entityType).foreach { case (name, props) =>
-        val entity = List(new EntityData().setEntityType(entityType).setEntityName(name)).asJava
+    def migrateEntityType(zkEntityType: String, entityType: String): Unit = {
+      adminZkClient.fetchAllEntityConfigs(zkEntityType).foreach { case (name, props) =>
+        val entity = List(buildEntityData(entityType, name)).asJava
         val quotaMap = ZkAdminManager.clientQuotaPropsToDoubleMap(props.asScala).map {
           case (key, value) => key -> lang.Double.valueOf(value)
         }.toMap.asJava
-        quotaEntityConsumer.accept(entity, quotaMap)
+        logAndRethrow(this, s"Error in client quota entity consumer. Entity was $entity.") {
+          quotaEntityConsumer.accept(entity, quotaMap)
+        }
       }
     }
 
-    migrateEntityType(ConfigType.User)
-    migrateEntityType(ConfigType.Client)
+    migrateEntityType(ConfigType.User, ClientQuotaEntity.USER)
+    migrateEntityType(ConfigType.Client, ClientQuotaEntity.CLIENT_ID)
 
     adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).foreach { case (name, props) =>
       // Taken from ZkAdminManager
@@ -65,8 +94,8 @@ class ZkConfigMigrationClient(
       if (components.size != 3 || components(1) != "clients")
         throw new IllegalArgumentException(s"Unexpected config path: ${name}")
       val entity = List(
-        new EntityData().setEntityType(ConfigType.User).setEntityName(components(0)),
-        new EntityData().setEntityType(ConfigType.Client).setEntityName(components(2))
+        buildEntityData(ClientQuotaEntity.USER, components(0)),
+        buildEntityData(ClientQuotaEntity.CLIENT_ID, components(2))
       )
       val quotaMap = props.asScala.map { case (key, value) =>
         val doubleValue = try lang.Double.valueOf(value) catch {
@@ -75,20 +104,18 @@ class ZkConfigMigrationClient(
         }
         key -> doubleValue
       }.asJava
-      quotaEntityConsumer.accept(entity.asJava, quotaMap)
+      logAndRethrow(this, s"Error in client quota entity consumer. Entity was $entity.") {
+        quotaEntityConsumer.accept(entity.asJava, quotaMap)
+      }
     }
 
-    migrateEntityType(ConfigType.Ip)
+    migrateEntityType(ConfigType.Ip, ClientQuotaEntity.IP)
   }
 
   override def iterateBrokerConfigs(configConsumer: BiConsumer[String, util.Map[String, String]]): Unit = {
     val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
     zkClient.getEntitiesConfigs(ConfigType.Broker, brokerEntities.toSet).foreach { case (broker, props) =>
-      val brokerResource = if (broker == ConfigEntityName.Default) {
-        ""
-      } else {
-        broker
-      }
+      val brokerResource = fromZkEntityName(broker)
       val decodedProps = props.asScala.map { case (key, value) =>
         if (DynamicBrokerConfig.isPasswordConfig(key))
           key -> passwordEncoder.decode(value).value
@@ -96,7 +123,9 @@ class ZkConfigMigrationClient(
           key -> value
       }.toMap.asJava
 
-      configConsumer.accept(brokerResource, decodedProps)
+      logAndRethrow(this, s"Error in broker config consumer. Broker was $brokerResource.") {
+        configConsumer.accept(brokerResource, decodedProps)
+      }
     }
   }
 
@@ -111,7 +140,7 @@ class ZkConfigMigrationClient(
       case _ => None
     }
 
-    val configName = configResource.name()
+    val configName = toZkEntityName(configResource.name())
     if (configType.isDefined) {
       val props = new Properties()
       configMap.forEach { case (key, value) => props.put(key, value) }
@@ -130,7 +159,7 @@ class ZkConfigMigrationClient(
           }
       }
     } else {
-      debug(s"Not updating ZK for $configResource since it is not a Broker or Topic entity.")
+      error(s"Not updating ZK for $configResource since it is not a Broker or Topic entity.")
       state
     }
   }
@@ -149,20 +178,20 @@ class ZkConfigMigrationClient(
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     val entityMap = entity.asScala
-    val hasUser = entityMap.contains(ClientQuotaEntity.USER)
-    val hasClient = entityMap.contains(ClientQuotaEntity.CLIENT_ID)
-    val hasIp = entityMap.contains(ClientQuotaEntity.IP)
+    val user = entityMap.get(ClientQuotaEntity.USER).map(toZkEntityName)
+    val client = entityMap.get(ClientQuotaEntity.CLIENT_ID).map(toZkEntityName)
+    val ip = entityMap.get(ClientQuotaEntity.IP).map(toZkEntityName)
     val props = new Properties()
 
-    val (configType, path, configKeys) = if (hasUser && !hasClient) {
-      (Some(ConfigType.User), Some(entityMap(ClientQuotaEntity.USER)), DynamicConfig.User.configKeys)
-    } else if (hasUser && hasClient) {
-      (Some(ConfigType.User), Some(s"${entityMap(ClientQuotaEntity.USER)}/clients/${entityMap(ClientQuotaEntity.CLIENT_ID)}"),
+    val (configType, path, configKeys) = if (user.isDefined && client.isEmpty) {
+      (Some(ConfigType.User), user, DynamicConfig.User.configKeys)
+    } else if (user.isDefined && client.isDefined) {
+      (Some(ConfigType.User), Some(s"${user.get}/clients/${client.get}"),
         DynamicConfig.User.configKeys)
-    } else if (hasClient) {
-      (Some(ConfigType.Client), Some(entityMap(ClientQuotaEntity.CLIENT_ID)), DynamicConfig.Client.configKeys)
-    } else if (hasIp) {
-      (Some(ConfigType.Ip), Some(entityMap(ClientQuotaEntity.IP)), DynamicConfig.Ip.configKeys)
+    } else if (client.isDefined) {
+      (Some(ConfigType.Client), client, DynamicConfig.Client.configKeys)
+    } else if (ip.isDefined) {
+      (Some(ConfigType.Ip), ip, DynamicConfig.Ip.configKeys)
     } else {
       (None, None, Map.empty.asJava)
     }
@@ -203,8 +232,8 @@ class ZkConfigMigrationClient(
       case None =>
         // If we didn't update the migration state, we failed to write the client quota. Try again
         // after recursively create its parent znodes
-        val createPath = if (hasUser && hasClient) {
-          s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ClientQuotaEntity.USER)}/clients"
+        val createPath = if (user.isDefined && client.isDefined) {
+          s"${ConfigEntityTypeZNode.path(configType.get)}/${user.get}/clients"
         } else {
           ConfigEntityTypeZNode.path(configType.get)
         }
