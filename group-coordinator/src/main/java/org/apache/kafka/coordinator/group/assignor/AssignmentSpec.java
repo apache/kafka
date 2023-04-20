@@ -78,7 +78,7 @@ public class AssignmentSpec {
     @Override
     public String toString() {
         return "AssignmentSpec(members=" + members +
-                ", topics=" + topics +
-                ')';
+            ", topics=" + topics +
+            ')';
     }
 }
