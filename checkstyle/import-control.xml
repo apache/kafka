@@ -25,6 +25,7 @@
   <!-- common library dependencies -->
   <allow pkg="java" />
   <allow pkg="javax.management" />
+  <allow pkg="org.crac" />
   <allow pkg="org.slf4j" />
   <allow pkg="org.junit" />
   <allow pkg="org.opentest4j" />

@@ -213,4 +213,13 @@ public interface KafkaClient extends Closeable {
      */
     boolean active();
 
+    /**
+     * Closes all network connections without closing the client completely.
+     */
+    void suspend();
+
+    /**
+     * Attempts to reconnect to at least one node in the cluster.
+     */
+    void resume();
 }

@@ -52,6 +52,9 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.crac.Context;
+import org.crac.Core;
+import org.crac.Resource;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -62,6 +65,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Phaser;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -69,7 +73,7 @@ import java.util.stream.Collectors;
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
  */
-public class Sender implements Runnable {
+public class Sender implements Runnable, Resource {
 
     private final Logger log;
 
@@ -102,6 +106,8 @@ public class Sender implements Runnable {
 
     /* true when the caller wants to ignore all unsent/inflight messages and force close.  */
     private volatile boolean forceClose;
+
+    private volatile Phaser checkpointPhaser;
 
     /* metrics */
     private final SenderMetrics sensors;
@@ -151,6 +157,7 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
+        Core.getGlobalContext().register(this);
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -296,6 +303,14 @@ public class Sender implements Runnable {
      *
      */
     void runOnce() {
+        Phaser phaser = checkpointPhaser;
+        if (phaser != null) {
+            // first time we notify that checkpoint can progress
+            phaser.arriveAndAwaitAdvance();
+            // second time we wait for restore
+            phaser.arriveAndAwaitAdvance();
+        }
+
         if (transactionManager != null) {
             try {
                 transactionManager.maybeResolveSequences();
@@ -868,6 +883,21 @@ public class Sender implements Runnable {
         produceThrottleTimeSensor.add(metrics.produceThrottleTimeAvg, new Avg());
         produceThrottleTimeSensor.add(metrics.produceThrottleTimeMax, new Max());
         return produceThrottleTimeSensor;
+    }
+
+    @Override
+    public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
+        checkpointPhaser = new Phaser(2);
+        checkpointPhaser.arriveAndAwaitAdvance();
+        client.suspend();
+    }
+
+    @Override
+    public void afterRestore(Context<? extends Resource> context) throws Exception {
+        Phaser phaser = checkpointPhaser;
+        checkpointPhaser = null;
+        client.resume();
+        phaser.arriveAndAwaitAdvance();
     }
 
     /**

@@ -976,6 +976,20 @@ public class Selector implements Selectable, AutoCloseable {
         return channel != null && channel.ready();
     }
 
+    @Override
+    public void closeAllConnections() {
+        List<String> connections = new ArrayList<>(channels.keySet());
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
+        Utils.closeAllQuietly(firstException, "release connections",
+                connections.stream().map(id -> (AutoCloseable) () -> close(id)).toArray(AutoCloseable[]::new));
+        Throwable exception = firstException.get();
+        if (exception instanceof RuntimeException) {
+            throw (RuntimeException) exception;
+        } else if (exception != null) {
+            throw new RuntimeException(exception);
+        }
+    }
+
     private KafkaChannel openOrClosingChannelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel == null)

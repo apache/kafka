@@ -120,4 +120,9 @@ public interface Selectable {
      * @param id The id for the connection
      */
     boolean isChannelReady(String id);
+
+    /**
+     * Drops all connections without closing the selector completely.
+     */
+    void closeAllConnections();
 }

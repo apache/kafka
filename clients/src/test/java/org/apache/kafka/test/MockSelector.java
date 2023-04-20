@@ -235,6 +235,10 @@ public class MockSelector implements Selectable {
         return ready.contains(id);
     }
 
+    @Override
+    public void closeAllConnections() {
+    }
+
     public void reset() {
         clear();
         initiatedSends.clear();

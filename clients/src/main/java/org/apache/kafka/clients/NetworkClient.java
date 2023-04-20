@@ -649,6 +649,23 @@ public class NetworkClient implements KafkaClient {
         return state.get() == State.ACTIVE;
     }
 
+    @Override
+    public void suspend() {
+        selector.closeAllConnections();
+    }
+
+    @Override
+    public void resume() {
+        long now = System.currentTimeMillis();
+        Node node = leastLoadedNode(now);
+        if (node == null) {
+            node = metadataUpdater.fetchNodes().stream().findAny().orElse(null);
+        }
+        if (node != null) {
+            initiateConnect(node, now);
+        }
+    }
+
     private void ensureActive() {
         if (!active())
             throw new DisconnectException("NetworkClient is no longer active, state is " + state);
