@@ -58,9 +58,23 @@ public class ClientAssignor {
         VersionedMetadata metadata
     ) {
         this.name = Objects.requireNonNull(name);
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("Assignor name cannot be empty.");
+        }
         this.reason = reason;
         this.minimumVersion = minimumVersion;
+        if (minimumVersion < -1) {
+            // -1 is supported as part of the upgrade from the old protocol to the new protocol. It
+            // basically means that the assignor supports metadata from the old client assignor.
+            throw new IllegalArgumentException("Assignor minimum version must be greater than -1.");
+        }
         this.maximumVersion = maximumVersion;
+        if (maximumVersion < 0) {
+            throw new IllegalArgumentException("Assignor maximum version must be greater than or equals to 0.");
+        } else if (maximumVersion < minimumVersion) {
+            throw new IllegalArgumentException("Assignor maximum version must be greater than or equals to "
+                + "the minimum version.");
+        }
         this.metadata = Objects.requireNonNull(metadata);
     }
 

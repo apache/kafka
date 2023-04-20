@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,6 +32,7 @@ import java.util.Set;
 import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class AssignmentTest {
@@ -120,18 +122,22 @@ public class AssignmentTest {
             ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))
         );
 
-        Assignment assignment1 = new Assignment(
+        Assignment assignment = new Assignment(
             (byte) 1,
             partitions,
             metadata
         );
 
-        Assignment assignment2 = new Assignment(
+        assertEquals(new Assignment(
             (byte) 1,
             partitions,
             metadata
-        );
+        ), assignment);
 
-        assertEquals(assignment1, assignment2);
+        assertNotEquals(new Assignment(
+            (byte) 1,
+            Collections.emptyMap(),
+            metadata
+        ), assignment);
     }
 }

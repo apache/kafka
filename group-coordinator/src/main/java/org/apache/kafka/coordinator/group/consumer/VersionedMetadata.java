@@ -20,7 +20,9 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
- * Immutable versioned metadata.
+ * Immutable versioned metadata. It contains a bunch of bytes tagged with a version. The
+ * format of the bytes is unspecified. This is mainly used by client side assignors to
+ * exchange arbitrary metadata between the members and the assignor and vice versa.
  */
 public class VersionedMetadata {
     public static final VersionedMetadata EMPTY = new VersionedMetadata((short) 0, ByteBuffer.allocate(0));

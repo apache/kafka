@@ -44,17 +44,16 @@ public class VersionedMetadataTest {
 
     @Test
     public void testEquals() {
-        VersionedMetadata metadata1 = new VersionedMetadata(
+        VersionedMetadata metadata = new VersionedMetadata(
             (short) 1,
             ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))
         );
 
-        VersionedMetadata metadata2 = new VersionedMetadata(
+        assertEquals(new VersionedMetadata(
             (short) 1,
             ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))
-        );
+        ), metadata);
 
-        assertEquals(metadata1, metadata2);
-        assertNotEquals(metadata1, VersionedMetadata.EMPTY);
+        assertNotEquals(VersionedMetadata.EMPTY, metadata);
     }
 }

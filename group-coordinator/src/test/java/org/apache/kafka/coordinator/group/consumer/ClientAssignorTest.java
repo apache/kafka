@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientAssignorTest {
@@ -96,7 +97,7 @@ public class ClientAssignorTest {
 
     @Test
     public void testEquals() {
-        ClientAssignor clientAssignor1 = new ClientAssignor(
+        ClientAssignor clientAssignor = new ClientAssignor(
             "range",
             (byte) 2,
             (short) 5,
@@ -107,7 +108,7 @@ public class ClientAssignorTest {
             )
         );
 
-        ClientAssignor clientAssignor2 = new ClientAssignor(
+        assertEquals(new ClientAssignor(
             "range",
             (byte) 2,
             (short) 5,
@@ -116,8 +117,17 @@ public class ClientAssignorTest {
                 (short) 8,
                 ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))
             )
-        );
+        ), clientAssignor);
 
-        assertEquals(clientAssignor1, clientAssignor2);
+        assertNotEquals(new ClientAssignor(
+            "uniform",
+            (byte) 2,
+            (short) 5,
+            (short) 10,
+            new VersionedMetadata(
+                (short) 8,
+                ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))
+            )
+        ), clientAssignor);
     }
 }

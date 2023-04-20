@@ -21,6 +21,9 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetada
 
 import java.util.Objects;
 
+/**
+ * Immutable topic metadata.
+ */
 public class TopicMetadata {
     /**
      * The topic id.
@@ -43,8 +46,17 @@ public class TopicMetadata {
         int numPartitions
     ) {
         this.id = Objects.requireNonNull(id);
+        if (Uuid.ZERO_UUID.equals(id)) {
+            throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
+        }
         this.name = Objects.requireNonNull(name);
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("Topic name cannot be empty.");
+        }
         this.numPartitions = numPartitions;
+        if (numPartitions < 0) {
+            throw new IllegalArgumentException("Number of partitions cannot be negative.");
+        }
     }
 
     /**
