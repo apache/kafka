@@ -19,7 +19,6 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.ConfigUtils;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
 
 import java.time.Duration;
 import java.util.List;
