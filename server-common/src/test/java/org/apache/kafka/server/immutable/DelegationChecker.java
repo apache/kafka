@@ -127,7 +127,7 @@ public abstract class DelegationChecker<D, W, T> {
         assertTrue(persistentCollectionMethodInvokedCorrectly);
     }
 
-    public void doUnsupportedVoidFunctionDelegrationCheck() {
+    public void doUnsupportedVoidFunctionDelegationCheck() {
         if (mockConsumer == null || wrapperConsumer == null) {
             throwExceptionForIllegalTestSetup();
         }
@@ -163,7 +163,7 @@ public abstract class DelegationChecker<D, W, T> {
         }
     }
 
-    public void doUnsupportedFunctionDelegrationCheck() {
+    public void doUnsupportedFunctionDelegationCheck() {
         if (mockConfigurationFunction == null || wrapperFunctionApplier == null) {
             throwExceptionForIllegalTestSetup();
         }

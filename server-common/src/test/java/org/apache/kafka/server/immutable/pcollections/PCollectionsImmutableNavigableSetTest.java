@@ -73,7 +73,7 @@ public class PCollectionsImmutableNavigableSetTest {
     }
 
     @Test
-    public void testDelegationOfAfterAdding() {
+    public void testDelegationOfAfterAdded() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForFunctionInvocation(mock -> mock.plus(eq(SINGLETON_SET.first())), SINGLETON_SET)
                 .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.added(SINGLETON_SET.first()), identity())
@@ -82,7 +82,7 @@ public class PCollectionsImmutableNavigableSetTest {
     }
 
     @Test
-    public void testDelegationOfAfterRemoving() {
+    public void testDelegationOfAfterRemoved() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForFunctionInvocation(mock -> mock.minus(eq(10)), SINGLETON_SET)
                 .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removed(10), identity())
@@ -127,19 +127,19 @@ public class PCollectionsImmutableNavigableSetTest {
     }
 
     @Test
-    public void testDelegationOfPollFirst() {
+    public void testDelegationOfUnsupportedFunctionPollFirst() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(TreePSet::pollFirst)
                 .defineWrapperUnsupportedFunctionInvocation(PCollectionsImmutableNavigableSet::pollFirst)
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfPollLast() {
+    public void testDelegationOfUnsupportedFunctionPollLast() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(TreePSet::pollLast)
                 .defineWrapperUnsupportedFunctionInvocation(PCollectionsImmutableNavigableSet::pollLast)
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
@@ -304,19 +304,19 @@ public class PCollectionsImmutableNavigableSetTest {
     }
 
     @Test
-    public void testDelegationOfAdd() {
+    public void testDelegationOfUnsupportedFunctionAdd() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(mock -> mock.add(eq(this)))
                 .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.add(this))
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRemove() {
+    public void testDelegationOfUnsupportedFunctionRemove() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(mock -> mock.remove(eq(this)))
                 .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.remove(this))
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @ParameterizedTest
@@ -329,44 +329,44 @@ public class PCollectionsImmutableNavigableSetTest {
     }
 
     @Test
-    public void testDelegationOfAddAll() {
+    public void testDelegationOfUnsupportedFunctionAddAll() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(mock -> mock.addAll(eq(Collections.emptyList())))
                 .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.addAll(Collections.emptyList()))
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRetainAll() {
+    public void testDelegationOfUnsupportedFunctionRetainAll() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(mock -> mock.retainAll(eq(Collections.emptyList())))
                 .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.retainAll(Collections.emptyList()))
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRemoveAll() {
+    public void testDelegationOfUnsupportedFunctionRemoveAll() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeAll(eq(Collections.emptyList())))
                 .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeAll(Collections.emptyList()))
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRemoveIf() {
+    public void testDelegationOfUnsupportedFunctionRemoveIf() {
         final Predicate<Object> mockPredicate = mock(Predicate.class);
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeIf(eq(mockPredicate)))
                 .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeIf(mockPredicate))
-                .doUnsupportedFunctionDelegrationCheck();
+                .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfClear() {
+    public void testDelegationOfUnsupportedFunctionClear() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForVoidMethodInvocation(TreePSet::clear)
                 .defineWrapperVoidMethodInvocation(PCollectionsImmutableNavigableSet::clear)
-                .doUnsupportedVoidFunctionDelegrationCheck();
+                .doUnsupportedVoidFunctionDelegationCheck();
     }
 
     @Test

@@ -71,7 +71,7 @@ public class PCollectionsImmutableSetTest {
     }
 
     @Test
-    public void testDelegationOfAfterAdding() {
+    public void testDelegationOfAfterAdded() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.plus(eq(this)), SINGLETON_SET)
             .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.added(this), identity())
@@ -80,7 +80,7 @@ public class PCollectionsImmutableSetTest {
     }
 
     @Test
-    public void testDelegationOfAfterRemoving() {
+    public void testDelegationOfAfterRemoved() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.minus(eq(this)), SINGLETON_SET)
             .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removed(this), identity())
@@ -150,19 +150,19 @@ public class PCollectionsImmutableSetTest {
     }
 
     @Test
-    public void testDelegationOfAdd() {
+    public void testDelegationOfUnsupportedFunctionAdd() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForUnsupportedFunction(mock -> mock.add(eq(this)))
             .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.add(this))
-            .doUnsupportedFunctionDelegrationCheck();
+            .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRemove() {
+    public void testDelegationOfUnsupportedFunctionRemove() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForUnsupportedFunction(mock -> mock.remove(eq(this)))
             .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.remove(this))
-            .doUnsupportedFunctionDelegrationCheck();
+            .doUnsupportedFunctionDelegationCheck();
     }
 
     @ParameterizedTest
@@ -175,44 +175,44 @@ public class PCollectionsImmutableSetTest {
     }
 
     @Test
-    public void testDelegationOfAddAll() {
+    public void testDelegationOfUnsupportedFunctionAddAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForUnsupportedFunction(mock -> mock.addAll(eq(Collections.emptyList())))
             .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.addAll(Collections.emptyList()))
-            .doUnsupportedFunctionDelegrationCheck();
+            .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRetainAll() {
+    public void testDelegationOfUnsupportedFunctionRetainAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForUnsupportedFunction(mock -> mock.retainAll(eq(Collections.emptyList())))
             .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.retainAll(Collections.emptyList()))
-            .doUnsupportedFunctionDelegrationCheck();
+            .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRemoveAll() {
+    public void testDelegationOfUnsupportedFunctionRemoveAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeAll(eq(Collections.emptyList())))
             .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeAll(Collections.emptyList()))
-            .doUnsupportedFunctionDelegrationCheck();
+            .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfRemoveIf() {
+    public void testDelegationOfUnsupportedFunctionRemoveIf() {
         final Predicate<Object> mockPredicate = mock(Predicate.class);
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeIf(eq(mockPredicate)))
             .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeIf(mockPredicate))
-            .doUnsupportedFunctionDelegrationCheck();
+            .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
-    public void testDelegationOfClear() {
+    public void testDelegationOfUnsupportedFunctionClear() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
             .defineMockConfigurationForVoidMethodInvocation(MapPSet::clear)
             .defineWrapperVoidMethodInvocation(PCollectionsImmutableSet::clear)
-            .doUnsupportedVoidFunctionDelegrationCheck();
+            .doUnsupportedVoidFunctionDelegationCheck();
     }
 
     @Test

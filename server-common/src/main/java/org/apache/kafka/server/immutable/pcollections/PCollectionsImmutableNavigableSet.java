@@ -43,7 +43,7 @@ public class PCollectionsImmutableNavigableSet<E> implements ImmutableNavigableS
 
     /**
      * @param e the element
-     * @return a wrapped hash-based persistent set that is empty
+     * @return a wrapped tree-based persistent set that is empty
      * @param <E> the element type
      */
     public static <E extends Comparable<? super E>> PCollectionsImmutableNavigableSet<E> singleton(E e) {
@@ -56,181 +56,181 @@ public class PCollectionsImmutableNavigableSet<E> implements ImmutableNavigableS
 
     @Override
     public PCollectionsImmutableNavigableSet<E> added(E e) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.plus(e));
+        return new PCollectionsImmutableNavigableSet<>(underlying().plus(e));
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> removed(E e) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.minus(e));
+        return new PCollectionsImmutableNavigableSet<>(underlying().minus(e));
     }
 
     @Override
     public E lower(E e) {
-        return underlying.lower(e);
+        return underlying().lower(e);
     }
 
     @Override
     public E floor(E e) {
-        return underlying.floor(e);
+        return underlying().floor(e);
     }
 
     @Override
     public E ceiling(E e) {
-        return underlying.ceiling(e);
+        return underlying().ceiling(e);
     }
 
     @Override
     public E higher(E e) {
-        return underlying.higher(e);
+        return underlying().higher(e);
     }
 
     @Override
     public E pollFirst() {
         // will throw UnsupportedOperationException
-        return underlying.pollFirst();
+        return underlying().pollFirst();
     }
 
     @Override
     public E pollLast() {
         // will throw UnsupportedOperationException
-        return underlying.pollLast();
+        return underlying().pollLast();
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> descendingSet() {
-        return new PCollectionsImmutableNavigableSet<>(underlying.descendingSet());
+        return new PCollectionsImmutableNavigableSet<>(underlying().descendingSet());
     }
 
     @Override
     public Iterator<E> descendingIterator() {
-        return underlying.descendingIterator();
+        return underlying().descendingIterator();
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> subSet(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.subSet(fromElement, fromInclusive, toElement, toInclusive));
+        return new PCollectionsImmutableNavigableSet<>(underlying().subSet(fromElement, fromInclusive, toElement, toInclusive));
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> headSet(E toElement, boolean inclusive) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.headSet(toElement, inclusive));
+        return new PCollectionsImmutableNavigableSet<>(underlying().headSet(toElement, inclusive));
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> tailSet(E fromElement, boolean inclusive) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.tailSet(fromElement, inclusive));
+        return new PCollectionsImmutableNavigableSet<>(underlying().tailSet(fromElement, inclusive));
     }
 
     @Override
     public Comparator<? super E> comparator() {
-        return underlying.comparator();
+        return underlying().comparator();
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> subSet(E fromElement, E toElement) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.subSet(fromElement, toElement));
+        return new PCollectionsImmutableNavigableSet<>(underlying().subSet(fromElement, toElement));
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> headSet(E toElement) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.headSet(toElement));
+        return new PCollectionsImmutableNavigableSet<>(underlying().headSet(toElement));
     }
 
     @Override
     public PCollectionsImmutableNavigableSet<E> tailSet(E fromElement) {
-        return new PCollectionsImmutableNavigableSet<>(underlying.tailSet(fromElement));
+        return new PCollectionsImmutableNavigableSet<>(underlying().tailSet(fromElement));
     }
 
     @Override
     public E first() {
-        return underlying.first();
+        return underlying().first();
     }
 
     @Override
     public E last() {
-        return underlying.last();
+        return underlying().last();
     }
 
     @Override
     public int size() {
-        return underlying.size();
+        return underlying().size();
     }
 
     @Override
     public boolean isEmpty() {
-        return underlying.isEmpty();
+        return underlying().isEmpty();
     }
 
     @Override
     public boolean contains(Object o) {
-        return underlying.contains(o);
+        return underlying().contains(o);
     }
 
     @Override
     public Iterator<E> iterator() {
-        return underlying.iterator();
+        return underlying().iterator();
     }
 
     @Override
     public void forEach(Consumer<? super E> action) {
-        underlying.forEach(action);
+        underlying().forEach(action);
     }
 
     @Override
     public Object[] toArray() {
-        return underlying.toArray();
+        return underlying().toArray();
     }
 
     @Override
     public <T> T[] toArray(T[] a) {
-        return underlying.toArray(a);
+        return underlying().toArray(a);
     }
 
     @Override
     public boolean add(E e) {
         // will throw UnsupportedOperationException
-        return underlying.add(e);
+        return underlying().add(e);
     }
 
     @Override
     public boolean remove(Object o) {
         // will throw UnsupportedOperationException
-        return underlying.remove(o);
+        return underlying().remove(o);
     }
 
     @Override
     public boolean containsAll(Collection<?> c) {
-        return underlying.containsAll(c);
+        return underlying().containsAll(c);
     }
 
     @Override
     public boolean addAll(Collection<? extends E> c) {
         // will throw UnsupportedOperationException
-        return underlying.addAll(c);
+        return underlying().addAll(c);
     }
 
     @Override
     public boolean retainAll(Collection<?> c) {
         // will throw UnsupportedOperationException
-        return underlying.retainAll(c);
+        return underlying().retainAll(c);
     }
 
     @Override
     public boolean removeAll(Collection<?> c) {
         // will throw UnsupportedOperationException
-        return underlying.removeAll(c);
+        return underlying().removeAll(c);
     }
 
     @Override
     public boolean removeIf(Predicate<? super E> filter) {
         // will throw UnsupportedOperationException
-        return underlying.removeIf(filter);
+        return underlying().removeIf(filter);
     }
 
     @Override
     public void clear() {
         // will throw UnsupportedOperationException
-        underlying.clear();
+        underlying().clear();
     }
 
     @Override
@@ -267,6 +267,8 @@ public class PCollectionsImmutableNavigableSet<E> implements ImmutableNavigableS
                 "underlying=" + underlying() +
                 '}';
     }
+
+    // package-private for testing
     TreePSet<E> underlying() {
         return underlying;
     }

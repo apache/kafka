@@ -38,7 +38,7 @@ public interface ImmutableNavigableSet<E> extends ImmutableSet<E>, NavigableSet<
 
     /**
      * @param e the element
-     * @return a wrapped hash-based persistent set that is empty
+     * @return a wrapped tree-based persistent set that is empty
      * @param <E> the element type
      */
     static <E extends Comparable<? super E>> ImmutableNavigableSet<E> singleton(E e) {
@@ -47,13 +47,13 @@ public interface ImmutableNavigableSet<E> extends ImmutableSet<E>, NavigableSet<
 
     /**
      * @param e the element
-     * @return a wrapped persistent sorted set that differs from this one in that the given element is added (if necessary)
+     * @return a wrapped persistent navigable set that differs from this one in that the given element is added (if necessary)
      */
     ImmutableNavigableSet<E> added(E e);
 
     /**
      * @param e the element
-     * @return a wrapped persistent sorted set that differs from this one in that the given element is added (if necessary)
+     * @return a wrapped persistent navigable set that differs from this one in that the given element is added (if necessary)
      */
     ImmutableNavigableSet<E> removed(E e);
 }
