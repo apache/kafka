@@ -864,6 +864,7 @@ project(':core') {
 
 
     implementation libs.argparse4j
+    implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
@@ -897,6 +898,7 @@ project(':core') {
     testImplementation project(':storage:api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1221,6 +1223,10 @@ project(':metadata') {
 
   javadoc {
     enabled = false
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-metadata.xml")
   }
 }
 
@@ -1554,11 +1560,13 @@ project(':server-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.joptSimple
+    implementation libs.pcollections
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
@@ -1604,6 +1612,10 @@ project(':server-common') {
 
   clean.doFirst {
     delete "$buildDir/kafka/"
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-server-common.xml")
   }
 }
 

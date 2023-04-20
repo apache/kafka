@@ -59,7 +59,7 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
@@ -74,7 +74,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
-import org.mockito.Mockito.{mock, never, reset, times, verify, when}
+import org.mockito.Mockito.{doReturn, mock, mockConstruction, never, reset, times, verify, verifyNoMoreInteractions, when}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
@@ -341,6 +341,44 @@ class ReplicaManagerTest {
       assertTrue(appendResult.hasFired)
     } finally {
       rm.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def checkRemoveMetricsCountMatchRegisterCount(): Unit = {
+    val mockLogMgr = mock(classOf[LogManager])
+    doReturn(Seq.empty, Seq.empty).when(mockLogMgr).liveLogDirs
+
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val rm = new ReplicaManager(
+        metrics = metrics,
+        config = config,
+        time = time,
+        scheduler = new MockScheduler(time),
+        logManager = mockLogMgr,
+        quotaManagers = quotaManager,
+        metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+        logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+        alterPartitionManager = alterPartitionManager,
+        threadNamePrefix = Option(this.getClass.getName))
+
+      // shutdown ReplicaManager so that metrics are removed
+      rm.shutdown()
+
+      // Use the second instance of metrics group that is constructed. The first instance is constructed by
+      // ReplicaManager constructor > BrokerTopicStats > BrokerTopicMetrics.
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
+      verify(mockMetricsGroup, times(9)).newGauge(anyString(), any())
+      verify(mockMetricsGroup, times(3)).newMeter(anyString(), anyString(), any(classOf[TimeUnit]))
+      verify(mockMetricsGroup, times(12)).removeMetric(anyString())
+
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      if (mockMetricsGroupCtor != null) {
+        mockMetricsGroupCtor.close()
+      }
     }
   }
 

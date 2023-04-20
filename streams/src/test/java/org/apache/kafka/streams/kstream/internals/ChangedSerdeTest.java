@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Assert;
@@ -36,11 +37,15 @@ import static org.junit.Assert.assertThrows;
 public class ChangedSerdeTest {
     private static final String TOPIC = "some-topic";
 
+    private static final Serializer<String> STRING_SERIALIZER = Serdes.String().serializer();
     private static final ChangedSerializer<String> CHANGED_STRING_SERIALIZER =
-            new ChangedSerializer<>(Serdes.String().serializer());
-
+            new ChangedSerializer<>(STRING_SERIALIZER);
     private static final ChangedDeserializer<String> CHANGED_STRING_DESERIALIZER =
             new ChangedDeserializer<>(Serdes.String().deserializer());
+
+    private static final int NEW_OLD_FLAG_SIZE = 1;
+    private static final int IS_LATEST_FLAG_SIZE = 1;
+    private static final int UINT32_SIZE = 4;
 
     final String nonNullNewValue = "hello";
     final String nonNullOldValue = "world";
@@ -105,5 +110,66 @@ public class ChangedSerdeTest {
         Assert.assertThrows(
             StreamsException.class,
             () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized));
+    }
+
+    @Test
+    public void shouldDeserializeReservedVersions3Through5() {
+        // `isLatest = true`
+        checkRoundTripForReservedVersion(new Change<>(nonNullNewValue, null, true));
+        checkRoundTripForReservedVersion(new Change<>(null, nonNullOldValue, true));
+        checkRoundTripForReservedVersion(new Change<>(nonNullNewValue, nonNullOldValue, true));
+
+        // `isLatest = false`
+        checkRoundTripForReservedVersion(new Change<>(nonNullNewValue, null, false));
+        checkRoundTripForReservedVersion(new Change<>(null, nonNullOldValue, false));
+        checkRoundTripForReservedVersion(new Change<>(nonNullNewValue, nonNullOldValue, false));
+    }
+
+    // versions 3 through 5 are reserved in the deserializer in case we want to use them in the
+    // future (in which case we save users from needing to perform another rolling upgrade by
+    // introducing these reserved versions in the same AK release as version 2).
+    // so, this serialization code is not actually in the serializer itself, but only here for
+    // now for purposes of testing the deserializer.
+    private static byte[] serializeVersions3Through5(final String topic, final Change<String> data) {
+        final boolean oldValueIsNotNull = data.oldValue != null;
+        final boolean newValueIsNotNull = data.newValue != null;
+
+        final byte[] newData = STRING_SERIALIZER.serialize(topic, null, data.newValue);
+        final byte[] oldData = STRING_SERIALIZER.serialize(topic, null, data.oldValue);
+
+        final int newDataLength = newValueIsNotNull ? newData.length : 0;
+        final int oldDataLength = oldValueIsNotNull ? oldData.length : 0;
+
+        // The serialization format is:
+        // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=3}
+        // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE newOldFlag=4}
+        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=5}
+        final ByteBuffer buf;
+        final byte isLatest = data.isLatest ? (byte) 1 : (byte) 0;
+        if (newValueIsNotNull && oldValueIsNotNull) {
+            final int capacity = UINT32_SIZE + newDataLength + oldDataLength + IS_LATEST_FLAG_SIZE + NEW_OLD_FLAG_SIZE;
+            buf = ByteBuffer.allocate(capacity);
+            ByteUtils.writeUnsignedInt(buf, newDataLength);
+            buf.put(newData).put(oldData).put(isLatest).put((byte) 5);
+        } else if (newValueIsNotNull) {
+            final int capacity = newDataLength + IS_LATEST_FLAG_SIZE + NEW_OLD_FLAG_SIZE;
+            buf = ByteBuffer.allocate(capacity);
+            buf.put(newData).put(isLatest).put((byte) 4);
+        } else if (oldValueIsNotNull) {
+            final int capacity = oldDataLength + IS_LATEST_FLAG_SIZE + NEW_OLD_FLAG_SIZE;
+            buf = ByteBuffer.allocate(capacity);
+            buf.put(oldData).put(isLatest).put((byte) 3);
+        } else {
+            throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
+        }
+
+        return buf.array();
+    }
+
+    private static void checkRoundTripForReservedVersion(final Change<String> data) {
+        final byte[] serialized = serializeVersions3Through5(TOPIC, data);
+        assertThat(serialized, is(notNullValue()));
+        final Change<String> deserialized = CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized);
+        assertThat(deserialized, is(data));
     }
 }
