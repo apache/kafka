@@ -579,7 +579,9 @@ public class TopicAdminTest {
         Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
+            new MockTime(), cluster, AdminClientConfig.RETRIES_CONFIG, "0"
+        )) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
