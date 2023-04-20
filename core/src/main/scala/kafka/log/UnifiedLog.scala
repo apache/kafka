@@ -1039,6 +1039,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         throw new InvalidRecordException("Append from Raft leader did not set the batch epoch correctly")
       }
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
+      // 消息格式Version 2的消息批次，起始位移值必须从0开始
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.CLIENT && batch.baseOffset != 0)
         throw new InvalidRecordException(s"The baseOffset of the record batch in the append to $topicPartition should " +
           s"be 0, but it is ${batch.baseOffset}")
@@ -1051,20 +1052,24 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Also indicate whether we have the accurate first offset or not
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = Optional.of(new LogOffsetMetadata(batch.baseOffset))
-        lastOffsetOfFirstBatch = batch.lastOffset
+          firstOffset = Optional.of(new LogOffsetMetadata(batch.baseOffset))// 更新firstOffset字段
+        lastOffsetOfFirstBatch = batch.lastOffset// 更新lastOffsetOfFirstBatch字段
         readFirstMessage = true
       }
 
       // check that offsets are monotonically increasing
+      // 一旦出现当前lastOffset不小于下一个batch的lastOffset，说明上一个batch中有消息的位移值大于后面batch的消息
+      // 这违反了位移值单调递增性
       if (lastOffset >= batch.lastOffset)
         monotonic = false
 
       // update the last offset seen
+      // 使用当前batch最后一条消息的位移值去更新lastOffset
       lastOffset = batch.lastOffset
       lastLeaderEpoch = batch.partitionLeaderEpoch
 
       // Check if the message sizes are valid.
+      // 检查消息批次总字节数大小是否超限，即是否大于Broker端参数max.message.bytes值
       val batchSize = batch.sizeInBytes
       if (!ignoreRecordSize && batchSize > config.maxMessageSize) {
         brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
@@ -1074,31 +1079,38 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       }
 
       // check the validity of the message by checking CRC
+      // 执行消息批次校验，包括格式是否正确以及CRC校验
       if (!batch.isValid) {
         brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
         throw new CorruptRecordException(s"Record is corrupt (stored crc = ${batch.checksum()}) in topic partition $topicPartition.")
       }
 
+      // 更新maxTimestamp字段和offsetOfMaxTimestamp
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
         offsetOfMaxTimestamp = lastOffset
       }
 
+      // 累加消息批次计数器以及有效字节数，更新shallowMessageCount字段
       shallowMessageCount += 1
       validBytesCount += batchSize
 
+      // 从消息批次中获取压缩器类型
       val batchCompression = CompressionType.forId(batch.compressionType.id)
       if (batchCompression != CompressionType.NONE)
         sourceCompression = batchCompression
     }
 
     // Apply broker-side compression if any
+    // 获取Broker端设置的压缩器类型，即Broker端参数compression.type值。
+    // 该参数默认值是producer，表示sourceCodec用的什么压缩器，targetCodec就用什么
     val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(sourceCompression)
     val lastLeaderEpochOpt: OptionalInt = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
       OptionalInt.of(lastLeaderEpoch)
     else
       OptionalInt.empty()
 
+    // 最后生成LogAppendInfo对象并返回
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp,
       RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression, targetCompression,
       shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], null,
@@ -1135,7 +1147,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Read messages from the log.
-   *
+   * startOffset，即从 Log 对象的哪个位移值开始读消息。
+   * maxLength，即最多能读取多少字节。
+   * isolation，设置读取隔离级别，主要控制能够读取的最大位移值，多用于 Kafka 事务。
+   * minOneMessage，即是否允许至少读一条消息。设想如果消息很大，超过了 maxLength，正常情况下 read 方法永远不会返回任何消息。但如果设置了该参数为 true，read 方法就保证至少能够返回一条消息。
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
    * @param isolation The fetch isolation, which controls the maximum offset we are allowed to read

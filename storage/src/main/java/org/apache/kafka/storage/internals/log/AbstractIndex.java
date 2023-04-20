@@ -37,6 +37,14 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * The abstract index class which holds entry format agnostic methods.
+ * 它定义了最顶层的抽象类，这个类封装了所有索引类型的公共操作。
+ * AbstractIndex 是抽象的索引对象类。可以说，它是承载索引项的容器，而每个继承它的子类负责定义具体的索引项结构
+ * Kafka 中的索引底层的实现原理是：内存映射文件，即 Java 中的 MappedByteBuffer。
+ * 使用内存映射文件的主要优势在于，它有很高的 I/O 性能，特别是对于索引这样的小文件来说，
+ * 由于文件内存被直接映射到一段虚拟内存上，访问内存映射文件的速度要快于普通的读写文件速度。
+ *
+ * 另外，在很多操作系统中（比如 Linux），这段映射的内存区域实际上就是内核的页缓存（Page Cache）。
+ * 这就意味着，里面的数据不需要重复拷贝到用户态空间，避免了很多不必要的时间、空间消耗。
  */
 public abstract class AbstractIndex implements Closeable {
 
@@ -48,15 +56,26 @@ public abstract class AbstractIndex implements Closeable {
 
     protected final ReentrantLock lock = new ReentrantLock();
 
-    private final long baseOffset;
-    private final int maxIndexSize;
-    private final boolean writable;
+    //索引对象对应日志段对象的起始位移值。
+    // 举个例子，如果你查看 Kafka 日志路径的话，就会发现，日志文件和索引文件都是成组出现的。
+    // 比如说，如果日志文件是 00000000000000000123.log，正常情况下，一定还有一组索引文件 00000000000000000123.index、00000000000000000123.timeindex 等。
+    // 这里的“123”就是这组文件的起始位移值，也就是 baseOffset 值。
+    private final long baseOffset; //起始位移值（baseOffset）
+    //它控制索引文件的最大长度。Kafka 源码传入该参数的值是 Broker 端参数 segment.index.bytes 的值，即 10MB。
+    // 这就是在默认情况下，所有 Kafka 索引文件大小都是 10MB 的原因。
+    private final int maxIndexSize; //索引文件最大字节数（maxIndexSize)
+    //“True”表示以“读写”方式打开，“False”表示以“只读”方式打开。
+    private final boolean writable; //索引文件打开方式（writable）
 
-    private volatile File file;
+    private volatile File file;//索引文件（file）
 
     // Length of the index file
     private volatile long length;
 
+    //使用内存映射文件的主要优势在于，它有很高的 I/O 性能，特别是对于索引这样的小文件来说，
+    // 由于文件内存被直接映射到一段虚拟内存上，访问内存映射文件的速度要快于普通的读写文件速度。
+    //总之，AbstractIndex 中最重要的就是这个 mmap 变量了。
+    // 事实上，AbstractIndex 继承类实现添加索引项的主要逻辑，也就是向 mmap 中添加对应的字段。
     private volatile MappedByteBuffer mmap;
 
     /**
@@ -85,8 +104,10 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     private void createAndAssignMmap() throws IOException {
+        // 第1步：创建索引文件
         boolean newlyCreated = file.createNewFile();
         RandomAccessFile raf;
+        // 第2步：以writable指定的方式（读写方式或只读方式）打开索引文件
         if (writable)
             raf = new RandomAccessFile(file, "rw");
         else
@@ -97,16 +118,20 @@ public abstract class AbstractIndex implements Closeable {
             if (newlyCreated) {
                 if (maxIndexSize < entrySize())
                     throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize);
+                // 第3步：设置索引文件长度，roundDownToExactMultiple计算的是不超过maxIndexSize的最大整数倍entrySize
+                // 比如maxIndexSize=1234567，entrySize=8，那么调整后的文件长度为1234560
                 raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize()));
             }
 
+            // 第4步：更新索引长度字段_length
             long length = raf.length();
+            // 第5步：创建MappedByteBuffer对象并返回
             MappedByteBuffer mmap = createMappedBuffer(raf, newlyCreated, length, writable, entrySize());
 
             this.length = length;
             this.mmap = mmap;
         } finally {
-            Utils.closeQuietly(raf, "index " + file.getName());
+            Utils.closeQuietly(raf, "index " + file.getName());// 关闭打开索引文件句柄
         }
     }
 
@@ -137,6 +162,9 @@ public abstract class AbstractIndex implements Closeable {
      * @param buffer the buffer of this memory mapped index.
      * @param n the slot
      * @return the index entry stored in the given slot.
+     * AbstractIndex 定义了抽象方法 parseEntry 用于查找给定的索引项
+     * 这里的“n”表示要查找给定 ByteBuffer 中保存的第 n 个索引项（在 Kafka 中也称第 n 个槽）。
+     * IndexEntry 是源码定义的一个接口，里面有两个方法：indexKey 和 indexValue，分别返回不同类型索引的 对。
      */
     protected abstract IndexEntry parseEntry(ByteBuffer buffer, int n);
 
@@ -468,12 +496,14 @@ public abstract class AbstractIndex implements Closeable {
             idx = raf.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, length);
 
         /* set the position in the index for the next entry */
+        // 第6步：如果是新创建的索引文件，将MappedByteBuffer对象的当前位置置成0
+        // 如果索引文件已存在，将MappedByteBuffer对象的当前位置设置成最后一个索引项所在的位置
         if (newlyCreated)
             idx.position(0);
         else
             // if this is a pre-existing index, assume it is valid and set position to last entry
             idx.position(roundDownToExactMultiple(idx.limit(), entrySize));
-
+        // 第7步：返回创建的MappedByteBuffer对象
         return idx;
     }
 
@@ -483,17 +513,23 @@ public abstract class AbstractIndex implements Closeable {
     private int indexSlotRangeFor(ByteBuffer idx, long target, IndexSearchType searchEntity,
                                   SearchResultType searchResultType) {
         // check if the index is empty
+        // 第1步：如果当前索引为空，直接返回<-1,-1>对
         if (entries == 0)
             return -1;
 
+        // 第3步：确认热区首个索引项位于哪个槽。_warmEntries就是所谓的分割线，目前固定为8192字节处
+        // 如果是OffsetIndex，_warmEntries = 8192 / 8 = 1024，即第1024个槽
+        // 如果是TimeIndex，_warmEntries = 8192 / 12 = 682，即第682个槽
         int firstHotEntry = Math.max(0, entries - 1 - warmEntries());
         // check if the target offset is in the warm section of the index
+        // 第4步：判断target位移值在热区还是冷区
         if (compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
             return binarySearch(idx, target, searchEntity,
                 searchResultType, firstHotEntry, entries - 1);
         }
 
         // check if the target offset is smaller than the least offset
+        // 第5步：确保target位移值不能小于当前最小位移值
         if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0) {
             switch (searchResultType) {
                 case LARGEST_LOWER_BOUND:
@@ -502,7 +538,7 @@ public abstract class AbstractIndex implements Closeable {
                     return 0;
             }
         }
-
+        // 第6步：如果在冷区，搜索冷区
         return binarySearch(idx, target, searchEntity, searchResultType, 0, firstHotEntry);
     }
 

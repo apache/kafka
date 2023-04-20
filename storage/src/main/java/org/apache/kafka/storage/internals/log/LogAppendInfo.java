@@ -76,19 +76,19 @@ public class LogAppendInfo {
      * @param lastOffsetOfFirstBatch The last offset of the first batch
      */
     public LogAppendInfo(Optional<LogOffsetMetadata> firstOffset,
-                         long lastOffset,
+                         long lastOffset,// 消息集合最后一条消息的位移值
                          OptionalInt lastLeaderEpoch,
-                         long maxTimestamp,
-                         long offsetOfMaxTimestamp,
-                         long logAppendTime,
-                         long logStartOffset,
-                         RecordConversionStats recordConversionStats,
-                         CompressionType sourceCompression,
-                         CompressionType targetCompression,
-                         int shallowCount,
-                         int validBytes,
-                         boolean offsetsMonotonic,
-                         long lastOffsetOfFirstBatch) {
+                         long maxTimestamp,// 消息集合最大消息时间戳
+                         long offsetOfMaxTimestamp,// 消息集合最大消息时间戳所属消息的位移值
+                         long logAppendTime,// 写入消息时间戳
+                         long logStartOffset,// 消息集合首条消息的位移值
+                         RecordConversionStats recordConversionStats,// 消息转换统计类，里面记录了执行了格式转换的消息数等数据
+                         CompressionType sourceCompression,// 消息集合中消息使用的压缩器（Compressor）类型，比如是Snappy还是LZ4
+                         CompressionType targetCompression,// 写入消息时需要使用的压缩器类型
+                         int shallowCount,// 消息批次数，每个消息批次下可能包含多条消息
+                         int validBytes,// 写入消息总字节数
+                         boolean offsetsMonotonic,// 消息位移值是否是顺序增加的
+                         long lastOffsetOfFirstBatch) {// 首个消息批次中最后一条消息的位移
         this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, offsetOfMaxTimestamp, logAppendTime, logStartOffset,
                 recordConversionStats, sourceCompression, targetCompression, shallowCount, validBytes, offsetsMonotonic,
                 lastOffsetOfFirstBatch, Collections.<RecordError>emptyList(), null, LeaderHwChange.NONE);

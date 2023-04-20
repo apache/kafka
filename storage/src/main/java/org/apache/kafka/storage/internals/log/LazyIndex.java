@@ -40,6 +40,9 @@ import org.apache.kafka.common.utils.Utils;
  *
  * Methods of this class are thread safe. Make sure to check `AbstractIndex` subclasses
  * documentation to establish their thread safety.
+ * 它定义了 AbstractIndex 上的一个包装类，实现索引项延迟加载。这个类主要是为了提高性能。
+ * 仅仅是包装了一个 AbstractIndex 的实现类，用于延迟加载。
+ * LazyIndex 的作用是为了提升性能，并没有什么功能上的改进。
  */
 public class LazyIndex<T extends AbstractIndex> {
 

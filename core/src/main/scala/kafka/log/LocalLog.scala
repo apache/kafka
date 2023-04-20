@@ -386,6 +386,7 @@ class LocalLog(@volatile private var _dir: File,
       trace(s"Reading maximum $maxLength bytes at offset $startOffset from log with " +
         s"total length ${segments.sizeInBytes} bytes")
 
+      // 读取消息时没有使用Monitor锁同步机制，因此这里取巧了，用本地变量的方式把LEO对象保存起来，避免争用（race condition）
       val endOffsetMetadata = nextOffsetMetadata
       val endOffset = endOffsetMetadata.messageOffset
       var segmentOpt = segments.floorSegment(startOffset)
@@ -395,7 +396,7 @@ class LocalLog(@volatile private var _dir: File,
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
           s"but we only have log segments upto $endOffset.")
 
-      if (startOffset == maxOffsetMetadata.messageOffset)
+      if (startOffset == maxOffsetMetadata.messageOffset)// 如果从LEO处开始读取，那么自然不会返回任何数据，直接返回空消息集合即可
         emptyFetchDataInfo(maxOffsetMetadata, includeAbortedTxns)
       else if (startOffset > maxOffsetMetadata.messageOffset)
         emptyFetchDataInfo(convertToOffsetMetadataOrThrow(startOffset), includeAbortedTxns)
@@ -413,11 +414,12 @@ class LocalLog(@volatile private var _dir: File,
             if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) maxOffsetMetadata.relativePositionInSegment
             else segment.size
 
+          // 调用日志段对象的read方法执行真正的读取消息操作
           fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
           if (fetchDataInfo != null) {
             if (includeAbortedTxns)
               fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
-          } else segmentOpt = segments.higherSegment(baseOffset)
+          } else segmentOpt = segments.higherSegment(baseOffset)// 如果没有返回任何消息，去下一个日志段对象试试
         }
 
         if (fetchDataInfo != null) fetchDataInfo
@@ -425,6 +427,7 @@ class LocalLog(@volatile private var _dir: File,
           // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
           // this can happen when all messages with offset larger than start offsets have been deleted.
           // In this case, we will return the empty set with log end offset metadata
+          // 已经读到日志末尾还是没有数据返回，只能返回空消息集合
           new FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
         }
       }

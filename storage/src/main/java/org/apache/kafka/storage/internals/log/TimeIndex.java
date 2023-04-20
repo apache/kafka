@@ -49,10 +49,11 @@ import java.nio.MappedByteBuffer;
  *
  * No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
  *
+ * 定义时间戳索引，保存“< 时间戳，位移值 >”对。
  */
 public class TimeIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(TimeIndex.class);
-    private static final int ENTRY_SIZE = 12;
+    private static final int ENTRY_SIZE = 12;//同理，TimeIndex 中的时间戳类型是长整型，占用 8 个字节，位移依然使用相对位移值，占用 4 个字节，因此总共需要 12 个字节。
 
     private volatile TimestampOffset lastEntry;
 

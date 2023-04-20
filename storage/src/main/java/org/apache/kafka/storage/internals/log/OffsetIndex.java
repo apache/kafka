@@ -49,10 +49,13 @@ import java.util.Optional;
  *
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal
  * storage format.
+ * 定义位移索引，保存“< 位移值，文件磁盘物理位置 >”对。
  */
 public class OffsetIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(OffsetIndex.class);
-    private static final int ENTRY_SIZE = 8;
+    //而 Broker 端参数 log.segment.bytes 是整型，这说明，Kafka 中每个日志段文件的大小不会超过 2^32，即 4GB，
+    //这就说明同一个日志段文件上的位移值减去 baseOffset 的差值一定在整数范围内。因此，源码只需要 4 个字节保存就行了。
+    private static final int ENTRY_SIZE = 8;//在 OffsetIndex 中，位移值用 4 个字节来表示，物理磁盘位置也用 4 个字节来表示，所以总共是 8 个字节。
 
     /* the last offset in the index */
     private long lastOffset;
@@ -142,18 +145,25 @@ public class OffsetIndex extends AbstractIndex {
     public void append(long offset, int position) {
         lock.lock();
         try {
+            // 第1步：判断索引文件未写满
             if (isFull())
                 throw new IllegalArgumentException("Attempt to append to a full index (size = " + entries() + ").");
 
+            // 第2步：必须满足以下条件之一才允许写入索引项：
+            // 条件1：当前索引文件为空
+            // 条件2：要写入的位移大于当前所有已写入的索引项的位移——Kafka规定索引项中的位移值必须是单调增加的
             if (entries() == 0 || offset > lastOffset) {
                 log.trace("Adding index entry {} => {} to {}", offset, position, file().getAbsolutePath());
-                mmap().putInt(relativeOffset(offset));
-                mmap().putInt(position);
+                mmap().putInt(relativeOffset(offset));// 第3步A：向mmap中写入相对位移值
+                mmap().putInt(position);// 第3步B：向mmap中写入物理位置信息
+                // 第4步：更新其他元数据统计信息，如当前索引项计数器_entries和当前索引项最新位移值_lastOffset
                 incrementEntries();
                 lastOffset = offset;
+                // 第5步：执行校验。写入的索引项格式必须符合要求，即索引项个数*单个索引项占用字节数匹配当前文件物理大小，否则说明文件已损坏
                 if (entries() * ENTRY_SIZE != mmap().position())
                     throw new IllegalStateException(entries() + " entries but file position in index is " + mmap().position());
             } else
+                // 如果第2步中两个条件都不满足，不能执行写入索引项操作，抛出异常
                 throw new InvalidOffsetException("Attempt to append an offset " + offset + " to position " + entries() +
                     " no larger than the last offset appended (" + lastOffset + ") to " + file().getAbsolutePath());
         } finally {
@@ -201,6 +211,9 @@ public class OffsetIndex extends AbstractIndex {
     }
 
     @Override
+    //OffsetPosition 是实现 IndexEntry 的实现类，Key 就是之前说的位移值，而 Value 就是物理磁盘位置值。
+    // 所以，这里你能看到代码调用了 relativeOffset(buffer, n) + baseOffset 计算出绝对位移值，
+    // 之后调用 physical(buffer, n) 计算物理磁盘位置，最后将它们封装到一起作为一个独立的索引项返回。
     protected OffsetPosition parseEntry(ByteBuffer buffer, int n) {
         return new OffsetPosition(baseOffset() + relativeOffset(buffer, n), physical(buffer, n));
     }
