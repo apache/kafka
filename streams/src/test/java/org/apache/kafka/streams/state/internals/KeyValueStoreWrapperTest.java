@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -116,36 +117,40 @@ public class KeyValueStoreWrapperTest {
     public void shouldPutToTimestampedStore() {
         givenWrapperWithTimestampedStore();
 
-        wrapper.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp());
 
+        assertThat(putReturnCode, equalTo(PUT_RETURN_CODE_IS_LATEST));
         verify(timestampedStore).put(KEY, VALUE_AND_TIMESTAMP);
     }
 
     @Test
     public void shouldPutToVersionedStore() {
         givenWrapperWithVersionedStore();
+        when(versionedStore.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp())).thenReturn(12L);
 
-        wrapper.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp());
 
-        verify(versionedStore).put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp());
+        assertThat(putReturnCode, equalTo(12L));
     }
 
     @Test
     public void shouldPutNullToTimestampedStore() {
         givenWrapperWithTimestampedStore();
 
-        wrapper.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp());
 
+        assertThat(putReturnCode, equalTo(PUT_RETURN_CODE_IS_LATEST));
         verify(timestampedStore).put(KEY, null);
     }
 
     @Test
     public void shouldPutNullToVersionedStore() {
         givenWrapperWithVersionedStore();
+        when(versionedStore.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp())).thenReturn(12L);
 
-        wrapper.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp());
 
-        verify(versionedStore).put(KEY, null, VALUE_AND_TIMESTAMP.timestamp());
+        assertThat(putReturnCode, equalTo(12L));
     }
 
     @Test

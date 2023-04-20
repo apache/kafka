@@ -55,7 +55,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     public final static String ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG = "allow.everyone.if.no.acl.found";
 
     /**
-     * A future which is completed once we have loaded up to the initial high water mark.
+     * A future which is completed once we have loaded up to the initial high watermark.
      */
     private final CompletableFuture<Void> initialLoadFuture = new CompletableFuture<>();
 

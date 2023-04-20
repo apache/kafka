@@ -228,6 +228,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       flatMap(_.node(listenerName.value()).asScala).toSeq
   }
 
+  // Does NOT include offline replica metadata
   override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     Option(_currentImage.topics().getTopic(topicName)).
       flatMap(topic => Option(topic.partitions().get(partitionId))).
@@ -238,7 +239,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         setLeader(partition.leader).
         setLeaderEpoch(partition.leaderEpoch).
         setIsr(Replicas.toList(partition.isr)).
-        setZkVersion(partition.partitionEpoch)))
+        setZkVersion(partition.partitionEpoch).
+        setReplicas(Replicas.toList(partition.replicas))))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
@@ -308,6 +310,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     } else {
       Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
     }
+  }
+
+  def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
+    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
+      map(brokerRegistration => brokerRegistration.epoch())
   }
 
   override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {

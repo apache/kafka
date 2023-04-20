@@ -47,7 +47,8 @@ class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KO
                     .withValue(
                         new Change<>(
                             getValueOrNull(record.value().newValue),
-                            getValueOrNull(record.value().oldValue)))
+                            getValueOrNull(record.value().oldValue),
+                            record.value().isLatest))
                     .withTimestamp(
                         record.value().newValue != null ? record.value().newValue.timestamp()
                             : record.timestamp())

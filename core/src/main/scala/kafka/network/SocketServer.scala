@@ -723,6 +723,10 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         new InetSocketAddress(host, port)
     val serverChannel = ServerSocketChannel.open()
     serverChannel.configureBlocking(false)
+    // Configure the socket with setReuseAddress(true). This is done to aid use-cases where the kafka
+    // server is rapidly shut down and started up on the same port (e.g. application integration test suites
+    // that embed a kafka cluster).
+    serverChannel.socket().setReuseAddress(true);
     if (recvBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
       serverChannel.socket().setReceiveBufferSize(recvBufferSize)
 

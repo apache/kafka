@@ -483,6 +483,18 @@ public class CachingKeyValueStore
     }
 
     @Override
+    public void clearCache() {
+        validateStoreOpen();
+        lock.writeLock().lock();
+        try {
+            validateStoreOpen();
+            context.cache().clear(cacheName);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
     public void close() {
         lock.writeLock().lock();
         try {

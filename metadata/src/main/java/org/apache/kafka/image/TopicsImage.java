@@ -21,13 +21,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-
 
 /**
  * Represents the topics in the metadata image.
@@ -35,27 +34,32 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class TopicsImage {
-    public static final TopicsImage EMPTY =
-        new TopicsImage(Collections.emptyMap(), Collections.emptyMap());
+    public static final TopicsImage EMPTY =  new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
 
-    private final Map<Uuid, TopicImage> topicsById;
-    private final Map<String, TopicImage> topicsByName;
+    private final ImmutableMap<Uuid, TopicImage> topicsById;
+    private final ImmutableMap<String, TopicImage> topicsByName;
 
-    public TopicsImage(Map<Uuid, TopicImage> topicsById,
-                       Map<String, TopicImage> topicsByName) {
-        this.topicsById = Collections.unmodifiableMap(topicsById);
-        this.topicsByName = Collections.unmodifiableMap(topicsByName);
+    public TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById,
+                       ImmutableMap<String, TopicImage> topicsByName) {
+        this.topicsById = topicsById;
+        this.topicsByName = topicsByName;
+    }
+
+    public TopicsImage including(TopicImage topic) {
+        return new TopicsImage(
+            this.topicsById.updated(topic.id(), topic),
+            this.topicsByName.updated(topic.name(), topic));
     }
 
     public boolean isEmpty() {
         return topicsById.isEmpty() && topicsByName.isEmpty();
     }
 
-    public Map<Uuid, TopicImage> topicsById() {
+    public ImmutableMap<Uuid, TopicImage> topicsById() {
         return topicsById;
     }
 
-    public Map<String, TopicImage> topicsByName() {
+    public ImmutableMap<String, TopicImage> topicsByName() {
         return topicsByName;
     }
 
@@ -74,8 +78,8 @@ public final class TopicsImage {
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
-        for (TopicImage topicImage : topicsById.values()) {
-            topicImage.write(writer, options);
+        for (Map.Entry<Uuid, TopicImage> entry : topicsById.entrySet()) {
+            entry.getValue().write(writer, options);
         }
     }
 

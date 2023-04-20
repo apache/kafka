@@ -525,7 +525,7 @@ public class StandardAuthorizerData {
         }
         // Check if the operation field matches. Here we hit a slight complication.
         // ACLs for various operations (READ, WRITE, DELETE, ALTER), "imply" the presence
-        // of DESCRIBE, even if it isn't explictly stated. A similar rule applies to
+        // of DESCRIBE, even if it isn't explicitly stated. A similar rule applies to
         // DESCRIBE_CONFIGS.
         //
         // But this rule only applies to ALLOW ACLs. So for example, a DENY ACL for READ
