@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
-public class PurgatoryTest {
+public class DeferredEventPurgatoryTest {
 
     static class SampleDeferredEvent implements DeferredEvent {
         private final CompletableFuture<Void> future = new CompletableFuture<>();
@@ -51,7 +51,7 @@ public class PurgatoryTest {
 
     @Test
     public void testCompleteEvents() {
-        Purgatory purgatory = new Purgatory();
+        DeferredEventPurgatory purgatory = new DeferredEventPurgatory();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
@@ -72,7 +72,7 @@ public class PurgatoryTest {
 
     @Test
     public void testFailOnIncorrectOrdering() {
-        Purgatory purgatory = new Purgatory();
+        DeferredEventPurgatory purgatory = new DeferredEventPurgatory();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         purgatory.add(2, event1);
@@ -81,7 +81,7 @@ public class PurgatoryTest {
 
     @Test
     public void testFailEvents() {
-        Purgatory purgatory = new Purgatory();
+        DeferredEventPurgatory purgatory = new DeferredEventPurgatory();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();

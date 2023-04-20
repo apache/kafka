@@ -28,7 +28,7 @@ import java.util.TreeMap;
  * The purgatory which holds events that have been started, but not yet completed.
  * We wait for the high watermark of the log to advance before completing them.
  */
-public class Purgatory {
+public class DeferredEventPurgatory {
     /**
      * A map from log offsets to events.  Each event will be completed once the log
      * advances past its offset.

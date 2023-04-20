@@ -88,7 +88,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
-import org.apache.kafka.purgatory.Purgatory;
+import org.apache.kafka.purgatory.DeferredEventPurgatory;
 import org.apache.kafka.purgatory.DeferredEvent;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
@@ -1488,7 +1488,7 @@ public final class QuorumController implements Controller {
      * The purgatory which holds deferred operations which are waiting for the metadata
      * log's high water mark to advance.  This must be accessed only by the event queue thread.
      */
-    private final Purgatory purgatory;
+    private final DeferredEventPurgatory purgatory;
 
     /**
      * A predicate that returns information about whether a ConfigResource exists.
@@ -1686,7 +1686,7 @@ public final class QuorumController implements Controller {
         this.time = time;
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
-        this.purgatory = new Purgatory();
+        this.purgatory = new DeferredEventPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager.Builder().
             setLogContext(logContext).
