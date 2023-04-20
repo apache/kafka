@@ -264,6 +264,10 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult beginAbort() {
+        return beginAbort(true);
+    }
+
+    synchronized TransactionalRequestResult beginAbort(boolean throwError) {
         return handleCachedTransactionRequestResult(() -> {
             if (currentState != State.ABORTABLE_ERROR)
                 maybeFailWithError();
