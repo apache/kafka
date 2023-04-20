@@ -55,7 +55,7 @@ public class DeferredEventQueue {
     }
 
     /**
-     * Fail all the pending purgatory entries.
+     * Fail all deferred events with the provided exception.
      *
      * @param exception     The exception to fail the entries with.
      */
@@ -71,7 +71,7 @@ public class DeferredEventQueue {
     }
 
     /**
-     * Add a new purgatory event.
+     * Add a new deferred event to be completed by the provided offset.
      *
      * @param offset        The offset to add the new event at.
      * @param event         The new event.
@@ -80,8 +80,8 @@ public class DeferredEventQueue {
         if (!pending.isEmpty()) {
             long lastKey = pending.lastKey();
             if (offset < lastKey) {
-                throw new RuntimeException("There is already a purgatory event with " +
-                    "offset " + lastKey + ".  We should not add one with an offset of " +
+                throw new IllegalArgumentException("There is already a deferred event with " +
+                    "offset " + lastKey + ". We should not add one with an offset of " +
                     offset + " which is lower than that.");
             }
         }
