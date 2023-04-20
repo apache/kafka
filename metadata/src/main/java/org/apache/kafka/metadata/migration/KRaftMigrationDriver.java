@@ -209,6 +209,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private boolean isValidStateChange(MigrationDriverState newState) {
         if (migrationState == newState)
             return true;
+
+        if (newState == MigrationDriverState.UNINITIALIZED) {
+            return false;
+        }
+
         switch (migrationState) {
             case UNINITIALIZED:
             case DUAL_WRITE:
@@ -245,23 +250,16 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     private void transitionTo(MigrationDriverState newState) {
         if (!isValidStateChange(newState)) {
-            log.error("Invalid transition in migration driver from {} to {}", migrationState, newState);
-            return;
+            throw new IllegalStateException(
+                String.format("Invalid transition in migration driver from %s to %s", migrationState, newState));
         }
+
         if (newState != migrationState) {
             log.debug("{} transitioning from {} to {} state", nodeId, migrationState, newState);
         } else {
             log.trace("{} transitioning from {} to {} state", nodeId, migrationState, newState);
         }
-        switch (newState) {
-            case UNINITIALIZED:
-                // No state can transition to UNITIALIZED.
-                throw new IllegalStateException("Invalid transition from " + migrationState + " to " + newState + " " +
-                "state in Zk to KRaft migration");
-            case INACTIVE:
-                // Any state can go to INACTIVE.
-                break;
-        }
+
         migrationState = newState;
     }
 
@@ -425,28 +423,33 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 }
 
                 ZkMigrationState zkMigrationState = image.features().zkMigrationState();
-                if (zkMigrationState.equals(ZkMigrationState.NONE)) {
-                    // This error message is used in zookeeper_migration_test.py::TestMigration.test_pre_migration_mode_3_4
-                    log.error("The controller's ZkMigrationState is NONE which means this cluster should not be migrated from ZooKeeper. " +
-                        "This controller should not be configured with 'zookeeper.metadata.migration.enable' set to true. " +
-                        "Will not proceed with a migration.");
-                    transitionTo(MigrationDriverState.INACTIVE);
-                } else if (zkMigrationState.equals(ZkMigrationState.PRE_MIGRATION)) {
-                    // Base case when starting the migration
-                    log.debug("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
-                    transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
-                } else if (zkMigrationState.equals(ZkMigrationState.MIGRATION)) {
-                    if (!migrationLeadershipState.zkMigrationComplete()) {
-                        log.error("KRaft controller indicates an active migration, but the ZK state does not.");
+                switch (zkMigrationState) {
+                    case NONE:
+                        // This error message is used in zookeeper_migration_test.py::TestMigration.test_pre_migration_mode_3_4
+                        log.error("The controller's ZkMigrationState is NONE which means this cluster should not be migrated from ZooKeeper. " +
+                            "This controller should not be configured with 'zookeeper.metadata.migration.enable' set to true. " +
+                            "Will not proceed with a migration.");
                         transitionTo(MigrationDriverState.INACTIVE);
-                    } else {
-                        // Base case when rebooting a controller during migration
-                        log.debug("Migration is in already progress, not waiting on ZK brokers.");
-                        transitionTo(MigrationDriverState.BECOME_CONTROLLER);
-                    }
-                } else if (zkMigrationState.equals(ZkMigrationState.POST_MIGRATION)) {
-                    log.error("KRaft controller indicates a completed migration, but the migration driver is somehow active.");
-                    transitionTo(MigrationDriverState.INACTIVE);
+                        break;
+                    case PRE_MIGRATION:
+                        // Base case when starting the migration
+                        log.debug("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
+                        transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
+                        break;
+                    case MIGRATION:
+                        if (!migrationLeadershipState.zkMigrationComplete()) {
+                            log.error("KRaft controller indicates an active migration, but the ZK state does not.");
+                            transitionTo(MigrationDriverState.INACTIVE);
+                        } else {
+                            // Base case when rebooting a controller during migration
+                            log.debug("Migration is in already progress, not waiting on ZK brokers.");
+                            transitionTo(MigrationDriverState.BECOME_CONTROLLER);
+                        }
+                        break;
+                    case POST_MIGRATION:
+                        log.error("KRaft controller indicates a completed migration, but the migration driver is somehow active.");
+                        transitionTo(MigrationDriverState.INACTIVE);
+                        break;
                 }
             }
         }

@@ -94,4 +94,8 @@ public enum ZkMigrationState {
         }
         return Optional.empty();
     }
+
+    public boolean inProgress() {
+        return this == PRE_MIGRATION || this == MIGRATION;
+    }
 }

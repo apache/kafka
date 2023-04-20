@@ -19,7 +19,6 @@ package org.apache.kafka.controller;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
@@ -257,7 +256,7 @@ public class FeatureControlManager {
         }
 
         // Don't allow metadata.version changes while we're migrating
-        if (EnumSet.of(ZkMigrationState.PRE_MIGRATION, ZkMigrationState.MIGRATION).contains(zkMigrationState)) {
+        if (zkMigrationState.inProgress()) {
             return invalidMetadataVersion(newVersionLevel, "Unable to modify metadata.version while a " +
                 "ZK migration is in progress.");
         }

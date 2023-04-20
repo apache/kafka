@@ -62,7 +62,9 @@ public final class FeaturesImage {
     }
 
     public boolean isEmpty() {
-        return finalizedVersions.isEmpty() && zkMigrationState.equals(ZkMigrationState.NONE);
+        return finalizedVersions.isEmpty() &&
+            metadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION) &&
+            zkMigrationState.equals(ZkMigrationState.NONE);
     }
 
     public MetadataVersion metadataVersion() {
@@ -130,7 +132,7 @@ public final class FeaturesImage {
 
     @Override
     public int hashCode() {
-        return Objects.hash(finalizedVersions, zkMigrationState);
+        return Objects.hash(finalizedVersions, metadataVersion, zkMigrationState);
     }
 
     @Override
@@ -138,6 +140,7 @@ public final class FeaturesImage {
         if (!(o instanceof FeaturesImage)) return false;
         FeaturesImage other = (FeaturesImage) o;
         return finalizedVersions.equals(other.finalizedVersions) &&
+            metadataVersion.equals(other.metadataVersion) &&
             zkMigrationState.equals(other.zkMigrationState);
     }
 

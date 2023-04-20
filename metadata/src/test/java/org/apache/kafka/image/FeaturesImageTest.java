@@ -28,11 +28,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -95,5 +98,16 @@ public class FeaturesImageTest {
         RecordTestUtils.replayAll(delta, writer.records());
         FeaturesImage nextImage = delta.apply();
         assertEquals(image, nextImage);
+    }
+
+    @Test
+    public void testEmpty() {
+        assertTrue(FeaturesImage.EMPTY.isEmpty());
+        assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
+            FeaturesImage.EMPTY.metadataVersion(), FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
+        assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
+            MetadataVersion.IBP_3_3_IV0, FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
+        assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
+            FeaturesImage.EMPTY.metadataVersion(), ZkMigrationState.MIGRATION).isEmpty());
     }
 }

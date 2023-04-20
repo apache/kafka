@@ -1126,7 +1126,7 @@ public final class QuorumController implements Controller {
         return isActiveController(curClaimEpoch);
     }
 
-    private boolean isActiveController(int claimEpoch) {
+    private static boolean isActiveController(int claimEpoch) {
         return claimEpoch != -1;
     }
 
@@ -1184,14 +1184,14 @@ public final class QuorumController implements Controller {
      * are committed to the log as an atomic batch. The records will include the bootstrap metadata records
      * (including the bootstrap "metadata.version") and may include a ZK migration record.
      */
-    public static void generateActivationRecords(
+    public static List<ApiMessageAndVersion> generateActivationRecords(
         Logger log,
         boolean isLogEmpty,
         boolean zkMigrationEnabled,
         BootstrapMetadata bootstrapMetadata,
-        FeatureControlManager featureControl,
-        Consumer<ApiMessageAndVersion> recordConsumer
+        FeatureControlManager featureControl
     ) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
         if (isLogEmpty) {
             // If no records have been replayed, we need to write out the bootstrap records.
             // This will include the new metadata.version, as well as things like SCRAM
@@ -1199,16 +1199,16 @@ public final class QuorumController implements Controller {
             log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
                 "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
                 bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
-            bootstrapMetadata.records().forEach(recordConsumer);
+            records.addAll(bootstrapMetadata.records());
 
             if (bootstrapMetadata.metadataVersion().isMigrationSupported()) {
                 if (zkMigrationEnabled) {
                     log.info("Putting the controller into pre-migration mode. No metadata updates will be allowed until " +
                         "the ZK metadata has been migrated");
-                    recordConsumer.accept(ZkMigrationState.PRE_MIGRATION.toRecord());
+                    records.add(ZkMigrationState.PRE_MIGRATION.toRecord());
                 } else {
                     log.debug("Setting the ZK migration state to NONE since this is a de-novo KRaft cluster.");
-                    recordConsumer.accept(ZkMigrationState.NONE.toRecord());
+                    records.add(ZkMigrationState.NONE.toRecord());
                 }
             } else {
                 if (zkMigrationEnabled) {
@@ -1237,9 +1237,12 @@ public final class QuorumController implements Controller {
                         throw new RuntimeException("Detected an failed migration state during bootstrap, cannot continue.");
                     case MIGRATION:
                         if (!zkMigrationEnabled) {
-                            log.info("Completing the ZK migration since this controller was configured with " +
+                            // This can happen if controller leadership transfers to a controller with migrations enabled
+                            // after another controller had finalized the migration. For example, during a rolling restart
+                            // of the controller quorum during which the migration config is being set to false.
+                            log.warn("Completing the ZK migration since this controller was configured with " +
                                 "'zookeeper.metadata.migration.enable' set to 'false'.");
-                            recordConsumer.accept(ZkMigrationState.POST_MIGRATION.toRecord());
+                            records.add(ZkMigrationState.POST_MIGRATION.toRecord());
                         } else {
                             log.info("Staying in the ZK migration since 'zookeeper.metadata.migration.enable' is still 'true'.");
                         }
@@ -1257,12 +1260,13 @@ public final class QuorumController implements Controller {
                 }
             }
         }
+        return records;
     }
     class CompleteActivationEvent implements ControllerWriteOperation<Void> {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
-            List<ApiMessageAndVersion> records = new ArrayList<>();
-            generateActivationRecords(log, logReplayTracker.empty(), zkMigrationEnabled, bootstrapMetadata, featureControl, records::add);
+            List<ApiMessageAndVersion> records = generateActivationRecords(log, logReplayTracker.empty(),
+                zkMigrationEnabled, bootstrapMetadata, featureControl);
             return ControllerResult.atomicOf(records, null);
         }
 

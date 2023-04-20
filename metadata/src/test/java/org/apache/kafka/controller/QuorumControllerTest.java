@@ -1416,14 +1416,12 @@ public class QuorumControllerTest {
                 .setMetadataVersion(metadataVersion)
                 .build();
 
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        QuorumController.generateActivationRecords(
+        List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
             log,
             emptyLog,
             zkMigrationEnabled,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
-            featureControlManager,
-            records::add);
+            featureControlManager);
         RecordTestUtils.replayAll(featureControlManager, records);
         return featureControlManager;
     }
