@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.purgatory;
+package org.apache.kafka.deferred;
 
 /**
  * Represents a deferred event in the controller purgatory.

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.purgatory;
+package org.apache.kafka.deferred;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -25,10 +25,10 @@ import java.util.OptionalLong;
 import java.util.TreeMap;
 
 /**
- * The purgatory which holds events that have been started, but not yet completed.
+ * The queue which holds deferred events that have been started, but not yet completed.
  * We wait for the high watermark of the log to advance before completing them.
  */
-public class DeferredEventPurgatory {
+public class DeferredEventQueue {
     /**
      * A map from log offsets to events.  Each event will be completed once the log
      * advances past its offset.
