@@ -21,7 +21,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka.config_property import CLUSTER_ID
-from kafkatest.services.kafka.quorum import remote_kraft, ServiceQuorumInfo, zk
+from kafkatest.services.kafka.quorum import isolated_kraft, ServiceQuorumInfo, zk
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
@@ -50,10 +50,10 @@ class TestMigration(ProduceConsumeValidateTest):
 
     def do_migration(self):
         # Start up KRaft controller in migration mode
-        remote_quorum = partial(ServiceQuorumInfo, remote_kraft)
+        remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
         controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
                                   allow_zk_with_kraft=True,
-                                  remote_kafka=self.kafka,
+                                  isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
                                                          ["zookeeper.metadata.migration.enable", "true"]],
                                   quorum_info_provider=remote_quorum)
