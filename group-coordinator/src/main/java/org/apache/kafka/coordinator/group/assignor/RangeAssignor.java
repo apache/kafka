@@ -248,7 +248,7 @@ public class RangeAssignor implements PartitionAssignor {
         // Consolidate the maps into MemberAssignment and then finally map each member to a MemberAssignment.
         Map<String, MemberAssignment> membersWithNewAssignment = new HashMap<>();
 
-        membersWithNewAssignmentPerTopic.forEach((memberId, assignmentPerTopic) -> membersWithNewAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(assignmentPerTopic)));
+        membersWithNewAssignmentPerTopic.forEach((memberId, assignmentPerTopic) -> membersWithNewAssignment.put(memberId, new MemberAssignment(assignmentPerTopic)));
 
         return new GroupAssignment(membersWithNewAssignment);
     }
