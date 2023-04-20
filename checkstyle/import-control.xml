@@ -198,10 +198,6 @@
     </subpackage>
   </subpackage>
 
-  <subpackage name="queue">
-    <allow pkg="org.apache.kafka.test" />
-  </subpackage>
-
   <subpackage name="clients">
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
