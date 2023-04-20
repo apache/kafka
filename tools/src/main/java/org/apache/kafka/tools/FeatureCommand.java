@@ -23,14 +23,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
+import net.sourceforge.argparse4j.internal.HelpScreenException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
@@ -54,12 +57,13 @@ public class FeatureCommand {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
-            System.err.println(e.getMessage());
+        } catch (HelpScreenException e) {
+            return 0;
+        } catch (ArgumentParserException e) {
+            System.err.printf("Command line error: " + e.getMessage() + ". Type --help for help.");
             return 1;
         } catch (Throwable e) {
             System.err.println(e.getMessage());
-            System.err.println(Utils.stackTrace(e));
             return 1;
         }
     }
@@ -173,7 +177,7 @@ public class FeatureCommand {
             try {
                 return MetadataVersion.fromFeatureLevel(level).version();
             } catch (Throwable e) {
-                throw new RuntimeException("UNKNOWN " + level, e);
+                return "UNKNOWN " + level;
             }
         }
         return String.valueOf(level);
@@ -181,7 +185,7 @@ public class FeatureCommand {
 
     static void handleDescribe(Admin adminClient) throws ExecutionException, InterruptedException {
         FeatureMetadata featureMetadata = adminClient.describeFeatures().featureMetadata().get();
-        featureMetadata.supportedFeatures().keySet().forEach(feature -> {
+        featureMetadata.supportedFeatures().keySet().stream().sorted().forEach(feature -> {
             short finalizedLevel = (featureMetadata.finalizedFeatures().get(feature) == null) ? 0 : featureMetadata.finalizedFeatures().get(feature).maxVersionLevel();
             SupportedVersionRange range = featureMetadata.supportedFeatures().get(feature);
             System.out.printf("Feature: %s\tSupportedMinVersion: %s\tSupportedMaxVersion: %s\tFinalizedVersionLevel: %s\tEpoch: %s%n",
@@ -267,11 +271,14 @@ public class FeatureCommand {
         FeatureUpdate.UpgradeType upgradeType = downgradeType(namespace);
         Map<String, FeatureUpdate> updates = new HashMap<>();
 
-        namespace.getList("feature").forEach(feature -> {
-            if (updates.put((String) feature, new FeatureUpdate((short) 0, upgradeType)) != null) {
-                throw new RuntimeException("Feature " + feature + " was specified more than once.");
-            }
-        });
+        List<String> features = namespace.getList("feature");
+        if (features != null) {
+            features.forEach(feature -> {
+                if (updates.put(feature, new FeatureUpdate((short) 0, upgradeType)) != null) {
+                    throw new RuntimeException("Feature " + feature + " was specified more than once.");
+                }
+            });
+        }
 
         update("disable", adminClient, updates, namespace.getBoolean("dry_run"));
     }
@@ -282,7 +289,7 @@ public class FeatureCommand {
         }
 
         UpdateFeaturesResult result = admin.updateFeatures(updates, new UpdateFeaturesOptions().validateOnly(dryRun));
-        Map<String, Optional<Throwable>> errors = new HashMap<>();
+        Map<String, Optional<Throwable>> errors = new TreeMap<>();
         result.values().forEach((feature, future) -> {
             try {
                 future.get();
@@ -295,18 +302,18 @@ public class FeatureCommand {
         });
 
         int numFailures = 0;
-        for (Map.Entry<String, Optional<Throwable>> entry : errors.entrySet()) {
-            short level = updates.get(entry.getKey()).maxVersionLevel();
-            Optional<Throwable> maybeThrowable = errors.get(entry.getKey());
+        for (Map.Entry<String, Optional<Throwable>> feature: errors.entrySet()) {
+            short level = updates.get(feature.getKey()).maxVersionLevel();
+            Optional<Throwable> maybeThrowable = feature.getValue();
             if (maybeThrowable != null && maybeThrowable.isPresent()) {
                 String helper = dryRun ? "Can not " : "Could not ";
-                String suffix = (op.equals("disable")) ? "disable " + entry.getKey() : op + " " + entry.getKey() + " to " + level;
+                String suffix = (op.equals("disable")) ? "disable " + feature.getKey() : op + " " + feature.getKey() + " to " + level;
                 System.out.println(helper + suffix + ". " + maybeThrowable.get().getMessage());
                 numFailures++;
             } else {
                 String verb = dryRun ? " can be " : " was ";
                 String obj = (op.equals("disable")) ? "disabled." : op + "d to " + level + ".";
-                System.out.println(entry.getKey() + verb + obj);
+                System.out.println(feature.getKey() + verb + obj);
             }
         }
 

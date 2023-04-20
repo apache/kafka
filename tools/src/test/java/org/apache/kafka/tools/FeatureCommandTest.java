@@ -267,26 +267,24 @@ class FeatureCommandUnitTest {
     @Test
     public void testHandleDisable() {
         Map<String, Object> namespace = new HashMap<>();
-        namespace.put("metadata", "3.3-IV3");
         namespace.put("feature", Arrays.asList("foo.bar", "metadata.version", "quux"));
         namespace.put("dry_run", false);
         String disableOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()))
                 .getMessage().contains("1 out of 3 operation(s) failed.")));
-        assertEquals(format("quux was disabled.%n" +
-                "foo.bar was disabled.%n" +
-                "Could not disable metadata.version. Can't downgrade below 4"), disableOutput);
+        assertEquals(format("foo.bar was disabled.%n" +
+                "Could not disable metadata.version. Can't downgrade below 4%n" +
+                "quux was disabled."), disableOutput);
     }
 
     @Test
     public void testHandleDisableDryRun() {
         Map<String, Object> namespace = new HashMap<>();
-        namespace.put("metadata", "3.3-IV3");
         namespace.put("feature", Arrays.asList("foo.bar", "metadata.version", "quux"));
         namespace.put("dry_run", true);
         String disableOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()))
                 .getMessage().contains("1 out of 3 operation(s) failed.")));
-        assertEquals(format("quux can be disabled.%n" +
-                "foo.bar can be disabled.%n" +
-                "Can not disable metadata.version. Can't downgrade below 4"), disableOutput);
+        assertEquals(format("foo.bar can be disabled.%n" +
+                "Can not disable metadata.version. Can't downgrade below 4%n" +
+                "quux can be disabled."), disableOutput);
     }
 }
