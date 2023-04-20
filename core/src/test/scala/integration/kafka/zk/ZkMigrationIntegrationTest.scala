@@ -335,11 +335,11 @@ class ZkMigrationIntegrationTest {
    * through the RPCs
    */
   @ClusterTests(Array(
-    new ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
       serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true"))),
-    new ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_5_IV0,
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 1, metadataVersion = MetadataVersion.IBP_3_5_IV0,
       serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true"))),
-    new ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_5_IV1,
+    new ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 1, metadataVersion = MetadataVersion.IBP_3_5_IV1,
       serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
   ))
   def testPreMigrationMode(clusterInstance: ClusterInstance): Unit = {
