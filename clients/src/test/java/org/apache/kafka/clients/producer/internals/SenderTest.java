@@ -723,16 +723,16 @@ public class SenderTest {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
+        // cluster authorization failed on initProducerId is retriable
         prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFalse(transactionManager.hasProducerId());
         assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
         assertEquals(-1, transactionManager.producerIdAndEpoch().epoch);
 
-        // cluster authorization can be retried
-        // cluster authorization is a fatal error for the producer
         assertSendFailure(ClusterAuthorizationException.class);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        // sender retry initProducerId and succeed
         sender.runOnce();
         assertFalse(transactionManager.hasFatalError());
         assertTrue(transactionManager.hasProducerId());
