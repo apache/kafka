@@ -2688,6 +2688,7 @@ class GroupMetadataManagerTest {
       (offsetCommitRecords ++ Seq(unknownRecord1, unknownRecord2) ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupTopicPartition, startOffset, records)
+    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupTopicPartition, 1, _ => (), 0L)
 
