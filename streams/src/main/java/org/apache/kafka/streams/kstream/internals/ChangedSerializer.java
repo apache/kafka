@@ -106,7 +106,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
         // The serialization format is:
         // {BYTE_ARRAY oldValue}{BYTE encodingFlag=0}
         // {BYTE_ARRAY newValue}{BYTE encodingFlag=1}
-        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE encodingFlag=2}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE encodingFlag=2}
         if (newValueIsNotNull && oldValueIsNotNull) {
             if (isUpgrade) {
                 throw new StreamsException("Both old and new values are not null (" + data.oldValue

@@ -543,6 +543,16 @@ public class NamedTopologyIntegrationTest {
 
     @Test
     public void shouldRemoveOneNamedTopologyWhileAnotherContinuesProcessing() throws Exception {
+        /*
+        Gradle Test Run :streams:unitTest > Gradle Test Executor 19 > NamedTopologyIntegrationTest > shouldRemoveOneNamedTopologyWhileAnotherContinuesProcessing() FAILED
+    java.lang.AssertionError:
+    Expected: <[KeyValue(B, 1), KeyValue(A, 2), KeyValue(C, 2)]>
+         but: was <[KeyValue(B, 1), KeyValue(A, 2), KeyValue(C, 1)]>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:6)
+        at org.apache.kafka.streams.integration.NamedTopologyIntegrationTest.shouldRemoveOneNamedTopologyWhileAnotherContinuesProcessing(NamedTopologyIntegrationTest.java:563)
+
+         */
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_1, 2, 1);
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_2, 2, 1);
 
