@@ -49,7 +49,11 @@ public class RangeAssignorTest {
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
         topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), Collections.emptyList(), new HashMap<>()));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      Collections.emptyList(),
+                                      Collections.emptyMap()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
@@ -64,7 +68,11 @@ public class RangeAssignorTest {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         List<Uuid> subscribedTopics = new ArrayList<>();
         subscribedTopics.add(topic2Uuid);
-        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopics, new HashMap<>()));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopics,
+                                      Collections.emptyMap()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
@@ -83,10 +91,18 @@ public class RangeAssignorTest {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
         List<Uuid> subscribedTopicsA = Arrays.asList(topic1Uuid, topic3Uuid);
-        members.put(consumerA, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, new HashMap<>()));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsA,
+                                      Collections.emptyMap()));
         // Consumer B
         List<Uuid> subscribedTopicsB = Arrays.asList(topic1Uuid, topic3Uuid);
-        members.put(consumerB, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, new HashMap<>()));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      Collections.emptyMap()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
@@ -114,13 +130,25 @@ public class RangeAssignorTest {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
         List<Uuid> subscribedTopicsA = Arrays.asList(topic1Uuid, topic2Uuid);
-        members.put(consumerA, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, new HashMap<>()));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsA,
+                                      Collections.emptyMap()));
         // Consumer B
         List<Uuid> subscribedTopicsB = Collections.singletonList(topic3Uuid);
-        members.put(consumerB, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, new HashMap<>()));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      Collections.emptyMap()));
         // Consumer C
         List<Uuid> subscribedTopicsC = Arrays.asList(topic2Uuid, topic3Uuid);
-        members.put(consumerC, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsC, new HashMap<>()));
+        members.put(consumerC, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsC,
+                                      Collections.emptyMap()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
@@ -149,13 +177,25 @@ public class RangeAssignorTest {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         // Consumer A
         List<Uuid> subscribedTopicsA = Arrays.asList(topic1Uuid, topic3Uuid);
-        members.put(consumerA, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, new HashMap<>()));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsA,
+                                      Collections.emptyMap()));
         // Consumer B
         List<Uuid> subscribedTopicsB = Arrays.asList(topic1Uuid, topic3Uuid);
-        members.put(consumerB, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, new HashMap<>()));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      Collections.emptyMap()));
         // Consumer C
         List<Uuid> subscribedTopicsC = Arrays.asList(topic1Uuid, topic3Uuid);
-        members.put(consumerC, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsC, new HashMap<>()));
+        members.put(consumerC, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsC,
+                                      Collections.emptyMap()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
@@ -183,19 +223,31 @@ public class RangeAssignorTest {
         // Add a new consumer to trigger a re-assignment
         // Consumer C
         List<Uuid> subscribedTopicsC = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
-        members.put(consumerC, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsC, new HashMap<>()));
+        members.put(consumerC, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsC,
+                                      Collections.emptyMap()));
         // Consumer A
         List<Uuid> subscribedTopicsA = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
         Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
         currentAssignmentForA.put(topic1Uuid, new HashSet<>(Collections.singletonList(0)));
         currentAssignmentForA.put(topic2Uuid, new HashSet<>(Collections.singletonList(0)));
-        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, currentAssignmentForA));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsA,
+                                      currentAssignmentForA));
         // Consumer B
         List<Uuid> subscribedTopicsB = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
         Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
         currentAssignmentForB.put(topic1Uuid, new HashSet<>(Collections.singletonList(1)));
         currentAssignmentForB.put(topic2Uuid, new HashSet<>(Collections.singletonList(1)));
-        members.computeIfAbsent(consumerB, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, currentAssignmentForB));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      currentAssignmentForB));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
@@ -227,14 +279,22 @@ public class RangeAssignorTest {
         Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
         currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
         currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
-        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, currentAssignmentForA));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsA,
+                                      currentAssignmentForA));
 
         // Consumer B
         List<Uuid> subscribedTopicsB = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
         Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
         currentAssignmentForB.put(topic1Uuid, new HashSet<>(Collections.singletonList(2)));
         currentAssignmentForB.put(topic2Uuid, new HashSet<>(Collections.singletonList(2)));
-        members.computeIfAbsent(consumerB, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, currentAssignmentForB));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      currentAssignmentForB));
 
         // Simulating adding a partition - originally T1 -> 3 Partitions and T2 -> 3 Partitions
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
@@ -272,17 +332,29 @@ public class RangeAssignorTest {
         Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
         currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
         currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
-        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, currentAssignmentForA));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsA,
+                                      currentAssignmentForA));
         // Consumer B
         List<Uuid> subscribedTopicsB = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
         Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
         currentAssignmentForB.put(topic1Uuid, new HashSet<>(Collections.singletonList(2)));
         currentAssignmentForB.put(topic2Uuid, new HashSet<>(Collections.singletonList(2)));
-        members.computeIfAbsent(consumerB, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, currentAssignmentForB));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      currentAssignmentForB));
         // Add a new consumer to trigger a re-assignment
         // Consumer C
         List<Uuid> subscribedTopicsC = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid));
-        members.put(consumerC, new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsC, new HashMap<>()));
+        members.put(consumerC, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsC,
+                                      Collections.emptyMap()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
@@ -320,7 +392,11 @@ public class RangeAssignorTest {
         Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
         currentAssignmentForB.put(topic1Uuid, new HashSet<>(Collections.singletonList(2)));
         currentAssignmentForB.put(topic2Uuid, new HashSet<>(Collections.singletonList(2)));
-        members.computeIfAbsent(consumerB, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, currentAssignmentForB));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      currentAssignmentForB));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
@@ -352,13 +428,21 @@ public class RangeAssignorTest {
         currentAssignmentForA.put(topic2Uuid, new HashSet<>(Collections.singletonList(0)));
         // Change subscriptions
         List<Uuid> subscribedTopicsA = new ArrayList<>(Collections.singletonList(topic1Uuid));
-        members.computeIfAbsent(consumerA, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsA, currentAssignmentForA));
+        members.put(consumerA, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsA,
+                                      currentAssignmentForA));
         // Consumer B
         Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
         currentAssignmentForB.put(topic2Uuid, new HashSet<>(Collections.singletonList(1)));
         // Change subscriptions
         List<Uuid> subscribedTopicsB = new ArrayList<>(Arrays.asList(topic1Uuid, topic2Uuid, topic3Uuid));
-        members.computeIfAbsent(consumerB, k -> new AssignmentMemberSpec(Optional.empty(), Optional.empty(), subscribedTopicsB, currentAssignmentForB));
+        members.put(consumerB, new AssignmentMemberSpec(
+                            Optional.empty(),
+                               Optional.empty(),
+                                      subscribedTopicsB,
+                                      currentAssignmentForB));
         // Consumer C
         Map<Uuid, Set<Integer>> currentAssignmentForC = new HashMap<>();
         currentAssignmentForC.put(topic2Uuid, new HashSet<>(Collections.singletonList(2)));
