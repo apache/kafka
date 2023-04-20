@@ -26,7 +26,7 @@ public class GroupAssignment {
     /**
      * The member assignments keyed by member id.
      */
-    final Map<String, MemberAssignment> members;
+    private final Map<String, MemberAssignment> members;
 
     public GroupAssignment(
         Map<String, MemberAssignment> members
@@ -35,13 +35,18 @@ public class GroupAssignment {
         this.members = members;
     }
 
+    /**
+     * @return Member assignments keyed by member Ids.
+     */
+    public Map<String, MemberAssignment> members() {
+        return members;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         GroupAssignment that = (GroupAssignment) o;
-
         return members.equals(that.members);
     }
 

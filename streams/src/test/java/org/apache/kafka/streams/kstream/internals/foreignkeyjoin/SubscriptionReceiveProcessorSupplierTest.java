@@ -45,7 +45,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-public class SubscriptionStoreReceiveProcessorSupplierTest {
+public class SubscriptionReceiveProcessorSupplierTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private File stateDir;
@@ -87,7 +87,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldDeleteKeyAndPropagateV0() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
                         SubscriptionWrapper<String>,
                         CombinedKey<String, String>,
@@ -139,7 +139,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldDeleteKeyAndPropagateV1() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
@@ -190,7 +190,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldDeleteKeyNoPropagateV0() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
@@ -242,7 +242,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldDeleteKeyNoPropagateV1() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
@@ -294,7 +294,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldPropagateOnlyIfFKValAvailableV0() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
@@ -346,7 +346,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldPropagateOnlyIfFKValAvailableV1() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
@@ -398,7 +398,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldPropagateNullIfNoFKValAvailableV0() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
@@ -450,7 +450,7 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     @Test
     public void shouldPropagateNullIfNoFKValAvailableV1() {
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        final SubscriptionStoreReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
+        final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
             SubscriptionWrapper<String>,
             CombinedKey<String, String>,
@@ -500,10 +500,10 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
     }
 
 
-    private SubscriptionStoreReceiveProcessorSupplier<String, String> supplier(
+    private SubscriptionReceiveProcessorSupplier<String, String> supplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder) {
 
-        return new SubscriptionStoreReceiveProcessorSupplier<>(storeBuilder, COMBINED_KEY_SCHEMA);
+        return new SubscriptionReceiveProcessorSupplier<>(storeBuilder, COMBINED_KEY_SCHEMA);
     }
 
     private StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder() {

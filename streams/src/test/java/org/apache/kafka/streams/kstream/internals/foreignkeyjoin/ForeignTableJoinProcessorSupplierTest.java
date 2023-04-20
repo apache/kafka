@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class ForeignJoinSubscriptionProcessorSupplierTest {
+public class ForeignTableJoinProcessorSupplierTest {
     final Map<String, ValueAndTimestamp<String>> fks = Collections.singletonMap(
         "fk1", ValueAndTimestamp.make("foo", 1L)
     );
@@ -375,8 +375,8 @@ public class ForeignJoinSubscriptionProcessorSupplierTest {
                       Change<ValueAndTimestamp<SubscriptionWrapper<String>>>,
                       String,
                       SubscriptionResponseWrapper<String>> processor(final KTableValueGetterSupplier<String, String> valueGetterSupplier) {
-        final SubscriptionJoinForeignProcessorSupplier<String, String, String> supplier =
-            new SubscriptionJoinForeignProcessorSupplier<>(valueGetterSupplier);
+        final SubscriptionJoinProcessorSupplier<String, String, String> supplier =
+            new SubscriptionJoinProcessorSupplier<>(valueGetterSupplier);
         return supplier.get();
     }
 }
