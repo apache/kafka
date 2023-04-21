@@ -222,8 +222,10 @@ class FeatureCommandUnitTest {
         namespace.put("metadata", "3.3-IV1");
         namespace.put("feature", Collections.singletonList("foo.bar=6"));
         namespace.put("dry_run", false);
-        String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()))
-                .getMessage().contains("1 out of 2 operation(s) failed.")));
+        String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+        });
         assertEquals(format("foo.bar was upgraded to 6.%n" +
                 "Could not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
     }
@@ -234,8 +236,10 @@ class FeatureCommandUnitTest {
         namespace.put("metadata", "3.3-IV1");
         namespace.put("feature", Collections.singletonList("foo.bar=6"));
         namespace.put("dry_run", true);
-        String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()))
-                .getMessage().contains("1 out of 2 operation(s) failed.")));
+        String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+        });
         assertEquals(format("foo.bar can be upgraded to 6.%n" +
                 "Can not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
     }
@@ -246,10 +250,12 @@ class FeatureCommandUnitTest {
         namespace.put("metadata", "3.3-IV3");
         namespace.put("feature", Collections.singletonList("foo.bar=1"));
         namespace.put("dry_run", false);
-        String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()))
-                .getMessage().contains("1 out of 2 operation(s) failed.")));
+        String downgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+        });
         assertEquals(format("foo.bar was downgraded to 1.%n" +
-                "Could not downgrade metadata.version to 7. Can't downgrade to newer version."), upgradeOutput);
+                "Could not downgrade metadata.version to 7. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
@@ -258,10 +264,12 @@ class FeatureCommandUnitTest {
         namespace.put("metadata", "3.3-IV3");
         namespace.put("feature", Collections.singletonList("foo.bar=1"));
         namespace.put("dry_run", true);
-        String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()))
-                .getMessage().contains("1 out of 2 operation(s) failed.")));
+        String downgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+        });
         assertEquals(format("foo.bar can be downgraded to 1.%n" +
-                "Can not downgrade metadata.version to 7. Can't downgrade to newer version."), upgradeOutput);
+                "Can not downgrade metadata.version to 7. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
@@ -269,8 +277,10 @@ class FeatureCommandUnitTest {
         Map<String, Object> namespace = new HashMap<>();
         namespace.put("feature", Arrays.asList("foo.bar", "metadata.version", "quux"));
         namespace.put("dry_run", false);
-        String disableOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()))
-                .getMessage().contains("1 out of 3 operation(s) failed.")));
+        String disableOutput = ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("1 out of 3 operation(s) failed."));
+        });
         assertEquals(format("foo.bar was disabled.%n" +
                 "Could not disable metadata.version. Can't downgrade below 4%n" +
                 "quux was disabled."), disableOutput);
@@ -281,8 +291,10 @@ class FeatureCommandUnitTest {
         Map<String, Object> namespace = new HashMap<>();
         namespace.put("feature", Arrays.asList("foo.bar", "metadata.version", "quux"));
         namespace.put("dry_run", true);
-        String disableOutput = ToolsTestUtils.captureStandardOut(() -> assertTrue(assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()))
-                .getMessage().contains("1 out of 3 operation(s) failed.")));
+        String disableOutput = ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("1 out of 3 operation(s) failed."));
+        });
         assertEquals(format("foo.bar can be disabled.%n" +
                 "Can not disable metadata.version. Can't downgrade below 4%n" +
                 "quux can be disabled."), disableOutput);
