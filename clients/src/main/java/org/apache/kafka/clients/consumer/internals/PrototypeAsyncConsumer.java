@@ -98,7 +98,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    private final ConcurrentHashMap.KeySetView<WakeupableFuture<?>, Boolean> activeFutures =
+    private final ConcurrentHashMap.KeySetView<CompletableFuture<?>, Boolean> activeFutures =
         ConcurrentHashMap.newKeySet();
     private AtomicBoolean shouldWakeup = new AtomicBoolean(false);
     private volatile boolean closed = false;
@@ -257,7 +257,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        maybeWakeup();
         CompletableFuture<Void> future = commit(offsets);
         final OffsetCommitCallback commitCallback = callback == null ? new DefaultOffsetCommitCallback() : callback;
         future.whenComplete((r, t) -> {
@@ -273,7 +272,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     // Visible for testing
-    WakeupableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
         maybeThrowInvalidGroupIdException();
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
         eventHandler.add(commitEvent);
@@ -362,7 +361,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         activeFutures.add(event.future());
         eventHandler.add(event);
         try {
-
             return event.complete(timeout);
         } catch (ExecutionException e) {
             throw new KafkaException(e);
@@ -511,7 +509,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         this.shouldWakeup.set(true);
-        this.activeFutures.forEach(WakeupableFuture::wakeup);
+        this.activeFutures.forEach(v -> v.completeExceptionally(new WakeupException()));
     }
 
     /**
@@ -553,7 +551,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
         maybeWakeup();
-        final WakeupableFuture<Void> commitFuture = commit(offsets);
+        final CompletableFuture<Void> commitFuture = commit(offsets);
         activeFutures.add(commitFuture);
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);

@@ -44,6 +44,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG;
@@ -112,7 +113,7 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testCommitAsync_NullCallback() throws InterruptedException {
-        WakeupableFuture<Void> future = new WakeupableFuture<>();
+        CompletableFuture<Void> future = new CompletableFuture<>();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
@@ -132,7 +133,7 @@ public class PrototypeAsyncConsumerTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testCommitAsync_UserSuppliedCallback() {
-        WakeupableFuture<Void> future = new WakeupableFuture<>();
+        CompletableFuture<Void> future = new CompletableFuture<>();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
@@ -150,7 +151,7 @@ public class PrototypeAsyncConsumerTest {
     public void testCommitted() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
-            when(mock.future()).thenReturn(new WakeupableFuture<>());
+            when(mock.future()).thenReturn(new CompletableFuture<>());
             when(mock.complete(any())).thenReturn(new HashMap<>());
         });
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
