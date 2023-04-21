@@ -88,6 +88,8 @@ import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
+import org.apache.kafka.deferred.DeferredEventQueue;
+import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -667,7 +669,7 @@ public final class QuorumController implements Controller {
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
-                OptionalLong maybeOffset = purgatory.highestPendingOffset();
+                OptionalLong maybeOffset = deferredEventQueue.highestPendingOffset();
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can complete immediately.
@@ -726,7 +728,7 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
-                purgatory.add(resultAndOffset.offset(), this);
+                deferredEventQueue.add(resultAndOffset.offset(), this);
             }
         }
 
@@ -906,7 +908,7 @@ public final class QuorumController implements Controller {
                             log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
 
                             // Complete any events in the purgatory that were waiting for this offset.
-                            purgatory.completeUpTo(offset);
+                            deferredEventQueue.completeUpTo(offset);
 
                             // The active controller can delete up to the current committed offset.
                             snapshotRegistry.deleteSnapshotsUpTo(offset);
@@ -1185,7 +1187,7 @@ public final class QuorumController implements Controller {
             raftClient.resign(curClaimEpoch);
             curClaimEpoch = -1;
             controllerMetrics.setActive(false);
-            purgatory.failAll(newNotControllerException());
+            deferredEventQueue.failAll(newNotControllerException());
 
             if (!snapshotRegistry.hasSnapshot(lastCommittedOffset)) {
                 throw new RuntimeException("Unable to find last committed offset " +
@@ -1483,10 +1485,10 @@ public final class QuorumController implements Controller {
     private final SnapshotRegistry snapshotRegistry;
 
     /**
-     * The purgatory which holds deferred operations which are waiting for the metadata
+     * The deferred event queue which holds deferred operations which are waiting for the metadata
      * log's high water mark to advance.  This must be accessed only by the event queue thread.
      */
-    private final ControllerPurgatory purgatory;
+    private final DeferredEventQueue deferredEventQueue;
 
     /**
      * A predicate that returns information about whether a ConfigResource exists.
@@ -1684,7 +1686,7 @@ public final class QuorumController implements Controller {
         this.time = time;
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
-        this.purgatory = new ControllerPurgatory();
+        this.deferredEventQueue = new DeferredEventQueue();
         this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager.Builder().
             setLogContext(logContext).
