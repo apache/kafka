@@ -36,15 +36,15 @@ import static java.lang.Math.min;
  * Properties are as follows:
  * <ol>
  * <li> Each member must get at least one partition for every topic that it is subscribed to. The only exception is when
- *      the number of subscribed members is greater than the number of partitions for that topic. (Range) </li>
+ * the number of subscribed members is greater than the number of partitions for that topic. (Range) </li>
  * <li> Partitions should be assigned to members in a way that facilitates the join operation when required. (Range) </li>
- *    This can only be done if every member is subscribed to the same topics and the topics are co-partitioned.
- *    Two streams are co-partitioned if the following conditions are met:
- *    <ul>
+ * This can only be done if every member is subscribed to the same topics and the topics are co-partitioned.
+ * Two streams are co-partitioned if the following conditions are met:
+ * <ul>
  * <li> The keys must have the same schemas.
  * <li> The topics involved must have the same number of partitions.
- *    </ul>
- * <li> Members should retain as much as their previous assignment as possible to reduce the number of partition movements during reassignment. (Sticky) </li>
+ * </ul>
+ * <li> Members should retain as much of their previous assignment as possible to reduce the number of partition movements during reassignment. (Sticky) </li>
  * </ol>
  */
 public class RangeAssignor implements PartitionAssignor {
@@ -87,10 +87,10 @@ public class RangeAssignor implements PartitionAssignor {
                 // Only topics that are present in both the subscribed topics list and the topic metadata should be considered for assignment.
                 if (assignmentSpec.topics().containsKey(topicId)) {
                     membersPerTopic
-                            .computeIfAbsent(topicId, k -> new ArrayList<>())
-                            .add(memberId);
+                        .computeIfAbsent(topicId, k -> new ArrayList<>())
+                        .add(memberId);
                 } else {
-                    log.info(memberId + " subscribed to topic " + topicId + " which doesn't exist in the topic metadata");
+                    log.warn(memberId + " subscribed to topic " + topicId + " which doesn't exist in the topic metadata");
                 }
             }
         });
@@ -105,7 +105,7 @@ public class RangeAssignor implements PartitionAssignor {
         topicsMetadata.forEach((topicId, assignmentTopicMetadata) -> {
             ArrayList<Integer> unassignedPartitionsForTopic = new ArrayList<>();
             int numPartitions = assignmentTopicMetadata.numPartitions();
-            // The partitions will be in ascending order within the list of unassigned partitions per topic.
+            // List of unassigned partitions per topic contains the partitions in ascending order.
             Set<Integer> assignedStickyPartitionsForTopic = assignedStickyPartitionsPerTopic.getOrDefault(topicId, new HashSet<>());
             for (int i = 0; i < numPartitions; i++) {
                 if (!assignedStickyPartitionsForTopic.contains(i)) {
@@ -119,14 +119,14 @@ public class RangeAssignor implements PartitionAssignor {
     }
 
 /**
- * <p>The algorithm includes the following steps:
+ * <p> The algorithm includes the following steps:
  * <ol>
  * <li> Generate a map of <code>membersPerTopic</code> using the given member subscriptions.</li>
  * <li> Generate a list of members (<code>potentiallyUnfilledMembers</code>) that have not met the minimum required quota for assignment AND
- * get a list of sticky partitions that we want to retain in the new assignment.</li>
- * <li> Add members from the <code>potentiallyUnfilled</code> list to the <code>Unfilled</code> list if they haven't met the total required quota i.e. minimum number of partitions per member + 1 (if member is designated to receive one of the excess partitions) </li>
- * <li> Generate a list of unassigned partitions by calculating the difference between total partitions and already assigned (sticky) partitions </li>
- * <li> Iterate through unfilled members and assign partitions from the unassigned partitions </li>
+ * get a list (<code>assignedStickyPartitionsPerTopic</code>) of partitions that we want to retain in the new assignment.</li>
+ * <li> Add members from the <code>potentiallyUnfilledMembers</code> list to the <code>unfilledMembers</code> list if they haven't met the total required quota i.e. minimum number of partitions per member + 1 (if member is designated to receive one of the excess partitions). </li>
+ * <li> Generate a list of unassigned partitions by calculating the difference between total partitions and already assigned (sticky) partitions. </li>
+ * <li> Iterate through the unfilled members and assign partitions from the unassigned partitions. </li>
  * </ol>
  * </p>
  */
@@ -151,41 +151,44 @@ public class RangeAssignor implements PartitionAssignor {
             AssignmentTopicMetadata topicData = assignmentSpec.topics().get(topicId);
             int numPartitionsForTopic = topicData.numPartitions();
 
-            // Idle members case : When the number of members subscribed to a topic is greater than the total number of Partitions,
+            // Idle members case : When the number of members subscribed to a topic is greater than the total number of partitions,
             // all members get assigned via the "extra partitions" logic since minRequiredQuota = 0.
             int minRequiredQuota = numPartitionsForTopic / membersForTopic.size();
             // Each member can get only ONE extra partition per topic after receiving the minimum quota.
             int numMembersWithExtraPartition = numPartitionsForTopic % membersForTopic.size();
 
             for (String memberId: membersForTopic) {
-                // The partitions need to be in numeric order since we want the same partition numbers from each topic
-                // to go to the same member in case of co-partitioned topics to facilitate joins.
-                Set<Integer> assignedPartitionsForTopic = assignmentSpec.members().get(memberId).assignedPartitions().getOrDefault(topicId, Collections.emptySet());
+                Set<Integer> assignedPartitionsForTopic = assignmentSpec.members().get(memberId)
+                    .assignedPartitions().getOrDefault(topicId, Collections.emptySet());
 
                 int currentAssignmentSize = assignedPartitionsForTopic.size();
                 List<Integer> currentAssignmentListForTopic = new ArrayList<>(assignedPartitionsForTopic);
 
                 // If there were previously assigned partitions present, we want to retain them.
                 if (currentAssignmentSize > 0) {
-                    // We either need to retain currentSize number of partitions when currentSize < required OR required number of partitions otherwise.
+                    // We need to retain:
+                    // 1) currentSize number of partitions (when currentSize < required) OR
+                    // 2) required number of partitions (when currentSize > required).
                     int retainedPartitionsCount = min(currentAssignmentSize, minRequiredQuota);
+                    // The partitions need to be in ascending order since we want the same partition numbers from each topic
+                    // to go to the same member to facilitate joins in case of co-partitioned topics.
                     Collections.sort(currentAssignmentListForTopic);
                     for (int i = 0; i < retainedPartitionsCount; i++) {
                         assignedStickyPartitionsPerTopic
-                                .computeIfAbsent(topicId, k -> new HashSet<>())
-                                .add(currentAssignmentListForTopic.get(i));
+                            .computeIfAbsent(topicId, k -> new HashSet<>())
+                            .add(currentAssignmentListForTopic.get(i));
                         membersWithNewAssignmentPerTopic
-                                .computeIfAbsent(memberId, k -> new HashMap<>())
-                                .computeIfAbsent(topicId, k -> new HashSet<>())
-                                .add(currentAssignmentListForTopic.get(i));
+                            .computeIfAbsent(memberId, k -> new HashMap<>())
+                            .computeIfAbsent(topicId, k -> new HashSet<>())
+                            .add(currentAssignmentListForTopic.get(i));
                     }
                 }
 
                 // Number of partitions left to reach the minRequiredQuota.
                 int remaining = minRequiredQuota - currentAssignmentSize;
 
-                // There are 3 cases w.r.t value of remaining
-                // 1) remaining < 0 this means that the member has more than the min required amount.
+                // There are 3 cases w.r.t the value of remaining:
+                // 1) remaining < 0: this means that the member has more than the min required amount.
                 if (remaining < 0 && numMembersWithExtraPartition > 0) {
                     // In order to remain as sticky as possible, since the order of members can be different, we want the members that already had extra
                     // partitions to retain them if it's still required, instead of assigning the extras to the first few members directly.
@@ -193,15 +196,15 @@ public class RangeAssignor implements PartitionAssignor {
                     // Since we already added the minimumRequiredQuota of partitions in the previous step (until minReq - 1), we just need to
                     // add the extra partition that will be present at the index right after min quota was satisfied.
                     assignedStickyPartitionsPerTopic
-                            .computeIfAbsent(topicId, k -> new HashSet<>())
-                            .add(currentAssignmentListForTopic.get(minRequiredQuota));
+                        .computeIfAbsent(topicId, k -> new HashSet<>())
+                        .add(currentAssignmentListForTopic.get(minRequiredQuota));
                     membersWithNewAssignmentPerTopic
-                            .computeIfAbsent(memberId, k -> new HashMap<>())
-                            .computeIfAbsent(topicId, k -> new HashSet<>())
-                            .add(currentAssignmentListForTopic.get(minRequiredQuota));
+                        .computeIfAbsent(memberId, k -> new HashMap<>())
+                        .computeIfAbsent(topicId, k -> new HashSet<>())
+                        .add(currentAssignmentListForTopic.get(minRequiredQuota));
                 } else {
-                    // 2) If remaining = 0 it has min req partitions but there is scope for getting an extra partition later on, so it is a potentialUnfilledMember.
-                    // 3) If remaining > 0 it doesn't even have the min required partitions, and it definitely is unfilled, so it should be added to potentialUnfilledMembers.
+                    // 2) If remaining = 0: it has min req partitions but there is scope for getting an extra partition later on, so it is a potential unfilled member.
+                    // 3) If remaining > 0: it doesn't even have the min required partitions, and it definitely is unfilled, so it should be added to potentiallyUnfilledMembers.
                     RemainingAssignmentsForMember<String, Integer> newPair = new RemainingAssignmentsForMember<>(memberId, remaining);
                     potentiallyUnfilledMembers.add(newPair);
                 }
@@ -219,8 +222,8 @@ public class RangeAssignor implements PartitionAssignor {
                 if (remaining > 0) {
                     RemainingAssignmentsForMember<String, Integer> newPair = new RemainingAssignmentsForMember<>(memberId, remaining);
                     unfilledMembersPerTopic
-                            .computeIfAbsent(topicId, k -> new ArrayList<>())
-                            .add(newPair);
+                        .computeIfAbsent(topicId, k -> new ArrayList<>())
+                        .add(newPair);
                 }
             }
         });
@@ -236,12 +239,14 @@ public class RangeAssignor implements PartitionAssignor {
             for (RemainingAssignmentsForMember<String, Integer> remainingAssignmentsForMember : unfilledMembersForTopic) {
                 String memberId = remainingAssignmentsForMember.memberId();
                 int remaining = remainingAssignmentsForMember.remaining();
-                List<Integer> partitionsToAssign = unassignedPartitionsPerTopic.get(topicId).subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
+                List<Integer> partitionsToAssign = unassignedPartitionsPerTopic.get(topicId)
+                    .subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
+
                 unassignedPartitionsListStartPointer += remaining;
                 membersWithNewAssignmentPerTopic
-                        .computeIfAbsent(memberId, k -> new HashMap<>())
-                        .computeIfAbsent(topicId, k -> new HashSet<>())
-                        .addAll(partitionsToAssign);
+                    .computeIfAbsent(memberId, k -> new HashMap<>())
+                    .computeIfAbsent(topicId, k -> new HashSet<>())
+                    .addAll(partitionsToAssign);
             }
         });
 
