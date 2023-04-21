@@ -68,7 +68,7 @@ public class PCollectionsImmutableMapTest {
     }
 
     @Test
-    public void testDelegationOfAfterUpdated() {
+    public void testDelegationOfUpdated() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.plus(eq(this), eq(this)), SINGLETON_MAP)
             .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.updated(this, this), identity())
@@ -77,7 +77,7 @@ public class PCollectionsImmutableMapTest {
     }
 
     @Test
-    public void testDelegationOfAfterRemoved() {
+    public void testDelegationOfRemoved() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
             .defineMockConfigurationForFunctionInvocation(mock -> mock.minus(eq(this)), SINGLETON_MAP)
             .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removed(this), identity())
@@ -234,6 +234,24 @@ public class PCollectionsImmutableMapTest {
             .defineMockConfigurationForUnsupportedFunction(mock -> mock.putIfAbsent(eq(this), eq(this)))
             .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.putIfAbsent(this, this))
             .doUnsupportedFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfUnsupportedFunctionRemoveByKeyAndValue(boolean mockFunctionReturnValue) {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.remove(eq(this), eq(this)), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.remove(this, this), identity())
+            .doFunctionDelegationCheck();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDelegationOfUnsupportedFunctionReplaceWhenMappedToSpecificValue(boolean mockFunctionReturnValue) {
+        new PCollectionsHashMapWrapperDelegationChecker<>()
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.replace(eq(this), eq(this), eq(this)), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.replace(this, this, this), identity())
+            .doFunctionDelegationCheck();
     }
 
     @Test

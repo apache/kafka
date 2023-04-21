@@ -73,7 +73,7 @@ public class PCollectionsImmutableNavigableSetTest {
     }
 
     @Test
-    public void testDelegationOfAfterAdded() {
+    public void testDelegationOfAdded() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForFunctionInvocation(mock -> mock.plus(eq(SINGLETON_SET.first())), SINGLETON_SET)
                 .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.added(SINGLETON_SET.first()), identity())
@@ -82,7 +82,7 @@ public class PCollectionsImmutableNavigableSetTest {
     }
 
     @Test
-    public void testDelegationOfAfterRemoved() {
+    public void testDelegationOfRemoved() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForFunctionInvocation(mock -> mock.minus(eq(10)), SINGLETON_SET)
                 .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.removed(10), identity())
