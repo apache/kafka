@@ -331,9 +331,11 @@ public abstract class AbstractIndex implements Closeable {
     /**
      * Get offset relative to base offset of this index
      * @throws IndexOffsetOverflowException
+     * 用于将一个 Long 型的位移值转换成相对位移
      */
     public int relativeOffset(long offset) {
         OptionalInt relativeOffset = toRelative(offset);
+        // 如果无法转换成功（比如差值超过了整型表示范围)，则抛出异常
         return relativeOffset.orElseThrow(() -> new IndexOffsetOverflowException(
             "Integer overflow for offset: " + offset + " (" + file.getAbsoluteFile() + ")"));
     }
@@ -586,6 +588,8 @@ public abstract class AbstractIndex implements Closeable {
         return result;
     }
 
+    //第一步是计算给定的 offset 值与 baseOffset 的差值；
+    // 第二步是校验该差值不能是负数或不能超过整型表示范围。如果校验通过，就直接返回该差值作为相对位移值，否则就返回 None 表示转换失败。
     private OptionalInt toRelative(long offset) {
         long relativeOffset = offset - baseOffset;
         if (relativeOffset < 0 || relativeOffset > Integer.MAX_VALUE)

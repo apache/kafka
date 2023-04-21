@@ -50,6 +50,8 @@ import java.util.Optional;
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal
  * storage format.
  * 定义位移索引，保存“< 位移值，文件磁盘物理位置 >”对。
+ * 每当 Consumer 需要从主题分区的某个位置开始读取消息时，Kafka 就会用到 OffsetIndex 直接定位物理文件位置，
+ * 从而避免了因为从头读取消息而引入的昂贵的 I/O 操作。
  */
 public class OffsetIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(OffsetIndex.class);
@@ -95,11 +97,16 @@ public class OffsetIndex extends AbstractIndex {
      * @return The offset found and the corresponding file position for this offset
      *         If the target offset is smaller than the least entry in the index (or the index is empty),
      *         the pair (baseOffset, 0) is returned.
+     * 既然 OffsetIndex 被用来快速定位消息所在的物理文件位置，那么必然需要定义一个方法执行对应的查询逻辑。
+     * 这个方法就是 lookup。
      */
     public OffsetPosition lookup(long targetOffset) {
         return maybeLock(lock, () -> {
-            ByteBuffer idx = mmap().duplicate();
+            ByteBuffer idx = mmap().duplicate();// 使用私有变量复制出整个索引映射区
+            // largestLowerBoundSlotFor方法底层使用了改进版的二分查找算法寻找对应的槽
             int slot = largestLowerBoundSlotFor(idx, targetOffset, IndexSearchType.KEY);
+            // 如果没找到，返回一个空的位置，即物理文件位置从0开始，表示从头读日志文件
+            // 否则返回slot槽对应的索引项
             if (slot == -1)
                 return new OffsetPosition(baseOffset(), 0);
             else
@@ -141,6 +148,7 @@ public class OffsetIndex extends AbstractIndex {
      * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
      * @throws IndexOffsetOverflowException if the offset causes index offset to overflow
      * @throws InvalidOffsetException if provided offset is not larger than the last offset
+     * 写入索引项
      */
     public void append(long offset, int position) {
         lock.lock();
@@ -228,6 +236,11 @@ public class OffsetIndex extends AbstractIndex {
 
     /**
      * Truncates index to a known number of entries.
+     * 索引还有一个常见的操作：截断操作（Truncation）。截断操作是指，将索引文件内容直接裁剪掉一部分。
+     * 比如，OffsetIndex 索引文件中当前保存了 100 个索引项，我想只保留最开始的 40 个索引项。
+     * 源码定义了 truncateToEntries 方法来实现这个需求：
+     * 这个方法接收 entries 参数，表示要截取到哪个槽，主要的逻辑实现是调用 mmap 的 position 方法。
+     * 源码中的 _entries * entrySize 就是 mmap 要截取到的字节处。
      */
     private void truncateToEntries(int entries) {
         lock.lock();
