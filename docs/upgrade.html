@@ -36,6 +36,16 @@
             operations to return the latest record (per key) as of a specified timestamp.
             See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889%3A+Versioned+State+Stores">KIP-889</a>
             for more details.
+            If the new store typed is used in the DSL, improved processing semantics are applied as described in 
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>.
+        </li>
+        <li>KTable aggregation semantics got further improved via 
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-904%3A+Kafka+Streams+-+Guarantee+subtractor+is+called+before+adder+if+key+has+not+changed">KIP-904</a>,
+	    now avoiding spurious itermedite results.
+        </li>
+        <li>Kafka Streams' <code>ProductionExceptionHandler</code> is improved via 
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-399%3A+Extend+ProductionExceptionHandler+to+cover+serialization+exceptions">KIP-399</a>,
+            now also covering serialiation errors.
         </li>
         <li>MirrorMaker now uses incrementalAlterConfigs API by default to synchronize topic configurations instead of the deprecated alterConfigs API.
             A new settings called <code>use.incremental.alter.configs</code> is introduced to allow users to control which API to use.
