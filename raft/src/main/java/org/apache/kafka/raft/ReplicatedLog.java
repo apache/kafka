@@ -259,7 +259,7 @@ public interface ReplicatedLog extends AutoCloseable {
      * the quorum leader.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot if it doesn't already exists
+     * @return a writable snapshot if it doesn't already exist
      */
     Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId);
 
@@ -287,7 +287,7 @@ public interface ReplicatedLog extends AutoCloseable {
      /**
       * Returns the latest snapshot id if one exists.
       *
-      * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
+      * @return an Optional snapshot id of the latest snapshot if one exists, otherwise returns an
       *         empty Optional
       */
     Optional<OffsetAndEpoch> latestSnapshotId();
