@@ -167,8 +167,20 @@ class LogCleaner(initialConfig: CleanerConfig,
    */
   def shutdown(): Unit = {
     info("Shutting down the log cleaner.")
-    cleaners.foreach(_.shutdown())
-    cleaners.clear()
+    try {
+      cleaners.foreach(_.shutdown())
+      cleaners.clear()
+    } finally {
+      remoteMetrics()
+    }
+  }
+
+  def remoteMetrics(): Unit = {
+    metricsGroup.removeMetric("max-buffer-utilization-percent")
+    metricsGroup.removeMetric("cleaner-recopy-percent")
+    metricsGroup.removeMetric("max-clean-time-secs")
+    metricsGroup.removeMetric("max-compaction-delay-secs")
+    metricsGroup.removeMetric("DeadThreadCount")
   }
 
   override def reconfigurableConfigs: Set[String] = {
