@@ -93,7 +93,7 @@ public class FeaturesImageTest {
 
     private void testToImageAndBack(FeaturesImage image) throws Throwable {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
         FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
         RecordTestUtils.replayAll(delta, writer.records());
         FeaturesImage nextImage = delta.apply();
