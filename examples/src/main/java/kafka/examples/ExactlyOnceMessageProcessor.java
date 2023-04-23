@@ -20,7 +20,9 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -40,6 +42,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
 import static java.time.Duration.ofMillis;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 
 /**
@@ -128,6 +131,11 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                     Utils.printErr(e.getMessage());
                     // we can't recover from these exceptions
                     shutdown();
+                } catch (OffsetOutOfRangeException | NoOffsetForPartitionException e) {
+                    // invalid or no offset found without auto.reset.policy
+                    Utils.printOut("Invalid or no offset found, using latest");
+                    consumer.seekToEnd(emptyList());
+                    consumer.commitSync();
                 } catch (KafkaException e) {
                     // abort the transaction and try to continue
                     Utils.printOut("Aborting transaction: %s", e);
