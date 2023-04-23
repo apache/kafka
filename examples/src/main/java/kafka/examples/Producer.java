@@ -104,29 +104,38 @@ public class Producer extends Thread {
 
     public KafkaProducer<Integer, String> createKafkaProducer() {
         Properties props = new Properties();
+        // bootstrap server config is required for producer to connect to brokers
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        // client id is not required, but it's good to track the source of requests beyond just ip/port
+        // by allowing a logical application name to be included in server-side request logging
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "client-" + UUID.randomUUID());
+        // key and value are just byte arrays, so we need to set appropriate serializers
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         if (transactionTimeoutMs > 0) {
+            // max time before the transaction coordinator proactively aborts the ongoing transaction
             props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs);
         }
         if (transactionalId != null) {
+            // the transactional id must be static and unique
+            // it is used to identify the same producer instance across process restarts
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         }
+        // enable duplicates protection at the partition level
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
         return new KafkaProducer<>(props);
     }
 
     private void asyncSend(KafkaProducer<Integer, String> producer, int key, String value) {
-        // still blocks when buffer.memory is full or metadata are not available
-        producer.send(new ProducerRecord<>(topic, key, value),
-            new ProducerCallback(key, value));
+        // send the record asynchronously, setting a callback to be notified of the result
+        // note tha send blocks when buffer.memory is full or metadata are not available
+        producer.send(new ProducerRecord<>(topic, key, value), new ProducerCallback(key, value));
     }
 
     private RecordMetadata syncSend(KafkaProducer<Integer, String> producer, int key, String value)
         throws ExecutionException, InterruptedException {
         try {
+            // send the record and then call get, which blocks waiting for the ack from the broker
             RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
             Utils.maybePrintRecord(numRecords, key, value, metadata);
             return metadata;
