@@ -34,7 +34,7 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.46.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '8.1.2'
+  id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.0"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
 
