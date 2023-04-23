@@ -152,7 +152,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             apiVersions,
             latestSupportedFeatures,
             Collections.emptyMap(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH);
+            UNKNOWN_FINALIZED_FEATURES_EPOCH,
+            false);
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
@@ -163,7 +164,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         long finalizedFeaturesEpoch,
         NodeApiVersions controllerApiVersions,
         ListenerType listenerType,
-        boolean enableUnstableLastVersion
+        boolean enableUnstableLastVersion,
+        boolean zkMigrationEnabled
     ) {
         ApiVersionCollection apiKeys;
         if (controllerApiVersions != null) {
@@ -186,7 +188,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             apiKeys,
             latestSupportedFeatures,
             finalizedFeatures,
-            finalizedFeaturesEpoch
+            finalizedFeaturesEpoch,
+            zkMigrationEnabled
         );
     }
 
@@ -195,7 +198,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         ApiVersionCollection apiVersions,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Map<String, Short> finalizedFeatures,
-        long finalizedFeaturesEpoch
+        long finalizedFeaturesEpoch,
+        boolean zkMigrationEnabled
     ) {
         return new ApiVersionsResponse(
             createApiVersionsResponseData(
@@ -204,7 +208,8 @@ public class ApiVersionsResponse extends AbstractResponse {
                 apiVersions,
                 latestSupportedFeatures,
                 finalizedFeatures,
-                finalizedFeaturesEpoch
+                finalizedFeaturesEpoch,
+                zkMigrationEnabled
             )
         );
     }
@@ -294,7 +299,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         final ApiVersionCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Map<String, Short> finalizedFeatures,
-        final long finalizedFeaturesEpoch
+        final long finalizedFeaturesEpoch,
+        final boolean zkMigrationEnabled
     ) {
         final ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
@@ -303,6 +309,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
         data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
         data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
+        data.setZkMigrationReady(zkMigrationEnabled);
 
         return data;
     }

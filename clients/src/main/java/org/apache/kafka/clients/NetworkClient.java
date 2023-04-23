@@ -1004,7 +1004,7 @@ public class NetworkClient implements KafkaClient {
             Map.Entry<String, ApiVersionsRequest.Builder> entry = iter.next();
             String node = entry.getKey();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
-                log.debug("Initiating API versions fetch from node {}.", node);
+                log.info("!!! Initiating API versions fetch from node {}.", node);
                 // We transition the connection to the CHECKING_API_VERSIONS state only when
                 // the ApiVersionsRequest is queued up to be sent out. Without this, the client
                 // could remain in the CHECKING_API_VERSIONS state forever if the channel does

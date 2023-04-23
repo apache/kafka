@@ -49,7 +49,8 @@ object ApiVersionManager {
       forwardingManager,
       supportedFeatures,
       metadataCache,
-      config.unstableApiVersionsEnabled
+      config.unstableApiVersionsEnabled,
+      config.migrationEnabled
     )
   }
 }
@@ -58,7 +59,8 @@ class SimpleApiVersionManager(
   val listenerType: ListenerType,
   val enabledApis: collection.Set[ApiKeys],
   brokerFeatures: Features[SupportedVersionRange],
-  val enableUnstableLastVersion: Boolean
+  val enableUnstableLastVersion: Boolean,
+  val zkMigrationEnabled: Boolean
 ) extends ApiVersionManager {
 
   def this(
@@ -69,7 +71,8 @@ class SimpleApiVersionManager(
       listenerType,
       ApiKeys.apisForListener(listenerType).asScala,
       BrokerFeatures.defaultSupportedFeatures(),
-      enableUnstableLastVersion
+      enableUnstableLastVersion,
+      zkMigrationEnabled
     )
   }
 
@@ -85,7 +88,8 @@ class DefaultApiVersionManager(
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
   metadataCache: MetadataCache,
-  val enableUnstableLastVersion: Boolean
+  val enableUnstableLastVersion: Boolean,
+  val zkMigrationEnabled: Boolean
 ) extends ApiVersionManager {
 
   val enabledApis = ApiKeys.apisForListener(listenerType).asScala
@@ -103,7 +107,8 @@ class DefaultApiVersionManager(
       finalizedFeatures.epoch,
       controllerApiVersions.orNull,
       listenerType,
-      enableUnstableLastVersion
+      enableUnstableLastVersion,
+      zkMigrationEnabled
     )
   }
 }
