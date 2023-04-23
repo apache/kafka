@@ -82,7 +82,7 @@ public class Utils {
             printOut("Deleted topics: %s", Arrays.toString(topicNames));
             // create topics in a retry loop
             while (true) {
-                // use default RF to avoid NOT_ENOUGH_REPLICAS error with minISR>1
+                // use default RF to avoid NOT_ENOUGH_REPLICAS error with minISR > 1
                 short replicationFactor = -1;
                 List<NewTopic> newTopics = Arrays.stream(topicNames)
                     .map(name -> new NewTopic(name, numPartitions, replicationFactor))

@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
@@ -36,6 +38,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 
 /**
@@ -76,12 +79,17 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
     public void run() {
         // the consumer instance is NOT thread safe
         try (KafkaConsumer<Integer, String> consumer = createKafkaConsumer()) {
+            // subscribes to a list of topics to get dynamically assigned partitions
+            // this class implements the rebalance listener that we pass here to be notified of such events
             consumer.subscribe(singleton(topic), this);
             Utils.printOut("Subscribed to %s", topic);
             while (!closed && remainingRecords > 0) {
                 try {
-                    // next poll must be called within session.timeout.ms to avoid rebalance
-                    ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
+                    // if required, poll updates partition assignment and invokes the configured rebalance listener
+                    // then tries to fetch records sequentially using the last committed offset or auto.offset.reset policy
+                    // returns immediately if there are records or times out returning an empty record set
+                    // the next poll must be called within session.timeout.ms to avoid group rebalance
+                    ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(10));
                     for (ConsumerRecord<Integer, String> record : records) {
                         Utils.maybePrintRecord(numRecords, record);
                     }
@@ -91,9 +99,13 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
                     // we can't recover from these exceptions
                     Utils.printErr(e.getMessage());
                     shutdown();
+                } catch (OffsetOutOfRangeException | NoOffsetForPartitionException e) {
+                    // invalid or no offset found without auto.reset.policy
+                    Utils.printOut("Invalid or no offset found, using latest");
+                    consumer.seekToEnd(emptyList());
+                    consumer.commitSync();
                 } catch (KafkaException e) {
                     // log the exception and try to continue
-                    // you can add your application retry strategy here
                     Utils.printErr(e.getMessage());
                 }
             }
@@ -114,16 +126,25 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
 
     public KafkaConsumer<Integer, String> createKafkaConsumer() {
         Properties props = new Properties();
+        // bootstrap server config is required for consumer to connect to brokers
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        // client id is not required, but it's good to track the source of requests beyond just ip/port
+        // by allowing a logical application name to be included in server-side request logging
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "client-" + UUID.randomUUID());
+        // consumer group id is required when we use subscribe(topics) for group management
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        // sets static membership to improve availability (e.g. rolling restart)
         instanceId.ifPresent(id -> props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, id));
+        // disables auto commit when EOS is enabled, because offsets are committed with the transaction
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, readCommitted ? "false" : "true");
+        // key and value are just byte arrays, so we need to set appropriate deserializers
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         if (readCommitted) {
+            // skips ongoing and aborted transactions
             props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         }
+        // sets the reset offset policy in case of invalid or no offset
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(props);
     }
@@ -136,5 +157,10 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
         Utils.printOut("Assigned partitions: %s", partitions);
+    }
+
+    @Override
+    public void onPartitionsLost(Collection<TopicPartition> partitions) {
+        Utils.printOut("Lost partitions: %s", partitions);
     }
 }
