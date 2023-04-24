@@ -183,6 +183,7 @@ public class TimeIndex extends AbstractIndex {
         lock.lock();
         try {
             if (!skipFullCheck && isFull())
+                // 如果索引文件已写满，抛出异常
                 throw new IllegalArgumentException("Attempt to append to a full time index (size = " + entries() + ").");
 
             // We do not throw exception when the offset equals to the offset of last entry. That means we are trying
@@ -191,9 +192,11 @@ public class TimeIndex extends AbstractIndex {
             // because that could happen in the following two scenarios:
             // 1. A log segment is closed.
             // 2. LogSegment.onBecomeInactiveSegment() is called when an active log segment is rolled.
+            // 确保索引单调增加性
             if (entries() != 0 && offset < lastEntry.offset)
                 throw new InvalidOffsetException("Attempt to append an offset (" + offset + ") to slot " + entries()
                     + " no larger than the last offset appended (" + lastEntry.offset + ") to " + file().getAbsolutePath());
+            // 确保时间戳的单调增加性
             if (entries() != 0 && timestamp < lastEntry.timestamp)
                 throw new IllegalStateException("Attempt to append a timestamp (" + timestamp + ") to slot " + entries()
                     + " no larger than the last timestamp appended (" + lastEntry.timestamp + ") to " + file().getAbsolutePath());
@@ -204,10 +207,10 @@ public class TimeIndex extends AbstractIndex {
             if (timestamp > lastEntry.timestamp) {
                 log.trace("Adding index entry {} => {} to {}.", timestamp, offset, file().getAbsolutePath());
                 MappedByteBuffer mmap = mmap();
-                mmap.putLong(timestamp);
-                mmap.putInt(relativeOffset(offset));
-                incrementEntries();
-                this.lastEntry = new TimestampOffset(timestamp, offset);
+                mmap.putLong(timestamp);// 向mmap写入时间戳
+                mmap.putInt(relativeOffset(offset));// 向mmap写入相对位移值
+                incrementEntries();// 更新索引项个数
+                this.lastEntry = new TimestampOffset(timestamp, offset);// 更新当前最新的索引项
                 if (entries() * ENTRY_SIZE != mmap.position())
                     throw new IllegalStateException(entries() + " entries but file position in index is " + mmap.position());
             }
