@@ -52,7 +52,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
         // The format we need to deserialize is:
         // {BYTE_ARRAY oldValue}{BYTE encodingFlag=0}
         // {BYTE_ARRAY newValue}{BYTE encodingFlag=1}
-        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOlvencodingFlagdFlag=2}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE encodingFlag=2}
         // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=3}
         // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE encodingFlag=4}
         // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE vencodingFlag=5}
