@@ -55,7 +55,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
         // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE encodingFlag=2}
         // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=3}
         // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE encodingFlag=4}
-        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE vencodingFlag=5}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=5}
         final ByteBuffer buffer = ByteBuffer.wrap(data);
         final byte encodingFlag = buffer.get(data.length - ENCODING_FLAG_SIZE);
 
