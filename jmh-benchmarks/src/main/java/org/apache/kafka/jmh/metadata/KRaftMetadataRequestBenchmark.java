@@ -197,7 +197,7 @@ public class KRaftMetadataRequestBenchmark {
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).
                 setTokenManager(null).
-                setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.BROKER, false)).
+                setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.BROKER, false, false)).
                 build();
     }
 

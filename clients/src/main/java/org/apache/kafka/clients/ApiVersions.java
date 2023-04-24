@@ -64,7 +64,7 @@ public class ApiVersions {
         return maxUsableProduceMagic;
     }
 
-    // check all nodes are ZK Migration ready
+    // check if all nodes are ZK Migration ready
     public boolean isAllNodeZkMigrationReady() {
         return nodeApiVersions.values().stream().allMatch(ver -> ver.zkMigrationEnabled());
     }

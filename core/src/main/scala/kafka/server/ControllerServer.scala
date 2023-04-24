@@ -175,7 +175,8 @@ class ControllerServer(
 
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
-        config.unstableApiVersionsEnabled
+        config.unstableApiVersionsEnabled,
+        config.migrationEnabled
       )
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)

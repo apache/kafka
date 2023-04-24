@@ -65,7 +65,8 @@ class SimpleApiVersionManager(
 
   def this(
     listenerType: ListenerType,
-    enableUnstableLastVersion: Boolean
+    enableUnstableLastVersion: Boolean,
+    zkMigrationEnabled: Boolean
   ) = {
     this(
       listenerType,
@@ -79,7 +80,7 @@ class SimpleApiVersionManager(
   private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava, enableUnstableLastVersion)
 
   override def apiVersionResponse(requestThrottleMs: Int): ApiVersionsResponse = {
-    ApiVersionsResponse.createApiVersionsResponse(requestThrottleMs, apiVersions, brokerFeatures)
+    ApiVersionsResponse.createApiVersionsResponse(requestThrottleMs, apiVersions, brokerFeatures, zkMigrationEnabled)
   }
 }
 
@@ -89,7 +90,7 @@ class DefaultApiVersionManager(
   features: BrokerFeatures,
   metadataCache: MetadataCache,
   val enableUnstableLastVersion: Boolean,
-  val zkMigrationEnabled: Boolean
+  val zkMigrationEnabled: Boolean = false
 ) extends ApiVersionManager {
 
   val enabledApis = ApiKeys.apisForListener(listenerType).asScala

@@ -283,7 +283,8 @@ public class KRaftMigrationDriverTest {
             migrationClient,
             metadataPropagator,
             metadataPublisher -> { },
-            new MockFaultHandler("test")
+            new MockFaultHandler("test"),
+            null
         );
 
         MetadataImage image = MetadataImage.EMPTY;
@@ -365,7 +366,8 @@ public class KRaftMigrationDriverTest {
             migrationClient,
             metadataPropagator,
             metadataPublisher -> { },
-            faultHandler
+            faultHandler,
+            null
         )) {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);

@@ -119,7 +119,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         return createApiVersionsResponse(
             throttleTimeMs,
             filterApis(RecordVersion.current(), listenerType, true),
-            Features.emptySupportedFeatures()
+            Features.emptySupportedFeatures(),
+            false
         );
     }
 
@@ -131,7 +132,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         return createApiVersionsResponse(
             throttleTimeMs,
             filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion),
-            Features.emptySupportedFeatures()
+            Features.emptySupportedFeatures(),
+            false
         );
     }
 
@@ -139,13 +141,14 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiVersionCollection apiVersions
     ) {
-        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures());
+        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures(), false);
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
         ApiVersionCollection apiVersions,
-        Features<SupportedVersionRange> latestSupportedFeatures
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        boolean zkMigrationEnabled
     ) {
         return createApiVersionsResponse(
             throttleTimeMs,
@@ -153,7 +156,7 @@ public class ApiVersionsResponse extends AbstractResponse {
             latestSupportedFeatures,
             Collections.emptyMap(),
             UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            false);
+            zkMigrationEnabled);
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(

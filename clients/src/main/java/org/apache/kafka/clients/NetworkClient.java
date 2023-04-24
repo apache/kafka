@@ -960,9 +960,9 @@ public class NetworkClient implements KafkaClient {
             apiVersionsResponse.data().zkMigrationReady());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
-        log.info("!!! Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, ZK migration ready: {}, API versions: {}.",
+        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, ZK migration ready: {}, API versions: {}.",
                 node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
-                apiVersionsResponse.data().supportedFeatures(), nodeVersionInfo);
+                apiVersionsResponse.data().supportedFeatures(), apiVersionsResponse.data().zkMigrationReady(), nodeVersionInfo);
     }
 
     /**
@@ -1004,7 +1004,7 @@ public class NetworkClient implements KafkaClient {
             Map.Entry<String, ApiVersionsRequest.Builder> entry = iter.next();
             String node = entry.getKey();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
-                log.info("!!! Initiating API versions fetch from node {}.", node);
+                log.debug("Initiating API versions fetch from node {}.", node);
                 // We transition the connection to the CHECKING_API_VERSIONS state only when
                 // the ApiVersionsRequest is queued up to be sent out. Without this, the client
                 // could remain in the CHECKING_API_VERSIONS state forever if the channel does

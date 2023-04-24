@@ -403,7 +403,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             switch (migrationState) {
                 case WAIT_FOR_CONTROLLER_QUORUM:
                     if (isControllerQuorumReadyForMigration()) {
-                        log.debug("Controller Quorum is ready for Zk to KRaft migration");
+                        log.info("Controller Quorum is ready for Zk to KRaft migration");
                         // Note that leadership would not change here. Hence we do not need to
                         // `apply` any leadership state change.
                         transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);

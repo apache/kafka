@@ -89,7 +89,7 @@ public class QuorumFeaturesTest {
                     setMinVersion(entry.getValue().min()).
                     setMaxVersion(entry.getValue().max()));
         });
-        return new NodeApiVersions(Collections.emptyList(), features);
+        return new NodeApiVersions(Collections.emptyList(), features, false);
     }
 
     @Test
