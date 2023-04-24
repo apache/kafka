@@ -1470,4 +1470,23 @@ public class QuorumControllerTest {
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
     }
+
+    @Test
+    public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+        ) {
+            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
+                    setControllerBuilderInitializer(controllerBuilder -> {
+                        controllerBuilder.setZkMigrationEnabled(true);
+                    }).
+                    setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV0, "test"));
+
+            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+            QuorumController active = controlEnv.activeController();
+            assertEquals(ZkMigrationState.NONE, active.appendReadEvent("read migration state", OptionalLong.empty(),
+                () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
+            assertThrows(FaultHandlerException.class, controlEnv::close);
+        }
+    }
 }
