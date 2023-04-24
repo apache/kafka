@@ -486,6 +486,7 @@ class ZkMigrationClient(
   override def writeClientQuotas(
     entity: util.Map[String, String],
     quotas: util.Map[String, java.lang.Double],
+    scram: util.Map[String, String],
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     val entityMap = entity.asScala
@@ -494,6 +495,7 @@ class ZkMigrationClient(
     val hasIp = entityMap.contains(ClientQuotaEntity.IP)
     val props = new Properties()
     // We store client quota values as strings in the ZK JSON
+    scram.forEach { case (key, value) => props.put(key, value.toString) }
     quotas.forEach { case (key, value) => props.put(key, value.toString) }
     val (configType, path) = if (hasUser && !hasClient) {
       (Some(ConfigType.User), Some(entityMap(ClientQuotaEntity.USER)))
