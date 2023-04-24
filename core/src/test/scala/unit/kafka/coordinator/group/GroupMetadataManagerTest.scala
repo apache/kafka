@@ -1183,8 +1183,6 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1220,8 +1218,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1297,8 +1293,6 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      any(),
-      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1338,8 +1332,6 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1399,8 +1391,6 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1448,8 +1438,6 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1601,8 +1589,6 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1707,8 +1693,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any())
     verify(replicaManager, times(2)).getMagic(any())
@@ -2815,8 +2799,6 @@ class GroupMetadataManagerTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
-      any(),
-      any(),
       any())
     capturedArgument
   }
@@ -2831,8 +2813,6 @@ class GroupMetadataManagerTest {
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any())
     ).thenAnswer(_ => {
