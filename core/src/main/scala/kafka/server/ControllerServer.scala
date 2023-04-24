@@ -270,7 +270,8 @@ class ControllerServer(
             "zk migration",
             fatal = false,
             () => {}
-          )
+          ),
+          sharedServer.raftManager.apiVersions
         )
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))

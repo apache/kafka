@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -81,6 +83,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private volatile MigrationDriverState migrationState;
     private volatile ZkMigrationLeadershipState migrationLeadershipState;
     private volatile MetadataImage image;
+    private volatile ApiVersions apiVersions;
 
     public KRaftMigrationDriver(
         int nodeId,
@@ -88,7 +91,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         MigrationClient zkMigrationClient,
         LegacyPropagator propagator,
         Consumer<MetadataPublisher> initialZkLoadHandler,
-        FaultHandler faultHandler
+        FaultHandler faultHandler,
+        ApiVersions apiVersions
     ) {
         this.nodeId = nodeId;
         this.zkRecordConsumer = zkRecordConsumer;
@@ -104,6 +108,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
+        this.apiVersions = apiVersions;
     }
 
     public void start() {
@@ -134,8 +139,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     private boolean isControllerQuorumReadyForMigration() {
-        // TODO implement this
-        return true;
+        return this.apiVersions.isAllNodeZkMigrationReady();
     }
 
     private boolean imageDoesNotContainAllBrokers(MetadataImage image, Set<Integer> brokerIds) {
@@ -383,7 +387,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     } else {
                         // Apply the new KRaft state
                         apply("KRaftLeaderEvent is active", state -> state.withNewKRaftController(nodeId, leaderAndEpoch.epoch()));
-                        // Before becoming the controller fo ZkBrokers, we need to make sure the
+                        // Before becoming the controller for ZkBrokers, we need to make sure the
                         // Controller Quorum can handle migration.
                         transitionTo(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM);
                     }
