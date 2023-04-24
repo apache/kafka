@@ -39,6 +39,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
@@ -77,6 +78,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -259,6 +261,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private List<InetSocketAddress> addresses = Collections.emptyList();
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -1106,6 +1109,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (cluster.invalidTopics().contains(topic))
             throw new InvalidTopicException(topic);
+
+        for (Node node : cluster.nodes()) {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(node.host(), node.port()), 1000);
+            } catch (Exception e) {
+                metadata.bootstrap(this.addresses);
+                throw new RuntimeException(e);
+            }
+        }
 
         metadata.add(topic, nowMs);
 
