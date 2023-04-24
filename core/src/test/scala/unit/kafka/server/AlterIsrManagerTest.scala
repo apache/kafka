@@ -19,8 +19,8 @@ package kafka.server
 
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.api.LeaderAndIsr
+import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.{MockScheduler, MockTime}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
@@ -32,7 +32,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AlterIsrRequest, AlterIsrResponse}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.{ArgumentMatchers, Mockito}
 
@@ -54,6 +54,15 @@ class AlterIsrManagerTest {
     brokerToController = EasyMock.createMock(classOf[BrokerToControllerChannelManager])
   }
 
+  @AfterEach
+  def tearDown(): Unit = {
+    // The metrics created in previous tests (via newGauge(), etc.) would be created and cached, gauging the DefaultAlterIsrManager
+    // in the previous test case.  So need to clear everything after each round.
+    KafkaYammerMetrics.defaultRegistry().allMetrics().forEach((name, _) => {
+      KafkaYammerMetrics.defaultRegistry().removeMetric(name)
+    })
+  }
+
   @Test
   def testBasic(): Unit = {
     EasyMock.expect(brokerToController.start())
@@ -65,6 +74,50 @@ class AlterIsrManagerTest {
     alterIsrManager.start()
     alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
     EasyMock.verify(brokerToController)
+  }
+
+  @Test
+  def testMetrics(): Unit = {
+    val capture = EasyMock.newCapture[AbstractRequest.Builder[AlterIsrRequest]]()
+    val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
+
+    EasyMock.expect(brokerToController.start())
+    EasyMock.expect(brokerToController.sendRequest(EasyMock.capture(capture), EasyMock.capture(callbackCapture))).times(2)
+    EasyMock.replay(brokerToController)
+
+    val scheduler = new MockScheduler(time)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
+    alterIsrManager.start()
+    assertEquals(0, alterIsrManager.unsentItemQueueSizeGauge.value())
+    assertEquals(0, alterIsrManager.inflightRequestGauge.value())
+    assertEquals(0, alterIsrManager.currentInflightRequestElapsedTimeGauge.value())
+
+    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
+    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}, 0))
+    val delay = 2000
+    time.sleep(delay)
+    assertEquals(1, alterIsrManager.unsentItemQueueSizeGauge.value())
+    assertEquals(1, alterIsrManager.inflightRequestGauge.value())
+    assertTrue(alterIsrManager.currentInflightRequestElapsedTimeGauge.value() == delay)
+
+    // Simulate response
+    val alterIsrResp = partitionResponse(tp0, Errors.NONE)
+    val resp = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, alterIsrResp)
+    callbackCapture.getValue.onComplete(resp)
+
+    // 2nd request, unsent == empty
+    time.sleep(delay * 2)
+    assertEquals(0, alterIsrManager.unsentItemQueueSizeGauge.value())
+    assertEquals(1, alterIsrManager.inflightRequestGauge.value())
+    assertTrue(alterIsrManager.currentInflightRequestElapsedTimeGauge.value() == delay * 2)
+
+    // Cleared all
+    time.sleep(delay * 2)
+    callbackCapture.getValue.onComplete(resp)
+    assertEquals(0, alterIsrManager.unsentItemQueueSizeGauge.value())
+    assertEquals(0, alterIsrManager.inflightRequestGauge.value())
+    assertTrue(alterIsrManager.currentInflightRequestElapsedTimeGauge.value() == 0)
   }
 
   @Test

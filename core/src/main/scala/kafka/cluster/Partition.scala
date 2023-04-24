@@ -19,6 +19,7 @@ package kafka.cluster
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.cluster.Partition.ISR_STATES_TO_CREATE_METRICS
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -66,6 +67,11 @@ class DelayedOperations(topicPartition: TopicPartition,
 }
 
 object Partition extends KafkaMetricsGroup {
+  val ISR_STATES_TO_CREATE_METRICS: Set[Class[_ <: IsrState]] = Set(
+    classOf[PendingExpandIsr],
+    classOf[PendingShrinkIsr],
+    classOf[CommittedIsr],
+  )
   def apply(topicPartition: TopicPartition,
             time: Time,
             replicaManager: ReplicaManager): Partition = {
@@ -109,6 +115,7 @@ object Partition extends KafkaMetricsGroup {
     removeMetric("ReplicasCount", tags)
     removeMetric("LastStableOffsetLag", tags)
     removeMetric("AtMinIsr", tags)
+    ISR_STATES_TO_CREATE_METRICS.foreach(c => removeMetric(s"${c.getSimpleName}", tags))
   }
 }
 
@@ -266,6 +273,9 @@ class Partition(val topicPartition: TopicPartition,
   newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
   newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
   newGauge("LastStableOffsetLag", () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
+  ISR_STATES_TO_CREATE_METRICS.foreach(c => newGauge(s"${c.getSimpleName}", () => if (isrStateClass.equals(c)) 1 else 0, tags))
+
+  def isrStateClass: Class[_ <: IsrState] = isrState.getClass
 
   def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - isrState.isr.size) > 0
 
