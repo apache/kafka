@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiVersionsTest {
 
@@ -54,5 +56,22 @@ public class ApiVersionsTest {
                 .setMinVersion((short) 0)
                 .setMaxVersion((short) 2))));
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+    }
+
+    @Test
+    public void testZkMigrationReady() {
+        ApiVersions apiVersions = new ApiVersions();
+
+        apiVersions.update("0", NodeApiVersions.create());
+        assertFalse(apiVersions.isAllNodeZkMigrationReady());
+
+        apiVersions.update("0", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertTrue(apiVersions.isAllNodeZkMigrationReady());
+
+        apiVersions.update("1", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertTrue(apiVersions.isAllNodeZkMigrationReady());
+
+        apiVersions.update("2", NodeApiVersions.create());
+        assertFalse(apiVersions.isAllNodeZkMigrationReady());
     }
 }
