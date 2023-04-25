@@ -291,6 +291,12 @@ public final class ByteUtils {
      * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      */
     public static long readVarlong(ByteBuffer buffer)  {
+        long raw =  readUnsignedVarlong(buffer);
+        return (raw >>> 1) ^ -(raw & 1);
+    }
+
+    // visible for testing
+    static long readUnsignedVarlong(ByteBuffer buffer)  {
         long value = 0L;
         int i = 0;
         long b;
@@ -301,7 +307,7 @@ public final class ByteUtils {
                 throw illegalVarlongException(value);
         }
         value |= b << i;
-        return (value >>> 1) ^ -(value & 1);
+        return value;
     }
 
     /**
@@ -444,6 +450,11 @@ public final class ByteUtils {
      */
     public static void writeVarlong(long value, ByteBuffer buffer) {
         long v = (value << 1) ^ (value >> 63);
+        writeUnsignedVarlong(v, buffer);
+    }
+
+    // visible for testing
+    static void writeUnsignedVarlong(long v, ByteBuffer buffer) {
         while ((v & 0xffffffffffffff80L) != 0L) {
             byte b = (byte) ((v & 0x7f) | 0x80);
             buffer.put(b);
