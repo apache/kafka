@@ -255,7 +255,7 @@ class RPCProducerIdManager(brokerId: Int,
       case Errors.BROKER_ID_NOT_REGISTERED =>
         warn("Our broker ID is not yet known by the controller, trying again.")
       case e: Errors =>
-        error(s"Had an unknown error from the controller: ${e.exception}")
+        error(s"Received an unexpected error code from the controller: $e")
     }
     shouldBackoff.set(!successfulResponse)
 
