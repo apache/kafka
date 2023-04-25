@@ -164,6 +164,7 @@ class RPCProducerIdManager(brokerId: Int,
 
   this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
 
+  private val IterationLimit = 3
   // Visible for testing
   private[transaction] var nextProducerIdBlock = new AtomicReference[ProducerIdsBlock](null)
   private val currentProducerIdBlock: AtomicReference[ProducerIdsBlock] = new AtomicReference(ProducerIdsBlock.EMPTY)
@@ -176,6 +177,7 @@ class RPCProducerIdManager(brokerId: Int,
 
   override def generateProducerId(): Try[Long] = {
     var result: Try[Long] = null
+    var iteration = 0
     while (result == null) {
       currentProducerIdBlock.get.claimNextId().asScala match {
         case None =>
@@ -189,6 +191,7 @@ class RPCProducerIdManager(brokerId: Int,
           } else {
             currentProducerIdBlock.set(block)
             requestInFlight.set(false)
+            iteration = iteration + 1
           }
 
         case Some(nextProducerId) =>
@@ -198,6 +201,9 @@ class RPCProducerIdManager(brokerId: Int,
             maybeRequestNextBlock()
           }
           result = Success(nextProducerId)
+      }
+      if (iteration == IterationLimit) {
+        result = Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
       }
     }
     result
