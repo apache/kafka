@@ -332,7 +332,7 @@
     </p>
 
     <ul>
-        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly, but the resulted stream may contain unnecessary leftRecord-null for left joins, and leftRecord-null or null-rightRecord for outer joins. </li>
+        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly. </li>
         <li> For Stream-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order), and hence it may produce unpredictable results. </li>
         <li> For Table-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order). However, the join result is a changelog stream and hence will be eventually consistent. </li>
     </ul>
