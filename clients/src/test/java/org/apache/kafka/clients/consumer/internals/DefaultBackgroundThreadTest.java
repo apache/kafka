@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -43,6 +44,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -89,11 +91,20 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    public void testStartupAndTearDown() {
+    public void testStartupAndTearDown() throws InterruptedException {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         backgroundThread.start();
+
+        // There's a nonzero amount of time between starting the thread and having it
+        // begin to execute our code. Wait for a bit before checking...
+        int maxWaitMs = 1000;
+        TestUtils.waitForCondition(backgroundThread::isRunning,
+                maxWaitMs,
+                "Thread did not start within " + maxWaitMs + " ms");
+
         assertTrue(backgroundThread.isRunning());
         backgroundThread.close();
+        assertFalse(backgroundThread.isRunning());
     }
 
     @Test
@@ -155,17 +166,16 @@ public class DefaultBackgroundThreadTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
 
-        return new DefaultBackgroundThread(
-                this.time,
+        return new DefaultBackgroundThread(this.time,
                 new ConsumerConfig(properties),
                 new LogContext(),
                 applicationEventsQueue,
                 backgroundEventsQueue,
-                this.errorEventHandler,
-                processor,
                 this.metadata,
                 this.networkClient,
                 this.groupState,
+                this.errorEventHandler,
+                processor,
                 this.coordinatorManager,
                 this.commitManager);
     }
