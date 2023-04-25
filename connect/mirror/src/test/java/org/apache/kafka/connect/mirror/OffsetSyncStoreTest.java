@@ -154,26 +154,29 @@ public class OffsetSyncStoreTest {
 
     @Test
     public void testKeepMostDistinctSyncs() {
-        // We should not expire more syncs from the store than necessary;
+        // Under normal operation, the incoming syncs will be regularly spaced and the store should keep a set of syncs
+        // which provide the best translation accuracy (expires as few syncs as possible)
         // Each new sync should be added to the cache and expire at most one other sync from the cache
         long iterations = 1000000;
         long maxStep = Long.MAX_VALUE / iterations;
         // Test a variety of steps (corresponding to the offset.lag.max configuration)
         for (long step = 1; step < maxStep; step = (step * 2) + 1)  {
-            try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-                int lastCount = 1;
-                store.start();
-                for (long offset = 0; offset <= iterations; offset += step) {
-                    store.sync(tp, offset, offset);
-                    // Invariant A: the latest sync is present
-                    assertEquals(offset, store.syncFor(tp, 0).upstreamOffset());
-                    // Invariant D: the earliest sync is present
-                    assertEquals(0L, store.syncFor(tp, 63).upstreamOffset());
-                    int count = countDistinctStoredSyncs(store, tp);
-                    int diff = count - lastCount;
-                    assertTrue(diff >= 0,
-                            "Store expired too many syncs: " + diff + " after receiving offset " + offset);
-                    lastCount = count;
+            for (long firstOffset = 0; firstOffset < 30; firstOffset++) {
+                try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
+                    int lastCount = 1;
+                    store.start();
+                    for (long offset = firstOffset; offset <= iterations; offset += step) {
+                        store.sync(tp, offset, offset);
+                        // Invariant A: the latest sync is present
+                        assertEquals(offset, store.syncFor(tp, 0).upstreamOffset());
+                        // Invariant D: the earliest sync is present
+                        assertEquals(firstOffset, store.syncFor(tp, 63).upstreamOffset());
+                        int count = countDistinctStoredSyncs(store, tp);
+                        int diff = count - lastCount;
+                        assertTrue(diff >= 0,
+                                "Store expired too many syncs: " + diff + " after receiving offset " + offset);
+                        lastCount = count;
+                    }
                 }
             }
         }
