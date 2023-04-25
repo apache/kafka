@@ -30,6 +30,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -37,7 +38,6 @@ import org.mockito.Mockito;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -47,6 +47,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -94,11 +95,20 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    public void testStartupAndTearDown() {
+    public void testStartupAndTearDown() throws InterruptedException {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         backgroundThread.start();
+
+        // There's a nonzero amount of time between starting the thread and having it
+        // begin to execute our code. Wait for a bit before checking...
+        int maxWaitMs = 1000;
+        TestUtils.waitForCondition(backgroundThread::isRunning,
+                maxWaitMs,
+                "Thread did not start within " + maxWaitMs + " ms");
+
         assertTrue(backgroundThread.isRunning());
         backgroundThread.close();
+        assertFalse(backgroundThread.isRunning());
     }
 
     @Test
@@ -119,8 +129,9 @@ public class DefaultBackgroundThreadTest {
     public void testMetadataUpdateEvent() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.backgroundEventsQueue = new LinkedBlockingQueue<>();
-        this.applicationEventProcessor = new ApplicationEventProcessor(this.backgroundEventsQueue, mockRequestManagerRegistry(),
-            metadata);
+        this.applicationEventProcessor = new ApplicationEventProcessor(this.backgroundEventsQueue,
+                mockRequestManagers(),
+                metadata);
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
@@ -171,11 +182,8 @@ public class DefaultBackgroundThreadTest {
         assertEquals(10, backgroundThread.handlePollResult(failure));
     }
 
-    private Map<RequestManager.Type, Optional<RequestManager>> mockRequestManagerRegistry() {
-        Map<RequestManager.Type, Optional<RequestManager>> registry = new HashMap<>();
-        registry.put(RequestManager.Type.COORDINATOR, Optional.of(coordinatorManager));
-        registry.put(RequestManager.Type.COMMIT, Optional.of(coordinatorManager));
-        return registry;
+    private RequestManagers mockRequestManagers() {
+        return new RequestManagers(Optional.of(coordinatorManager), Optional.of(commitManager));
     }
 
     private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
@@ -197,17 +205,16 @@ public class DefaultBackgroundThreadTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
 
-        return new DefaultBackgroundThread(
-                this.time,
+        return new DefaultBackgroundThread(this.time,
                 new ConsumerConfig(properties),
                 new LogContext(),
                 applicationEventsQueue,
                 backgroundEventsQueue,
-                this.errorEventHandler,
-            applicationEventProcessor,
                 this.metadata,
                 this.networkClient,
                 this.groupState,
+                this.errorEventHandler,
+                applicationEventProcessor,
                 this.coordinatorManager,
                 this.commitManager);
     }

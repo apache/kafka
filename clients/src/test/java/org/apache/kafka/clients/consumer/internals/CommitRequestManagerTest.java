@@ -61,7 +61,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
-    private SubscriptionState subscriptionState;
+    private SubscriptionState subscriptions;
     private GroupState groupState;
     private LogContext logContext;
     private MockTime time;
@@ -72,7 +72,7 @@ public class CommitRequestManagerTest {
     public void setup() {
         this.logContext = new LogContext();
         this.time = new MockTime(0);
-        this.subscriptionState = mock(SubscriptionState.class);
+        this.subscriptions = mock(SubscriptionState.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.groupState = new GroupState("group-1", Optional.empty());
 
@@ -101,7 +101,7 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        when(subscriptionState.allConsumed()).thenReturn(offsets);
+        when(subscriptions.allConsumed()).thenReturn(offsets);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         assertPoll(1, commitRequestManger);
@@ -327,10 +327,9 @@ public class CommitRequestManagerTest {
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
         props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
         props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
-        return new CommitRequestManager(
-                this.time,
+        return new CommitRequestManager(this.time,
                 this.logContext,
-                this.subscriptionState,
+                this.subscriptions,
                 new ConsumerConfig(props),
                 this.coordinatorRequestManager,
                 this.groupState);
