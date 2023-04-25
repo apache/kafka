@@ -65,7 +65,7 @@ abstract class AbstractBrokerToControllerRequestManager[Item <: BrokerToControll
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
 
   // Additional observability into the internal states
-  private val baseMetricTags = Map("class" -> getClass.getName)
+  private val baseMetricTags = Map("requestManagerCategory" -> BrokerToControllerRequestManager.getClass.getSimpleName.replaceAll("\\$$", ""))
   @volatile private var lastInflightRequestLockTimeMs = time.milliseconds()
   @VisibleForTesting private[server] val unsentItemQueueSizeGauge = newGauge("unsentItemQueueSize", () => unsentItemQueue.size, baseMetricTags)
   @VisibleForTesting private[server] val inflightRequestGauge = newGauge("inflightRequest", () => if (inflightRequest.get()) 1 else 0, baseMetricTags)
