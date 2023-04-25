@@ -143,12 +143,6 @@ public class Uuid implements Comparable<Uuid> {
             return 1;
         } else if (mostSignificantBits < other.mostSignificantBits) {
             return -1;
-        } else if (leastSignificantBits > other.leastSignificantBits) {
-            return 1;
-        } else if (leastSignificantBits < other.leastSignificantBits) {
-            return -1;
-        } else {
-            return 0;
-        }
+        } else return Long.compare(leastSignificantBits, other.leastSignificantBits);
     }
 }
