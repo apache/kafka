@@ -290,7 +290,7 @@ class OffsetSyncStore implements AutoCloseable {
 
     private boolean invariantC(OffsetSync iSync, OffsetSync jSync, int i) {
         long bound = jSync.upstreamOffset() + (1L << Math.max(i - 2, 0));
-        return iSync == jSync || bound < 0 || iSync.upstreamOffset() >= bound;
+        return iSync == jSync || (bound >= 0 && iSync.upstreamOffset() >= bound);
     }
 
     private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition, long upstreamOffset) {
