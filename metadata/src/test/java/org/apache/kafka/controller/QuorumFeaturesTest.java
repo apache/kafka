@@ -100,4 +100,30 @@ public class QuorumFeaturesTest {
         assertTrue(quorumFeatures.isControllerId(2));
         assertFalse(quorumFeatures.isControllerId(3));
     }
+
+    @Test
+    public void testZkMigrationReady() {
+        ApiVersions apiVersions = new ApiVersions();
+        QuorumFeatures quorumFeatures = new QuorumFeatures(0, apiVersions, LOCAL, Arrays.asList(0, 1, 2));
+
+        // create apiVersion with zkMigrationEnabled flag set for node 0, the other 2 nodes have no apiVersions info
+        apiVersions.update("0", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertFalse(quorumFeatures.isAllControllersZkMigrationReady());
+
+        // create apiVersion with zkMigrationEnabled flag set for node 1, the other 1 node have no apiVersions info
+        apiVersions.update("1", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertFalse(quorumFeatures.isAllControllersZkMigrationReady());
+
+        // create apiVersion with zkMigrationEnabled flag disabled for node 2, should still be not ready
+        apiVersions.update("2", NodeApiVersions.create());
+        assertFalse(quorumFeatures.isAllControllersZkMigrationReady());
+
+        // update zkMigrationEnabled flag to enabled for node 2, should be ready now
+        apiVersions.update("2", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertTrue(quorumFeatures.isAllControllersZkMigrationReady());
+
+        // create apiVersion with zkMigrationEnabled flag disabled for a non-controller, and expect we fill filter it out
+        apiVersions.update("3", NodeApiVersions.create());
+        assertTrue(quorumFeatures.isAllControllersZkMigrationReady());
+    }
 }

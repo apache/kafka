@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.controller.QuorumFeatures;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -83,7 +82,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private volatile MigrationDriverState migrationState;
     private volatile ZkMigrationLeadershipState migrationLeadershipState;
     private volatile MetadataImage image;
-    private volatile ApiVersions apiVersions;
+    private volatile QuorumFeatures quorumFeatures;
 
     public KRaftMigrationDriver(
         int nodeId,
@@ -92,13 +91,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         LegacyPropagator propagator,
         Consumer<MetadataPublisher> initialZkLoadHandler,
         FaultHandler faultHandler,
-        ApiVersions apiVersions
+        QuorumFeatures quorumFeatures,
+        Time time
     ) {
         this.nodeId = nodeId;
         this.zkRecordConsumer = zkRecordConsumer;
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
-        this.time = Time.SYSTEM;
+        this.time = time;
         LogContext logContext = new LogContext("[KRaftMigrationDriver id=" + nodeId + "] ");
         this.log = logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
@@ -108,8 +108,21 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
-        this.apiVersions = apiVersions;
+        this.quorumFeatures = quorumFeatures;
     }
+
+    public KRaftMigrationDriver(
+        int nodeId,
+        ZkRecordConsumer zkRecordConsumer,
+        MigrationClient zkMigrationClient,
+        LegacyPropagator propagator,
+        Consumer<MetadataPublisher> initialZkLoadHandler,
+        FaultHandler faultHandler,
+        QuorumFeatures quorumFeatures
+    ) {
+        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, Time.SYSTEM);
+    }
+
 
     public void start() {
         eventQueue.prepend(new PollEvent());
@@ -139,7 +152,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     private boolean isControllerQuorumReadyForMigration() {
-        return this.apiVersions.isAllNodeZkMigrationReady();
+        if (!this.quorumFeatures.isAllControllersZkMigrationReady()) {
+            log.info("Still waiting for all controller nodes ready to begin the migration.");
+            return false;
+        }
+        return true;
     }
 
     private boolean imageDoesNotContainAllBrokers(MetadataImage image, Set<Integer> brokerIds) {
@@ -403,7 +420,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             switch (migrationState) {
                 case WAIT_FOR_CONTROLLER_QUORUM:
                     if (isControllerQuorumReadyForMigration()) {
-                        log.info("Controller Quorum is ready for Zk to KRaft migration");
+                        log.debug("Controller Quorum is ready for Zk to KRaft migration");
                         // Note that leadership would not change here. Hence we do not need to
                         // `apply` any leadership state change.
                         transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
