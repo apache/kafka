@@ -656,8 +656,6 @@ class TransactionStateManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      any(),
-      any(),
       any()
     )
 
@@ -701,8 +699,6 @@ class TransactionStateManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      any(),
-      any(),
       any()
     )
 
@@ -742,8 +738,6 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any())
 
@@ -800,8 +794,6 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any()
     )
@@ -950,8 +942,6 @@ class TransactionStateManagerTest {
       recordsCapture.capture(),
       callbackCapture.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any()
     )).thenAnswer(_ => callbackCapture.getValue.apply(
@@ -1102,8 +1092,6 @@ class TransactionStateManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
       any(),
       any())
     ).thenAnswer(_ => capturedArgument.getValue.apply(
