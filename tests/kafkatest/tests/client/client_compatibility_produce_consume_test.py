@@ -57,7 +57,7 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
         return super(ClientCompatibilityProduceConsumeTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
     @cluster(num_nodes=9)
-    @matrix(broker_version=[str(DEV_BRANCH)], client_version=str(DEV_BRANCH), metadata_quorum=quorum.all_non_upgrade)
+    @matrix(broker_version=[str(DEV_BRANCH)], client_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
     @parametrize(broker_version=str(LATEST_0_10_0), client_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_0_10_1), client_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_0_10_2), client_version=str(DEV_BRANCH))
