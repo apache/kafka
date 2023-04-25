@@ -332,8 +332,7 @@
     </p>
 
     <ul>
-        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly, but the resulting stream may contain unnecessary leftRecord-null for left joins, and leftRecord-null or null-rightRecord for outer joins.
-            This behavior is the same regardless of whether versioned stores are used.</li>
+        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly.</li>
         <li> For Stream-Table joins, if not using versioned stores, then out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order),
             and hence it may produce unpredictable results. With versioned stores, stream-side out-of-order data will be properly handled by performing a timestamp-based lookup in the table. Table-side out-of-order data is still not handled.</li>
         <li> For Table-Table joins, if not using versioned stores, then out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order).
