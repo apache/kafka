@@ -141,7 +141,8 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
             }
 
-            if (useVersionedSemantics && !record.value().isLatest) {
+            final boolean isLatest = record.value().isLatest;
+            if (useVersionedSemantics && !isLatest) {
                 // skip out-of-order records when aggregating a versioned table, since the
                 // aggregate should include latest-by-timestamp records only. as an optimization,
                 // do not forward the out-of-order record downstream to the repartition topic either.
@@ -153,8 +154,6 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 mapper.apply(record.key(), record.value().newValue);
             final KeyValue<? extends K1, ? extends V1> oldPair = record.value().oldValue == null ? null :
                 mapper.apply(record.key(), record.value().oldValue);
-
-            final boolean isLatest = record.value().isLatest;
 
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate

@@ -29,7 +29,7 @@ public class TableRepartitionMapNode<K, V> extends ProcessorGraphNode<K, V> impl
 
     @SuppressWarnings("unchecked")
     @Override
-    public void enableVersionedSemantics(final boolean useVersionedSemantics) {
+    public void enableVersionedSemantics(final boolean useVersionedSemantics, final String parentNodeName) {
         final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters().processorSupplier();
         if (!(processorSupplier instanceof KTableRepartitionMap)) {
             throw new IllegalStateException("Unexpected processor type for table repartition map: " + processorSupplier.getClass().getName());

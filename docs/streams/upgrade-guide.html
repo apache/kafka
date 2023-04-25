@@ -66,16 +66,6 @@
 
     <h3 class="anchor-heading"><a id="streams_notable_changes" class="anchor-link"></a><a href="#streams_notable_changes">Notable compatibility changes in past releases</a></h3>
     <p>
-        Downgrading from 3.0.x or newer version to 2.8.x or older version needs special attention:
-        Since 3.0.0 release, Kafka Streams uses a newer RocksDB version whose on-disk format changed.
-        This means that old versioned RocksDB would not be able to recognize the bytes written by that newer versioned RocksDB,
-        and hence it is harder to downgrade Kafka Streams with version 3.0.0 or newer to older versions in-flight.
-        Users need to wipe out the local RocksDB state stores written by the new versioned Kafka Streams before swapping in the
-        older versioned Kafka Streams bytecode, which would then restore the state stores with the old on-disk format from the
-        changelogs.
-    </p>
-
-    <p>
         Downgrading from 3.5.x or newer version to 3.4.x or older version needs special attention:
         Since 3.5.0 release, Kafka Streams uses a new serialization format for repartition topics.
         This means that older versions of Kafka Streams would not be able to recognize the bytes written by newer versions,
@@ -87,6 +77,16 @@
         long enough to make sure that the application has finished processing any "in-flight" messages written
         into the repartition topics in the new serialization format. Afterwards, you can downgrade your application to a
         pre-3.5.x version.
+    </p>
+
+    <p>
+        Downgrading from 3.0.x or newer version to 2.8.x or older version needs special attention:
+        Since 3.0.0 release, Kafka Streams uses a newer RocksDB version whose on-disk format changed.
+        This means that old versioned RocksDB would not be able to recognize the bytes written by that newer versioned RocksDB,
+        and hence it is harder to downgrade Kafka Streams with version 3.0.0 or newer to older versions in-flight.
+        Users need to wipe out the local RocksDB state stores written by the new versioned Kafka Streams before swapping in the
+        older versioned Kafka Streams bytecode, which would then restore the state stores with the old on-disk format from the
+        changelogs.
     </p>
 
     <p>
@@ -132,11 +132,6 @@
     </p>
 
     <h3><a id="streams_api_changes_350" href="#streams_api_changes_350">Streams API changes in 3.5.0</a></h3>
-    <p>
-      We added a new Serde type <code>Boolean</code> in
-      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-907%3A+Add+Boolean+Serde+to+public+interface">KIP-907</a>
-    </p>
-
     <p>      
       A new state store type, versioned key-value stores, was introduced in
       <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889%3A+Versioned+State+Stores">KIP-889</a>.
@@ -149,6 +144,37 @@
       <a href="/{{version}}/documentation/streams/developer-guide/processor-api.html#versioned-state-stores">Developer Guide</a> section.
       Versioned key-value stores are opt-in only; existing applications will not be
       affected upon upgrading to 3.5 without explicit code changes.
+    </p>
+
+    <p>
+      In addition to KIP-899, <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>
+      updates DSL processing semantics if a user opts-in to use the new versioned key-value stores.
+      Using the new versioned key-value stores, DSL processing are able to handle out-of-order data better:
+      For example, late record may be dropped and stream-table joins do a timestamped based lookup into the table.
+      Table aggregations and primary/foreign-key table-table joins are also improved. 
+      Note: versioned key-value stores are not supported for global-KTable and don't work with <code>suppress()</code>.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-904%3A+Kafka+Streams+-+Guarantee+subtractor+is+called+before+adder+if+key+has+not+changed">KIP-904</a>
+      improves the implemenation of KTable aggregations. In general, an input KTable update triggers a result refinent for two rows;
+      however, prior to KIP-904, if both refinements happend to the same result row, two independent updates to the same row are applied, resulting in spurious itermediate results.
+      KIP-904 allows us to detect this case, and to only apply a single update avoiding spurious intermediate results.
+    </p>
+
+    <p>
+      Error handling is improved via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-399%3A+Extend+ProductionExceptionHandler+to+cover+serialization+exceptions">KIP-399</a>.
+      The existing <code>ProductionExceptionHandler</code> now also covers serialization errors.
+    </p>
+
+    <p>
+      We added a new Serde type <code>Boolean</code> in
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-907%3A+Add+Boolean+Serde+to+public+interface">KIP-907</a>
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-884%3A+Add+config+to+configure+KafkaClientSupplier+in+Kafka+Streams">KIP-884</a>
+      adds a new config <code>default.client.supplier</code> that allows to use a custom <code>KafkaClientSupplier</code> without any code changes.
     </p>
 
     <h3><a id="streams_api_changes_310" href="#streams_api_changes_310">Streams API changes in 3.1.0</a></h3>

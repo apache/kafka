@@ -35,14 +35,14 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
+public class SubscriptionReceiveProcessorSupplier<K, KO>
     implements ProcessorSupplier<KO, SubscriptionWrapper<K>, CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
-    private static final Logger LOG = LoggerFactory.getLogger(SubscriptionStoreReceiveProcessorSupplier.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SubscriptionReceiveProcessorSupplier.class);
 
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
     private final CombinedKeySchema<KO, K> keySchema;
 
-    public SubscriptionStoreReceiveProcessorSupplier(
+    public SubscriptionReceiveProcessorSupplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
         final CombinedKeySchema<KO, K> keySchema) {
 
@@ -103,7 +103,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                 final ValueAndTimestamp<SubscriptionWrapper<K>> newValue = ValueAndTimestamp.make(record.value(), record.timestamp());
                 final ValueAndTimestamp<SubscriptionWrapper<K>> oldValue = store.get(subscriptionKey);
 
-                //This store is used by the prefix scanner in ForeignJoinSubscriptionProcessorSupplier
+                //This store is used by the prefix scanner in ForeignTableJoinProcessorSupplier
                 if (record.value().getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE) ||
                     record.value().getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE)) {
                     store.delete(subscriptionKey);

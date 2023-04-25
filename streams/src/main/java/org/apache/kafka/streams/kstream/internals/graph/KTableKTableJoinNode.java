@@ -17,11 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KTableKTableAbstractJoin;
 import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
 import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -33,7 +31,7 @@ import java.util.Arrays;
 /**
  * Too much specific information to generalize so the KTable-KTable join requires a specific node.
  */
-public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, Change<V1>, Change<V2>, Change<VR>> {
+public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, Change<V1>, Change<V2>, Change<VR>> implements VersionedSemanticsGraphNode {
 
     private final Serde<K> keySerde;
     private final Serde<VR> valueSerde;
@@ -98,6 +96,27 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     }
 
     @Override
+    public void enableVersionedSemantics(final boolean useVersionedSemantics, final String parentNodeName) {
+        enableVersionedSemantics(thisProcessorParameters(), useVersionedSemantics, parentNodeName);
+        enableVersionedSemantics(otherProcessorParameters(), useVersionedSemantics, parentNodeName);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void enableVersionedSemantics(final ProcessorParameters<K, ?, ?, ?> processorParameters,
+                                          final boolean useVersionedSemantics,
+                                          final String parentNodeName) {
+        final ProcessorSupplier<K, ?, ?, ?> processorSupplier = processorParameters.processorSupplier();
+        if (!(processorSupplier instanceof KTableKTableAbstractJoin)) {
+            throw new IllegalStateException("Unexpected processor type for table-table join: " + processorSupplier.getClass().getName());
+        }
+        final KTableKTableAbstractJoin<K, ?, ?, ?> tableJoin = (KTableKTableAbstractJoin<K, ?, ?, ?>) processorSupplier;
+
+        if (parentNodeName.equals(tableJoin.joinThisParentNodeName())) {
+            tableJoin.setUseVersionedSemantics(useVersionedSemantics);
+        }
+    }
+
+    @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String thisProcessorName = thisProcessorParameters().processorName();
         final String otherProcessorName = otherProcessorParameters().processorName();
@@ -119,14 +138,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             thisProcessorName,
             otherProcessorName);
 
-        // join processors for both sides of the join should have access to both stores
-        final Set<String> stores = new HashSet<>(joinThisStoreNames.length + joinOtherStoreNames.length);
-        Collections.addAll(stores, joinThisStoreNames);
-        Collections.addAll(stores, joinOtherStoreNames);
-        final String[] mergedStoreNames = stores.toArray(new String[0]);
-
-        topologyBuilder.connectProcessorAndStateStores(thisProcessorName, mergedStoreNames);
-        topologyBuilder.connectProcessorAndStateStores(otherProcessorName, mergedStoreNames);
+        topologyBuilder.connectProcessorAndStateStores(thisProcessorName, joinOtherStoreNames);
+        topologyBuilder.connectProcessorAndStateStores(otherProcessorName, joinThisStoreNames);
 
         if (storeBuilder != null) {
             topologyBuilder.addStateStore(storeBuilder, mergeProcessorName);
