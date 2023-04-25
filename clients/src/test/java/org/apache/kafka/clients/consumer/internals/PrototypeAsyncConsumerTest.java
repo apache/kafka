@@ -226,16 +226,13 @@ public class PrototypeAsyncConsumerTest {
         consumerProps.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
         consumerProps.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
 
-        return new PrototypeAsyncConsumer<>(
-                time,
+        return new PrototypeAsyncConsumer<>(time,
                 logContext,
                 config,
                 subscriptions,
                 eventHandler,
                 metrics,
-                clusterResourceListeners,
                 Optional.ofNullable(this.groupId),
-                clientId,
                 config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 }

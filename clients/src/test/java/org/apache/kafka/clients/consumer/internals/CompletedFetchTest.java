@@ -229,8 +229,7 @@ public class CompletedFetchTest {
                 ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
                 checkCrcs,
                 ConsumerConfig.DEFAULT_CLIENT_RACK,
-                keyDeserializer,
-                valueDeserializer,
+                new Deserializers<>(keyDeserializer, valueDeserializer),
                 isolationLevel
         );
         return new CompletedFetch<>(

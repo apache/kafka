@@ -16,28 +16,31 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
+
+import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
+import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_METRIC_GROUP_PREFIX;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -48,6 +51,7 @@ import java.util.concurrent.BlockingQueue;
  * initialized by the polling thread.
  */
 public class DefaultBackgroundThread extends KafkaThread {
+
     private static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
@@ -61,9 +65,10 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
     private final GroupState groupState;
-    private boolean running;
+    private volatile boolean running;
+    private volatile boolean closed;
 
-    private final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry;
+    private final RequestManagers requestManagers;
 
     // Visible for testing
     DefaultBackgroundThread(final Time time,
@@ -71,16 +76,15 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final LogContext logContext,
                             final BlockingQueue<ApplicationEvent> applicationEventQueue,
                             final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                            final ErrorEventHandler errorEventHandler,
-                            final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
                             final GroupState groupState,
+                            final ErrorEventHandler errorEventHandler,
+                            final ApplicationEventProcessor processor,
                             final CoordinatorRequestManager coordinatorManager,
                             final CommitRequestManager commitRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
-        this.running = true;
         this.log = logContext.logger(getClass());
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
@@ -91,18 +95,21 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.errorEventHandler = errorEventHandler;
         this.groupState = groupState;
 
-        this.requestManagerRegistry = new HashMap<>();
-        this.requestManagerRegistry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
-        this.requestManagerRegistry.put(RequestManager.Type.COMMIT, Optional.ofNullable(commitRequestManager));
+        this.requestManagers = new RequestManagers(Optional.ofNullable(coordinatorManager),
+                Optional.ofNullable(commitRequestManager));
     }
+
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
-                                   final GroupRebalanceConfig rebalanceConfig,
                                    final LogContext logContext,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                    final ConsumerMetadata metadata,
-                                   final KafkaClient networkClient) {
+                                   final ApiVersions apiVersions,
+                                   final Metrics metrics,
+                                   final Sensor fetcherThrottleTimeSensor,
+                                   final SubscriptionState subscriptions,
+                                   final GroupRebalanceConfig rebalanceConfig) {
         super(BACKGROUND_THREAD_NAME, true);
         try {
             this.time = time;
@@ -110,50 +117,58 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
-            // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
-            this.networkClientDelegate = new NetworkClientDelegate(
-                    this.time,
-                    this.config,
+
+            final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
                     logContext,
-                    networkClient);
-            this.running = true;
+                    apiVersions,
+                    time,
+                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                    metadata,
+                    fetcherThrottleTimeSensor);
+
+            this.networkClientDelegate = new NetworkClientDelegate(this.time, this.config, logContext, networkClient);
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.groupState = new GroupState(rebalanceConfig);
-            this.requestManagerRegistry = Collections.unmodifiableMap(buildRequestManagerRegistry(logContext));
-            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry, metadata);
+            long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+
+            if (groupState.groupId != null) {
+                CoordinatorRequestManager coordinatorManager = new CoordinatorRequestManager(this.time,
+                        logContext,
+                        retryBackoffMs,
+                        this.errorEventHandler,
+                        groupState.groupId);
+                CommitRequestManager commitRequestManager = new CommitRequestManager(this.time,
+                        logContext,
+                        subscriptions,
+                        config,
+                        coordinatorManager,
+                        groupState);
+                this.requestManagers = new RequestManagers(Optional.of(coordinatorManager),
+                        Optional.of(commitRequestManager));
+            } else {
+                this.requestManagers = new RequestManagers(Optional.empty(), Optional.empty());
+            }
+
+            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagers, metadata);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
         }
     }
 
-    private Map<RequestManager.Type, Optional<RequestManager>> buildRequestManagerRegistry(final LogContext logContext) {
-        Map<RequestManager.Type, Optional<RequestManager>> registry = new HashMap<>();
-        CoordinatorRequestManager coordinatorManager = groupState.groupId == null ?
-                null :
-                new CoordinatorRequestManager(
-                        time,
-                        logContext,
-                        config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-                        errorEventHandler,
-                        groupState.groupId);
-        // Add subscriptionState
-        CommitRequestManager commitRequestManager = coordinatorManager == null ?
-                null :
-                new CommitRequestManager(time,
-                        logContext, null, config,
-                        coordinatorManager,
-                        groupState);
-        registry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
-        registry.put(RequestManager.Type.COMMIT, Optional.ofNullable(commitRequestManager));
-        return registry;
-    }
-
     @Override
     public void run() {
+        if (closed)
+            throw new IllegalStateException("Background consumer thread is closed");
+
+        running = true;
+
         try {
             log.debug("Background thread started");
+
             while (running) {
                 try {
                     runOnce();
@@ -167,7 +182,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             throw new RuntimeException(t);
         } finally {
             close();
-            log.debug("{} closed", getClass());
+            log.debug("Exited run loop");
         }
     }
 
@@ -178,22 +193,25 @@ public class DefaultBackgroundThread extends KafkaThread {
      * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        drain();
+        if (!applicationEventQueue.isEmpty()) {
+            LinkedList<ApplicationEvent> res = new LinkedList<>();
+            this.applicationEventQueue.drainTo(res);
+
+            for (ApplicationEvent event : res) {
+                log.debug("Consuming application event: {}", event);
+                Objects.requireNonNull(event);
+                applicationEventProcessor.process(event);
+            }
+        }
+
         final long currentTimeMs = time.milliseconds();
-        final long pollWaitTimeMs = requestManagerRegistry.values().stream()
+        final long pollWaitTimeMs = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
                 .map(m -> m.get().poll(currentTimeMs))
+                .filter(Objects::nonNull)
                 .map(this::handlePollResult)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
-    }
-
-    private void drain() {
-        Queue<ApplicationEvent> events = pollApplicationEvent();
-        for (ApplicationEvent event : events) {
-            log.debug("Consuming application event: {}", event);
-            consumeApplicationEvent(event);
-        }
     }
 
     long handlePollResult(NetworkClientDelegate.PollResult res) {
@@ -203,23 +221,8 @@ public class DefaultBackgroundThread extends KafkaThread {
         return res.timeUntilNextPollMs;
     }
 
-    private Queue<ApplicationEvent> pollApplicationEvent() {
-        if (this.applicationEventQueue.isEmpty()) {
-            return new LinkedList<>();
-        }
-
-        LinkedList<ApplicationEvent> res = new LinkedList<>();
-        this.applicationEventQueue.drainTo(res);
-        return res;
-    }
-
-    private void consumeApplicationEvent(final ApplicationEvent event) {
-        Objects.requireNonNull(event);
-        applicationEventProcessor.process(event);
-    }
-
     public boolean isRunning() {
-        return this.running;
+        return running;
     }
 
     public void wakeup() {
@@ -227,8 +230,12 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     public void close() {
-        this.running = false;
-        this.wakeup();
+        if (closed)
+            return;
+
+        closed = true;
+        running = false;
+        wakeup();
         Utils.closeQuietly(networkClientDelegate, "network client utils");
         Utils.closeQuietly(metadata, "consumer metadata client");
     }
