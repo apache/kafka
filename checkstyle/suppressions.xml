@@ -318,7 +318,6 @@
     <suppress checks="AvoidStarImport"
               files="MetadataVersionTest.java"/>
 
-
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
               files="(ConsumerGroupMember).java"/>
