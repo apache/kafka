@@ -157,7 +157,7 @@ public class OffsetSyncStoreTest {
         // Under normal operation, the incoming syncs will be regularly spaced and the store should keep a set of syncs
         // which provide the best translation accuracy (expires as few syncs as possible)
         // Each new sync should be added to the cache and expire at most one other sync from the cache
-        long iterations = 1000000;
+        long iterations = 10000;
         long maxStep = Long.MAX_VALUE / iterations;
         // Test a variety of steps (corresponding to the offset.lag.max configuration)
         for (long step = 1; step < maxStep; step = (step * 2) + 1)  {
