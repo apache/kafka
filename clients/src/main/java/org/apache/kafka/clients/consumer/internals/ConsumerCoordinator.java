@@ -244,27 +244,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
-        Set<TopicPartition> joinedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-        int generationId = generation().generationId;
-        // join with member's old owned partitions if syncGroup failed with REBALANCE_IN_PROGRESS
-        if (!lastOwnedPartitions.isEmpty()) {
-            joinedPartitions = new HashSet<>(lastOwnedPartitions);
-            generationId = lastGenerationId;
-        }
-        lastOwnedPartitions.clear();
 
         List<String> topics = new ArrayList<>(joinedSubscription);
         for (ConsumerPartitionAssignor assignor : assignors) {
             Subscription subscription = new Subscription(topics,
                 assignor.subscriptionUserData(joinedSubscription),
-                new ArrayList<>(joinedPartitions),
-                generationId,
+                subscriptions.assignedPartitionsList(),
+                generation().generationId,
                 rackId);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                    .setName(assignor.name())
-                    .setMetadata(Utils.toArray(metadata)));
+                .setName(assignor.name())
+                .setMetadata(Utils.toArray(metadata)));
         }
         return protocolSet;
     }
@@ -487,12 +479,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw new KafkaException("User rebalance callback throws an error", firstException.get());
             }
         }
-    }
-
-    @Override
-    void savePreviousJoinGroupState() {
-        lastOwnedPartitions = subscriptions.assignedPartitions();
-        lastGenerationId = this.generation().generationId;
     }
 
     void maybeUpdateSubscriptionMetadata() {

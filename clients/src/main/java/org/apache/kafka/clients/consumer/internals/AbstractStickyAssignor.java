@@ -136,11 +136,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         // detected, eg two consumers somehow claiming the same partition in the same/current generation
         Map<TopicPartition, String> allPreviousPartitionsToOwner = new HashMap<>();
 
-        maxGeneration = subscriptions.values().stream()
-            .map(v -> v.generationId().orElse(DEFAULT_GENERATION))
-            .max(Integer::compareTo)
-            .orElse(DEFAULT_GENERATION);
-
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             final String consumer = subscriptionEntry.getKey();
             Subscription subscription = subscriptionEntry.getValue();
@@ -158,9 +153,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
 
-            if (memberData.generation.isPresent() && memberData.generation.get() >= maxGeneration - 1
-                || !memberData.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
-
+            if (memberData.generation.isPresent()) {
+                // the member has a valid generation, so we can consider its owned partitions if it has the highest
+                // generation amongst
                 for (final TopicPartition tp : memberData.partitions) {
                     if (allTopics.contains(tp.topic())) {
                         String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
@@ -168,7 +163,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             // this partition is not owned by other consumer in the same generation
                             ownedPartitions.add(tp);
                         } else {
-                            final int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
+                            final int memberGeneration = memberData.generation.get();
                             final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
                             if (memberGeneration == otherMemberGeneration) {
@@ -192,8 +187,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
                             // if memberGeneration < otherMemberGeneration, the other member continue owns the generation
                             log.warn("Found multiple members {} and {} claiming the same TopicPartition {} in " +
-                                    "different generations. The topic partition wil be assigned to the member with higher generation.",
-                                consumer, otherConsumer, tp);
+                                    "different generations. The topic partition wil be assigned to the member with " +
+                                    "the higher generation {}.",
+                                consumer, otherConsumer, tp, Math.max(memberGeneration, otherMemberGeneration));
                         }
                     }
                 }
