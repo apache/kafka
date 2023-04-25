@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.tests;
 
+import java.util.Arrays;
+import java.util.Collections;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -24,18 +26,24 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -69,6 +77,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.longSerde;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
 
 public class StreamsUpgradeTest {
@@ -107,11 +116,31 @@ public class StreamsUpgradeTest {
         final boolean runFkJoin = Boolean.parseBoolean(streamsProperties.getProperty(
             "test.run_fk_join",
             "false"));
+        final boolean runTableAgg = Boolean.parseBoolean(streamsProperties.getProperty(
+            "test.run_table_agg",
+            "false"));
         if (runFkJoin) {
             try {
                 final KTable<Integer, String> fkTable = builder.table(
                     "fk", Consumed.with(intSerde, stringSerde));
                 buildFKTable(dataStream, fkTable);
+            } catch (final Exception e) {
+                System.err.println("Caught " + e.getMessage());
+            }
+        }
+        if (runTableAgg) {
+            final String aggProducePrefix = streamsProperties.getProperty("test.agg_produce_prefix", "");
+            if (aggProducePrefix.isEmpty()) {
+                System.err.printf("'%s' must be specified when '%s' is true.", "test.agg_produce_prefix", "test.run_table_agg");
+            }
+            final String expectedAggPrefixesStr = streamsProperties.getProperty("test.expected_agg_prefixes", "");
+            if (expectedAggPrefixesStr.isEmpty()) {
+                System.err.printf("'%s' must be specified when '%s' is true.", "test.expected_agg_prefixes", "test.run_table_agg");
+            }
+            final List<String> expectedAggPrefixes = Arrays.asList(expectedAggPrefixesStr.split(","));
+
+            try {
+                buildTableAgg(dataTable, aggProducePrefix, expectedAggPrefixes);
             } catch (final Exception e) {
                 System.err.println("Caught " + e.getMessage());
             }
@@ -141,6 +170,89 @@ public class StreamsUpgradeTest {
             .toStream();
         kStream.process(SmokeTestUtil.printProcessorSupplier("fk"));
         kStream.to("fk-result", Produced.with(stringSerde, stringSerde));
+    }
+
+    private static void buildTableAgg(final KTable<String, Integer> sourceTable,
+                                      final String aggProducePrefix,
+                                      final List<String> expectedAggPrefixes) {
+        sourceTable
+            .groupBy(
+                (k, v) -> new KeyValue<>((int) (Math.random() * 15), aggProducePrefix), // group into smaller number of keys, while still allowing for distribution to all downstream tasks
+                Grouped.with(intSerde, stringSerde))
+            .aggregate(
+                () -> new Agg(Collections.emptyList(), 0),
+                (k, v, agg) -> {
+                    final List<String> seenPrefixes;
+                    final boolean updated;
+                    if (!agg.seenPrefixes.contains(v)) {
+                        seenPrefixes = new ArrayList<>(agg.seenPrefixes);
+                        seenPrefixes.add(v);
+                        Collections.sort(seenPrefixes);
+                        updated = true;
+                    } else {
+                        seenPrefixes = agg.seenPrefixes;
+                        updated = false;
+                    }
+
+                    final boolean shouldLog = updated || (agg.recordsProcessed % 10 == 0); // value of 10 is chosen for debugging purposes. can increase to 100 once test is passing.
+                    if (shouldLog && seenPrefixes.containsAll(expectedAggPrefixes)) {
+                        System.out.printf("Table aggregate processor saw expected prefixes: %s%n", String.join(",", expectedAggPrefixes));
+                    } else {
+                        System.out.printf("Table aggregate processor did not see expected prefixes. Seen: %s. Expected: %s%n", String.join(",", seenPrefixes), String.join(",", expectedAggPrefixes)); // this line for debugging purposes only.
+                    }
+
+                    return new Agg(seenPrefixes, agg.recordsProcessed + 1);
+                },
+                (k, v, agg) -> agg,
+                Materialized.with(intSerde, new AggSerde()))
+            .mapValues((k, vAgg) -> String.join(",", vAgg.seenPrefixes))
+            .toStream()
+            .to("table-agg-result", Produced.with(intSerde, stringSerde));
+    }
+
+    private static class Agg {
+        private final List<String> seenPrefixes;
+        private final long recordsProcessed;
+
+        Agg(final List<String> seenPrefixes, final long recordsProcessed)  {
+            this.seenPrefixes = seenPrefixes;
+            this.recordsProcessed = recordsProcessed;
+        }
+
+        byte[] serialize() {
+            final byte[] rawSeenPrefixes = stringSerde.serializer().serialize("", String.join(",", seenPrefixes));
+            final byte[] rawRecordsProcessed = longSerde.serializer().serialize("", recordsProcessed);
+            return ByteBuffer
+                .allocate(rawSeenPrefixes.length + rawRecordsProcessed.length)
+                .put(rawSeenPrefixes)
+                .put(rawRecordsProcessed)
+                .array();
+        }
+
+        static Agg deserialize(final byte[] rawAgg) {
+            final byte[] rawSeenPrefixes = new byte[rawAgg.length - 8];
+            System.arraycopy(rawAgg, 0, rawSeenPrefixes, 0, rawSeenPrefixes.length);
+            final List<String> seenPrefixes = Arrays.asList(stringSerde.deserializer().deserialize("", rawSeenPrefixes).split(","));
+
+            final byte[] rawRecordsProcessed = new byte[8];
+            System.arraycopy(rawAgg, rawAgg.length - 8, rawRecordsProcessed, 0, 8);
+            final long recordsProcessed = longSerde.deserializer().deserialize("", rawRecordsProcessed);
+
+            return new Agg(seenPrefixes, recordsProcessed);
+        }
+    }
+
+    private static class AggSerde implements Serde<Agg> {
+
+        @Override
+        public Serializer<Agg> serializer() {
+            return (topic, agg) -> agg.serialize();
+        }
+
+        @Override
+        public Deserializer<Agg> deserializer() {
+            return (topic, rawAgg) -> Agg.deserialize(rawAgg);
+        }
     }
 
     private static class FutureKafkaClientSupplier extends DefaultKafkaClientSupplier {

@@ -41,6 +41,7 @@ metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 fk_join_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(LATEST_2_8), 
                     str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3)]
+table_agg_versions = [str(LATEST_3_3)]
 
 """
 After each release one should first check that the released version has been uploaded to 
@@ -235,6 +236,91 @@ class StreamsUpgradeTest(Test):
             counter = counter + 1
 
         self.stop_and_await()
+
+    @cluster(num_nodes=6)
+    @matrix(from_version=table_agg_versions, to_version=[str(DEV_VERSION)])
+    def test_rolling_upgrade_for_table_agg(self, from_version, to_version):
+        """
+        This test verifies that the cluster successfully upgrades despite changes in the table
+        repartition topic format.
+
+        Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
+        """
+
+        extra_properties = {'test.run_table_agg': 'true'}
+
+        self.set_up_services()
+
+        self.driver.start()
+
+        extra_properties = extra_properties.copy()
+        extra_properties['test.agg_produce_prefix'] = 'A'
+        extra_properties['test.expected_agg_prefixes'] = 'A'
+        self.start_all_nodes_with(from_version, extra_properties)
+
+        counter = 1
+        random.seed()
+
+        # rolling bounce
+        random.shuffle(self.processors)
+        p3 = self.processors[-1]
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
+
+        # bounce two instances to new version (verifies that new version can process records
+        # written by old version)
+        extra_properties = extra_properties.copy()
+        extra_properties['test.agg_produce_prefix'] = 'B'
+        extra_properties['test.expected_agg_prefixes'] = 'A,B'
+        for p in self.processors[:-1]:
+            self.do_stop_start_bounce(p, from_version[:-2], to_version, counter, extra_properties)
+            counter = counter + 1
+
+        # bounce remaining instance on old version (just for verification purposes, to verify that
+        # instance on old version can process records written by new version)
+        extra_properties = extra_properties.copy()
+        extra_properties['test.agg_produce_prefix'] = 'A'
+        extra_properties['test.expected_agg_prefixes'] = 'A,B'
+        self.do_stop_start_bounce(p3, None, from_version, counter, extra_properties)
+        counter = counter + 1
+
+        self.wait_for_table_agg_success('A,B')
+
+        # bounce remaining instance to new version (verifies that new version without upgrade_from
+        # can process records written by new version with upgrade_from)
+        extra_properties = extra_properties.copy()
+        extra_properties['test.agg_produce_prefix'] = 'C'
+        extra_properties['test.expected_agg_prefixes'] = 'A,B,C'
+        self.do_stop_start_bounce(p3, None, to_version, counter, extra_properties)
+        counter = counter + 1
+
+        # bounce first instances again without removing upgrade_from (just for verification purposes,
+        # to verify that instance with upgrade_from can process records written without upgrade_from)
+        extra_properties = extra_properties.copy()
+        extra_properties['test.agg_produce_prefix'] = 'B'
+        extra_properties['test.expected_agg_prefixes'] = 'A,B,C'
+        for p in self.processors[:-1]:
+            self.do_stop_start_bounce(p, from_version[:-2], to_version, counter, extra_properties)
+            counter = counter + 1
+
+        self.wait_for_table_agg_success('A,B,C')
+
+        self.stop_and_await()
+
+    def wait_for_table_agg_success(self, expected_prefixes):
+        agg_success_str = "Table aggregate processor saw expected prefixes: " + expected_prefixes
+        with self.processor1.node.account.monitor_log(self.processor1.LOG_FILE) as first_monitor:
+            with self.processor2.node.account.monitor_log(self.processor2.LOG_FILE) as second_monitor:
+                with self.processor3.node.account.monitor_log(self.processor3.LOG_FILE) as third_monitor:
+                    first_monitor.wait_until(agg_success_str,
+                                             timeout_sec=60,
+                                             err_msg="Could not verify table aggregate processor success for '" + expected_prefixes + "' in " + str(self.processor1.node.account))
+                    second_monitor.wait_until(agg_success_str,
+                                              timeout_sec=60,
+                                              err_msg="Could not verify table aggregate processor success for '" + expected_prefixes + "' in " + str(self.processor2.node.account))
+                    third_monitor.wait_until(agg_success_str,
+                                             timeout_sec=60,
+                                             err_msg="Could not verify table aggregate processor success for '" + expected_prefixes + "' in " + str(self.processor3.node.account))
 
     @cluster(num_nodes=6)
     def test_version_probing_upgrade(self):
