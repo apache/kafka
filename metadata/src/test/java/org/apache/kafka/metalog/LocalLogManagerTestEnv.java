@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -155,11 +156,12 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
      */
     public void appendInitialRecords(List<ApiMessageAndVersion> records) {
         int initialLeaderEpoch = 1;
-        shared.append(new LeaderChangeBatch(
+        shared.append(OptionalLong.empty(), new LeaderChangeBatch(
             new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
-        shared.append(new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
-        shared.append(new LeaderChangeBatch(
-            new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
+        shared.append(OptionalLong.empty(),
+            new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
+        shared.append(OptionalLong.empty(),
+            new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
     }
 
     public String clusterId() {

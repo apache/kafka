@@ -173,7 +173,7 @@ class TestRaftServer(
 
     raftManager.register(this)
 
-    override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch): Unit = {
+    override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch, endOffset: Long): Unit = {
       if (newLeaderAndEpoch.isLeader(config.nodeId)) {
         eventQueue.offer(HandleClaim(newLeaderAndEpoch.epoch))
       } else if (claimedEpoch.isDefined) {

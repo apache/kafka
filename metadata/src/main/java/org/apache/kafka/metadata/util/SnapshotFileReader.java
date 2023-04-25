@@ -137,7 +137,7 @@ public final class SnapshotFileReader implements AutoCloseable {
                         listener.handleLeaderChange(new LeaderAndEpoch(
                             OptionalInt.of(message.leaderId()),
                             batch.partitionLeaderEpoch()
-                        ));
+                        ), batch.lastOffset() + 1);
                         break;
                     default:
                         log.error("Ignoring control record with type {} at offset {}",

@@ -355,7 +355,8 @@ public class KafkaRaftClientTest {
         for (int i = 0; i < size; i++)
             batchToLarge.add("a");
 
-        assertThrows(RecordBatchTooLargeException.class, () -> context.client.scheduleAtomicAppend(epoch, batchToLarge));
+        assertThrows(RecordBatchTooLargeException.class,
+                () -> context.client.scheduleAtomicAppend(epoch, OptionalLong.empty(), batchToLarge));
     }
 
     @Test
