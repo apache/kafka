@@ -25,7 +25,4 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 public interface RequestManager {
     PollResult poll(long currentTimeMs);
 
-    enum Type {
-        COORDINATOR, COMMIT
-    }
 }
