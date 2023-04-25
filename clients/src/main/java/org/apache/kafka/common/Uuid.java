@@ -139,10 +139,7 @@ public class Uuid implements Comparable<Uuid> {
 
     @Override
     public int compareTo(Uuid other) {
-        if (mostSignificantBits > other.mostSignificantBits) {
-            return 1;
-        } else if (mostSignificantBits < other.mostSignificantBits) {
-            return -1;
-        } else return Long.compare(leastSignificantBits, other.leastSignificantBits);
+        final int result = Long.compare(mostSignificantBits, other.mostSignificantBits);
+        return (result != 0) ? result : Long.compare(leastSignificantBits, other.leastSignificantBits);
     }
 }
