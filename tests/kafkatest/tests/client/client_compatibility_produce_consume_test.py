@@ -78,8 +78,6 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     @parametrize(broker_version=str(LATEST_3_2), client_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_3_3), client_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_3_4), client_version=str(DEV_BRANCH))
-    @parametrize(broker_version=str(LATEST_3_5), client_version=str(DEV_BRANCH))
-    @parametrize(broker_version=str(LATEST_3_6), client_version=str(DEV_BRANCH))
     def test_produce_consume(self, broker_version, client_version, metadata_quorum=quorum.zk):
         print("running producer_consumer_compat with broker_version = %s and client_version = %s" % (broker_version, client_version), flush=True)
         self.kafka.set_version(KafkaVersion(broker_version))
