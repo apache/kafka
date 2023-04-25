@@ -43,8 +43,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *     <li>Invariant A: syncs[0] is the latest offset sync from the syncs topic</li>
  *     <li>Invariant B: For each i,j, i < j, syncs[i] != syncs[j]: syncs[i].upstream <= syncs[j].upstream + 2^j - 2^i</li>
- *     <li>Invariant C: For each i,j, i < j, syncs[i] != syncs[j]: syncs[j].upstream + 2^(i-2) <= syncs[i].upstream</li>
- *     <li>Invariant D: syncs[63] is the earliest offset sync from the syncs topic which was not eligible for compaction</li>
+ *     <li>Invariant C: For each i,j, i < j, syncs[i] != syncs[j]: syncs[i].upstream >= syncs[j].upstream + 2^(i-2)</li>
+ *     <li>Invariant D: syncs[63] is the earliest offset sync from the syncs topic usable for translation</li>
  * </ul>
  * <p>The above invariants ensure that the store is kept updated upon receipt of each sync, and that distinct
  * offset syncs are separated by approximately exponential space. They can be checked locally (by comparing all adjacent
@@ -54,8 +54,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * For variable in-memory state, translation of a fixed upstream offset will not be monotonic.
  * <p>Translation will be unavailable for all topic-partitions before an initial read-to-end of the offset syncs topic
  * is complete. Translation will be unavailable after that if no syncs are present for a topic-partition, if replication
- * started after the position of the consumer group, or if relevant offset syncs for the topic were eligible for
- * compaction at the time of the initial read-to-end.
+ * started after the position of the consumer group, or if relevant offset syncs for the topic were potentially used as
+ * for translation in an earlier generation of the sync store.
  */
 class OffsetSyncStore implements AutoCloseable {
 
@@ -229,12 +229,16 @@ class OffsetSyncStore implements AutoCloseable {
 
     private void updateSyncArray(OffsetSync[] syncs, OffsetSync offsetSync) {
         long upstreamOffset = offsetSync.upstreamOffset();
-        // Old offsets are invalid, so overwrite them all.
+        // While reading to the end of the topic, ensure that our earliest sync is later than
+        // any earlier sync that could have been used for translation, to preserve monotonicity
+        // If the upstream offset rewinds, all previous offsets are invalid, so overwrite them all.
         if (!readToEnd || syncs[0].upstreamOffset() > upstreamOffset) {
             clearSyncArray(syncs, offsetSync);
             return;
         }
         OffsetSync replacement = offsetSync;
+        // The most-recently-discarded offset sync
+        // We track this since it may still be eligible for use in the syncs array at a later index
         OffsetSync oldValue = syncs[0];
         // Invariant A is always violated once a new sync appears.
         // Repair Invariant A: the latest sync must always be updated
@@ -242,24 +246,26 @@ class OffsetSyncStore implements AutoCloseable {
         for (int current = 1; current < SYNCS_PER_PARTITION; current++) {
             int previous = current - 1;
 
-            // Consider using oldValue instead of replacement, which allows us to keep more distinct values stored
+            // We can potentially use oldValue instead of replacement, allowing us to keep more distinct values stored
             // If oldValue is not recent, it should be expired from the store
             boolean isRecent = invariantB(syncs[previous], oldValue, previous, current);
             // Ensure that this value is sufficiently separated from the previous value
             // We prefer to keep more recent syncs of similar precision (i.e. the value in replacement)
-            boolean separatedFromPrevious = invariantC(syncs[previous], oldValue, previous, current);
+            boolean separatedFromPrevious = invariantC(syncs[previous], oldValue, previous);
             // Ensure that this value is sufficiently separated from the next value
             // We prefer to keep existing syncs of lower precision (i.e. the value in syncs[next])
             int next = current + 1;
-            boolean separatedFromNext = next >= SYNCS_PER_PARTITION || invariantC(oldValue, syncs[next], current, next);
+            boolean separatedFromNext = next >= SYNCS_PER_PARTITION || invariantC(oldValue, syncs[next], current);
             // If this condition is false, oldValue will be expired from the store and lost forever.
             if (isRecent && separatedFromPrevious && separatedFromNext) {
                 replacement = oldValue;
             }
 
             // The replacement variable always contains a value which satisfies the invariants for this index.
+            // This replacement may or may not be used, since the invariants could already be satisfied,
+            // and in that case, prefer to keep the existing tail of the syncs array rather than updating it.
             assert invariantB(syncs[previous], replacement, previous, current);
-            assert invariantC(syncs[previous], replacement, previous, current);
+            assert invariantC(syncs[previous], replacement, previous);
 
             // Test if changes to the previous index affected the invariant for this index
             if (invariantB(syncs[previous], syncs[current], previous, current)) {
@@ -272,7 +278,7 @@ class OffsetSyncStore implements AutoCloseable {
                 syncs[current] = replacement;
 
                 assert invariantB(syncs[previous], syncs[current], previous, current);
-                assert invariantC(syncs[previous], syncs[current], previous, current);
+                assert invariantC(syncs[previous], syncs[current], previous);
             }
         }
     }
@@ -282,9 +288,9 @@ class OffsetSyncStore implements AutoCloseable {
         return iSync == jSync || bound < 0 || iSync.upstreamOffset() <= bound;
     }
 
-    private boolean invariantC(OffsetSync iSync, OffsetSync jSync, int i, int j) {
+    private boolean invariantC(OffsetSync iSync, OffsetSync jSync, int i) {
         long bound = jSync.upstreamOffset() + (1L << Math.max(i - 2, 0));
-        return iSync == jSync || bound < 0 || bound <= iSync.upstreamOffset();
+        return iSync == jSync || bound < 0 || iSync.upstreamOffset() >= bound;
     }
 
     private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition, long upstreamOffset) {

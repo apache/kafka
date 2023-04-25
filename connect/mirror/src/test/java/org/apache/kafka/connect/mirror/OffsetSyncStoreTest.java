@@ -143,7 +143,7 @@ public class OffsetSyncStoreTest {
             assertSparseSync(store, 9990, 9970);
             assertSparseSync(store, 10000, 9990);
 
-            // Rewind upstream offsets should clear all historical syncs
+            // Rewinding upstream offsets should clear all historical syncs
             store.sync(tp, 1500, 11000);
             assertSparseSyncInvariant(store, tp);
             assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 1499));
@@ -155,11 +155,11 @@ public class OffsetSyncStoreTest {
     @Test
     public void testKeepMostDistinctSyncs() {
         // We should not expire more syncs from the store than necessary;
-        // Each new sync should expire at most two other syncs from the cache
+        // Each new sync should be added to the cache and expire at most two other syncs from the cache
         long iterations = 1000000;
         long maxStep = Long.MAX_VALUE / iterations;
         // Test a variety of steps (corresponding to the offset.lag.max configuration)
-        for (long step = 1; step < maxStep; step = (step << 1) + 1)  {
+        for (long step = 1; step < maxStep; step = (step * 2) + 1)  {
             try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
                 int lastCount = 1;
                 store.start();
@@ -198,28 +198,32 @@ public class OffsetSyncStoreTest {
 
     private void assertSparseSyncInvariant(FakeOffsetSyncStore store, TopicPartition topicPartition) {
         for (int j = 0; j < OffsetSyncStore.SYNCS_PER_PARTITION; j++) {
-            for (int i = 0; i <= j; i++) {
+            for (int i = 0; i < j; i++) {
                 long jUpstream = store.syncFor(topicPartition, j).upstreamOffset();
                 long iUpstream = store.syncFor(topicPartition, i).upstreamOffset();
                 if (jUpstream == iUpstream) {
                     continue;
                 }
-                long iUpstreamLowerBound = jUpstream + (1L << Math.max(i - 2, 0));
+                int exponent = Math.max(i - 2, 0);
+                long iUpstreamLowerBound = jUpstream + (1L << exponent);
                 if (iUpstreamLowerBound < 0) {
                     continue;
                 }
                 assertTrue(
-                        iUpstreamLowerBound <= iUpstream,
+                        iUpstream >= iUpstreamLowerBound,
                         "Invariant C(" + i + "," + j + "): Upstream offset " + iUpstream + " at position " + i
-                                + " should be at least " + iUpstreamLowerBound + " (" + jUpstream + " + 2^" + Math.max(i - 1, 0) + ")"
+                                + " should be at least " + iUpstreamLowerBound
+                                + " (" + jUpstream + " + 2^" + exponent + ")"
                 );
-                long iUpstreamBound = jUpstream + (1L << j) - (1L << i);
-                if (iUpstreamBound < 0)
+                long iUpstreamUpperBound = jUpstream + (1L << j) - (1L << i);
+                if (iUpstreamUpperBound < 0)
                     continue;
                 assertTrue(
-                        iUpstream <= iUpstreamBound,
+                        iUpstream <= iUpstreamUpperBound,
                         "Invariant B(" + i + "," + j + "): Upstream offset " + iUpstream + " at position " + i
-                                + " should be no greater than " + iUpstreamBound + " (" + jUpstream + " + 2^" + j + ")"
+                                + " should be no greater than " + iUpstreamUpperBound
+                                + " (" + jUpstream + " + 2^" + j + " - 2^" + i + ")"
+
                 );
             }
         }
