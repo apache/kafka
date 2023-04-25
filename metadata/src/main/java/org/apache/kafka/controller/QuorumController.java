@@ -928,7 +928,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void abortMigration() {
-            log.error("Aborting ZK Migration");
+            fatalFaultHandler.handleFault("Aborting the ZK migration");
             // TODO use KIP-868 transaction
         }
     }
@@ -1244,7 +1244,8 @@ public final class QuorumController implements Controller {
                         }
                         break;
                     case PRE_MIGRATION:
-                        throw new RuntimeException("Detected an failed migration state during bootstrap, cannot continue.");
+                        log.warn("Activating pre-migration controller without empty log. There may be a partial migration");
+                        break;
                     case MIGRATION:
                         if (!zkMigrationEnabled) {
                             // This can happen if controller leadership transfers to a controller with migrations enabled

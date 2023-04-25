@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
@@ -1407,7 +1408,7 @@ public class QuorumControllerTest {
 
     FeatureControlManager getActivationRecords(
             MetadataVersion metadataVersion,
-            boolean emptyLog,
+            Optional<ZkMigrationState> stateInLog,
             boolean zkMigrationEnabled
     ) {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
@@ -1416,9 +1417,12 @@ public class QuorumControllerTest {
                 .setMetadataVersion(metadataVersion)
                 .build();
 
+        stateInLog.ifPresent(zkMigrationState ->
+            featureControlManager.replay((ZkMigrationStateRecord) zkMigrationState.toRecord().message()));
+
         List<ApiMessageAndVersion> records = QuorumController.generateActivationRecords(
             log,
-            emptyLog,
+            !stateInLog.isPresent(),
             zkMigrationEnabled,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
             featureControlManager);
@@ -1432,19 +1436,19 @@ public class QuorumControllerTest {
 
         assertEquals(
             "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
-            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, true, true)).getMessage()
+            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.empty(), true)).getMessage()
         );
 
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, true, false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.empty(), false);
         assertEquals(MetadataVersion.IBP_3_3_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
 
         assertEquals(
             "Should not have ZK migrations enabled on a cluster running metadata.version 3.3-IV0",
-            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, false, true)).getMessage()
+            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.of(ZkMigrationState.NONE), true)).getMessage()
         );
 
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, false, false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.of(ZkMigrationState.NONE), false);
         assertEquals(MetadataVersion.IBP_3_3_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
     }
@@ -1453,23 +1457,51 @@ public class QuorumControllerTest {
     public void testActivationRecords34() {
         FeatureControlManager featureControl;
 
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, true, true);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
 
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, true, false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), false);
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
 
         assertEquals(
             "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
-            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_4_IV0, false, true)).getMessage()
+            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.NONE), true)).getMessage()
         );
 
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, false, false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.NONE), false);
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.PRE_MIGRATION), true);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.MIGRATION), true);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.MIGRATION, featureControl.zkMigrationState());
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.MIGRATION), false);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.POST_MIGRATION, featureControl.zkMigrationState());
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION), true);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.POST_MIGRATION, featureControl.zkMigrationState());
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION), false);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.POST_MIGRATION, featureControl.zkMigrationState());
     }
+
+    @Test
+    public void testActivationRecordsNonEmptyLog() {
+        FeatureControlManager featureControl;
+
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());    }
 
     @Test
     public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {
