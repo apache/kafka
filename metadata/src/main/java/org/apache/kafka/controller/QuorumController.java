@@ -415,7 +415,16 @@ public final class QuorumController implements Controller {
         OptionalInt latestController = raftClient.leaderAndEpoch().leaderId();
         if (latestController.isPresent()) {
             return new NotControllerException(ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX +
-                latestController.getAsInt());
+                latestController.getAsInt() + ".");
+        } else {
+            return new NotControllerException("No controller appears to be active.");
+        }
+    }
+
+    private NotControllerException newPreMigrationException() {
+        OptionalInt latestController = raftClient.leaderAndEpoch().leaderId();
+        if (latestController.isPresent()) {
+            return new NotControllerException("The controller is in pre-migration mode.");
         } else {
             return new NotControllerException("No controller appears to be active.");
         }
@@ -685,7 +694,7 @@ public final class QuorumController implements Controller {
             }
             if (featureControl.inPreMigrationMode() && !flags.contains(RUNS_IN_PREMIGRATION)) {
                 log.info("Cannot run write operation {} in pre-migration mode. Returning NOT_CONTROLLER.", name);
-                throw newNotControllerException();
+                throw newPreMigrationException();
             }
             startProcessingTimeNs = OptionalLong.of(now);
             ControllerResult<T> result = op.generateRecordsAndResult();
@@ -1165,13 +1174,14 @@ public final class QuorumController implements Controller {
             // Prepend the activate event. It is important that this event go at the beginning
             // of the queue rather than the end (hence prepend rather than append). It's also
             // important not to use prepend for anything else, to preserve the ordering here.
-            ControllerWriteEvent<Void> activationEvent = new ControllerWriteEvent<>("completeActivation[" + epoch + "]",
-                    new CompleteActivationEvent(),
-                    EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
-            activationEvent.future.whenComplete((__, t) -> {
-                if (t != null) {
-                    fatalFaultHandler.handleFault("exception while activating controller", t);
-                }
+            ControllerWriteEvent<Void> activationEvent = new ControllerWriteEvent<>(
+                "completeActivation[" + epoch + "]",
+                new CompleteActivationEvent(),
+                EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION)
+            );
+            activationEvent.future.exceptionally(t -> {
+                fatalFaultHandler.handleFault("exception while activating controller", t);
+                return null;
             });
             queue.prepend(activationEvent);
         } catch (Throwable e) {
