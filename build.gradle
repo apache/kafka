@@ -269,7 +269,7 @@ subprojects {
     if (JavaVersion.current().isJava9Compatible())
       options.release = minJavaVersion
   }
-  
+
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
   sourceCompatibility = minJavaVersion
@@ -2057,6 +2057,7 @@ project(':streams') {
   srcJar.dependsOn 'processMessages'
 
   javadoc {
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     include "**/org/apache/kafka/streams/**"
     exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
   }
