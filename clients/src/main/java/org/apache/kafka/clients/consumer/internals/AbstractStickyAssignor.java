@@ -33,7 +33,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-
 import org.apache.kafka.clients.consumer.internals.Utils.PartitionComparator;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -149,48 +148,47 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
 
             MemberData memberData = memberData(subscription);
+            maxGeneration = Math.max(maxGeneration, memberData.generation.orElse(DEFAULT_GENERATION));
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
 
-            if (memberData.generation.isPresent()) {
-                // the member has a valid generation, so we can consider its owned partitions if it has the highest
-                // generation amongst
-                for (final TopicPartition tp : memberData.partitions) {
-                    if (allTopics.contains(tp.topic())) {
-                        String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
-                        if (otherConsumer == null) {
-                            // this partition is not owned by other consumer in the same generation
-                            ownedPartitions.add(tp);
-                        } else {
-                            final int memberGeneration = memberData.generation.get();
-                            final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
+            // the member has a valid generation, so we can consider its owned partitions if it has the highest
+            // generation amongst
+            for (final TopicPartition tp : memberData.partitions) {
+                if (allTopics.contains(tp.topic())) {
+                    String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
+                    if (otherConsumer == null) {
+                        // this partition is not owned by other consumer in the same generation
+                        ownedPartitions.add(tp);
+                    } else {
+                        final int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
+                        final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
-                            if (memberGeneration == otherMemberGeneration) {
-                                if (subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION) == memberData.generation.orElse(DEFAULT_GENERATION)) {
-                                    log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
-                                            + "same generation {}, this will be invalidated and removed from their previous assignment.",
-                                        consumer, otherConsumer, tp, maxGeneration);
-                                    partitionsWithMultiplePreviousOwners.add(tp);
-                                }
-                                consumerToOwnedPartitions.get(otherConsumer).remove(tp);
-                                allPreviousPartitionsToOwner.put(tp, consumer);
-                                continue;
+                        if (memberGeneration == otherMemberGeneration) {
+                            if (subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION) == memberData.generation.orElse(DEFAULT_GENERATION)) {
+                                log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
+                                        + "same generation {}, this will be invalidated and removed from their previous assignment.",
+                                    consumer, otherConsumer, tp, memberGeneration);
+                                partitionsWithMultiplePreviousOwners.add(tp);
                             }
-
-                            if (memberGeneration > otherMemberGeneration) {
-                                // move partition from the member with an older generation to the member with the newer generation
-                                consumerToOwnedPartitions.get(consumer).add(tp);
-                                consumerToOwnedPartitions.get(otherConsumer).remove(tp);
-                                allPreviousPartitionsToOwner.put(tp, consumer);
-                            }
-
-                            // if memberGeneration < otherMemberGeneration, the other member continue owns the generation
-                            log.warn("Found multiple members {} and {} claiming the same TopicPartition {} in " +
-                                    "different generations. The topic partition wil be assigned to the member with " +
-                                    "the higher generation {}.",
-                                consumer, otherConsumer, tp, Math.max(memberGeneration, otherMemberGeneration));
+                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
+                            continue;
                         }
+
+                        if (memberGeneration > otherMemberGeneration) {
+                            // move partition from the member with an older generation to the member with the newer generation
+                            consumerToOwnedPartitions.get(consumer).add(tp);
+                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
+                        }
+
+                        // if memberGeneration < otherMemberGeneration, the other member continue owns the generation
+                        log.warn("Found multiple members {} and {} claiming the same TopicPartition {} in " +
+                                "different generations. The topic partition wil be assigned to the member with " +
+                                "the higher generation {}.",
+                            consumer, otherConsumer, tp, Math.max(memberGeneration, otherMemberGeneration));
                     }
                 }
             }

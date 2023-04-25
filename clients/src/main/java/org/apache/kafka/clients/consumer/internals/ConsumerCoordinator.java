@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Arrays;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -38,11 +41,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
@@ -69,7 +72,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -78,8 +80,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -248,15 +248,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         List<String> topics = new ArrayList<>(joinedSubscription);
         for (ConsumerPartitionAssignor assignor : assignors) {
             Subscription subscription = new Subscription(topics,
-                assignor.subscriptionUserData(joinedSubscription),
-                subscriptions.assignedPartitionsList(),
-                generation().generationId,
-                rackId);
+                                                         assignor.subscriptionUserData(joinedSubscription),
+                                                         subscriptions.assignedPartitionsList(),
+                                                         generation().generationId,
+                                                         rackId);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                .setName(assignor.name())
-                .setMetadata(Utils.toArray(metadata)));
+                    .setName(assignor.name())
+                    .setMetadata(Utils.toArray(metadata)));
         }
         return protocolSet;
     }

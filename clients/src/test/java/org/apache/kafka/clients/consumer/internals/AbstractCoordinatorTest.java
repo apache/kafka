@@ -68,7 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -84,9 +83,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 public class AbstractCoordinatorTest {
     private static final ByteBuffer EMPTY_DATA = ByteBuffer.wrap(new byte[0]);
@@ -1613,66 +1609,6 @@ public class AbstractCoordinatorTest {
             executor.shutdownNow();
             executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
         }
-    }
-
-    @Test
-    public void testResetGenerationIdAfterSyncGroupFailedWithRebalanceInProgress() throws InterruptedException, ExecutionException {
-        setupCoordinator();
-
-        coordinator = spy(this.coordinator);
-
-        String memberId = "memberId";
-        int generation = 5;
-
-        // Rebalance once to initialize the generation and memberId
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        expectJoinGroup("", generation, memberId);
-        expectSyncGroup(generation, memberId);
-        ensureActiveGroup(generation, memberId);
-
-        // Force a rebalance
-        coordinator.requestRejoin("Manual test trigger");
-        assertTrue(coordinator.rejoinNeededOrPending());
-
-        ExecutorService executor = Executors.newFixedThreadPool(1);
-        try {
-            // Return RebalanceInProgress in syncGroup
-            int rejoinedGeneration = 10;
-            expectJoinGroup(memberId, rejoinedGeneration, memberId);
-            expectRebalanceInProgressForSyncGroup(rejoinedGeneration, memberId);
-            executor.submit(() ->
-                coordinator.ensureActiveGroup(mockTime.timer(Integer.MAX_VALUE)));
-
-            TestUtils.waitForCondition(() -> {
-                AbstractCoordinator.Generation currentGeneration = coordinator.generation();
-                return currentGeneration.generationId == AbstractCoordinator.Generation.NO_GENERATION.generationId &&
-                    currentGeneration.memberId.equals(memberId);
-            }, 2000, "Generation should be reset");
-
-            rejoinedGeneration = 20;
-            expectSyncGroup(rejoinedGeneration, memberId);
-            expectJoinGroup(memberId, rejoinedGeneration, memberId);
-            verify(coordinator, times(1)).savePreviousJoinGroupState();
-        } finally {
-            executor.shutdownNow();
-            executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
-        }
-    }
-
-    private void expectRebalanceInProgressForSyncGroup(
-        int expectedGeneration,
-        String expectedMemberId
-    ) {
-        mockClient.prepareResponse(body -> {
-            if (!(body instanceof SyncGroupRequest)) {
-                return false;
-            }
-            SyncGroupRequestData syncGroupRequest = ((SyncGroupRequest) body).data();
-            return syncGroupRequest.generationId() == expectedGeneration
-                && syncGroupRequest.memberId().equals(expectedMemberId)
-                && syncGroupRequest.protocolType().equals(PROTOCOL_TYPE)
-                && syncGroupRequest.protocolName().equals(PROTOCOL_NAME);
-        }, syncGroupResponse(Errors.REBALANCE_IN_PROGRESS, PROTOCOL_TYPE, PROTOCOL_NAME));
     }
 
     private AtomicBoolean prepareFirstHeartbeat() {
