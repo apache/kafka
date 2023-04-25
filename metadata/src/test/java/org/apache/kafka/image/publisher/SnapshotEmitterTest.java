@@ -81,7 +81,11 @@ public class SnapshotEmitterTest {
         }
 
         @Override
-        public long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> records) {
+        public long scheduleAtomicAppend(
+            int epoch,
+            OptionalLong requiredEndOffset,
+            List<ApiMessageAndVersion> records
+        ) {
             return 0;
         }
 

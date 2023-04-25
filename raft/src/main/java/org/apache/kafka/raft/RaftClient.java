@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.raft.errors.UnexpectedEndOffsetException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
@@ -36,10 +37,10 @@ public interface RaftClient<T> extends AutoCloseable {
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
-         * {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}
+         * {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, OptionalLong, List)}
          * and this callback. The Raft implementation is free to batch together the records
          * from multiple append calls provided that batch boundaries are respected. Records
-         * specified through {@link #scheduleAtomicAppend(int, List)} are guaranteed to be a
+         * specified through {@link #scheduleAtomicAppend(int, OptionalLong, List)} are guaranteed to be a
          * subset of a batch provided by the {@link BatchReader}. Records specified through
          * {@link #scheduleAppend(int, List)} are guaranteed to be in the same order but
          * they can map to any number of batches provided by the {@link BatchReader}.
@@ -80,8 +81,11 @@ public interface RaftClient<T> extends AutoCloseable {
          * epoch.
          *
          * @param leader the current leader and epoch
+         * @param endOffset the current log end offset (exclusive). This is useful for nodes that
+         *                  are claiming leadership, because it lets them know what log offset they
+         *                  should attempt to write to next.
          */
-        default void handleLeaderChange(LeaderAndEpoch leader) {}
+        default void handleLeaderChange(LeaderAndEpoch leader, long endOffset) {}
 
         default void beginShutdown() {}
     }
@@ -172,6 +176,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * uncommitted entries after observing an epoch change.
      *
      * @param epoch the current leader epoch
+     * @param requiredEndOffset if this is set, it is the offset we must use.
      * @param records the list of records to append
      * @return the expected offset of the last record if append succeed
      * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
@@ -179,8 +184,9 @@ public interface RaftClient<T> extends AutoCloseable {
      *         committed
      * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
      * @throws BufferAllocationException we failed to allocate memory for the records
+     * @throws UnexpectedEndOffsetException the requested end offset could not be obtained.
      */
-    long scheduleAtomicAppend(int epoch, List<T> records);
+    long scheduleAtomicAppend(int epoch, OptionalLong requiredEndOffset, List<T> records);
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively

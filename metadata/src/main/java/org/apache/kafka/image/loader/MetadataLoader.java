@@ -495,7 +495,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     }
 
     @Override
-    public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
+    public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch, long endOffset) {
         eventQueue.append(() -> {
             currentLeaderAndEpoch = leaderAndEpoch;
             for (MetadataPublisher publisher : publishers.values()) {

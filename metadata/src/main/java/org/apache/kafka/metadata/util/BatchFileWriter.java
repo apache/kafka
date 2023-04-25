@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalLong;
 
 import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 
@@ -61,11 +62,11 @@ public class BatchFileWriter implements AutoCloseable {
     }
 
     public void append(ApiMessageAndVersion apiMessageAndVersion) {
-        batchAccumulator.append(0, Collections.singletonList(apiMessageAndVersion));
+        batchAccumulator.append(0, Collections.singletonList(apiMessageAndVersion), OptionalLong.empty(), false);
     }
 
     public void append(List<ApiMessageAndVersion> messageBatch) {
-        batchAccumulator.append(0, messageBatch);
+        batchAccumulator.append(0, messageBatch, OptionalLong.empty(), false);
     }
 
     public void close() throws IOException {

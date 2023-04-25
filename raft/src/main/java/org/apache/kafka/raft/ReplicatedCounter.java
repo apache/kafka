@@ -165,7 +165,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleLeaderChange(LeaderAndEpoch newLeader) {
+    public synchronized void handleLeaderChange(LeaderAndEpoch newLeader, long endOffset) {
         if (newLeader.isLeader(nodeId)) {
             log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",
                 committed, newLeader);
