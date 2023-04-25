@@ -102,7 +102,7 @@ public class BatchMemoryPool implements MemoryPool {
             }
 
             // Free the buffer if the number of pooled buffers is already the maximum number of batches.
-            // Otherwise return the buffer to the memory pool.
+            // Otherwise, return the buffer to the memory pool.
             if (free.size() >= maxRetainedBatches) {
                 numAllocatedBatches--;
             } else {
