@@ -43,9 +43,9 @@ public class ChangedSerdeTest {
     private static final ChangedDeserializer<String> CHANGED_STRING_DESERIALIZER =
             new ChangedDeserializer<>(Serdes.String().deserializer());
 
-    private static final int NEW_OLD_FLAG_SIZE = 1;
+    private static final int ENCODING_FLAG_SIZE = 1;
     private static final int IS_LATEST_FLAG_SIZE = 1;
-    private static final int UINT32_SIZE = 4;
+    private static final int MAX_VARINT_LENGTH = 5;
 
     final String nonNullNewValue = "hello";
     final String nonNullOldValue = "world";
@@ -141,29 +141,33 @@ public class ChangedSerdeTest {
         final int oldDataLength = oldValueIsNotNull ? oldData.length : 0;
 
         // The serialization format is:
-        // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=3}
-        // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE newOldFlag=4}
-        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE newOldFlag=5}
+        // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=3}
+        // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE encodingFlag=4}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=5}
         final ByteBuffer buf;
         final byte isLatest = data.isLatest ? (byte) 1 : (byte) 0;
         if (newValueIsNotNull && oldValueIsNotNull) {
-            final int capacity = UINT32_SIZE + newDataLength + oldDataLength + IS_LATEST_FLAG_SIZE + NEW_OLD_FLAG_SIZE;
+            final int capacity = MAX_VARINT_LENGTH + newDataLength + oldDataLength + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE;
             buf = ByteBuffer.allocate(capacity);
-            ByteUtils.writeUnsignedInt(buf, newDataLength);
+            ByteUtils.writeVarint(newDataLength, buf);
             buf.put(newData).put(oldData).put(isLatest).put((byte) 5);
         } else if (newValueIsNotNull) {
-            final int capacity = newDataLength + IS_LATEST_FLAG_SIZE + NEW_OLD_FLAG_SIZE;
+            final int capacity = newDataLength + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE;
             buf = ByteBuffer.allocate(capacity);
             buf.put(newData).put(isLatest).put((byte) 4);
         } else if (oldValueIsNotNull) {
-            final int capacity = oldDataLength + IS_LATEST_FLAG_SIZE + NEW_OLD_FLAG_SIZE;
+            final int capacity = oldDataLength + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE;
             buf = ByteBuffer.allocate(capacity);
             buf.put(oldData).put(isLatest).put((byte) 3);
         } else {
             throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
         }
 
-        return buf.array();
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        return serialized;
     }
 
     private static void checkRoundTripForReservedVersion(final Change<String> data) {

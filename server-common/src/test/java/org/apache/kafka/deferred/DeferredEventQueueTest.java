@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.deferred;
 
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
-public class ControllerPurgatoryTest {
+public class DeferredEventQueueTest {
 
     static class SampleDeferredEvent implements DeferredEvent {
         private final CompletableFuture<Void> future = new CompletableFuture<>();
@@ -50,48 +51,48 @@ public class ControllerPurgatoryTest {
 
     @Test
     public void testCompleteEvents() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        DeferredEventQueue deferredEventQueue = new DeferredEventQueue();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
-        purgatory.add(1, event1);
-        assertEquals(OptionalLong.of(1L), purgatory.highestPendingOffset());
-        purgatory.add(1, event2);
-        assertEquals(OptionalLong.of(1L), purgatory.highestPendingOffset());
-        purgatory.add(3, event3);
-        assertEquals(OptionalLong.of(3L), purgatory.highestPendingOffset());
-        purgatory.completeUpTo(2);
+        deferredEventQueue.add(1, event1);
+        assertEquals(OptionalLong.of(1L), deferredEventQueue.highestPendingOffset());
+        deferredEventQueue.add(1, event2);
+        assertEquals(OptionalLong.of(1L), deferredEventQueue.highestPendingOffset());
+        deferredEventQueue.add(3, event3);
+        assertEquals(OptionalLong.of(3L), deferredEventQueue.highestPendingOffset());
+        deferredEventQueue.completeUpTo(2);
         assertTrue(event1.future.isDone());
         assertTrue(event2.future.isDone());
         assertFalse(event3.future.isDone());
-        purgatory.completeUpTo(4);
+        deferredEventQueue.completeUpTo(4);
         assertTrue(event3.future.isDone());
-        assertEquals(OptionalLong.empty(), purgatory.highestPendingOffset());
+        assertEquals(OptionalLong.empty(), deferredEventQueue.highestPendingOffset());
     }
 
     @Test
     public void testFailOnIncorrectOrdering() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        DeferredEventQueue deferredEventQueue = new DeferredEventQueue();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
-        purgatory.add(2, event1);
-        assertThrows(RuntimeException.class, () -> purgatory.add(1, event2));
+        deferredEventQueue.add(2, event1);
+        assertThrows(RuntimeException.class, () -> deferredEventQueue.add(1, event2));
     }
 
     @Test
     public void testFailEvents() {
-        ControllerPurgatory purgatory = new ControllerPurgatory();
+        DeferredEventQueue deferredEventQueue = new DeferredEventQueue();
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
-        purgatory.add(1, event1);
-        purgatory.add(3, event2);
-        purgatory.add(3, event3);
-        purgatory.completeUpTo(2);
+        deferredEventQueue.add(1, event1);
+        deferredEventQueue.add(3, event2);
+        deferredEventQueue.add(3, event3);
+        deferredEventQueue.completeUpTo(2);
         assertTrue(event1.future.isDone());
         assertFalse(event2.future.isDone());
         assertFalse(event3.future.isDone());
-        purgatory.failAll(new RuntimeException("failed"));
+        deferredEventQueue.failAll(new RuntimeException("failed"));
         assertTrue(event2.future.isDone());
         assertTrue(event3.future.isDone());
         assertEquals(RuntimeException.class, assertThrows(ExecutionException.class,

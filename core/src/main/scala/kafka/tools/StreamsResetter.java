@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package kafka.tools;
 
-package org.apache.kafka.controller;
 
-/**
- * Represents a deferred event in the controller purgatory.
- */
-interface DeferredEvent {
-    /**
-     * Complete the event.
-     *
-     * @param exception         null if the event should be completed successfully; the
-     *                          error otherwise.
-     */
-    void complete(Throwable exception);
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+@Deprecated
+public class StreamsResetter {
+
+    public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        System.out.println("WARNING: The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.");
+        Class<?> toolClass = Class.forName("org.apache.kafka.tools.StreamsResetter");
+        Method main = toolClass.getDeclaredMethod("main", String[].class);
+        main.invoke(null, (Object) args);
+    }
 }
