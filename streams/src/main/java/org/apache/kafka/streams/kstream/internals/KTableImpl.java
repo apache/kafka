@@ -175,6 +175,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return queryableStoreName;
     }
 
+//    public void joinedWithGrace(final Duration gracePeriod){
+//        graphNode;
+//        //check if materilized
+//        //if not version store then error
+//        //or force materlization
+//        //overwirte materlized internal with version store
+//        //overwrite of versioned
+//        processorSupplier;
+//        //
+//        queryableStoreName;
+//    }
+
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
                                   final Named named,
                                   final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,

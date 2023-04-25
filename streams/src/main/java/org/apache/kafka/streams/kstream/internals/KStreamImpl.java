@@ -54,6 +54,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinBufferNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamToTableNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
@@ -74,6 +75,8 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
@@ -1254,8 +1257,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
-
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
+
+        if(joinedInternal.gracePeriod() != null) {
+            return doGraceStreamTableJoin(table, joiner, name, leftJoin, joined)    ;
+        }
+
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
             joiner,
@@ -1270,6 +1277,55 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
+
+        // do not have serde for joined result
+        return new KStreamImpl<>(
+            name,
+            joined.keySerde() != null ? joined.keySerde() : keySerde,
+            null,
+            allSourceNodes,
+            false,
+            streamTableJoinNode,
+            builder);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <VO, VR> KStream<K, VR> doGraceStreamTableJoin(final KTable<K, VO> table,
+                                                      final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
+                                                      final String name,
+                                                      final boolean leftJoin,
+                                                      final Joined<K, V, VO> joined) {
+
+        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
+
+        TimeOrderedKeyValueBuffer<K, V> supressBuffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(name, joined.keySerde(), joined.valueSerde()).build();
+
+        final ProcessorSupplier<K, V, K, V> processorSupplier1 = new KStreamJoinSupressBufferProcessSupplier<>(supressBuffer, joined.gracePeriod());
+        final ProcessorParameters<K, V, ?, ?> processorParameters1 = new ProcessorParameters<>(processorSupplier1, name);
+
+
+        final StreamTableJoinBufferNode<K, V> streamTableJoinBufferNode = new StreamTableJoinBufferNode<>(
+            name,
+            processorParameters1,
+            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames()
+        );
+
+        builder.addGraphNode(graphNode, streamTableJoinBufferNode);
+
+        final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
+            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
+            joiner,
+            leftJoin);
+
+        final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
+            name,
+            processorParameters,
+            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
+            this.name
+        );
+
+        builder.addGraphNode(streamTableJoinBufferNode, streamTableJoinNode);
 
         // do not have serde for joined result
         return new KStreamImpl<>(

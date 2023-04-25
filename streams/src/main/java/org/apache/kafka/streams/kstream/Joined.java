@@ -18,6 +18,8 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
 
+import java.time.Duration;
+
 /**
  * The {@code Joined} class represents optional params that can be passed to
  * {@link KStream#join(KTable, ValueJoiner, Joined) KStream#join(KTable,...)} and
@@ -29,19 +31,22 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
     protected final Serde<V> valueSerde;
     protected final Serde<VO> otherValueSerde;
     protected final String name;
+    protected final Duration gracePeriod;
 
     private Joined(final Serde<K> keySerde,
                    final Serde<V> valueSerde,
                    final Serde<VO> otherValueSerde,
-                   final String name) {
+                   final String name,
+                   final Duration gracePeriod) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
         this.name = name;
+        this.gracePeriod = gracePeriod;
     }
 
     protected Joined(final Joined<K, V, VO> joined) {
-        this(joined.keySerde, joined.valueSerde, joined.otherValueSerde, joined.name);
+        this(joined.keySerde, joined.valueSerde, joined.otherValueSerde, joined.name, joined.gracePeriod);
     }
 
     /**
@@ -59,7 +64,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
     public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
                                                    final Serde<V> valueSerde,
                                                    final Serde<VO> otherValueSerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, null);
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, null, null);
     }
 
     /**
@@ -84,7 +89,34 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
                                                    final Serde<V> valueSerde,
                                                    final Serde<VO> otherValueSerde,
                                                    final String name) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, null);
+    }
+
+    /**
+     * Create an instance of {@code Joined} with key, value, and otherValue {@link Serde} instances.
+     * {@code null} values are accepted and will be replaced by the default serdes as defined in
+     * config.
+     *
+     * @param keySerde the key serde to use. If {@code null} the default key serde from config will be
+     * used
+     * @param valueSerde the value serde to use. If {@code null} the default value serde from config
+     * will be used
+     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde
+     * from config will be used
+     * @param name the name used as the base for naming components of the join including any
+     * repartition topics
+     * @param gracePeriod stream buffer time
+     * @param <K> key type
+     * @param <V> value type
+     * @param <VO> other value type
+     * @return new {@code Joined} instance with the provided serdes
+     */
+    public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
+                                                   final Serde<V> valueSerde,
+                                                   final Serde<VO> otherValueSerde,
+                                                   final String name,
+                                                   final Duration gracePeriod) {
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
     }
 
     /**
@@ -98,7 +130,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * @return new {@code Joined} instance configured with the keySerde
      */
     public static <K, V, VO> Joined<K, V, VO> keySerde(final Serde<K> keySerde) {
-        return new Joined<>(keySerde, null, null, null);
+        return new Joined<>(keySerde, null, null, null, null);
     }
 
     /**
@@ -112,7 +144,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * @return new {@code Joined} instance configured with the valueSerde
      */
     public static <K, V, VO> Joined<K, V, VO> valueSerde(final Serde<V> valueSerde) {
-        return new Joined<>(null, valueSerde, null, null);
+        return new Joined<>(null, valueSerde, null, null, null);
     }
 
     /**
@@ -126,7 +158,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * @return new {@code Joined} instance configured with the otherValueSerde
      */
     public static <K, V, VO> Joined<K, V, VO> otherValueSerde(final Serde<VO> otherValueSerde) {
-        return new Joined<>(null, null, otherValueSerde, null);
+        return new Joined<>(null, null, otherValueSerde, null, null);
     }
 
     /**
@@ -142,7 +174,23 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      *
      */
     public static <K, V, VO> Joined<K, V, VO> as(final String name) {
-        return new Joined<>(null, null, null, name);
+        return new Joined<>(null, null, null, name, null);
+    }
+
+    /**
+     * Create an instance of {@code Joined} with base name for all components of the join, this may
+     * include any repartition topics created to complete the join.
+     *
+     * @param name the name used as the base for naming components of the join including any
+     * repartition topics
+     * @param <K> key type
+     * @param <V> value type
+     * @param <VO> other value type
+     * @return new {@code Joined} instance configured with the name
+     *
+     */
+    public static <K, V, VO> Joined<K, V, VO> as(final Duration name) {
+        return new Joined<>(null, null, null, null, name);
     }
 
 
@@ -154,7 +202,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * @return new {@code Joined} instance configured with the {@code name}
      */
     public Joined<K, V, VO> withKeySerde(final Serde<K> keySerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
     }
 
     /**
@@ -165,7 +213,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
     public Joined<K, V, VO> withValueSerde(final Serde<V> valueSerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
     }
 
     /**
@@ -176,7 +224,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
     public Joined<K, V, VO> withOtherValueSerde(final Serde<VO> otherValueSerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
     }
 
     /**
@@ -189,7 +237,17 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      */
     @Override
     public Joined<K, V, VO> withName(final String name) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
+    }
+
+    /**
+     * Set the grace period on the stream side of the join. Records will enter a buffer before being processed. Late records in the grace period will be processed in timestamp order, records out of the grace period will be dropped.
+     *
+     * @param gracePeriod the duration of the grace period. If zero, no buffer will be used.
+     * @return new {@code Joined} instance configured with the gracePeriod
+     */
+    public Joined<K, V, VO> withGracePeriod(final Duration gracePeriod) {
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
     }
 
     public Serde<K> keySerde() {
@@ -202,5 +260,9 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
 
     public Serde<VO> otherValueSerde() {
         return otherValueSerde;
+    }
+
+    public Duration gracePeriod() {
+        return gracePeriod;
     }
 }
