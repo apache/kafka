@@ -155,7 +155,7 @@ public class OffsetSyncStoreTest {
     @Test
     public void testKeepMostDistinctSyncs() {
         // We should not expire more syncs from the store than necessary;
-        // Each new sync should be added to the cache and expire at most two other syncs from the cache
+        // Each new sync should be added to the cache and expire at most one other sync from the cache
         long iterations = 1000000;
         long maxStep = Long.MAX_VALUE / iterations;
         // Test a variety of steps (corresponding to the offset.lag.max configuration)
@@ -171,7 +171,7 @@ public class OffsetSyncStoreTest {
                     assertEquals(0L, store.syncFor(tp, 63).upstreamOffset());
                     int count = countDistinctStoredSyncs(store, tp);
                     int diff = count - lastCount;
-                    assertTrue(diff >= -1,
+                    assertTrue(diff >= 0,
                             "Store expired too many syncs: " + diff + " after receiving offset " + offset);
                     lastCount = count;
                 }
