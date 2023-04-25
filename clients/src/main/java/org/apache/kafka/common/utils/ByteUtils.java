@@ -453,8 +453,8 @@ public final class ByteUtils {
         writeUnsignedVarlong(v, buffer);
     }
 
-    // visible for testing
-    static void writeUnsignedVarlong(long v, ByteBuffer buffer) {
+    // visible for testing and benchmarking
+    public static void writeUnsignedVarlong(long v, ByteBuffer buffer) {
         while ((v & 0xffffffffffffff80L) != 0L) {
             byte b = (byte) ((v & 0x7f) | 0x80);
             buffer.put(b);
