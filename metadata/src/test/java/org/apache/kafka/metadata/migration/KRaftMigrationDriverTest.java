@@ -42,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -63,12 +64,12 @@ public class KRaftMigrationDriverTest {
 
         @Override
         public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public OffsetAndEpoch completeMigration() {
-            return new OffsetAndEpoch(100, 1);
+        public CompletableFuture<OffsetAndEpoch> completeMigration() {
+            return CompletableFuture.completedFuture(new OffsetAndEpoch(100, 1));
         }
 
         @Override
@@ -81,6 +82,7 @@ public class KRaftMigrationDriverTest {
 
         private final Set<Integer> brokerIds;
         public final Map<ConfigResource, Map<String, String>> capturedConfigs = new HashMap<>();
+        private ZkMigrationLeadershipState state = null;
 
         public CapturingMigrationClient(Set<Integer> brokerIdsInZk) {
             this.brokerIds = brokerIdsInZk;
@@ -88,21 +90,27 @@ public class KRaftMigrationDriverTest {
 
         @Override
         public ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState) {
-            return initialState;
+            if (state == null) {
+                state = initialState;
+            }
+            return state;
         }
 
         @Override
         public ZkMigrationLeadershipState setMigrationRecoveryState(ZkMigrationLeadershipState state) {
+            this.state = state;
             return state;
         }
 
         @Override
         public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
+            this.state = state;
             return state;
         }
 
         @Override
         public ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state) {
+            this.state = state;
             return state;
         }
 
@@ -113,6 +121,7 @@ public class KRaftMigrationDriverTest {
             Map<Integer, PartitionRegistration> topicPartitions,
             ZkMigrationLeadershipState state
         ) {
+            this.state = state;
             return state;
         }
 
@@ -121,6 +130,7 @@ public class KRaftMigrationDriverTest {
             Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
             ZkMigrationLeadershipState state
         ) {
+            this.state = state;
             return state;
         }
 
@@ -131,6 +141,7 @@ public class KRaftMigrationDriverTest {
             ZkMigrationLeadershipState state
         ) {
             capturedConfigs.computeIfAbsent(configResource, __ -> new HashMap<>()).putAll(configMap);
+            this.state = state;
             return state;
         }
 
@@ -140,6 +151,7 @@ public class KRaftMigrationDriverTest {
             Map<String, Double> quotas,
             ZkMigrationLeadershipState state
         ) {
+            this.state = state;
             return state;
         }
 
@@ -148,6 +160,7 @@ public class KRaftMigrationDriverTest {
             long nextProducerId,
             ZkMigrationLeadershipState state
         ) {
+            this.state = state;
             return state;
         }
 
@@ -157,6 +170,7 @@ public class KRaftMigrationDriverTest {
             List<AccessControlEntry> deletedAcls,
             ZkMigrationLeadershipState state
         ) {
+            this.state = state;
             return state;
         }
 
@@ -166,6 +180,7 @@ public class KRaftMigrationDriverTest {
             List<AccessControlEntry> addedAcls,
             ZkMigrationLeadershipState state
         ) {
+            this.state = state;
             return state;
         }
 
@@ -290,6 +305,7 @@ public class KRaftMigrationDriverTest {
         MetadataDelta delta = new MetadataDelta(image);
 
         driver.start();
+        delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
         delta.replay(zkBrokerRecord(1));
         delta.replay(zkBrokerRecord(2));
         delta.replay(zkBrokerRecord(3));
@@ -371,6 +387,7 @@ public class KRaftMigrationDriverTest {
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(1));
             delta.replay(zkBrokerRecord(2));
             delta.replay(zkBrokerRecord(3));
@@ -391,6 +408,44 @@ public class KRaftMigrationDriverTest {
             } else {
                 Assertions.assertNull(faultHandler.firstException());
             }
+        }
+    }
+
+    @Test
+    public void testSkipWaitForBrokersInDualWrite() throws Exception {
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet());
+        MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
+        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
+                3000,
+                new NoOpRecordConsumer(),
+                migrationClient,
+                metadataPropagator,
+                metadataPublisher -> { },
+                faultHandler
+        )) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+
+            // Fake a complete migration with ZK client
+            migrationClient.setMigrationRecoveryState(
+                ZkMigrationLeadershipState.EMPTY.withKRaftMetadataOffsetAndEpoch(100, 1));
+
+            driver.start();
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            delta.replay(ZkMigrationState.MIGRATION.toRecord().message());
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
         }
     }
 }
