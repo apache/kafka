@@ -183,7 +183,6 @@ public class KRaftMigrationDriverTest {
         public ZkMigrationLeadershipState writeClientQuotas(
             Map<String, String> clientQuotaEntity,
             Map<String, Double> quotas,
-            Map<String, String> scram,
             ZkMigrationLeadershipState state
         ) {
             this.state = state;
