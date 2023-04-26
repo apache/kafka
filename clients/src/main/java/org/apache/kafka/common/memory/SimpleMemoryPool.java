@@ -51,7 +51,7 @@ public class SimpleMemoryPool implements MemoryPool {
     }
 
     @Override
-    public ByteBuffer tryAllocate(int sizeBytes) {
+    public ByteBuffer tryAllocate(int sizeBytes) {//为 Request 对象分配内存。
         if (sizeBytes < 1)
             throw new IllegalArgumentException("requested size " + sizeBytes + "<=0");
         if (sizeBytes > maxSingleAllocationSize)
