@@ -575,12 +575,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def transactionNeedsVerifying(producerId: Long): Boolean = {
-    leaderLogIfLocal.exists(leaderLog => leaderLog.transactionNeedsVerifying(producerId))
+  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short): Boolean = {
+    leaderLogIfLocal.exists(leaderLog => leaderLog.transactionNeedsVerifying(producerId, producerEpoch))
   }
   
-  def compareAndSetVerificationState(producerId: Long, expectedVerificationState: ProducerStateEntry.VerificationState, newVerficationState: ProducerStateEntry.VerificationState): Unit = {
-    leaderLogIfLocal.foreach(leaderLog => leaderLog.compareAndSetVerificationState(producerId, expectedVerificationState, newVerficationState))
+  def compareAndSetVerificationState(producerId: Long, producerEpoch: Short, expectedVerificationState: ProducerStateEntry.VerificationState, newVerficationState: ProducerStateEntry.VerificationState): Unit = {
+    leaderLogIfLocal.foreach(leaderLog => leaderLog.compareAndSetVerificationState(producerId, producerEpoch, expectedVerificationState, newVerficationState))
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition

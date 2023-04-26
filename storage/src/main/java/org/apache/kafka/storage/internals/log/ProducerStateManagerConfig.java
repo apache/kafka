@@ -23,9 +23,12 @@ public class ProducerStateManagerConfig {
     public static final String PRODUCER_ID_EXPIRATION_MS = "producer.id.expiration.ms";
     public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton(PRODUCER_ID_EXPIRATION_MS);
     private volatile int producerIdExpirationMs;
+    
+    private volatile boolean transactionVerificationEnabled;
 
-    public ProducerStateManagerConfig(int producerIdExpirationMs) {
+    public ProducerStateManagerConfig(int producerIdExpirationMs, boolean transactionVerificationEnabled) {
         this.producerIdExpirationMs = producerIdExpirationMs;
+        this.transactionVerificationEnabled = transactionVerificationEnabled;
     }
 
     public void setProducerIdExpirationMs(int producerIdExpirationMs) {
@@ -34,5 +37,9 @@ public class ProducerStateManagerConfig {
 
     public int producerIdExpirationMs() {
         return producerIdExpirationMs;
+    }
+    
+    public boolean transactionVerificationEnabled() {
+        return transactionVerificationEnabled;
     }
 }

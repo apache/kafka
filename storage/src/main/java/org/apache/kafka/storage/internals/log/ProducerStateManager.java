@@ -183,6 +183,16 @@ public class ProducerStateManager {
         producers.clear();
         producerIdCount = 0;
     }
+    
+    public ProducerStateEntry entryForVerification(long producerId, short producerEpoch) {
+        if (producers.containsKey(producerId))
+            return producers.get(producerId);
+        else {
+            ProducerStateEntry entry = ProducerStateEntry.forVerification(producerId, producerEpoch, time.milliseconds());
+            addProducerId(producerId, entry);
+            return entry;
+        }
+    }
 
     /**
      * Load producer state snapshots by scanning the logDir.

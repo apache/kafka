@@ -579,22 +579,30 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     result
   }
 
-  def transactionNeedsVerifying(producerId: Long): Boolean = lock synchronized {
-    val entry = producerStateManager.activeProducers.get(producerId)
-    (entry != null && !entry.currentTxnFirstOffset.isPresent) &&
-      (entry.compareAndSetVerificationState(ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFYING) ||
+  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short): Boolean = lock synchronized {
+    val entry = producerStateManager.entryForVerification(producerId, producerEpoch)
+    (!entry.currentTxnFirstOffset.isPresent) &&
+      (entry.compareAndSetVerificationState(producerEpoch, ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFYING) ||
         entry.verificationState() == ProducerStateEntry.VerificationState.VERIFYING)
   }
   
   def compareAndSetVerificationState(producerId: Long,
+                                     producerEpoch: Short, 
                                      expectedVerificationState: ProducerStateEntry.VerificationState,
                                      newVerificationState: ProducerStateEntry.VerificationState): Unit = { lock synchronized {
+      val entry = producerStateManager.entryForVerification(producerId, producerEpoch)
+      if (!entry.compareAndSetVerificationState(producerEpoch, expectedVerificationState, newVerificationState))
+        warn("The expected state did not match the current verification state, so the verification state was not updated.")
+    }
+  }
+  
+  def verificationState(producerId: Long): ProducerStateEntry.VerificationState = { lock synchronized {
       val entry = producerStateManager.activeProducers.get(producerId)
       if (entry != null) {
-        if (!entry.compareAndSetVerificationState(expectedVerificationState, newVerificationState))
-          warn("The expected state did not match the current verification state, so the verification state was not updated.")
+        entry.verificationState()
       } else {
-        warn("The given producer ID did not have an entry in the producer state manager, so it's verification state was not updated.")
+        warn("The given producer ID did not have an entry in the producer state manager, so it's state will be returned as EMPTY")
+        ProducerStateEntry.VerificationState.EMPTY
       }
     }
   }
@@ -994,6 +1002,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           val duplicateBatch = maybeLastEntry.flatMap(_.findDuplicateBatch(batch))
           if (duplicateBatch.isPresent) {
             return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
+          }
+
+          // verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
+          // otherwise throw error? not sure yet how to handle.
+          if (batch.isTransactional && producerStateManager.producerStateManagerConfig().transactionVerificationEnabled()) {
+            if (verificationState(batch.producerId()) != ProducerStateEntry.VerificationState.VERIFIED)
+              throw new InvalidRecordException("Record was not part of an ongoing transaction")
           }
         }
         // verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.

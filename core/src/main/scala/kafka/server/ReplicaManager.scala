@@ -642,7 +642,7 @@ class ReplicaManager(val config: KafkaConfig,
           (entriesPerPartition, Map.empty)
         else
           entriesPerPartition.partition { case (topicPartition, records) =>
-            !getPartitionOrException(topicPartition).transactionNeedsVerifying(records.firstBatch().producerId())
+            !getPartitionOrException(topicPartition).transactionNeedsVerifying(records.firstBatch().producerId(), records.firstBatch().producerEpoch())
           }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
@@ -756,7 +756,7 @@ class ReplicaManager(val config: KafkaConfig,
           val verifiedPartitions = notYetVerifiedEntriesPerPartition.keySet.map(_.asInstanceOf[TopicPartition]).diff(unverifiedEntries.keySet)
           verifiedPartitions.foreach { tp => 
             getPartitionOrException(tp).compareAndSetVerificationState(
-              batchInfo.producerId(), ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+              batchInfo.producerId(), batchInfo.producerEpoch(), ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
           }
           appendEntries(allEntries)(unverifiedEntries)
         }
@@ -1061,7 +1061,8 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           val partition = getPartitionOrException(topicPartition)
           val producerId = records.firstBatch().producerId()
-          partition.compareAndSetVerificationState(producerId, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+          val producerEpoch = records.firstBatch().producerEpoch()
+          partition.compareAndSetVerificationState(producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal)
           val numAppendedMessages = info.numMessages
 

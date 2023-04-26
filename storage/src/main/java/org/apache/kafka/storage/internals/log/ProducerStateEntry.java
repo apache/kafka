@@ -54,6 +54,10 @@ public class ProducerStateEntry {
         return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY);
     }
 
+    public static ProducerStateEntry forVerification(long producerId, short producerEpoch, long milliseconds) {
+        return new ProducerStateEntry(producerId, producerEpoch, -1, milliseconds, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY);
+    }
+
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata, VerificationState verificationState) {
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -118,8 +122,8 @@ public class ProducerStateEntry {
         batchMetadata.add(batch);
     }
     
-    public boolean compareAndSetVerificationState(VerificationState expectedVerificationState, VerificationState newVerificationState) {
-        if (verificationState == expectedVerificationState) {
+    public boolean compareAndSetVerificationState(short expectedProducerEpoch, VerificationState expectedVerificationState, VerificationState newVerificationState) {
+        if (expectedProducerEpoch == this.producerEpoch && verificationState == expectedVerificationState) {
             this.verificationState = newVerificationState;
             return true;
         }
