@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -80,6 +81,11 @@ public abstract class DelegationChecker<D, W, T> {
         return this;
     }
 
+    public DelegationChecker<D, W, T> defineMockConfigurationForUnsupportedFunction(Function<D, T> mockConfigurationFunction) {
+        this.mockConfigurationFunction = Objects.requireNonNull(mockConfigurationFunction);
+        return this;
+    }
+
     public DelegationChecker<D, W, T> defineWrapperVoidMethodInvocation(Consumer<W> wrapperConsumer) {
         this.wrapperConsumer = Objects.requireNonNull(wrapperConsumer);
         return this;
@@ -90,6 +96,12 @@ public abstract class DelegationChecker<D, W, T> {
         Function<T, R> expectedFunctionReturnValueTransformation) {
         this.wrapperFunctionApplier = Objects.requireNonNull(wrapperFunctionApplier);
         this.mockFunctionReturnValueTransformation = Objects.requireNonNull(expectedFunctionReturnValueTransformation);
+        return this;
+    }
+
+    public DelegationChecker<D, W, T> defineWrapperUnsupportedFunctionInvocation(
+            Function<W, T> wrapperFunctionApplier) {
+        this.wrapperFunctionApplier = Objects.requireNonNull(wrapperFunctionApplier);
         return this;
     }
 
@@ -115,6 +127,18 @@ public abstract class DelegationChecker<D, W, T> {
         assertTrue(persistentCollectionMethodInvokedCorrectly);
     }
 
+    public void doUnsupportedVoidFunctionDelegationCheck() {
+        if (mockConsumer == null || wrapperConsumer == null) {
+            throwExceptionForIllegalTestSetup();
+        }
+
+        // configure the mock to behave as desired
+        mockConsumer.accept(Mockito.doCallRealMethod().when(mock));
+
+        assertThrows(UnsupportedOperationException.class, () -> wrapperConsumer.accept(wrapper),
+            "Expected to Throw UnsupportedOperationException");
+    }
+
     @SuppressWarnings("unchecked")
     public void doFunctionDelegationCheck() {
         if (mockConfigurationFunction == null || wrapperFunctionApplier == null ||
@@ -137,6 +161,16 @@ public abstract class DelegationChecker<D, W, T> {
         } else {
             assertEquals(transformedMockFunctionReturnValue, wrapperReturnValue);
         }
+    }
+
+    public void doUnsupportedFunctionDelegationCheck() {
+        if (mockConfigurationFunction == null || wrapperFunctionApplier == null) {
+            throwExceptionForIllegalTestSetup();
+        }
+
+        when(mockConfigurationFunction.apply(mock)).thenCallRealMethod();
+        assertThrows(UnsupportedOperationException.class, () -> wrapperFunctionApplier.apply(wrapper),
+            "Expected to Throw UnsupportedOperationException");
     }
 
     private static void throwExceptionForIllegalTestSetup() {

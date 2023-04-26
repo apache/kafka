@@ -33,7 +33,7 @@ import java.util.Objects;
 /**
  * Receives {@code SubscriptionWrapper<K>} events and processes them according to their Instruction.
  * Depending on the results, {@code SubscriptionResponseWrapper}s are created, which will be propagated to
- * the {@code SubscriptionResolverJoinProcessorSupplier} instance.
+ * the {@code ResponseJoinProcessorSupplier} instance.
  *
  * @param <K> Type of primary keys
  * @param <KO> Type of foreign key

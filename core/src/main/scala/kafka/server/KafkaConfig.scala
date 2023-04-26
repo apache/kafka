@@ -773,12 +773,15 @@ object KafkaConfig {
   /** ********* Socket Server Configuration ***********/
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
     s" If the listener name is not a security protocol, <code>$ListenerSecurityProtocolMapProp</code> must also be set.\n" +
-    " Listener names and port numbers must be unique.\n" +
+    " Listener names and port numbers must be unique unless \n" +
+    " one listener is an IPv4 address and the other listener is \n" +
+    " an IPv6 address (for the same port).\n" +
     " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
     " Leave hostname empty to bind to default interface.\n" +
     " Examples of legal listener lists:\n" +
     " PLAINTEXT://myhost:9092,SSL://:9091\n" +
-    " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
+    " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n" +
+    " PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092\n"
   val AdvertisedListenersDoc = s"Listeners to publish to ZooKeeper for clients to use, if different than the <code>$ListenersProp</code> config property." +
     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
     s" If this is not set, the value for <code>$ListenersProp</code> will be used." +

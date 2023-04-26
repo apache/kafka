@@ -31,7 +31,7 @@ public class TableFilterNode<K, V> extends TableProcessorNode<K, V> implements V
 
     @SuppressWarnings("unchecked")
     @Override
-    public void enableVersionedSemantics(final boolean useVersionedSemantics) {
+    public void enableVersionedSemantics(final boolean useVersionedSemantics, final String parentNodeName) {
         final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters().processorSupplier();
         if (!(processorSupplier instanceof KTableFilter)) {
             throw new IllegalStateException("Unexpected processor type for table filter: " + processorSupplier.getClass().getName());

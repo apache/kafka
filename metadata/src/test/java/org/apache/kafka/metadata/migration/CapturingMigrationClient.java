@@ -68,6 +68,8 @@ class CapturingMigrationClient implements MigrationClient {
     private final ConfigMigrationClient configMigrationClient;
     private final AclMigrationClient aclMigrationClient;
 
+    private ZkMigrationLeadershipState state = null;
+
     CapturingMigrationClient(
         Set<Integer> brokerIdsInZk,
         TopicMigrationClient topicMigrationClient,
@@ -82,21 +84,27 @@ class CapturingMigrationClient implements MigrationClient {
 
     @Override
     public ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState) {
-        return initialState;
+        if (this.state == null) {
+            this.state = initialState;
+        }
+        return this.state;
     }
 
     @Override
     public ZkMigrationLeadershipState setMigrationRecoveryState(ZkMigrationLeadershipState state) {
+        this.state = state;
         return state;
     }
 
     @Override
     public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
+        this.state = state;
         return state;
     }
 
     @Override
     public ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state) {
+        this.state = state;
         return state;
     }
 
@@ -121,6 +129,7 @@ class CapturingMigrationClient implements MigrationClient {
         long nextProducerId,
         ZkMigrationLeadershipState state
     ) {
+        this.state = state;
         return state;
     }
 

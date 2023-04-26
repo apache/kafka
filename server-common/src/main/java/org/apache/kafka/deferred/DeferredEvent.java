@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.deferred;
 
 /**
- * Represents a deferred event in the controller purgatory.
+ * Represents a deferred event in the {{@link DeferredEventQueue}}.
  */
-interface DeferredEvent {
+public interface DeferredEvent {
     /**
      * Complete the event.
      *

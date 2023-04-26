@@ -44,7 +44,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{Disabled, Timeout}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
@@ -120,6 +120,11 @@ class ZkMigrationIntegrationTest {
     }
   }
 
+  /**
+   * Test ZkMigrationClient against a real ZooKeeper-backed Kafka cluster. This test creates a ZK cluster
+   * and modifies data using AdminClient. The ZkMigrationClient is then used to read the metadata from ZK
+   * as would happen during a migration. The generated records are then verified.
+   */
   @ClusterTest(brokers = 3, clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0)
   def testMigrate(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.createAdminClient()
@@ -182,7 +187,6 @@ class ZkMigrationIntegrationTest {
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
   }
 
-  @Disabled("Will be fixed by KAFKA-14840")
   @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
     new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
     new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),

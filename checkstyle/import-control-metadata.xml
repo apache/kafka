@@ -86,6 +86,7 @@
         <allow pkg="org.apache.kafka.metadata.authorizer" />
         <allow pkg="org.apache.kafka.metadata.migration" />
         <allow pkg="org.apache.kafka.metalog" />
+        <allow pkg="org.apache.kafka.deferred" />
         <allow pkg="org.apache.kafka.queue" />
         <allow pkg="org.apache.kafka.raft" />
         <allow pkg="org.apache.kafka.server.authorizer" />
