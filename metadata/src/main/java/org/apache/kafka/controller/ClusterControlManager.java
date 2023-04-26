@@ -340,6 +340,11 @@ public class ClusterControlManager {
             throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
         }
 
+        if (!request.isMigratingZkBroker() && featureControl.inPreMigrationMode()) {
+            throw new BrokerIdNotRegisteredException("Controller is in pre-migration mode and cannot register KRaft " +
+                "brokers until the metadata migration is complete.");
+        }
+
         RegisterBrokerRecord record = new RegisterBrokerRecord().
             setBrokerId(brokerId).
             setIsMigratingZkBroker(request.isMigratingZkBroker()).
