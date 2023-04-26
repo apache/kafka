@@ -97,7 +97,7 @@ public class RangeAssignor implements PartitionAssignor {
                         .computeIfAbsent(topicId, k -> new ArrayList<>())
                         .add(memberId);
                 } else {
-                    log.warn(memberId + " subscribed to topic " + topicId + " which doesn't exist in the topic metadata");
+                    log.warn("Member " + memberId + " subscribed to topic " + topicId + " which doesn't exist in the topic metadata");
                 }
             }
         });
