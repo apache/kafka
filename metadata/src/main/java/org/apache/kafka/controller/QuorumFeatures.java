@@ -130,7 +130,7 @@ public class QuorumFeatures {
     }
 
     // check if all controller nodes are ZK Migration ready
-    public boolean isAllControllersZkMigrationReady() {
+    public Optional<String> reasonAllControllersZkMigrationNotReady() {
         List<String> missingApiVers = new ArrayList<>();
         List<String> zkMigrationNotReady = new ArrayList<>();
         for (int id : quorumNodeIds) {
@@ -144,11 +144,11 @@ public class QuorumFeatures {
 
         boolean isReady = missingApiVers.isEmpty() && zkMigrationNotReady.isEmpty();
         if (!isReady) {
-            String missingApiVersionMsg = missingApiVers.isEmpty() ? "" : "Missing apiVersion from nodes: " + missingApiVers;
-            String zkMigrationNotReadyMsg = zkMigrationNotReady.isEmpty() ? "" : "Nodes don't enable `zookeeper.metadata.migration.enable`: " + zkMigrationNotReady;
-            log.debug("Not all controller nodes ZK migration are ready. {}. {}", zkMigrationNotReadyMsg, missingApiVersionMsg);
+            String zkMigrationNotReadyMsg = zkMigrationNotReady.isEmpty() ? "" : "Nodes don't enable `zookeeper.metadata.migration.enable`: " + zkMigrationNotReady + ".";
+            String missingApiVersionMsg = missingApiVers.isEmpty() ? "" : " Missing apiVersion from nodes: " + missingApiVers;
+            return Optional.of(zkMigrationNotReadyMsg + missingApiVersionMsg);
         }
 
-        return isReady;
+        return Optional.empty();
     }
 }

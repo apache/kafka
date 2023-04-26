@@ -108,22 +108,25 @@ public class QuorumFeaturesTest {
 
         // create apiVersion with zkMigrationEnabled flag set for node 0, the other 2 nodes have no apiVersions info
         apiVersions.update("0", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
-        assertFalse(quorumFeatures.isAllControllersZkMigrationReady());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().get().contains("Missing apiVersion from nodes: [1, 2]"));
 
         // create apiVersion with zkMigrationEnabled flag set for node 1, the other 1 node have no apiVersions info
         apiVersions.update("1", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
-        assertFalse(quorumFeatures.isAllControllersZkMigrationReady());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().get().contains("Missing apiVersion from nodes: [2]"));
 
         // create apiVersion with zkMigrationEnabled flag disabled for node 2, should still be not ready
         apiVersions.update("2", NodeApiVersions.create());
-        assertFalse(quorumFeatures.isAllControllersZkMigrationReady());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().get().contains("Nodes don't enable `zookeeper.metadata.migration.enable`: [2]"));
 
         // update zkMigrationEnabled flag to enabled for node 2, should be ready now
         apiVersions.update("2", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
-        assertTrue(quorumFeatures.isAllControllersZkMigrationReady());
+        assertFalse(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
 
         // create apiVersion with zkMigrationEnabled flag disabled for a non-controller, and expect we fill filter it out
         apiVersions.update("3", NodeApiVersions.create());
-        assertTrue(quorumFeatures.isAllControllersZkMigrationReady());
+        assertFalse(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
     }
 }

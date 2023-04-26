@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -152,8 +153,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     private boolean isControllerQuorumReadyForMigration() {
-        if (!this.quorumFeatures.isAllControllersZkMigrationReady()) {
-            log.info("Still waiting for all controller nodes ready to begin the migration.");
+        Optional<String> notReadyMsg = this.quorumFeatures.reasonAllControllersZkMigrationNotReady();
+        if (notReadyMsg.isPresent()) {
+            log.info("Still waiting for all controller nodes ready to begin the migration. due to:" + notReadyMsg.get());
             return false;
         }
         return true;
