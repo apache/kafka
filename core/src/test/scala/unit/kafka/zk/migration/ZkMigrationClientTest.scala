@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.zk.migration
+package kafka.zk.migration
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
@@ -249,13 +249,9 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(1, batches.size())
     val configs = batches.get(0)
       .asScala
-      .map {
-        _.message()
-      }
+      .map {_.message() }
       .filter(message => MetadataRecordType.fromId(message.apiKey()).equals(MetadataRecordType.CONFIG_RECORD))
-      .map {
-        _.asInstanceOf[ConfigRecord]
-      }
+      .map { _.asInstanceOf[ConfigRecord] }
       .toSeq
     assertEquals(2, configs.size)
     assertEquals(TopicConfig.FLUSH_MS_CONFIG, configs.head.name())

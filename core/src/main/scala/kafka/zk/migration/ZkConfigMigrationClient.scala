@@ -21,7 +21,7 @@ import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, DynamicC
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
-import kafka.zookeeper.{CreateRequest, SetDataRequest}
+import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
@@ -168,8 +168,33 @@ class ZkConfigMigrationClient(
     configResource: ConfigResource,
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
-    // TODO
-    throw new IllegalArgumentException()
+    val configType = configResource.`type`() match {
+      case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
+      case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
+      case _ => None
+    }
+
+    val configName = toZkEntityName(configResource.name())
+    if (configType.isDefined) {
+      val path = ConfigEntityZNode.path(configType.get, configName)
+      val requests = Seq(DeleteRequest(path, ZkVersion.MatchAnyVersion))
+      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
+
+      if (responses.head.resultCode.equals(Code.NONODE)) {
+        // Not fatal.
+        error(s"Did not delete $configResource since the node did not exist.")
+        state
+      } else if (responses.head.resultCode.equals(Code.OK)) {
+        // Write the notification znode if our update was successful
+        zkClient.createConfigChangeNotification(s"$configType/$configName")
+        state.withMigrationZkVersion(migrationZkVersion)
+      } else {
+        throw KeeperException.create(responses.head.resultCode, path)
+      }
+    } else {
+      error(s"Not updating ZK for $configResource since it is not a Broker or Topic entity.")
+      state
+    }
   }
 
   override def writeClientQuotas(

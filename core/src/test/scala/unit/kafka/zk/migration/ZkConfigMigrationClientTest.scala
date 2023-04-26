@@ -64,6 +64,10 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
         assertEquals(props.getProperty(name), value)
       }
     })
+
+    migrationState = migrationClient.configClient().deleteConfigs(
+      new ConfigResource(ConfigResource.Type.BROKER, "1"), migrationState)
+    assertEquals(0, zkClient.getEntityConfigs(ConfigType.Broker, "1").size())
   }
 
   @Test
@@ -132,6 +136,12 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 100.0),
       ConfigType.User, "user1")
     assertEquals(4, migrationState.migrationZkVersion())
+
+    migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
+      Map(ClientQuotaEntity.USER -> ""),
+      Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 200.0),
+      ConfigType.User, "<default>")
+    assertEquals(5, migrationState.migrationZkVersion())
   }
 
   // Write Client Quotas using ZkMigrationClient and read them back using AdminZkClient
