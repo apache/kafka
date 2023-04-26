@@ -71,7 +71,13 @@ public class QuotaConfigs {
         return userClientConfigNames.contains(name);
     }
 
-    public static ConfigDef userConfigs() {
+    public static ConfigDef clientQuotaConfigs() {
+        ConfigDef configDef = new ConfigDef();
+        buildUserClientQuotaConfigDef(configDef);
+        return configDef;
+    }
+
+    public static ConfigDef scramConfigsPlusClientQuotaConfigs() {
         ConfigDef configDef = new ConfigDef();
         ScramMechanism.mechanismNames().forEach(mechanismName -> {
             configDef.define(mechanismName, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,

@@ -81,7 +81,7 @@ object DynamicConfig {
   }
 
   object User {
-    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userConfigs()
+    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.scramConfigsPlusClientQuotaConfigs()
 
     def configKeys = userConfigs.configKeys
 
