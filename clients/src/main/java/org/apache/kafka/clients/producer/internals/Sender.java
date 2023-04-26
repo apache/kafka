@@ -342,7 +342,6 @@ public class Sender implements Runnable {
             transactionManager.failPendingRequests(new AuthenticationException(exception));
             maybeAbortBatches(exception);
             transactionManager.transitionToUninitialized(exception);
-            client.poll(retryBackoffMs, time.milliseconds());
             return true;
         }
         return false;
