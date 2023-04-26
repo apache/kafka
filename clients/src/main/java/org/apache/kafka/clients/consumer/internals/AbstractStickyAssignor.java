@@ -137,7 +137,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             final String consumer = subscriptionEntry.getKey();
-            Subscription subscription = subscriptionEntry.getValue();
+            final Subscription subscription = subscriptionEntry.getValue();
 
             // initialize the subscribed topics set if this is the first subscription
             if (subscribedTopics.isEmpty()) {
@@ -148,7 +148,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
 
             MemberData memberData = memberData(subscription);
-            maxGeneration = Math.max(maxGeneration, memberData.generation.orElse(DEFAULT_GENERATION));
+            final int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
+            maxGeneration = Math.max(maxGeneration, memberGeneration);
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
@@ -162,33 +163,38 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         // this partition is not owned by other consumer in the same generation
                         ownedPartitions.add(tp);
                     } else {
-                        final int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
                         final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
                         if (memberGeneration == otherMemberGeneration) {
-                            if (subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION) == memberData.generation.orElse(DEFAULT_GENERATION)) {
-                                log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
-                                        + "same generation {}, this will be invalidated and removed from their previous assignment.",
+                            log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
+                                            + "same generation {}, this will be invalidated and removed from their previous assignment.",
                                     consumer, otherConsumer, tp, memberGeneration);
-                                partitionsWithMultiplePreviousOwners.add(tp);
-                            }
+                            partitionsWithMultiplePreviousOwners.add(tp);
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
                             allPreviousPartitionsToOwner.put(tp, consumer);
-                            continue;
-                        }
-
-                        if (memberGeneration > otherMemberGeneration) {
+                        } else if (memberGeneration > otherMemberGeneration) {
                             // move partition from the member with an older generation to the member with the newer generation
                             consumerToOwnedPartitions.get(consumer).add(tp);
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
                             allPreviousPartitionsToOwner.put(tp, consumer);
+                            // if memberGeneration > otherMemberGeneration, the other member continue owns the generation
+                            log.warn("{} in generation {} and {} in generation {} claiming the same TopicPartition {} in " +
+                                            "different generations. The topic partition wil be assigned to the member with " +
+                                            "the higher generation {}.",
+                                    consumer, memberGeneration,
+                                    otherConsumer, otherMemberGeneration,
+                                    tp,
+                                    memberGeneration);
+                        } else {
+                            // if memberGeneration < otherMemberGeneration, the other member continue owns the generation
+                            log.warn("{} in generation {} and {} in generation {} claiming the same TopicPartition {} in " +
+                                            "different generations. The topic partition wil be assigned to the member with " +
+                                            "the higher generation {}.",
+                                    consumer, memberGeneration,
+                                    otherConsumer, otherMemberGeneration,
+                                    tp,
+                                    otherMemberGeneration);
                         }
-
-                        // if memberGeneration < otherMemberGeneration, the other member continue owns the generation
-                        log.warn("Found multiple members {} and {} claiming the same TopicPartition {} in " +
-                                "different generations. The topic partition wil be assigned to the member with " +
-                                "the higher generation {}.",
-                            consumer, otherConsumer, tp, Math.max(memberGeneration, otherMemberGeneration));
                     }
                 }
             }

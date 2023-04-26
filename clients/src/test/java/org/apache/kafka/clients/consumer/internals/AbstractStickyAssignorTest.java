@@ -16,6 +16,18 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
+import java.util.Set;
+
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.StickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
@@ -30,22 +42,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
-import java.util.Set;
-
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_CONSUMER_RACK;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_RACK_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_CONSUMER_RACK;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.nullRacks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.racks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.verifyRackAssignment;
@@ -1040,7 +1040,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
     @EnumSource(RackConfig.class)
-    public void testOwnedPartitionsAreStableForConsumerWithMultipleGeneration(RackConfig rackConfig) {
+    public void testEnsurePartitionsAssignedToHighestGeneration(RackConfig rackConfig) {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, partitionInfos(topic, 3));
@@ -1049,12 +1049,17 @@ public abstract class AbstractStickyAssignorTest {
 
         int currentGeneration = 10;
 
+        // ensure partitions are always assigned to the member with the highest generation
+        // topic, 1 -> [consumer2], consumer3
+        // topic2, 1 -> [consumer2], consumer3
+        // topic, 0 -> [consumer1], consumer3
+        // topic3, 2 -> consumer3
         subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic, topic2, topic3),
             partitions(tp(topic, 0), tp(topic2, 0), tp(topic3, 0)), currentGeneration, 0));
         subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic, topic2, topic3),
             partitions(tp(topic, 1), tp(topic2, 1), tp(topic3, 1)), currentGeneration - 1, 1));
         subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic, topic2, topic3),
-            partitions(tp(topic2, 2), tp(topic3, 2), tp(topic, 1)), currentGeneration - 2, 1));
+            partitions(tp(topic3, 0), tp(topic3, 2), tp(topic2, 1)), currentGeneration - 2, 1));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic2, 0), tp(topic3, 0))),
@@ -1092,10 +1097,8 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         // ensure assigned partitions don't get reassigned
-        assertTrue(assignment.get(consumer1).containsAll(
-            Arrays.asList(tp(topic2, 1),
-                tp(topic3, 0),
-                tp(topic1, 2))));
+        assertEquals(new HashSet<>(assignment.get(consumer1)),
+                new HashSet<>(partitions(tp(topic2, 1), tp(topic3, 0), tp(topic1, 2))));
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
