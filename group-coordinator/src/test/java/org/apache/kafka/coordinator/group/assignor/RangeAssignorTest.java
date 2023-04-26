@@ -382,6 +382,66 @@ public class RangeAssignorTest {
         assertAssignment(expectedAssignment, computedAssignment);
         assertCoPartitionJoinProperty(computedAssignment);
     }
+    @Test
+    public void testReassignmentWhenOneConsumerAddedAndOnePartitionAfterInitialAssignmentWithTwoConsumersTwoTopics() {
+        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        // Add a new partition to topic 1, initially T1 -> 3 partitions
+        topics.put(topic1Uuid, new AssignmentTopicMetadata(4));
+        topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
+
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        // Initial Subscriptions: A -> T1, T2 | B -> T1, T2 | C -> T1, T2
+
+        Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
+        currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
+        currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
+        members.put(consumerA, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                Arrays.asList(topic1Uuid, topic2Uuid),
+                currentAssignmentForA)
+        );
+
+        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
+        currentAssignmentForB.put(topic1Uuid, Collections.singleton(2));
+        currentAssignmentForB.put(topic2Uuid, Collections.singleton(2));
+        members.put(consumerB, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                Arrays.asList(topic1Uuid, topic2Uuid),
+                currentAssignmentForB)
+        );
+
+        // Add a new consumer to trigger a re-assignment
+        members.put(consumerC, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                Collections.singletonList(topic1Uuid),
+                Collections.emptyMap()));
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
+
+        Map<Uuid, Set<Set<Integer>>> expectedAssignment = new HashMap<>();
+        // Topic 1 Partitions Assignment
+        mkAssignment(expectedAssignment, topic1Uuid, Arrays.asList(0, 1));
+        mkAssignment(expectedAssignment, topic1Uuid, Collections.singleton(2));
+        mkAssignment(expectedAssignment, topic1Uuid, Collections.singleton(3));
+        // Topic 2 Partitions Assignment
+        // Since the new consumer isn't subscribed to topic 2 the assignment shouldn't change
+        mkAssignment(expectedAssignment, topic2Uuid, Arrays.asList(0, 1));
+        mkAssignment(expectedAssignment, topic2Uuid, Collections.singleton(2));
+        System.out.println("assignment is " + computedAssignment);
+        // Test for stickiness
+        assertEquals(computedAssignment.members().get(consumerA)
+                        .targetPartitions(), new HashMap<>(currentAssignmentForA),
+                "Stickiness test failed for Consumer A");
+        assertEquals(computedAssignment.members().get(consumerB)
+                        .targetPartitions(), new HashMap<>(currentAssignmentForB),
+                "Stickiness test failed for Consumer B");
+
+        assertAssignment(expectedAssignment, computedAssignment);
+    }
 
     @Test
     public void testReassignmentWhenOneConsumerRemovedAfterInitialAssignmentWithTwoConsumersTwoTopics() {
