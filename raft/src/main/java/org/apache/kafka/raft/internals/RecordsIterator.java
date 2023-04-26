@@ -247,14 +247,14 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     }
 
     private <U> U readRecord(
-        InputStream bytesStream,
+        InputStream stream,
         int totalBatchSize,
         BiFunction<Optional<ByteBuffer>, Optional<ByteBuffer>, U> decoder
     ) {
         // Read size of body in bytes
         int size;
         try {
-            size = ByteUtils.readVarint(bytesStream);
+            size = ByteUtils.readVarint(stream);
         } catch (IOException e) {
             throw new UncheckedIOException("Unable to read record size", e);
         }
@@ -272,7 +272,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         buf.limit(size - 1);
 
         try {
-            int bytesRead = bytesStream.read(buf.array(), 0, size);
+            int bytesRead = stream.read(buf.array(), 0, size);
             if (bytesRead != size) {
                 throw new RuntimeException("Unable to read " + size + " bytes, only read " + bytesRead);
             }
