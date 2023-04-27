@@ -328,7 +328,25 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>GET /</code>- return basic information about the Kafka Connect cluster such as the version of the Connect worker that serves the REST request (including git commit ID of the source code) and the Kafka cluster ID that is connected to.
     </ul>
 
-    <p>For the complete specification of the REST API, see the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a></p>
+    <p>The <code>admin.listeners</code> configuration can be used to configure admin REST APIs on Kafka Connect's REST API server. Similar to the <code>listeners</code> configuration, this field should contain a list of listeners in the following format: <code>protocol://host:port,protocol2://host2:port2</code>. Currently supported protocols are <code>http</code> and <code>https</code>.
+        For example:</p>
+
+    <pre class="brush: text;">
+admin.listeners=http://localhost:8080,https://localhost:8443</pre>
+
+    <p>By default, if <code>admin.listeners</code> is not configured, the admin REST APIs will be available on the regular listeners.</p>
+
+    <p>The following are the currently supported admin REST API endpoints:</p>
+
+    <ul>
+        <li><code>GET /admin/loggers</code> - list the current loggers that have their levels explicitly set and their log levels</li>
+        <li><code>GET /admin/loggers/{name}</code> - get the log level for the specified logger</li>
+        <li><code>PUT /admin/loggers/{name}</code> - set the log level for the specified logger</li>
+    </ul>
+
+    <p>See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-495%3A+Dynamically+Adjust+Log+Levels+in+Connect">KIP-495</a> for more details about the admin logger REST APIs.</p>
+
+    <p>For the complete specification of the Kafka Connect REST API, see the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a></p>
 
     <h4><a id="connect_errorreporting" href="#connect_errorreporting">Error Reporting in Connect</a></h4>
 
