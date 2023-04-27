@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogStartOffsetIncrementReason, OffsetMap, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -55,7 +55,7 @@ class LogCleanerTest {
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
-  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, true)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
 
   @AfterEach
   def teardown(): Unit = {
@@ -1059,8 +1059,6 @@ class LogCleanerTest {
     }
 
     val producerId2 = 2L
-    log.transactionNeedsVerifying(producerId2, producerEpoch)
-    log.compareAndSetVerificationState(producerId2, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
     val records = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
       producerId2,
@@ -2041,10 +2039,6 @@ class LogCleanerTest {
       val simpleRecords = keys.map { key =>
         val keyBytes = key.toString.getBytes
         new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
-      }
-      if (isTransactional && origin == AppendOrigin.CLIENT) {
-        log.transactionNeedsVerifying(producerId, producerEpoch)
-        log.compareAndSetVerificationState(producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
       }
       val records = if (isTransactional)
         MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords.toArray: _*)
