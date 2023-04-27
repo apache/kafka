@@ -437,7 +437,7 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                     advised as performance is expected to be worse than when using non-versioned
                     stores.</p>
                 <p>Versioned stores do not support caching or interactive queries at this time.
-                    Also, window stores may not be versioned.</p>
+                    Also, window stores and global tables may not be versioned.</p>
                 <b>Upgrade note:</b> Versioned state stores are opt-in only; no automatic
                     upgrades from non-versioned to versioned stores will take place.
                 <p>Upgrades are supported from persistent, non-versioned key-value stores

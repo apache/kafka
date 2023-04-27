@@ -359,6 +359,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 assertTrue(primaryConsumer.position(
                         new TopicPartition(reverseTopic1, 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected downstream offset.");
             }
+
         }
 
         // create more matching topics
@@ -511,7 +512,6 @@ public class MirrorConnectorsIntegrationBaseTest {
 
             waitForConsumerGroupFullSync(backup, Arrays.asList(backupTopic1, remoteTopic2),
                     consumerGroupName, NUM_RECORDS_PRODUCED, offsetLagMax);
-
             assertDownstreamRedeliveriesBoundedByMaxLag(backupConsumer, offsetLagMax);
         }
 
@@ -658,6 +658,72 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
+    public void testOffsetTranslationBehindReplicationFlow() throws InterruptedException {
+        String consumerGroupName = "consumer-group-lagging-behind";
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
+        String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
+        warmUpConsumer(consumerProps);
+        mm2Props.put("sync.group.offsets.enabled", "true");
+        mm2Props.put("sync.group.offsets.interval.seconds", "1");
+        mm2Props.put("offset.lag.max", Integer.toString(OFFSET_LAG_MAX));
+        mm2Config = new MirrorMakerConfig(mm2Props);
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+        // Produce a large number of records to the topic, all replicated within one MM2 lifetime.
+        int iterations = 100;
+        for (int i = 0; i < iterations; i++) {
+            produceMessages(primary, "test-topic-1");
+        }
+        waitForTopicCreated(backup, remoteTopic);
+        assertEquals(iterations * NUM_RECORDS_PRODUCED, backup.kafka().consume(iterations * NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, remoteTopic).count(),
+                "Records were not replicated to backup cluster.");
+        // Once the replication has finished, we spin up the upstream consumer and start slowly consuming records
+        ConsumerRecords<byte[], byte[]> allRecords = primary.kafka().consume(iterations * NUM_RECORDS_PRODUCED, RECORD_CONSUME_DURATION_MS, "test-topic-1");
+        MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
+        Map<TopicPartition, OffsetAndMetadata> initialCheckpoints = waitForCheckpointOnAllPartitions(
+                backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic);
+        Map<TopicPartition, OffsetAndMetadata> partialCheckpoints;
+        log.info("Initial checkpoints: {}", initialCheckpoints);
+        try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
+            primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+            primaryConsumer.commitSync(partialOffsets(allRecords, 0.9f));
+            partialCheckpoints = waitForNewCheckpointOnAllPartitions(
+                    backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic, initialCheckpoints);
+            log.info("Partial checkpoints: {}", partialCheckpoints);
+        }
+
+        for (TopicPartition tp : initialCheckpoints.keySet()) {
+            assertTrue(initialCheckpoints.get(tp).offset() < partialCheckpoints.get(tp).offset(),
+                    "Checkpoints should advance when the upstream consumer group advances");
+        }
+
+        assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
+
+        Map<TopicPartition, OffsetAndMetadata> finalCheckpoints;
+        try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
+            primaryConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+            primaryConsumer.commitSync(partialOffsets(allRecords, 0.1f));
+            finalCheckpoints = waitForNewCheckpointOnAllPartitions(
+                    backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic, partialCheckpoints);
+            log.info("Final checkpoints: {}", finalCheckpoints);
+        }
+
+        for (TopicPartition tp : partialCheckpoints.keySet()) {
+            assertTrue(finalCheckpoints.get(tp).offset() < partialCheckpoints.get(tp).offset(),
+                    "Checkpoints should rewind when the upstream consumer group rewinds");
+        }
+    }
+
+    private Map<TopicPartition, OffsetAndMetadata> partialOffsets(ConsumerRecords<byte[], byte[]> allRecords, double fraction) {
+        return allRecords.partitions()
+                .stream()
+                .collect(Collectors.toMap(Function.identity(), partition -> {
+                    List<ConsumerRecord<byte[], byte[]>> records = allRecords.records(partition);
+                    int index = (int) (records.size() * fraction);
+                    return new OffsetAndMetadata(records.get(index).offset());
+                }));
+    }
+
+    @Test
     public void testSyncTopicConfigs() throws InterruptedException {
         mm2Config = new MirrorMakerConfig(mm2Props);
 
@@ -785,7 +851,6 @@ public class MirrorConnectorsIntegrationBaseTest {
             return true;
         }, 30000, "Topic configurations were not synced");
     }
-
 
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {
         return new TopicPartition(remoteTopicName(tp.topic(), alias), tp.partition());
@@ -930,14 +995,25 @@ public class MirrorConnectorsIntegrationBaseTest {
     private static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
             MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName
     ) throws InterruptedException {
+        return waitForNewCheckpointOnAllPartitions(client, consumerGroupName, remoteClusterAlias, topicName, Collections.emptyMap());
+    }
+
+    protected static Map<TopicPartition, OffsetAndMetadata> waitForNewCheckpointOnAllPartitions(
+                MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName,
+                Map<TopicPartition, OffsetAndMetadata> lastCheckpoint
+    ) throws InterruptedException {
         AtomicReference<Map<TopicPartition, OffsetAndMetadata>> ret = new AtomicReference<>();
         waitForCondition(
                 () -> {
                     Map<TopicPartition, OffsetAndMetadata> offsets = client.remoteConsumerOffsets(
                             consumerGroupName, remoteClusterAlias, Duration.ofMillis(3000));
                     for (int i = 0; i < NUM_PARTITIONS; i++) {
-                        if (!offsets.containsKey(new TopicPartition(topicName, i))) {
+                        TopicPartition tp = new TopicPartition(topicName, i);
+                        if (!offsets.containsKey(tp)) {
                             log.info("Checkpoint is missing for {}: {}-{}", consumerGroupName, topicName, i);
+                            return false;
+                        } else if (lastCheckpoint.containsKey(tp) && lastCheckpoint.get(tp).equals(offsets.get(tp))) {
+                            log.info("Checkpoint is the same as previous checkpoint");
                             return false;
                         }
                     }
@@ -998,9 +1074,12 @@ public class MirrorConnectorsIntegrationBaseTest {
                 for (TopicPartition tp : tps) {
                     assertTrue(consumerGroupOffsets.containsKey(tp),
                             "TopicPartition " + tp + " does not have translated offsets");
-                    assertTrue(consumerGroupOffsets.get(tp).offset() > lastOffset.get(tp) - offsetLagMax,
-                            "TopicPartition " + tp + " does not have fully-translated offsets");
-                    assertTrue(consumerGroupOffsets.get(tp).offset() <= endOffsets.get(tp).offset(),
+                    long offset = consumerGroupOffsets.get(tp).offset();
+                    assertTrue(offset > lastOffset.get(tp) - offsetLagMax,
+                            "TopicPartition " + tp + " does not have fully-translated offsets: "
+                                    + offset + " is not close enough to " + lastOffset.get(tp)
+                                    + " (strictly more than " + (lastOffset.get(tp) - offsetLagMax) + ")");
+                    assertTrue(offset <= endOffsets.get(tp).offset(),
                             "TopicPartition " + tp + " has downstream offsets beyond the log end, this would lead to negative lag metrics");
                 }
                 return true;
