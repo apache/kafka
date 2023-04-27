@@ -500,7 +500,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Set<TopicPartition> assignment() {
-        throw new KafkaException("method not implemented");
+        return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
     }
 
     /**
@@ -544,7 +544,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         // make sure the offsets of topic partitions the consumer is unsubscribing from
         // are committed since there will be no following rebalance
-        CompletableFuture<Void> future = commit(subscriptions.allConsumed());
+        commit(subscriptions.allConsumed());
 
         log.info("Assigned to partition(s): {}", Utils.join(partitions, ", "));
         if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))

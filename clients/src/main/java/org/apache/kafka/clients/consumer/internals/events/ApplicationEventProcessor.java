@@ -52,6 +52,10 @@ public class ApplicationEventProcessor {
                 return process((PollApplicationEvent) event);
             case FETCH_COMMITTED_OFFSET:
                 return process((OffsetFetchApplicationEvent) event);
+            case METADATA_UPDATE:
+                return process((MetadataUpdateApplicationEvent) event);
+            case UNSUBSCRIBE:
+                return process((UnsubscribeApplicationEvent) event);
         }
         return false;
     }
