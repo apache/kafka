@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -51,17 +52,18 @@ public class RangeAssignorTest {
                 Optional.empty(),
                 Optional.empty(),
                 Collections.emptyList(),
-                Collections.emptyMap())
-            );
+                Collections.emptyMap()
+            )
+        );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
 
-        assertTrue(groupAssignment.members().isEmpty());
+        assertEquals(Collections.emptyMap(), groupAssignment.members());
     }
 
     @Test
-    public void testOneConsumerNonExistentTopic() {
+    public void testOneConsumerSubscribedToNonExistentTopic() {
         Map<Uuid, AssignmentTopicMetadata> topics = Collections.singletonMap(topic1Uuid, new AssignmentTopicMetadata(3));
         Map<String, AssignmentMemberSpec> members = Collections.singletonMap(
             consumerA,
@@ -69,8 +71,9 @@ public class RangeAssignorTest {
                 Optional.empty(),
                 Optional.empty(),
                 Collections.singletonList(topic2Uuid),
-                Collections.emptyMap())
-            );
+                Collections.emptyMap()
+            )
+        );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
@@ -84,8 +87,7 @@ public class RangeAssignorTest {
         topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // Initial Subscriptions are: A -> T1, T3 | B -> T1, T3
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
@@ -122,8 +124,7 @@ public class RangeAssignorTest {
         topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
         topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // Initial Subscriptions: A -> T1, T2 | B -> T3 | C -> T2, T3
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
@@ -168,8 +169,7 @@ public class RangeAssignorTest {
         topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // Initial Subscriptions: A -> T1, T3 | B -> T1, T3 | C -> T1, T3
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
@@ -214,8 +214,7 @@ public class RangeAssignorTest {
         topics.put(topic1Uuid, new AssignmentTopicMetadata(2));
         topics.put(topic2Uuid, new AssignmentTopicMetadata(2));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // Initial Subscriptions: A -> T1, T2 | B -> T1, T2 | C -> T1, T2
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
         currentAssignmentForA.put(topic1Uuid, Collections.singleton(0));
@@ -277,8 +276,7 @@ public class RangeAssignorTest {
         topics.put(topic1Uuid, new AssignmentTopicMetadata(4));
         topics.put(topic2Uuid, new AssignmentTopicMetadata(4));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // Initial Subscriptions: A -> T1, T2 | B -> T1, T2
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
         currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
@@ -328,7 +326,6 @@ public class RangeAssignorTest {
         topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // Initial Subscriptions: A -> T1, T2 | B -> T1, T2 | C -> T1, T2
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
         currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
@@ -389,7 +386,6 @@ public class RangeAssignorTest {
         topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        // Initial Subscriptions: A -> T1, T2 | B -> T1, T2 | C -> T1, T2
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
         currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
@@ -482,6 +478,7 @@ public class RangeAssignorTest {
         topics.put(topic3Uuid, new AssignmentTopicMetadata(2));
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
+
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
 
