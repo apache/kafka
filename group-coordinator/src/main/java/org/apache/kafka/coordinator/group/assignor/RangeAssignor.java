@@ -242,9 +242,9 @@ public class RangeAssignor implements PartitionAssignor {
 
                     unassignedPartitionsListStartPointer += remaining;
                     membersWithNewAssignmentPerTopic
-                            .computeIfAbsent(memberId, k -> new HashMap<>())
-                            .computeIfAbsent(topicId, k -> new HashSet<>())
-                            .addAll(partitionsToAssign);
+                        .computeIfAbsent(memberId, k -> new HashMap<>())
+                        .computeIfAbsent(topicId, k -> new HashSet<>())
+                        .addAll(partitionsToAssign);
                 }
             }
         });

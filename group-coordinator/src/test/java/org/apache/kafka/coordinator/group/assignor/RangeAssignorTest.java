@@ -49,10 +49,10 @@ public class RangeAssignorTest {
         Map<String, AssignmentMemberSpec> members = Collections.singletonMap(
             consumerA,
             new AssignmentMemberSpec(
-                    Optional.empty(),
-                    Optional.empty(),
-                    Collections.emptyList(),
-                    Collections.emptyMap())
+                Optional.empty(),
+                Optional.empty(),
+                Collections.emptyList(),
+                Collections.emptyMap())
             );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
@@ -240,10 +240,10 @@ public class RangeAssignorTest {
 
         // Add a new consumer to trigger a re-assignment
         members.put(consumerC, new AssignmentMemberSpec(
-                Optional.empty(),
-                Optional.empty(),
-                Arrays.asList(topic1Uuid, topic2Uuid),
-                Collections.emptyMap())
+            Optional.empty(),
+            Optional.empty(),
+            Arrays.asList(topic1Uuid, topic2Uuid),
+            Collections.emptyMap())
         );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
@@ -396,28 +396,28 @@ public class RangeAssignorTest {
         currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
         currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
         members.put(consumerA, new AssignmentMemberSpec(
-                Optional.empty(),
-                Optional.empty(),
-                Arrays.asList(topic1Uuid, topic2Uuid),
-                currentAssignmentForA)
+            Optional.empty(),
+            Optional.empty(),
+            Arrays.asList(topic1Uuid, topic2Uuid),
+            currentAssignmentForA)
         );
 
         Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
         currentAssignmentForB.put(topic1Uuid, Collections.singleton(2));
         currentAssignmentForB.put(topic2Uuid, Collections.singleton(2));
         members.put(consumerB, new AssignmentMemberSpec(
-                Optional.empty(),
-                Optional.empty(),
-                Arrays.asList(topic1Uuid, topic2Uuid),
-                currentAssignmentForB)
+            Optional.empty(),
+            Optional.empty(),
+            Arrays.asList(topic1Uuid, topic2Uuid),
+            currentAssignmentForB)
         );
 
         // Add a new consumer to trigger a re-assignment
         members.put(consumerC, new AssignmentMemberSpec(
-                Optional.empty(),
-                Optional.empty(),
-                Collections.singletonList(topic1Uuid),
-                Collections.emptyMap()));
+            Optional.empty(),
+            Optional.empty(),
+            Collections.singletonList(topic1Uuid),
+            Collections.emptyMap()));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
