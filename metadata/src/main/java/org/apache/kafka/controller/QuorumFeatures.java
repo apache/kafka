@@ -134,6 +134,9 @@ public class QuorumFeatures {
         List<String> missingApiVers = new ArrayList<>();
         List<String> zkMigrationNotReady = new ArrayList<>();
         for (int id : quorumNodeIds) {
+            if (nodeId == id) {
+                continue; // No need to check local node because the KraftMigrationDriver will be created only when migration config set
+            }
             NodeApiVersions nodeVersions = apiVersions.get(Integer.toString(id));
             if (nodeVersions == null) {
                 missingApiVers.add(String.valueOf(id));
