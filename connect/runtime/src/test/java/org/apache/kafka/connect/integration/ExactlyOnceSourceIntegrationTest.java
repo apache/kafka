@@ -412,10 +412,10 @@ public class ExactlyOnceSourceIntegrationTest {
         Map<String, Object> consumerProps = new HashMap<>();
         consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         // consume all records from the source topic or fail, to ensure that they were correctly produced
-        ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka().consumeAll(
+        ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka().consume(
+                MINIMUM_MESSAGES,
                 CONSUME_RECORDS_TIMEOUT_MS,
                 Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
-                null,
                 topic
         );
         assertTrue("Not enough records produced by source connector. Expected at least: " + MINIMUM_MESSAGES + " + but got " + sourceRecords.count(),
