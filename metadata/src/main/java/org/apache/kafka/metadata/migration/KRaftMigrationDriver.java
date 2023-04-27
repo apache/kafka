@@ -460,9 +460,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         transitionTo(MigrationDriverState.INACTIVE);
                         break;
                     case PRE_MIGRATION:
-                        // Base case when starting the migration
-                        log.debug("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
-                        transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
+                        if (isControllerQuorumReadyForMigration()) {
+                            // Base case when starting the migration
+                            log.debug("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
+                            transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
+                        }
                         break;
                     case MIGRATION:
                         if (!migrationLeadershipState.zkMigrationComplete()) {

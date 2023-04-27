@@ -470,6 +470,7 @@ public class KRaftMigrationDriverTest {
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(1));
             MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
             image = delta.apply(provenance);
