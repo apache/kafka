@@ -209,7 +209,7 @@ public class TargetAssignmentBuilderTest {
                 if (updatedMemberOrNull != null) {
                     builder.withUpdatedMember(memberId, updatedMemberOrNull);
                 } else {
-                    builder.withRemoveMembers(memberId);
+                    builder.withRemoveMember(memberId);
                 }
             });
 
@@ -229,15 +229,15 @@ public class TargetAssignmentBuilderTest {
         );
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(newTargetAssignmentEpochRecord(
+        assertEquals(Collections.singletonList(newTargetAssignmentEpochRecord(
             "my-group",
             20
-        ), result.records().get(result.records().size() - 1));
+        )), result.records());
         assertEquals(Collections.emptyMap(), result.assignments());
     }
 
     @Test
-    public void testAssignmentIsNotChanged() {
+    public void testAssignmentHasNotChanged() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
 
@@ -324,6 +324,8 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
+        assertEquals(3, result.records().size());
+
         assertUnorderedList(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 4, 5, 6),
@@ -338,7 +340,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(newTargetAssignmentEpochRecord(
             "my-group",
             20
-        ), result.records().get(result.records().size() - 1));
+        ), result.records().get(2));
 
         Map<String, Assignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-2", new Assignment(mkAssignment(
@@ -395,6 +397,8 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
+        assertEquals(4, result.records().size());
+
         assertUnorderedList(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2),
@@ -408,12 +412,12 @@ public class TargetAssignmentBuilderTest {
                 mkTopicAssignment(fooTopicId, 5, 6),
                 mkTopicAssignment(barTopicId, 5, 6)
             ))
-        ), result.records().subList(0, result.records().size() - 1));
+        ), result.records().subList(0, 3));
 
         assertEquals(newTargetAssignmentEpochRecord(
             "my-group",
             20
-        ), result.records().get(result.records().size() - 1));
+        ), result.records().get(3));
 
         Map<String, Assignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new Assignment(mkAssignment(
@@ -565,7 +569,9 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        // Member 1 has not record because its assignment did not change.
+        assertEquals(3, result.records().size());
+
+        // Member 1 has no record because its assignment did not change.
         assertUnorderedList(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -575,12 +581,12 @@ public class TargetAssignmentBuilderTest {
                 mkTopicAssignment(fooTopicId, 6),
                 mkTopicAssignment(barTopicId, 6)
             ))
-        ), result.records().subList(0, result.records().size() - 1));
+        ), result.records().subList(0, 2));
 
         assertEquals(newTargetAssignmentEpochRecord(
             "my-group",
             20
-        ), result.records().get(result.records().size() - 1));
+        ), result.records().get(2));
 
         Map<String, Assignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new Assignment(mkAssignment(
@@ -641,6 +647,8 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
+        assertEquals(3, result.records().size());
+
         assertUnorderedList(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -650,12 +658,12 @@ public class TargetAssignmentBuilderTest {
                 mkTopicAssignment(fooTopicId, 4, 5, 6),
                 mkTopicAssignment(barTopicId, 4, 5, 6)
             ))
-        ), result.records().subList(0, result.records().size() - 1));
+        ), result.records().subList(0, 2));
 
         assertEquals(newTargetAssignmentEpochRecord(
             "my-group",
             20
-        ), result.records().get(result.records().size() - 1));
+        ), result.records().get(2));
 
         Map<String, Assignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new Assignment(mkAssignment(
@@ -674,6 +682,7 @@ public class TargetAssignmentBuilderTest {
         List<T> expected,
         List<T> actual
     ) {
+        assertEquals(expected.size(), actual.size());
         assertEquals(new HashSet<>(expected), new HashSet<>(actual));
     }
 }

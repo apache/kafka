@@ -49,7 +49,7 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignme
  *
  * When a member is deleted, it is assumed that its target assignment record
  * is deleted as part of the member deletion process. In other words, this class
- * does not yield a tombstone for remove members.
+ * does not yield a tombstone for removed members.
  */
 public class TargetAssignmentBuilder {
     /**
@@ -85,7 +85,7 @@ public class TargetAssignmentBuilder {
         }
 
         /**
-         * @return The assignment.
+         * @return The assignments.
          */
         public Map<String, Assignment> assignments() {
             return assignments;
@@ -103,7 +103,7 @@ public class TargetAssignmentBuilder {
     private final int groupEpoch;
 
     /**
-     * The partition assignor to compute the assignment.
+     * The partition assignor used to compute the assignment.
      */
     private final PartitionAssignor assignor;
 
@@ -126,7 +126,7 @@ public class TargetAssignmentBuilder {
      * The members which have been updated or deleted. Deleted members
      * are signaled by a null value.
      */
-    private Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
+    private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
 
     /**
      * Constructs the object.
@@ -148,7 +148,7 @@ public class TargetAssignmentBuilder {
     /**
      * Adds all the current members.
      *
-     * @param members   The current members in the consumer groups.
+     * @param members   The current members in the consumer group.
      * @return This object.
      */
     public TargetAssignmentBuilder withMembers(
@@ -172,9 +172,9 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the current target assignments.
+     * Adds the existing target assignments.
      *
-     * @param assignments   The current assignments.
+     * @param assignments   The existing target assignments.
      * @return This object.
      */
     public TargetAssignmentBuilder withTargetAssignments(
@@ -207,7 +207,7 @@ public class TargetAssignmentBuilder {
      * @param memberId The member id.
      * @return This object.
      */
-    public TargetAssignmentBuilder withRemoveMembers(
+    public TargetAssignmentBuilder withRemoveMember(
         String memberId
     ) {
         return withUpdatedMember(memberId, null);
@@ -217,7 +217,7 @@ public class TargetAssignmentBuilder {
      * Builds the new target assignment.
      *
      * @return A TargetAssignmentResult which contains the records to update
-     *         the current target assignment.
+     *         the existing target assignment.
      * @throws PartitionAssignorException if the assignment can not be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
@@ -267,7 +267,7 @@ public class TargetAssignmentBuilder {
             newTargetAssignment.put(memberId, newMemberAssignment);
 
             if (oldMemberAssignment == null) {
-                // If the member had no assignment, we always create a record for him.
+                // If the member had no assignment, we always create a record for it.
                 records.add(newTargetAssignmentRecord(
                     groupId,
                     memberId,
