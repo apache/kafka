@@ -212,7 +212,7 @@ public class LeaderState<T> implements EpochState {
         List<ReplicaState> followersByDescendingFetchOffset
     ) {
         if (oldHighWatermark.isPresent()) {
-            log.trace(
+            log.debug(
                 "High watermark set to {} from {} based on indexOfHw {} and voters {}",
                 newHighWatermark,
                 oldHighWatermark.get(),

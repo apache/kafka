@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -43,6 +44,7 @@ import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -56,6 +58,18 @@ class KStreamImplJoin {
     private final InternalStreamsBuilder builder;
     private final boolean leftOuter;
     private final boolean rightOuter;
+
+    static class TimeTrackerSupplier {
+        private final Map<TaskId, TimeTracker> tracker = new HashMap<>();
+
+        public TimeTracker get(final TaskId taskId) {
+            return tracker.computeIfAbsent(taskId, taskId1 -> new TimeTracker());
+        }
+
+        public void remove(final TaskId taskId) {
+            tracker.remove(taskId);
+        }
+    }
 
     static class TimeTracker {
         private long emitIntervalMs = 1000L;
@@ -159,7 +173,7 @@ class KStreamImplJoin {
         }
 
         // Time-shared between joins to keep track of the maximum stream time
-        final TimeTracker sharedTimeTracker = new TimeTracker();
+        final TimeTrackerSupplier sharedTimeTrackerSupplier = new TimeTrackerSupplier();
 
         final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoin<K, V1, V2, VOut> joinThis = new KStreamKStreamJoin<>(
@@ -169,7 +183,7 @@ class KStreamImplJoin {
             joiner,
             leftOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            sharedTimeTracker
+            sharedTimeTrackerSupplier
         );
 
         final KStreamKStreamJoin<K, V2, V1, VOut> joinOther = new KStreamKStreamJoin<>(
@@ -179,14 +193,13 @@ class KStreamImplJoin {
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            sharedTimeTracker
+            sharedTimeTrackerSupplier
         );
 
         final KStreamKStreamSelfJoin<K, V1, V2, VOut> selfJoin = new KStreamKStreamSelfJoin<>(
             thisWindowStore.name(),
             internalWindows,
             joiner,
-            sharedTimeTracker,
             windows.size() + windows.gracePeriodMs()
         );
 

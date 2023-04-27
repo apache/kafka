@@ -150,9 +150,10 @@ props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);</code></pre>
     Serdes.String(),
     Serdes.Long())
   .withCachingEnabled();</code></pre>
+      <p>Record caches are not supported for <a class="reference internal" href="processor-api.html#streams-developer-guide-state-store-versioned"><span class="std std-ref">versioned state stores</span></a>.</p>
     </div>
     <div class="section" id="rocksdb">
-      <h2><a class="toc-backref" href="#id3">RocksDB</a><a class="headerlink" href="#rocksdb" title="Permalink to this headline"></a></h2>
+      <span id="streams-developer-guide-memory-management-rocksdb"></span><h2><a class="toc-backref" href="#id3">RocksDB</a><a class="headerlink" href="#rocksdb" title="Permalink to this headline"></a></h2>
       <p> Each instance of RocksDB allocates off-heap memory for a block cache, index and filter blocks, and memtable (write buffer). Critical configs (for RocksDB version 4.1.0) include
         <code class="docutils literal"><span class="pre">block_cache_size</span></code>, <code class="docutils literal"><span class="pre">write_buffer_size</span></code> and <code class="docutils literal"><span class="pre">max_write_buffer_number</span></code>.  These can be specified through the
         <code class="docutils literal"><span class="pre">rocksdb.config.setter</span></code> configuration.</p>

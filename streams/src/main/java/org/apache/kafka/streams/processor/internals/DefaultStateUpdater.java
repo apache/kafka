@@ -168,7 +168,6 @@ public class DefaultStateUpdater implements StateUpdater {
             maybeCheckpointTasks(checkpointStartTimeMs);
 
             final long waitStartTimeMs = time.milliseconds();
-
             waitIfAllChangelogsCompletelyRead();
 
             final long endTimeMs = time.milliseconds();
@@ -749,7 +748,7 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public boolean restoresActiveTasks() {
         return !executeWithQueuesLocked(
-            () -> getStreamOfNonPausedTasks().filter(Task::isActive).collect(Collectors.toSet())
+            () -> getStreamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
         ).isEmpty();
     }
 
