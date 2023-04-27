@@ -3479,7 +3479,6 @@ public class TransactionManagerTest {
         assertThrowsFatalStateException("maybeAddPartition", () -> transactionManager.maybeAddPartition(tp0));
         assertThrowsFatalStateException("initializeTransactions", () -> transactionManager.initializeTransactions());
         assertThrowsFatalStateException("sendOffsetsToTransaction", () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
-        assertThrowsFatalStateException("maybeUpdateProducerIdAndEpoch", () -> transactionManager.maybeUpdateProducerIdAndEpoch(tp0));
     }
 
     private void assertThrowsFatalStateException(String methodName, Runnable operation) {
