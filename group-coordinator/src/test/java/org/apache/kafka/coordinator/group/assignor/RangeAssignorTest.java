@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
@@ -477,7 +476,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testReassignmentWhenMultipleSubscriptionsRemovedAfterInitialAssignmentWithThreeConsumersTwoTopics() {
-
         Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
         topics.put(topic1Uuid, new AssignmentTopicMetadata(3));
         topics.put(topic2Uuid, new AssignmentTopicMetadata(3));
