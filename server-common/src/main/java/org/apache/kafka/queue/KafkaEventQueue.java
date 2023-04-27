@@ -250,7 +250,7 @@ public final class KafkaEventQueue implements EventQueue {
                             continue;
                         } else if (shuttingDown) {
                             remove(eventContext);
-                            toDeliver = new RejectedExecutionException();
+                            toDeliver = new RejectedExecutionException("The event queue is shutting down");
                             toRun = eventContext;
                             continue;
                         }
@@ -300,7 +300,7 @@ public final class KafkaEventQueue implements EventQueue {
             lock.lock();
             try {
                 if (shuttingDown) {
-                    return new RejectedExecutionException();
+                    return new RejectedExecutionException("The event queue is shutting down");
                 }
                 if (interrupted) {
                     return new InterruptedException();
