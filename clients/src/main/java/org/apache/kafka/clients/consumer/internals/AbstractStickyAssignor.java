@@ -166,6 +166,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
                         if (memberGeneration == otherMemberGeneration) {
+                            // if two members of the same generation own the same partition, revoke the partition
                             log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
                                             + "same generation {}, this will be invalidated and removed from their previous assignment.",
                                     consumer, otherConsumer, tp, memberGeneration);
@@ -174,22 +175,21 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             allPreviousPartitionsToOwner.put(tp, consumer);
                         } else if (memberGeneration > otherMemberGeneration) {
                             // move partition from the member with an older generation to the member with the newer generation
-                            consumerToOwnedPartitions.get(consumer).add(tp);
+                            ownedPartitions.add(tp);
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
                             allPreviousPartitionsToOwner.put(tp, consumer);
-                            // if memberGeneration > otherMemberGeneration, the other member continue owns the generation
-                            log.warn("{} in generation {} and {} in generation {} claiming the same TopicPartition {} in " +
-                                            "different generations. The topic partition wil be assigned to the member with " +
-                                            "the higher generation {}.",
+                            log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
+                                            "TopicPartition {} in different generations. The topic partition wil be " +
+                                            "assigned to the member with the higher generation {}.",
                                     consumer, memberGeneration,
                                     otherConsumer, otherMemberGeneration,
                                     tp,
                                     memberGeneration);
                         } else {
-                            // if memberGeneration < otherMemberGeneration, the other member continue owns the generation
-                            log.warn("{} in generation {} and {} in generation {} claiming the same TopicPartition {} in " +
-                                            "different generations. The topic partition wil be assigned to the member with " +
-                                            "the higher generation {}.",
+                            // let the other member continue to own the topic partition
+                            log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
+                                            "TopicPartition {} in different generations. The topic partition wil be " +
+                                            "assigned to the member with the higher generation {}.",
                                     consumer, memberGeneration,
                                     otherConsumer, otherMemberGeneration,
                                     tp,

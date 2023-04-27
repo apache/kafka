@@ -1050,16 +1050,12 @@ public abstract class AbstractStickyAssignorTest {
         int currentGeneration = 10;
 
         // ensure partitions are always assigned to the member with the highest generation
-        // topic, 1 -> [consumer2], consumer3
-        // topic2, 1 -> [consumer2], consumer3
-        // topic, 0 -> [consumer1], consumer3
-        // topic3, 2 -> consumer3
         subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic, topic2, topic3),
             partitions(tp(topic, 0), tp(topic2, 0), tp(topic3, 0)), currentGeneration, 0));
         subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic, topic2, topic3),
             partitions(tp(topic, 1), tp(topic2, 1), tp(topic3, 1)), currentGeneration - 1, 1));
         subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic, topic2, topic3),
-            partitions(tp(topic3, 0), tp(topic3, 2), tp(topic2, 1)), currentGeneration - 2, 1));
+            partitions(tp(topic2, 1), tp(topic3, 0), tp(topic3, 2)), currentGeneration - 2, 1));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic2, 0), tp(topic3, 0))),
@@ -1080,14 +1076,14 @@ public abstract class AbstractStickyAssignorTest {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, partitionInfos(topic, 3));
+        partitionsPerTopic.put(topic1, partitionInfos(topic1, 3));
         partitionsPerTopic.put(topic2, partitionInfos(topic2, 3));
         partitionsPerTopic.put(topic3, partitionInfos(topic3, 3));
-        partitionsPerTopic.put(topic1, partitionInfos(topic1, 3));
 
         int currentGeneration = 10;
 
-        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1), partitions(),
-            DEFAULT_GENERATION, 0));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1),
+            partitions(), DEFAULT_GENERATION, 0));
         subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1),
             partitions(tp(topic, 0), tp(topic2, 0), tp(topic1, 0)), currentGeneration - 1, 1));
         subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1),
@@ -1097,8 +1093,8 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         // ensure assigned partitions don't get reassigned
-        assertEquals(new HashSet<>(assignment.get(consumer1)),
-                new HashSet<>(partitions(tp(topic2, 1), tp(topic3, 0), tp(topic1, 2))));
+        assertEquals(new HashSet<>(partitions(tp(topic1, 2), tp(topic2, 1), tp(topic3, 0))),
+                new HashSet<>(assignment.get(consumer1)));
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
