@@ -37,13 +37,13 @@ import java.util.function.BiFunction;
  * The member state has the following properties:
  * - Current Epoch  - The current epoch of the member.
  * - Next Epoch     - The desired epoch of the member. It corresponds to the epoch of
- *                    the target/desired assignment. The member transition to this epoch
- *                    when it has revoked the partitions that it does not owned or if it
+ *                    the target/desired assignment. The member transitions to this epoch
+ *                    when it has revoked the partitions that it does not own or if it
  *                    does not have to revoke any.
  * - Previous Epoch - The previous epoch of the member when the state was updated.
  * - Assigned Set   - The set of partitions currently assigned to the member. This represents what
  *                    the member should have.
- * - Revoking Set   - The set of partitions that the member should revoke before it could transition
+ * - Revoking Set   - The set of partitions that the member should revoke before it can transition
  *                    to the next state.
  * - Assigning Set  - The set of partitions that the member will eventually receive. The partitions
  *                    in this set are still owned by other members in the group.
