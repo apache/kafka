@@ -72,6 +72,13 @@ import scala.util.control.ControlThrowable
  *      1 Acceptor thread that handles new connections
  *      Acceptor has 1 Processor thread that has its own selector and read requests from the socket.
  *      1 Handler thread that handles requests and produces responses back to the processor thread for writing.
+ *
+ *
+ *      SocketServer 组件是核心，主要实现了 Reactor 模式，用于处理外部多个 Clients（这里的 Clients 指的是广义的 Clients，
+ *      可能包含 Producer、Consumer 或其他 Broker）的并发请求，并负责将处理结果封装进 Response 中，返还给 Clients。
+ *      这个组件是 Kafka 网络通信层中最重要的子模块。它下辖的 Acceptor 线程、Processor 线程和 RequestChannel 等对象，都是实施网络通信的重要组成部分
+ *
+ *
  */
 class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
@@ -568,9 +575,12 @@ class ControlPlaneAcceptor(socketServer: SocketServer,
 
 /**
  * Thread that accepts and configures new connections. There is one of these per endpoint.
+ * endPoint。它就是你定义的 Kafka Broker 连接信息，比如 PLAINTEXT://localhost:9092。Acceptor 需要用到 endPoint 包含的主机名和端口信息创建 Server Socket。
+ * sendBufferSize。它设置的是 SocketOptions 的 SO_SNDBUF，即用于设置出站（Outbound）网络 I/O 的底层缓冲区大小。该值默认是 Broker 端参数 socket.send.buffer.bytes 的值，即 100KB。
+ * recvBufferSize。它设置的是 SocketOptions 的 SO_RCVBUF，即用于设置入站（Inbound）网络 I/O 的底层缓冲区大小。该值默认是 Broker 端参数 socket.receive.buffer.bytes 的值，即 100KB。
  */
 private[kafka] abstract class Acceptor(val socketServer: SocketServer,
-                                       val endPoint: EndPoint,
+                                       val endPoint: EndPoint,//定义的 Kafka Broker 连接信息
                                        var config: KafkaConfig,
                                        nodeId: Int,
                                        val connectionQuotas: ConnectionQuotas,
@@ -591,16 +601,22 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   def metricPrefix(): String
   def threadPrefix(): String
 
-  private val sendBufferSize = config.socketSendBufferBytes
-  private val recvBufferSize = config.socketReceiveBufferBytes
+  //如果在你的生产环境中，Clients 与 Broker 的通信网络延迟很大（比如 RTT>10ms），建议你调大控制缓冲区大小的两个参数，
+  // 也就是 sendBufferSize 和 recvBufferSize。通常来说，默认值 100KB 太小了。
+  private val sendBufferSize = config.socketSendBufferBytes //它设置的是 SocketOptions 的 SO_SNDBUF，即用于设置出站（Outbound）网络 I/O 的底层缓冲区大小
+  private val recvBufferSize = config.socketReceiveBufferBytes //它设置的是 SocketOptions 的 SO_RCVBUF，即用于设置入站（Inbound）网络 I/O 的底层缓冲区大小。
   private val listenBacklogSize = config.socketListenBacklogSize
 
+  // 创建底层的NIO Selector对象
+  // Selector对象负责执行底层实际I/O操作，如监听连接创建请求、读写请求等
   private val nioSelector = NSelector.open()
 
   // If the port is configured as 0, we are using a wildcard port, so we need to open the socket
   // before we can find out what port we have. If it is set to a nonzero value, defer opening
   // the socket until we start the Acceptor. The reason for deferring the socket opening is so
   // that systems which assume that the socket being open indicates readiness are not confused.
+  // Broker端创建对应的ServerSocketChannel实例
+  // 后续把该Channel向上一步的Selector对象注册
   private[network] var serverChannel: ServerSocketChannel  = _
   private[network] val localPort: Int  = if (endPoint.port != 0) {
     endPoint.port
@@ -611,6 +627,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     newPort
   }
 
+  // 创建Processor线程池，实际上是Processor线程数组
   private[network] val processors = new ArrayBuffer[Processor]()
   // Build the metric name explicitly in order to keep the existing name for compatibility
   private val blockedPercentMeterMetricName = KafkaMetricsGroup.explicitMetricName(
@@ -624,6 +641,11 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private var started = false
   private[network] val startedFuture = new CompletableFuture[Void]()
 
+  // 线程命名规范：processor线程前缀-kafka-network-thread-broker序号-监听器名称-安全协议-Processor序号
+  // 假设为序号为0的Broker设置PLAINTEXT://localhost:9092作为连接信息，那么3个Processor线程名称分别为：
+  // data-plane-kafka-network-thread-0-ListenerName(PLAINTEXT)-PLAINTEXT-0
+  // data-plane-kafka-network-thread-0-ListenerName(PLAINTEXT)-PLAINTEXT-1
+  // data-plane-kafka-network-thread-0-ListenerName(PLAINTEXT)-PLAINTEXT-2
   val thread = KafkaThread.nonDaemon(
     s"${threadPrefix()}-kafka-socket-acceptor-${endPoint.listenerName}-${endPoint.securityProtocol}-${endPoint.port}",
     this)
@@ -661,9 +683,13 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     // Shutdown `removeCount` processors. Remove them from the processor list first so that no more
     // connections are assigned. Shutdown the removed processors, closing the selector and its connections.
     // The processors are then removed from `requestChannel` and any pending responses to these processors are dropped.
+    // 获取Processor线程池中最后removeCount个线程
     val toRemove = processors.takeRight(removeCount)
+    // 移除最后removeCount个线程
     processors.remove(processors.size - removeCount, removeCount)
+    // 关闭最后removeCount个线程
     toRemove.foreach(_.close())
+    // 在RequestChannel中移除这些Processor
     toRemove.foreach(processor => requestChannel.removeProcessor(processor.id))
   }
 
@@ -686,8 +712,15 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
 
   /**
    * Accept loop that checks for new connection attempts
+   * 这里的关键点在于，Acceptor 线程会先为每个入站请求确定要处理它的 Processor 线程，
+   * 然后调用 assignNewConnection 方法令 Processor 线程创建与发送方的连接。
+   * 基本上，Acceptor 线程使用 Java NIO 的 Selector + SocketChannel 的方式循环地轮询准备就绪的 I/O 事件。
+   * 这里的 I/O 事件，主要是指网络连接创建事件，即代码中的 SelectionKey.OP_ACCEPT。
+   * 一旦接收到外部连接请求，Acceptor 就会指定一个 Processor 线程，并将该请求交由它，让它创建真正的网络连接。
+   * 总的来说，Acceptor 线程就做这么点事。
    */
   override def run(): Unit = {
+    //注册OP_ACCEPT事件
     serverChannel.register(nioSelector, SelectionKey.OP_ACCEPT)
     try {
       while (shouldRun.get()) {
@@ -703,7 +736,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
           case e: Throwable => error("Error occurred", e)
         }
       }
-    } finally {
+    } finally {// 执行各种资源关闭逻辑
       debug("Closing server socket, selector, and any throttled sockets.")
       CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
       CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
@@ -740,8 +773,9 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
    * Listen for new connections and assign accepted connections to processors using round-robin.
    */
   private def acceptNewConnections(): Unit = {
+    // 每500毫秒获取一次就绪I/O事件
     val ready = nioSelector.select(500)
-    if (ready > 0) {
+    if (ready > 0) {// 如果有I/O事件准备就绪
       val keys = nioSelector.selectedKeys()
       val iter = keys.iterator()
       while (iter.hasNext && shouldRun.get()) {
@@ -750,6 +784,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
           iter.remove()
 
           if (key.isAcceptable) {
+            // 调用accept方法创建Socket连接
             accept(key).foreach { socketChannel =>
               // Assign the channel to the next processor (using round-robin) to which the
               // channel can be added without blocking. If newConnections queue is full on
@@ -758,12 +793,14 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
               var processor: Processor = null
               do {
                 retriesLeft -= 1
+                // 指定由哪个Processor线程进行处理
                 processor = synchronized {
                   // adjust the index (if necessary) and retrieve the processor atomically for
                   // correct behaviour in case the number of processors is reduced dynamically
                   currentProcessorIndex = currentProcessorIndex % processors.length
                   processors(currentProcessorIndex)
                 }
+                // 更新Processor线程序号
                 currentProcessorIndex += 1
               } while (!assignNewConnection(socketChannel, processor, retriesLeft == 0))
             }
@@ -848,10 +885,10 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     for (_ <- 0 until toCreate) {
       val processor = newProcessor(socketServer.nextProcessorId(), listenerName, securityProtocol)
       listenerProcessors += processor
-      requestChannel.addProcessor(processor)
+      requestChannel.addProcessor(processor) // 添加一组新的Processor线程
 
-      if (started) {
-        processor.start()
+      if (started) {// 如果Processor线程池已经启动
+        processor.start()// 启动新的Processor线程
       }
     }
     processors ++= listenerProcessors
@@ -896,6 +933,8 @@ private[kafka] object Processor {
  *                             the control plane processor would be fellow broker's choice for sending
  *                             forwarding requests; if the control plane is not defined, the processor
  *                             relying on the inter broker listener would be acting as the privileged listener.
+ *
+ * 如果说 Acceptor 是做入站连接处理的，那么，Processor 代码则是真正创建连接以及分发请求的地方。
  */
 private[kafka] class Processor(
   val id: Int,
@@ -938,8 +977,25 @@ private[kafka] class Processor(
     override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
   }
 
+  /**
+   * 它保存的是要创建的新连接信息，具体来说，就是 SocketChannel 对象。这是一个默认上限是 20 的队列，而且，目前代码中硬编码了队列的长度，因此，你无法变更这个队列的长度。
+   * 每当 Processor 线程接收新的连接请求时，都会将对应的 SocketChannel 放入这个队列。后面在创建连接时（也就是调用 configureNewConnections 时），
+   * 就从该队列中取出 SocketChannel，然后注册新的连接。
+   */
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
+
+  /**
+   * 严格来说，这是一个临时 Response 队列。当 Processor 线程将 Response 返还给 Request 发送方之后，还要将 Response 放入这个临时队列。
+   * 为什么需要这个临时队列呢？这是因为，有些 Response 回调逻辑要在 Response 被发送回发送方之后，才能执行，因此需要暂存在一个临时队列里面。
+   * 这就是 inflightResponses 存在的意义。
+   */
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
+
+  /**
+  * 看名字我们就可以知道，这是 Response 队列，而不是 Request 队列。
+   * 这告诉了我们一个事实：每个 Processor 线程都会维护自己的 Response 队列，而不是像网上的某些文章说的，Response 队列是线程共享的或是保存在 RequestChannel 中的。
+   * Response 队列里面保存着需要被返还给发送方的所有 Response 对象。
+  */
   private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
 
   private[kafka] val metricTags = mutable.LinkedHashMap(
@@ -1000,19 +1056,20 @@ private[kafka] class Processor(
   // closed, connection ids are not reused while requests from the closed connection are being processed.
   private var nextConnectionIndex = 0
 
+  // 等待Processor线程启动完成
   override def run(): Unit = {
     try {
       while (shouldRun.get()) {
         try {
           // setup any new connections that have been queued up
-          configureNewConnections()
+          configureNewConnections() // 创建新连接
           // register any new responses for writing
-          processNewResponses()
-          poll()
-          processCompletedReceives()
-          processCompletedSends()
-          processDisconnected()
-          closeExcessConnections()
+          processNewResponses()// 发送Response，并将Response放入到inflightResponses临时队列
+          poll()// 执行NIO poll，获取对应SocketChannel上准备就绪的I/O操作
+          processCompletedReceives()// 将接收到的Request放入Request队列
+          processCompletedSends()// 为临时Response队列中的Response执行回调逻辑
+          processDisconnected()// 处理因发送失败而导致的连接断开
+          closeExcessConnections()// 关闭超过配额限制部分的连接
         } catch {
           // We catch all the throwables here to prevent the processor thread from exiting. We do this because
           // letting a processor exit might cause a bigger impact on the broker. This behavior might need to be
@@ -1023,7 +1080,7 @@ private[kafka] class Processor(
           case e: Throwable => processException("Processor got uncaught exception.", e)
         }
       }
-    } finally {
+    } finally {// 关闭底层资源
       debug(s"Closing selector - processor $id")
       CoreUtils.swallow(closeAll(), this, Level.ERROR)
     }
@@ -1044,13 +1101,14 @@ private[kafka] class Processor(
     processException(errorMessage, throwable)
   }
 
+  // 它负责发送 Response 给 Request 发送方，并且将 Response 放入临时 Response 队列。
   private def processNewResponses(): Unit = {
     var currentResponse: RequestChannel.Response = null
-    while ({currentResponse = dequeueResponse(); currentResponse != null}) {
-      val channelId = currentResponse.request.context.connectionId
+    while ({currentResponse = dequeueResponse(); currentResponse != null}) {// Response队列中存在待处理Response
+      val channelId = currentResponse.request.context.connectionId// 获取连接通道ID
       try {
         currentResponse match {
-          case response: NoOpResponse =>
+          case response: NoOpResponse => // 无需发送Response
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
             updateRequestMetrics(response)
@@ -1061,9 +1119,10 @@ private[kafka] class Processor(
             handleChannelMuteEvent(channelId, ChannelMuteEvent.RESPONSE_SENT)
             tryUnmuteChannel(channelId)
 
-          case response: SendResponse =>
+          case response: SendResponse => // 发送Response并将Response放入inflightResponses
+            //这里的关键是 SendResponse 分支上的 sendResponse 方法
             sendResponse(response, response.responseSend)
-          case response: CloseConnectionResponse =>
+          case response: CloseConnectionResponse => // 关闭对应的连接
             updateRequestMetrics(response)
             trace("Closing socket connection actively according to the response code.")
             close(channelId)
@@ -1096,9 +1155,9 @@ private[kafka] class Processor(
     // Invoke send for closingChannel as well so that the send is failed and the channel closed properly and
     // removed from the Selector after discarding any pending staged receives.
     // `openOrClosingChannel` can be None if the selector closed the connection because it was idle for too long
-    if (openOrClosingChannel(connectionId).isDefined) {
-      selector.send(new NetworkSend(connectionId, responseSend))
-      inflightResponses += (connectionId -> response)
+    if (openOrClosingChannel(connectionId).isDefined) {// 如果该连接处于可连接状态
+      selector.send(new NetworkSend(connectionId, responseSend))// 发送Response
+      inflightResponses += (connectionId -> response)// 将Response加入到inflightResponses队列
     }
   }
 
@@ -1275,15 +1334,21 @@ private[kafka] class Processor(
    * Register any new connections that have been queued up. The number of connections processed
    * in each iteration is limited to ensure that traffic and connection close notifications of
    * existing channels are handled promptly.
+   * 该方法最重要的逻辑是调用 selector 的 register 来注册 SocketChannel。
+   * 每个 Processor 线程都维护了一个 Selector 类实例。
+   * Selector 类是社区提供的一个基于 Java NIO Selector 的接口，用于执行非阻塞多通道的网络 I/O 操作。
+   * 在核心功能上，Kafka 提供的 Selector 和 Java 提供的是一致的。
    */
   private def configureNewConnections(): Unit = {
-    var connectionsProcessed = 0
+    var connectionsProcessed = 0// 当前已配置的连接数计数器
     while (connectionsProcessed < connectionQueueSize && !newConnections.isEmpty) {
-      val channel = newConnections.poll()
+      val channel = newConnections.poll()// 从连接队列中取出SocketChannel
       try {
         debug(s"Processor $id listening to new connection from ${channel.socket.getRemoteSocketAddress}")
+        // 用给定Selector注册该Channel
+        // 底层就是调用Java NIO的SocketChannel.register(selector, SelectionKey.OP_READ)
         selector.register(connectionId(channel.socket), channel)
-        connectionsProcessed += 1
+        connectionsProcessed += 1// 更新计数器
       } catch {
         // We explicitly catch all exceptions and close the socket to avoid a socket leak.
         case e: Throwable =>
