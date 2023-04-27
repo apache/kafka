@@ -1181,10 +1181,6 @@ public final class QuorumController implements Controller {
                 new CompleteActivationEvent(),
                 EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION)
             );
-            activationEvent.future.exceptionally(t -> {
-                fatalFaultHandler.handleFault("exception while activating controller", t);
-                return null;
-            });
             queue.prepend(activationEvent);
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while claiming leadership", e);
