@@ -687,19 +687,19 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                             }
                         });
                     }
-                    // Updateuser scram and quota data for each user with changes in either.
+                    // Update user scram and quota data for each user with changes in either.
                     users.forEach(userName -> {
-                        Map<String, String> userscramMap = getScramCredentialStringsForUser(userName);
+                        Map<String, String> userScramMap = getScramCredentialStringsForUser(userName);
                         ClientQuotaEntity clientQuotaEntity = new
                             ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
                         if (image.clientQuotas() != null) {
                             Map<String, Double> quotaMap = new HashMap<String, Double>();
                             apply("Updating client quota " + clientQuotaEntity, migrationState ->
-                                zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userscramMap, migrationState));
+                                zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
                         } else {
                             Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
                             apply("Updating client quota " + clientQuotaEntity, migrationState ->
-                                zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userscramMap, migrationState));
+                                zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
                         }
                     });
                 }
