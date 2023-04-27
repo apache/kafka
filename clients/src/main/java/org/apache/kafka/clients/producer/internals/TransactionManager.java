@@ -306,6 +306,10 @@ public class TransactionManager {
         return beginAbort(InvalidStateTransitionHandler.THROW_EXCEPTION);
     }
 
+    /**
+     * This calls the same logic as {@link #beginAbort()} but does not throw immediately throw any errors if
+     * internal state issues are detected.
+     */
     public void beginAbortOnShutdown() {
         beginAbort(InvalidStateTransitionHandler.SET_FATAL_STATE);
     }
@@ -436,7 +440,7 @@ public class TransactionManager {
         transitionToAbortableError(exception, InvalidStateTransitionHandler.THROW_EXCEPTION);
     }
 
-    synchronized void transitionToAbortableError(RuntimeException exception,
+    private synchronized void transitionToAbortableError(RuntimeException exception,
                                                  InvalidStateTransitionHandler invalidStateTransitionHandler) {
         if (currentState == State.ABORTING_TRANSACTION) {
             log.debug("Skipping transition to abortable error state since the transaction is already being " +
@@ -1054,15 +1058,7 @@ public class TransactionManager {
             String message = idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name();
 
-            // If the transition is being called on behalf of a direct user interaction, we want to continue to
-            // throw the IllegalStateException. This gives the user the opportunity to fix the issue without
-            // permanently poisoning the state.
-            //
-            // However, if the transition was triggered internally to the producer (e.g. as part of response
-            // handling inside Sender), we want to "poison" the transaction manager's state to avoid potential
-            // corruption from being in an otherwise inconsistent state.
-            //
-            // See KAFKA-14831 for more detail.
+            // See InvalidStateTransitionHandler above for more detail.
             if (invalidStateTransitionHandler == InvalidStateTransitionHandler.THROW_EXCEPTION) {
                 throw new IllegalStateException(message);
             } else {
