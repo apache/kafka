@@ -689,7 +689,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     }
                     // Updateuser scram and quota data for each user with changes in either.
                     users.forEach(userName -> {
-                        System.out.println("Applying changes for user : " + userName);
                         Map<String, String> userscramMap = getScramCredentialStringsForUser(userName);
                         ClientQuotaEntity clientQuotaEntity = new
                             ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
@@ -762,9 +761,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     ScramCredentialData scramCredentialData = scramMechanismMap.get(userName);
                     if (scramCredentialData != null) {
                         userScramCredentialStrings.put(scramMechanism.mechanismName(),
-                            ScramCredentialUtils.credentialToString(
-                                scramCredentialData.toCredential(scramMechanism)));
-                        System.out.println("    Changes are: " + 
                             ScramCredentialUtils.credentialToString(
                                 scramCredentialData.toCredential(scramMechanism)));
                     }
