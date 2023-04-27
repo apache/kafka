@@ -17,7 +17,11 @@
 
 package org.apache.kafka.coordinator.group.generic;
 
+import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
+
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -27,36 +31,101 @@ import java.util.stream.Collectors;
 
 /**
  * Java rewrite of {@link kafka.coordinator.group.MemberMetadata} that is used
- * by {@link org.apache.kafka.coordinator.group.GroupCoordinator}
+ * by the new group coordinator (KIP-848).
  */
 public class GenericGroupMember {
 
-    private static class Protocol {
-        private final String name;
-        private final byte[] metadata;
+    /**
+     * A builder allowing to create a new generic member or update an
+     * existing one.
+     *
+     * Please refer to the javadoc of {{@link GenericGroupMember}} for the
+     * definition of the fields.
+     */
+    public static class Builder {
+        private final String memberId;
+        private Optional<String> groupInstanceId = Optional.empty();
+        private String clientId = "";
+        private String clientHost = "";
+        private int rebalanceTimeoutMs = -1;
+        private int sessionTimeoutMs = -1;
+        private String protocolType = "";
+        private List<Protocol> supportedProtocols = Collections.emptyList();
+        private byte[] assignment = new byte[0];
 
-        private Protocol(String name, byte[] metadata) {
-            this.name = name;
-            this.metadata = metadata;
+        public Builder(String memberId) {
+            this.memberId = Objects.requireNonNull(memberId);
         }
 
-        @Override
-        public boolean equals(Object o) {
-            if (!this.getClass().equals(o.getClass())) {
-                return false;
-            }
+        public Builder(GenericGroupMember member) {
+            Objects.requireNonNull(member);
 
-            Protocol that = (Protocol) o;
-            return name.equals(that.name) &&
-                Arrays.equals(this.metadata, that.metadata);
+            this.memberId = member.memberId;
+            this.groupInstanceId = member.groupInstanceId;
+            this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
+            this.sessionTimeoutMs = member.sessionTimeoutMs;
+            this.clientId = member.clientId;
+            this.clientHost = member.clientHost;
+            this.protocolType = member.protocolType;
+            this.supportedProtocols = member.supportedProtocols;
+            this.assignment = member.assignment;
         }
 
-        @Override
-        public String toString() {
-            return name;
+        public Builder setGroupInstanceId(Optional<String> groupInstanceId) {
+            this.groupInstanceId = groupInstanceId;
+            return this;
+        }
+
+        public Builder setClientId(String clientId) {
+            this.clientId = clientId;
+            return this;
+        }
+
+        public Builder setClientHost(String clientHost) {
+            this.clientHost = clientHost;
+            return this;
+        }
+
+        public Builder setRebalanceTimeoutMs(int rebalanceTimeoutMs) {
+            this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+            return this;
+        }
+
+        public Builder setSessionTimeoutMs(int sessionTimeoutMs) {
+            this.sessionTimeoutMs = sessionTimeoutMs;
+            return this;
+        }
+
+        public Builder setProtocolType(String protocolType) {
+            this.protocolType = protocolType;
+            return this;
+        }
+
+        public Builder setSupportedProtocols(List<Protocol> protocols) {
+            this.supportedProtocols = protocols;
+            return this;
+        }
+
+        public Builder setAssignment(byte[] assignment) {
+            this.assignment = assignment;
+            return this;
+        }
+
+        public GenericGroupMember build() {
+            return new GenericGroupMember(
+                memberId,
+                groupInstanceId,
+                clientId,
+                clientHost,
+                rebalanceTimeoutMs,
+                sessionTimeoutMs,
+                protocolType,
+                supportedProtocols,
+                assignment
+            );
         }
     }
-    
+
     private static class MemberSummary {
         private final String memberId;
         private final Optional<String> groupInstanceId;
@@ -154,12 +223,12 @@ public class GenericGroupMember {
     /**
      * The callback that is invoked once this member joins the group.
      */
-    private CompletableFuture<JoinGroupResult> awaitingJoinCallback = null;
+    private CompletableFuture<JoinGroupResponseData> awaitingJoinCallback = null;
 
     /**
      * The callback that is invoked once this member completes the sync group phase.
      */
-    private CompletableFuture<SyncGroupResult> awaitingSyncCallback = null;
+    private CompletableFuture<SyncGroupResponseData> awaitingSyncCallback = null;
 
     /**
      * Indicates whether the member is a new member of the group.
@@ -243,11 +312,11 @@ public class GenericGroupMember {
      */
     public byte[] metadata(String protocolName) {
         Optional<Protocol> match = supportedProtocols.stream().filter(protocol ->
-            protocol.name.equals(protocolName))
+            protocol.name().equals(protocolName))
                 .findFirst();
 
         if (match.isPresent()) {
-            return match.get().metadata;
+            return match.get().metadata();
         } else {
             throw new IllegalArgumentException("Member does not support protocol " +
                 protocolName);
@@ -317,10 +386,10 @@ public class GenericGroupMember {
      */
     public String vote(Set<String> candidates) {
         Optional<Protocol> match = supportedProtocols.stream().filter(protocol ->
-            candidates.contains(protocol.name)).findFirst();
+            candidates.contains(protocol.name())).findFirst();
         
         if (match.isPresent()) {
-            return match.get().name;
+            return match.get().name();
         } else {
             throw new IllegalArgumentException("Member does not support any of the candidate protocols");
         }
@@ -331,7 +400,7 @@ public class GenericGroupMember {
      * @return a set of protocol names from the given list of supported protocols.
      */
     public static Set<String> plainProtocolSet(List<Protocol> supportedProtocols) {
-        return supportedProtocols.stream().map(protocol -> protocol.name).collect(Collectors.toSet());
+        return supportedProtocols.stream().map(Protocol::name).collect(Collectors.toSet());
     }
 
     /**
@@ -390,31 +459,35 @@ public class GenericGroupMember {
         return supportedProtocols;
     }
 
+    public byte[] assignment() {
+        return assignment;
+    }
+
     /**
      * @return the awaiting join callback.
      */
-    public CompletableFuture<JoinGroupResult> awaitingJoinCallback() {
+    public CompletableFuture<JoinGroupResponseData> awaitingJoinCallback() {
         return awaitingJoinCallback;
     }
 
     /**
      * @param value the updated join callback.
      */
-    public void setAwaitingJoinCallback(CompletableFuture<JoinGroupResult> value) {
+    public void setAwaitingJoinCallback(CompletableFuture<JoinGroupResponseData> value) {
         this.awaitingJoinCallback = value;
     }
 
     /**
      * @return the awaiting sync callback.
      */
-    public CompletableFuture<SyncGroupResult> awaitingSyncCallback() {
+    public CompletableFuture<SyncGroupResponseData> awaitingSyncCallback() {
         return awaitingSyncCallback;
     }
 
     /**
      * @param value the updated sync callback.
      */
-    public void setAwaitingSyncCallback(CompletableFuture<SyncGroupResult> value) {
+    public void setAwaitingSyncCallback(CompletableFuture<SyncGroupResponseData> value) {
         this.awaitingSyncCallback = value;
     }
 
@@ -432,6 +505,14 @@ public class GenericGroupMember {
         this.isNew = value;
     }
 
+    public boolean heartBeatSatisfied() {
+        return heartbeatSatisfied;
+    }
+
+    public void setHeartBeatSatisfied(boolean value) {
+        this.heartbeatSatisfied = value;
+    }
+
     @Override
     public String toString() {
         return "GenericGroupMember(" +
@@ -444,6 +525,23 @@ public class GenericGroupMember {
             ", protocolType='" + protocolType + '\'' +
             ", supportedProtocols=" + supportedProtocols +
             ')';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        GenericGroupMember that = (GenericGroupMember) o;
+
+        return memberId.equals(that.memberId) &&
+            groupInstanceId.equals(that.groupInstanceId) &&
+            clientId.equals(that.clientId) &&
+            clientHost.equals(that.clientHost) &&
+            rebalanceTimeoutMs == that.rebalanceTimeoutMs &&
+            sessionTimeoutMs == that.sessionTimeoutMs &&
+            protocolType.equals(that.protocolType) &&
+            supportedProtocols.equals(that.supportedProtocols) &&
+            Arrays.equals(assignment, that.assignment);
     }
 
     @Override
