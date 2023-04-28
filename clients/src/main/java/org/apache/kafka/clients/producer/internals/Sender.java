@@ -302,15 +302,16 @@ public class Sender implements Runnable {
                 transactionManager.maybeResolveSequences();
 
                 RuntimeException lastError = transactionManager.lastError();
-                if (transactionManager.hasAbortableError() && shouldHandleAuthorizationError(lastError)) {
-                    return;
-                }
 
                 // do not continue sending if the transaction manager is in a failed state
                 if (transactionManager.hasFatalError()) {
                     if (lastError != null)
                         maybeAbortBatches(lastError);
                     client.poll(retryBackoffMs, time.milliseconds());
+                    return;
+                }
+
+                if (transactionManager.hasAbortableError() && shouldHandleAuthorizationError(lastError)) {
                     return;
                 }
 
