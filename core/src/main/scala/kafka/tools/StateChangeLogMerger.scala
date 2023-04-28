@@ -44,9 +44,8 @@ import org.apache.kafka.server.util.CommandLineUtils
  * 3. Start time from when the logs should be merged
  * 4. End time until when the logs should be merged
  */
-
+@deprecated(since = "3.6")
 object StateChangeLogMerger extends Logging {
-
   val dateFormatString = "yyyy-MM-dd HH:mm:ss,SSS"
   val topicPartitionRegex = new Regex("\\[(" + Topic.LEGAL_CHARS + "+),( )*([0-9]+)\\]")
   val dateRegex = new Regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}")
@@ -58,6 +57,7 @@ object StateChangeLogMerger extends Logging {
   var endDate: Date = _
 
   def main(args: Array[String]): Unit = {
+    println("WARNING: This tool is deprecated and will be removed in the next major release.")
 
     // Parse input arguments.
     val parser = new OptionParser(false)
@@ -192,5 +192,4 @@ object StateChangeLogMerger extends Logging {
       secondDate.compareTo(firstDate)
     }
   }
-
 }
