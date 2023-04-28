@@ -20,20 +20,23 @@ import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.wrapZkException
 import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
+import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.{AuthFailedException, NoAuthException, SessionClosedRequireAuthException}
 
-import java.util
+import java.{lang, util}
 import java.util.Properties
 import java.util.function.Consumer
 import scala.collection.Seq
@@ -209,15 +212,34 @@ class ZkMigrationClient(
   def migrateClientQuotas(
     recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
   ): Unit = wrapZkException {
-    configClient.iterateClientQuotas((entity, props) => {
-      val batch = new util.ArrayList[ApiMessageAndVersion]()
-      props.forEach((key, value) => {
-        batch.add(new ApiMessageAndVersion(new ClientQuotaRecord()
-          .setEntity(entity)
-          .setKey(key)
-          .setValue(value), 0.toShort))
-      })
-      if (!batch.isEmpty) {
+    configClient.iterateClientQuotas(new ClientQuotaVisitor {
+      override def visitClientQuota(
+        entityDataList: util.List[ClientQuotaRecord.EntityData],
+        quotas: util.Map[String, lang.Double]
+      ): Unit = {
+        val batch = new util.ArrayList[ApiMessageAndVersion]()
+        quotas.forEach((key, value) => {
+          batch.add(new ApiMessageAndVersion(new ClientQuotaRecord()
+            .setEntity(entityDataList)
+            .setKey(key)
+            .setValue(value), 0.toShort))
+        })
+        recordConsumer.accept(batch)
+      }
+
+      override def visitScramCredential(
+        userName: String,
+        scramMechanism: ScramMechanism,
+        scramCredential: ScramCredential
+      ): Unit = {
+        val batch = new util.ArrayList[ApiMessageAndVersion]()
+        batch.add(new ApiMessageAndVersion(new UserScramCredentialRecord()
+          .setName(userName)
+          .setMechanism(scramMechanism.`type`)
+          .setSalt(scramCredential.salt)
+          .setStoredKey(scramCredential.storedKey)
+          .setServerKey(scramCredential.serverKey)
+          .setIterations(scramCredential.iterations), 0.toShort))
         recordConsumer.accept(batch)
       }
     })

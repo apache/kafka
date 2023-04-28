@@ -382,6 +382,7 @@ public class KRaftMigrationDriverTest {
         }
     }
 
+    @Test
     public void testSkipWaitForBrokersInDualWrite() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(), null, null, null);

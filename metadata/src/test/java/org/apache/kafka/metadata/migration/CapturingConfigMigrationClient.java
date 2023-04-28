@@ -36,7 +36,7 @@ public class CapturingConfigMigrationClient implements ConfigMigrationClient {
     }
 
     @Override
-    public void iterateClientQuotas(BiConsumer<List<ClientQuotaRecord.EntityData>, Map<String, Double>> quotaEntityConsumer) {
+    public void iterateClientQuotas(ClientQuotaVisitor visitor) {
 
     }
 
@@ -52,9 +52,10 @@ public class CapturingConfigMigrationClient implements ConfigMigrationClient {
     }
 
     @Override
-    public ZkMigrationLeadershipState writeClientQuotas(Map<String, String> clientQuotaEntity, Map<String, Double> quotas, ZkMigrationLeadershipState state) {
-        return state;
+    public ZkMigrationLeadershipState writeClientQuotas(Map<String, String> clientQuotaEntity, Map<String, Double> quotas, Map<String, String> scram, ZkMigrationLeadershipState state) {
+        return null;
     }
+
 
     @Override
     public ZkMigrationLeadershipState deleteConfigs(ConfigResource configResource, ZkMigrationLeadershipState state) {

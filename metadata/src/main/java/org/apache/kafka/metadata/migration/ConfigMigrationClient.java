@@ -17,8 +17,10 @@
 
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.security.scram.ScramCredential;
 
 import java.util.List;
 import java.util.Map;
@@ -26,9 +28,13 @@ import java.util.function.BiConsumer;
 
 public interface ConfigMigrationClient {
 
-    void iterateClientQuotas(
-        BiConsumer<List<ClientQuotaRecord.EntityData>, Map<String, Double>> quotaEntityConsumer
-    );
+    interface ClientQuotaVisitor {
+        void visitClientQuota(List<ClientQuotaRecord.EntityData> entityDataList, Map<String, Double> quotas);
+
+        void visitScramCredential(String userName, ScramMechanism scramMechanism, ScramCredential scramCredential);
+    }
+
+    void iterateClientQuotas(ClientQuotaVisitor visitor);
 
     void iterateBrokerConfigs(BiConsumer<String, Map<String, String>> configConsumer);
 
@@ -41,6 +47,7 @@ public interface ConfigMigrationClient {
     ZkMigrationLeadershipState writeClientQuotas(
         Map<String, String> clientQuotaEntity,
         Map<String, Double> quotas,
+        Map<String, String> scram,
         ZkMigrationLeadershipState state
     );
 

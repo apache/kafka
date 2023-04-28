@@ -17,24 +17,31 @@
 
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.image.AclsDelta;
 import org.apache.kafka.image.AclsImage;
+import org.apache.kafka.image.ClientQuotaImage;
 import org.apache.kafka.image.ClientQuotasDelta;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.image.ConfigurationsImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 
 import java.util.ArrayList;
@@ -65,7 +72,7 @@ public class KRaftMigrationZkWriter {
     public void handleSnapshot(MetadataImage image) {
         handleTopicsSnapshot(image.topics());
         handleConfigsSnapshot(image.configs());
-        handleClientQuotasSnapshot(image.clientQuotas());
+        handleClientQuotasSnapshot(image.clientQuotas(), image.scram());
         operationConsumer.accept("Setting next producer ID", migrationState ->
             migrationClient.writeProducerId(image.producerIds().highestSeenProducerId(), migrationState));
         handleAclsSnapshot(image.acls());
@@ -79,7 +86,7 @@ public class KRaftMigrationZkWriter {
             handleConfigsDelta(image.configs(), delta.configsDelta());
         }
         if (delta.clientQuotasDelta() != null) {
-            handleClientQuotasDelta(image.clientQuotas(), delta.clientQuotasDelta());
+            handleClientQuotasDelta(image, delta);
         }
         if (delta.producerIdsDelta() != null) {
             operationConsumer.accept("Updating next producer ID", migrationState ->
@@ -209,22 +216,67 @@ public class KRaftMigrationZkWriter {
         });
     }
 
-    void handleClientQuotasSnapshot(ClientQuotasImage image) {
-        Set<ClientQuotaEntity> changedEntities = new HashSet<>();
-        migrationClient.configClient().iterateClientQuotas((entityDataList, props) -> {
-            Map<String, String> entityMap = new HashMap<>(2);
-            entityDataList.forEach(entityData -> entityMap.put(entityData.entityType(), entityData.entityName()));
-            ClientQuotaEntity entity = new ClientQuotaEntity(entityMap);
-            if (!image.entities().get(entity).quotaMap().equals(props)) {
-                changedEntities.add(entity);
+    private Map<String, String> getScramCredentialStringsForUser(ScramImage image, String userName) {
+        Map<String, String> userScramCredentialStrings = new HashMap<>();
+        if (image != null) {
+            image.mechanisms().forEach((scramMechanism, scramMechanismMap) -> {
+                ScramCredentialData scramCredentialData = scramMechanismMap.get(userName);
+                if (scramCredentialData != null) {
+                    userScramCredentialStrings.put(scramMechanism.mechanismName(),
+                        ScramCredentialUtils.credentialToString(scramCredentialData.toCredential(scramMechanism)));
+                }
+            });
+        }
+        return userScramCredentialStrings;
+    }
+
+    void handleClientQuotasSnapshot(ClientQuotasImage clientQuotasImage, ScramImage scramImage) {
+        Set<ClientQuotaEntity> changedNonUserEntities = new HashSet<>();
+        Set<String> changedUsers = new HashSet<>();
+        migrationClient.configClient().iterateClientQuotas(new ConfigMigrationClient.ClientQuotaVisitor() {
+            @Override
+            public void visitClientQuota(List<ClientQuotaRecord.EntityData> entityDataList, Map<String, Double> quotas) {
+                Map<String, String> entityMap = new HashMap<>(2);
+                entityDataList.forEach(entityData -> entityMap.put(entityData.entityType(), entityData.entityName()));
+                ClientQuotaEntity entity = new ClientQuotaEntity(entityMap);
+                if (!clientQuotasImage.entities().getOrDefault(entity, ClientQuotaImage.EMPTY).quotaMap().equals(quotas)) {
+                    if (
+                        entity.entries().containsKey(ClientQuotaEntity.USER) &&
+                        !entity.entries().containsKey(ClientQuotaEntity.CLIENT_ID)
+                    ) {
+                        // Track regular user entities separately
+                        changedUsers.add(entityMap.get(ClientQuotaEntity.USER));
+                    } else {
+                        changedNonUserEntities.add(entity);
+                    }
+                }
+            }
+
+            @Override
+            public void visitScramCredential(String userName, ScramMechanism scramMechanism, ScramCredential scramCredential) {
+                // For each ZK entity, see if it exists in the image and if it's equal
+                ScramCredentialData data = scramImage.mechanisms().getOrDefault(scramMechanism, Collections.emptyMap()).get(userName);
+                if (data == null || !data.toCredential(scramMechanism).equals(scramCredential)) {
+                    changedUsers.add(userName);
+                }
             }
         });
 
-        changedEntities.forEach(entity -> {
-            Map<String, Double> quotaMap = image.entities().get(entity).quotaMap();
+        changedNonUserEntities.forEach(entity -> {
+            Map<String, Double> quotaMap = clientQuotasImage.entities().get(entity).quotaMap();
             operationConsumer.accept("Update client quotas for " + entity, migrationState ->
-                migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, migrationState));
+                migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, Collections.emptyMap(), migrationState));
         });
+
+        changedUsers.forEach(userName -> {
+            ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
+            Map<String, Double> quotaMap = clientQuotasImage.entities().get(entity).quotaMap();
+            Map<String, String> scramMap = getScramCredentialStringsForUser(scramImage, userName);
+            operationConsumer.accept("Update scram credentials for " + userName, migrationState ->
+                migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, scramMap, migrationState));
+        });
+
+
     }
 
     void handleConfigsDelta(ConfigurationsImage configsImage, ConfigurationsDelta configsDelta) {
@@ -241,13 +293,49 @@ public class KRaftMigrationZkWriter {
         });
     }
 
-    void handleClientQuotasDelta(ClientQuotasImage image, ClientQuotasDelta delta) {
-        Set<ClientQuotaEntity> changedEntities = delta.changes().keySet();
-        changedEntities.forEach(clientQuotaEntity -> {
-            Map<String, Double> quotaMap = image.entities().get(clientQuotaEntity).quotaMap();
-            operationConsumer.accept("Update client quotas for " + clientQuotaEntity, migrationState ->
-                migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, migrationState));
-        });
+    void handleClientQuotasDelta(MetadataImage metadataImage, MetadataDelta metadataDelta) {
+        if ((metadataDelta.clientQuotasDelta() != null) || (metadataDelta.scramDelta() != null)) {
+            // A list of users with scram or quota changes
+            HashSet<String> users = new HashSet<>();
+
+            // Populate list with users with scram changes
+            if (metadataDelta.scramDelta() != null) {
+                metadataDelta.scramDelta().changes().forEach((scramMechanism, changes) -> {
+                    changes.forEach((userName, changeOpt) -> users.add(userName));
+                });
+            }
+
+            // Populate list with users with quota changes
+            // and apply quota changes to all non-user quota changes
+            if (metadataDelta.clientQuotasDelta() != null) {
+                metadataDelta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
+                    if ((clientQuotaEntity.entries().containsKey(ClientQuotaEntity.USER)) &&
+                            (!clientQuotaEntity.entries().containsKey(ClientQuotaEntity.CLIENT_ID))) {
+                        String userName = clientQuotaEntity.entries().get(ClientQuotaEntity.USER);
+                        // Add clientQuotaEntity to list to process at the end
+                        users.add(userName);
+                    } else {
+                        Map<String, Double> quotaMap = metadataImage.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
+                        operationConsumer.accept("Updating client quota " + clientQuotaEntity, migrationState ->
+                            migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, Collections.emptyMap(), migrationState));
+                    }
+                });
+            }
+
+            // Update user scram and quota data for each user with changes in either.
+            users.forEach(userName -> {
+                Map<String, String> userScramMap = getScramCredentialStringsForUser(metadataImage.scram(), userName);
+                ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
+                if (metadataImage.clientQuotas() == null) {
+                    operationConsumer.accept("Updating client quota " + clientQuotaEntity, migrationState ->
+                        migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), Collections.emptyMap(), userScramMap, migrationState));
+                } else {
+                    Map<String, Double> quotaMap = metadataImage.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
+                    operationConsumer.accept("Updating client quota " + clientQuotaEntity, migrationState ->
+                        migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
+                }
+            });
+        }
     }
 
     private ResourcePattern resourcePatternFromAcl(StandardAcl acl) {

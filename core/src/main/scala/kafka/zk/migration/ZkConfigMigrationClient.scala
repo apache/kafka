@@ -22,10 +22,13 @@ import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
+import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
@@ -70,17 +73,30 @@ class ZkConfigMigrationClient(
   }
 
 
-  override def iterateClientQuotas(
-    quotaEntityConsumer: BiConsumer[util.List[EntityData], util.Map[String, lang.Double]]
-  ): Unit = {
+  override def iterateClientQuotas(visitor: ClientQuotaVisitor): Unit = {
     def migrateEntityType(zkEntityType: String, entityType: String): Unit = {
       adminZkClient.fetchAllEntityConfigs(zkEntityType).foreach { case (name, props) =>
         val entity = List(buildEntityData(entityType, name)).asJava
+
+        ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach { mechanism =>
+          val propertyValue = props.getProperty(mechanism.mechanismName)
+          if (propertyValue != null) {
+            val scramCredentials = ScramCredentialUtils.credentialFromString(propertyValue)
+            logAndRethrow(this, s"Error in client quota visitor for SCRAM credential. User was $entity.") {
+              visitor.visitScramCredential(name, mechanism, scramCredentials)
+            }
+            props.remove(mechanism.mechanismName)
+          }
+        }
+
         val quotaMap = ZkAdminManager.clientQuotaPropsToDoubleMap(props.asScala).map {
           case (key, value) => key -> lang.Double.valueOf(value)
         }.toMap.asJava
-        logAndRethrow(this, s"Error in client quota entity consumer. Entity was $entity.") {
-          quotaEntityConsumer.accept(entity, quotaMap)
+
+        if (!quotaMap.isEmpty) {
+          logAndRethrow(this, s"Error in client quota visitor. Entity was $entity.") {
+            visitor.visitClientQuota(entity, quotaMap)
+          }
         }
       }
     }
@@ -104,8 +120,8 @@ class ZkConfigMigrationClient(
         }
         key -> doubleValue
       }.asJava
-      logAndRethrow(this, s"Error in client quota entity consumer. Entity was $entity.") {
-        quotaEntityConsumer.accept(entity.asJava, quotaMap)
+      logAndRethrow(this, s"Error in client quota entity visitor. Entity was $entity.") {
+        visitor.visitClientQuota(entity.asJava, quotaMap)
       }
     }
 
@@ -200,6 +216,7 @@ class ZkConfigMigrationClient(
   override def writeClientQuotas(
     entity: util.Map[String, String],
     quotas: util.Map[String, java.lang.Double],
+    scram: util.Map[String, String],
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     val entityMap = entity.asScala
@@ -249,6 +266,7 @@ class ZkConfigMigrationClient(
         }
       }
     }
+    scram.forEach { case (key, value) => props.put(key, value) }
 
     // Try to write the client quota configs once with create=false, and again with create=true if the first operation fails
     tryWriteEntityConfig(configType.get, path.get, props, create = false, state) match {
