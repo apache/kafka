@@ -1181,10 +1181,6 @@ public final class QuorumController implements Controller {
                 new CompleteActivationEvent(),
                 EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION)
             );
-            activationEvent.future.exceptionally(t -> {
-                fatalFaultHandler.handleFault("exception while activating controller", t);
-                return null;
-            });
             queue.prepend(activationEvent);
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while claiming leadership", e);
@@ -1275,12 +1271,21 @@ public final class QuorumController implements Controller {
         }
         return records;
     }
+
     class CompleteActivationEvent implements ControllerWriteOperation<Void> {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
-            List<ApiMessageAndVersion> records = generateActivationRecords(log, logReplayTracker.empty(),
-                zkMigrationEnabled, bootstrapMetadata, featureControl);
-            return ControllerResult.atomicOf(records, null);
+            try {
+                List<ApiMessageAndVersion> records = generateActivationRecords(log,
+                    logReplayTracker.empty(),
+                    zkMigrationEnabled,
+                    bootstrapMetadata,
+                    featureControl);
+                return ControllerResult.atomicOf(records, null);
+            } catch (Throwable t) {
+                throw fatalFaultHandler.handleFault("exception while completing controller " +
+                    "activation", t);
+            }
         }
 
         @Override

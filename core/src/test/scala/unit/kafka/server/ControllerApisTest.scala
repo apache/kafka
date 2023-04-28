@@ -154,7 +154,7 @@ class ControllerApisTest {
       new KafkaConfig(props),
       MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
       Seq.empty,
-      new SimpleApiVersionManager(ListenerType.CONTROLLER, true)
+      new SimpleApiVersionManager(ListenerType.CONTROLLER, true, false)
     )
   }
 

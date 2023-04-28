@@ -154,6 +154,9 @@
             <allow pkg="org.apache.kafka.metadata" />
             <allow pkg="org.apache.kafka.common.internals" />
         </subpackage>
+        <subpackage name="migration">
+            <allow pkg="org.apache.kafka.controller" />
+        </subpackage>
         <subpackage name="bootstrap">
             <allow pkg="org.apache.kafka.snapshot" />
         </subpackage>
