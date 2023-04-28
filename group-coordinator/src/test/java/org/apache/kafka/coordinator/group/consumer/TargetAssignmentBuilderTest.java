@@ -37,6 +37,7 @@ import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkA
 import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentRecord;
+import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -144,52 +145,40 @@ public class TargetAssignmentBuilderTest {
             return this;
         }
 
-        private AssignmentMemberSpec assignmentMemberSpec(
-            ConsumerGroupMember member,
-            Assignment targetAssignment
-        ) {
-            Set<Uuid> subscribedTopics = new HashSet<>();
-            member.subscribedTopicNames().forEach(topicName -> {
-                TopicMetadata topicMetadata = subscriptionMetadata.get(topicName);
-                if (topicMetadata != null) {
-                    subscribedTopics.add(topicMetadata.id());
-                }
-            });
-
-            return new AssignmentMemberSpec(
-                Optional.ofNullable(member.instanceId()),
-                Optional.ofNullable(member.rackId()),
-                subscribedTopics,
-                targetAssignment.partitions()
-            );
-        }
-
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
             // Prepare expected member specs.
             Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+
+            // All the existing members are prepared.
             members.forEach((memberId, member) -> {
-                memberSpecs.put(memberId, assignmentMemberSpec(
+                memberSpecs.put(memberId, createAssignmentMemberSpec(
                     member,
-                    targetAssignments.getOrDefault(memberId, Assignment.EMPTY)
+                    targetAssignments.getOrDefault(memberId, Assignment.EMPTY),
+                    subscriptionMetadata
                 ));
             });
 
+            // All the updated are added and all the deleted
+            // members are removed.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
                 if (updatedMemberOrNull == null) {
                     memberSpecs.remove(memberId);
                 } else {
-                    memberSpecs.put(memberId, assignmentMemberSpec(
+                    memberSpecs.put(memberId, createAssignmentMemberSpec(
                         updatedMemberOrNull,
-                        targetAssignments.getOrDefault(memberId, Assignment.EMPTY)
+                        targetAssignments.getOrDefault(memberId, Assignment.EMPTY),
+                        subscriptionMetadata
                     ));
                 }
             });
 
+            // Prepare the expected topic metadata.
             Map<Uuid, AssignmentTopicMetadata> topicMetadata = new HashMap<>();
             subscriptionMetadata.forEach((topicName, metadata) -> {
                 topicMetadata.put(metadata.id(), new AssignmentTopicMetadata(metadata.numPartitions()));
             });
 
+            // Prepare the expected assignment spec.
             AssignmentSpec assignmentSpec = new AssignmentSpec(
                 memberSpecs,
                 topicMetadata
@@ -205,20 +194,61 @@ public class TargetAssignmentBuilderTest {
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withTargetAssignments(targetAssignments);
 
+            // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
                 if (updatedMemberOrNull != null) {
-                    builder.withUpdatedMember(memberId, updatedMemberOrNull);
+                    builder.addOrUpdateMember(memberId, updatedMemberOrNull);
                 } else {
-                    builder.withRemoveMember(memberId);
+                    builder.removeMember(memberId);
                 }
             });
 
+            // Execute the builder.
             TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
 
+            // Verify that the assignor was called once with the expected
+            // assignment spec.
             verify(assignor, times(1)).assign(assignmentSpec);
 
             return result;
         }
+    }
+
+    @Test
+    public void testCreateAssignmentMemberSpec() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+            .setRackId("rackId")
+            .setInstanceId("instanceId")
+            .build();
+
+        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<String, TopicMetadata>() {
+            {
+                put("foo", new TopicMetadata(fooTopicId, "foo", 5));
+                put("bar", new TopicMetadata(barTopicId, "bar", 5));
+            }
+        };
+
+        Assignment assignment = new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2, 3),
+            mkTopicAssignment(barTopicId, 1, 2, 3)
+        ));
+
+        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
+            member,
+            assignment,
+            subscriptionMetadata
+        );
+
+        assertEquals(new AssignmentMemberSpec(
+            Optional.of("instanceId"),
+            Optional.of("rackId"),
+            new HashSet<>(Arrays.asList(fooTopicId, barTopicId)),
+            assignment.partitions()
+        ), assignmentMemberSpec);
     }
 
     @Test

@@ -118,7 +118,7 @@ public class TargetAssignmentBuilder {
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     /**
-     * The current target assignment.
+     * The existing target assignment.
      */
     private Map<String, Assignment> assignments = Collections.emptyMap();
 
@@ -146,9 +146,9 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds all the current members.
+     * Adds all the existing members.
      *
-     * @param members   The current members in the consumer group.
+     * @param members   The existing members in the consumer group.
      * @return This object.
      */
     public TargetAssignmentBuilder withMembers(
@@ -185,18 +185,18 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Updates a member. This is useful when the updated member is
+     * Adds or updates a member. This is useful when the updated member is
      * not yet materialized in memory.
      *
-     * @param memberId      The member id.
-     * @param updatedMember The updated member.
+     * @param memberId  The member id.
+     * @param member    The member to add or update.
      * @return This object.
      */
-    public TargetAssignmentBuilder withUpdatedMember(
+    public TargetAssignmentBuilder addOrUpdateMember(
         String memberId,
-        ConsumerGroupMember updatedMember
+        ConsumerGroupMember member
     ) {
-        this.updatedMembers.put(memberId, updatedMember);
+        this.updatedMembers.put(memberId, member);
         return this;
     }
 
@@ -207,10 +207,10 @@ public class TargetAssignmentBuilder {
      * @param memberId The member id.
      * @return This object.
      */
-    public TargetAssignmentBuilder withRemoveMember(
+    public TargetAssignmentBuilder removeMember(
         String memberId
     ) {
-        return withUpdatedMember(memberId, null);
+        return addOrUpdateMember(memberId, null);
     }
 
     /**
@@ -224,22 +224,22 @@ public class TargetAssignmentBuilder {
         Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> addMemberSpec(
-            memberSpecs,
+        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
             member,
-            assignments.getOrDefault(memberId, Assignment.EMPTY)
-        ));
+            assignments.getOrDefault(memberId, Assignment.EMPTY),
+            subscriptionMetadata
+        )));
 
         // Update the member spec if updated or deleted members.
         updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
-                addMemberSpec(
-                    memberSpecs,
+                memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
-                    assignments.getOrDefault(memberId, Assignment.EMPTY)
-                );
+                    assignments.getOrDefault(memberId, Assignment.EMPTY),
+                    subscriptionMetadata
+                ));
             }
         });
 
@@ -304,10 +304,10 @@ public class TargetAssignmentBuilder {
         }
     }
 
-    private void addMemberSpec(
-        Map<String, AssignmentMemberSpec> members,
+    public static AssignmentMemberSpec createAssignmentMemberSpec(
         ConsumerGroupMember member,
-        Assignment targetAssignment
+        Assignment targetAssignment,
+        Map<String, TopicMetadata> subscriptionMetadata
     ) {
         Set<Uuid> subscribedTopics = new HashSet<>();
         member.subscribedTopicNames().forEach(topicName -> {
@@ -317,11 +317,11 @@ public class TargetAssignmentBuilder {
             }
         });
 
-        members.put(member.memberId(), new AssignmentMemberSpec(
+        return new AssignmentMemberSpec(
             Optional.ofNullable(member.instanceId()),
             Optional.ofNullable(member.rackId()),
             subscribedTopics,
             targetAssignment.partitions()
-        ));
+        );
     }
 }
