@@ -501,6 +501,8 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
+        assertEquals(4, result.records().size());
+
         assertUnorderedList(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2),
@@ -514,12 +516,12 @@ public class TargetAssignmentBuilderTest {
                 mkTopicAssignment(fooTopicId, 5, 6),
                 mkTopicAssignment(barTopicId, 5, 6)
             ))
-        ), result.records().subList(0, result.records().size() - 1));
+        ), result.records().subList(0, 3));
 
         assertEquals(newTargetAssignmentEpochRecord(
             "my-group",
             20
-        ), result.records().get(result.records().size() - 1));
+        ), result.records().get(3));
 
         Map<String, Assignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new Assignment(mkAssignment(
