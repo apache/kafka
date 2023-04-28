@@ -199,7 +199,7 @@ public class MetadataRequestBenchmark {
             setClusterId("clusterId").
             setTime(Time.SYSTEM).
             setTokenManager(null).
-            setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER, false)).
+            setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER, false, false)).
             build();
     }
 

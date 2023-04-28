@@ -158,7 +158,7 @@ object BrokerApiVersionsCommand {
     private def getNodeApiVersions(node: Node): NodeApiVersions = {
       val response = send(node, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
       Errors.forCode(response.data.errorCode).maybeThrow()
-      new NodeApiVersions(response.data.apiKeys, response.data.supportedFeatures)
+      new NodeApiVersions(response.data.apiKeys, response.data.supportedFeatures, response.data.zkMigrationReady)
     }
 
     /**
