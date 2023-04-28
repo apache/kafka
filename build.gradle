@@ -34,14 +34,14 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.46.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '8.1.2'
+  id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.0"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
 
   id "com.github.spotbugs" version '5.0.13' apply false
   id 'org.gradle.test-retry' version '1.5.2' apply false
   id 'org.scoverage' version '7.0.1' apply false
-  id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
+  id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
 }
 

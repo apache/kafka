@@ -81,7 +81,7 @@ public class PCollectionsImmutableSet<E> implements ImmutableSet<E> {
 
     @Override
     public Iterator<E> iterator() {
-        return underlying.iterator();
+        return underlying().iterator();
     }
 
     @Override
@@ -113,7 +113,7 @@ public class PCollectionsImmutableSet<E> implements ImmutableSet<E> {
 
     @Override
     public boolean containsAll(Collection<?> c) {
-        return underlying.containsAll(c);
+        return underlying().containsAll(c);
     }
 
     @Override

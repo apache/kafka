@@ -44,13 +44,10 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
     private final long retentionPeriod;
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis;
 
-    private final TimeTracker sharedTimeTracker;
-
     KStreamKStreamSelfJoin(
         final String windowName,
         final JoinWindowsInternal windows,
         final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis,
-        final TimeTracker sharedTimeTracker,
         final long retentionPeriod) {
 
         this.windowName = windowName;
@@ -59,7 +56,6 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         this.joinOtherBeforeMs = windows.afterMs;
         this.joinOtherAfterMs = windows.beforeMs;
         this.joinerThis = joinerThis;
-        this.sharedTimeTracker = sharedTimeTracker;
         this.retentionPeriod = retentionPeriod;
     }
 
@@ -69,6 +65,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
     }
 
     private class KStreamKStreamSelfJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
+        private final TimeTracker timeTracker = new TimeTracker();
         private WindowStore<K, V2> windowStore;
         private Sensor droppedRecordsSensor;
 
@@ -95,9 +92,9 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             final Record selfRecord = record
                 .withValue(joinerThis.apply(record.key(), record.value(), (V2) record.value()))
                 .withTimestamp(inputRecordTimestamp);
-            sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
+            timeTracker.advanceStreamTime(inputRecordTimestamp);
             // We emit the self record only if it isn't expired.
-            final boolean emitSelfRecord = inputRecordTimestamp > sharedTimeTracker.streamTime - retentionPeriod + 1;
+            final boolean emitSelfRecord = inputRecordTimestamp > timeTracker.streamTime - retentionPeriod + 1;
 
             // Join current record with other
             try (final WindowStoreIterator<V2> iter = windowStore.fetch(record.key(), timeFrom, timeTo)) {

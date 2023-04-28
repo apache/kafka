@@ -14,25 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
-import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineObject;
+package org.apache.kafka.deferred;
 
-public class MigrationControlManager {
-    private final TimelineObject<ZkMigrationState> zkMigrationState;
-
-    MigrationControlManager(SnapshotRegistry snapshotRegistry) {
-        zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
-    }
-
-    ZkMigrationState zkMigrationState() {
-        return zkMigrationState.get();
-    }
-
-    void replay(ZkMigrationStateRecord record) {
-        zkMigrationState.set(ZkMigrationState.of(record.zkMigrationState()));
-    }
+/**
+ * Represents a deferred event in the {{@link DeferredEventQueue}}.
+ */
+public interface DeferredEvent {
+    /**
+     * Complete the event.
+     *
+     * @param exception         null if the event should be completed successfully; the
+     *                          error otherwise.
+     */
+    void complete(Throwable exception);
 }

@@ -77,7 +77,7 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER, true)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER, true, false)
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
   server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
   val sockets = new ArrayBuffer[Socket]
