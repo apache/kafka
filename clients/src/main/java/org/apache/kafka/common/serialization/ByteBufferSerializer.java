@@ -52,6 +52,13 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
         return Utils.toArray(data);
     }
 
+    /**
+     * Note that this method will modify the position and limit of the input ByteBuffer.
+     *
+     * @param topic   topic associated with data
+     * @param data    typed data
+     * @return serialized ByteBuffer
+     */
     @Override
     public ByteBuffer serializeToByteBuffer(String topic, ByteBuffer data) {
         if (data == null) {
