@@ -1359,7 +1359,7 @@ public class QuorumControllerTest {
         assertEquals(
             "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
             assertThrows(FaultHandlerException.class, () ->
-                checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true)).getCause().getCause().getMessage()
+                checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true)).getCause().getMessage()
         );
     }
 
