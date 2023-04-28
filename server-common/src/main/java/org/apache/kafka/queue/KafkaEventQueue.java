@@ -245,7 +245,7 @@ public final class KafkaEventQueue implements EventQueue {
                             continue;
                         } else if (interrupted) {
                             remove(eventContext);
-                            toDeliver = new InterruptedException();
+                            toDeliver = new InterruptedException("The event handler thread is interrupted");
                             toRun = eventContext;
                             continue;
                         } else if (shuttingDown) {
@@ -264,7 +264,7 @@ public final class KafkaEventQueue implements EventQueue {
                         }
                     } else {
                         if (interrupted) {
-                            toDeliver = new InterruptedException();
+                            toDeliver = new InterruptedException("The event handler thread is interrupted");
                         } else {
                             toDeliver = null;
                         }
@@ -303,7 +303,7 @@ public final class KafkaEventQueue implements EventQueue {
                     return new RejectedExecutionException("The event queue is shutting down");
                 }
                 if (interrupted) {
-                    return new InterruptedException();
+                    return new InterruptedException("The event handler thread is interrupted");
                 }
                 OptionalLong existingDeadlineNs = OptionalLong.empty();
                 if (eventContext.tag != null) {
