@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentTopicMetadata;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.junit.jupiter.api.Test;
 
@@ -55,7 +56,7 @@ public class TargetAssignmentBuilderTest {
         private final Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
         private final Map<String, Assignment> targetAssignments = new HashMap<>();
-        private final Map<String, org.apache.kafka.coordinator.group.assignor.MemberAssignment> assignments = new HashMap<>();
+        private final Map<String, MemberAssignment> assignments = new HashMap<>();
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
@@ -65,7 +66,7 @@ public class TargetAssignmentBuilderTest {
             this.groupEpoch = groupEpoch;
         }
 
-        public TargetAssignmentBuilderTestContext addGroupMember(
+        public void addGroupMember(
             String memberId,
             List<String> subscriptions,
             Map<Uuid, Set<Integer>> targetPartitions
@@ -80,28 +81,26 @@ public class TargetAssignmentBuilderTest {
                 targetPartitions,
                 VersionedMetadata.EMPTY
             ));
-
-            return this;
         }
 
-        public TargetAssignmentBuilderTestContext addTopicMetadata(
-            Uuid topicId,
+        public Uuid addTopicMetadata(
             String topicName,
             int numPartitions
         ) {
+            Uuid topicId = Uuid.randomUuid();
             subscriptionMetadata.put(topicName, new TopicMetadata(
                 topicId,
                 topicName,
                 numPartitions
             ));
-            return this;
+            return topicId;
         }
 
-        public TargetAssignmentBuilderTestContext updateMemberSubscription(
+        public void updateMemberSubscription(
             String memberId,
             List<String> subscriptions
         ) {
-            return updateMemberSubscription(
+            updateMemberSubscription(
                 memberId,
                 subscriptions,
                 Optional.empty(),
@@ -109,7 +108,7 @@ public class TargetAssignmentBuilderTest {
             );
         }
 
-        public TargetAssignmentBuilderTestContext updateMemberSubscription(
+        public void updateMemberSubscription(
             String memberId,
             List<String> subscriptions,
             Optional<String> instanceId,
@@ -127,22 +126,19 @@ public class TargetAssignmentBuilderTest {
                 .maybeUpdateInstanceId(instanceId)
                 .maybeUpdateRackId(rackId)
                 .build());
-            return this;
         }
 
-        public TargetAssignmentBuilderTestContext removeMemberSubscription(
+        public void removeMemberSubscription(
             String memberId
         ) {
             this.updatedMembers.put(memberId, null);
-            return this;
         }
 
-        public TargetAssignmentBuilderTestContext prepareMemberAssignment(
+        public void prepareMemberAssignment(
             String memberId,
             Map<Uuid, Set<Integer>> assignment
         ) {
-            assignments.put(memberId, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(assignment));
-            return this;
+            assignments.put(memberId, new MemberAssignment(assignment));
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
@@ -268,16 +264,13 @@ public class TargetAssignmentBuilderTest {
 
     @Test
     public void testAssignmentHasNotChanged() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
             20
         );
 
-        context.addTopicMetadata(fooTopicId, "foo", 6);
-        context.addTopicMetadata(barTopicId, "bar", 6);
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -321,16 +314,13 @@ public class TargetAssignmentBuilderTest {
 
     @Test
     public void testAssignmentSwapped() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
             20
         );
 
-        context.addTopicMetadata(fooTopicId, "foo", 6);
-        context.addTopicMetadata(barTopicId, "bar", 6);
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -387,16 +377,13 @@ public class TargetAssignmentBuilderTest {
 
     @Test
     public void testNewMember() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
             20
         );
 
-        context.addTopicMetadata(fooTopicId, "foo", 6);
-        context.addTopicMetadata(barTopicId, "bar", 6);
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -468,16 +455,13 @@ public class TargetAssignmentBuilderTest {
 
     @Test
     public void testUpdateMember() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
             20
         );
 
-        context.addTopicMetadata(fooTopicId, "foo", 6);
-        context.addTopicMetadata(barTopicId, "bar", 6);
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -556,16 +540,13 @@ public class TargetAssignmentBuilderTest {
 
     @Test
     public void testPartialAssignmentUpdate() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
             20
         );
 
-        context.addTopicMetadata(fooTopicId, "foo", 6);
-        context.addTopicMetadata(barTopicId, "bar", 6);
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
@@ -637,16 +618,13 @@ public class TargetAssignmentBuilderTest {
 
     @Test
     public void testDeleteMember() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
             20
         );
 
-        context.addTopicMetadata(fooTopicId, "foo", 6);
-        context.addTopicMetadata(barTopicId, "bar", 6);
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
