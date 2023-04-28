@@ -658,7 +658,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 }
 
                 if ((delta.clientQuotasDelta() != null) || (delta.scramDelta() != null)) {
-
                     // A list of users with scram or quota changes
                     HashSet<String> users = new HashSet<String>();
 
@@ -692,7 +691,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         Map<String, String> userScramMap = getScramCredentialStringsForUser(userName);
                         ClientQuotaEntity clientQuotaEntity = new
                             ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
-                        if (image.clientQuotas() != null) {
+                        if (image.clientQuotas() == null) {
                             Map<String, Double> quotaMap = new HashMap<String, Double>();
                             apply("Updating client quota " + clientQuotaEntity, migrationState ->
                                 zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
