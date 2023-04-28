@@ -22,6 +22,7 @@ import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.controller.QuorumFeatures;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -47,6 +48,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
@@ -91,6 +93,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private volatile MigrationDriverState migrationState;
     private volatile ZkMigrationLeadershipState migrationLeadershipState;
     private volatile MetadataImage image;
+    private volatile QuorumFeatures quorumFeatures;
     private volatile boolean firstPublish;
 
     public KRaftMigrationDriver(
@@ -99,15 +102,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         MigrationClient zkMigrationClient,
         LegacyPropagator propagator,
         Consumer<MetadataPublisher> initialZkLoadHandler,
-        FaultHandler faultHandler
+        FaultHandler faultHandler,
+        QuorumFeatures quorumFeatures,
+        Time time
     ) {
         this.nodeId = nodeId;
         this.zkRecordConsumer = zkRecordConsumer;
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
-        this.time = Time.SYSTEM;
+        this.time = time;
         this.logContext = new LogContext("[KRaftMigrationDriver id=" + nodeId + "] ");
-        this.log = this.logContext.logger(KRaftMigrationDriver.class);
+        this.log = logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "controller-" + nodeId + "-migration-driver-");
@@ -116,7 +121,21 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.leaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
+        this.quorumFeatures = quorumFeatures;
     }
+
+    public KRaftMigrationDriver(
+        int nodeId,
+        ZkRecordConsumer zkRecordConsumer,
+        MigrationClient zkMigrationClient,
+        LegacyPropagator propagator,
+        Consumer<MetadataPublisher> initialZkLoadHandler,
+        FaultHandler faultHandler,
+        QuorumFeatures quorumFeatures
+    ) {
+        this(nodeId, zkRecordConsumer, zkMigrationClient, propagator, initialZkLoadHandler, faultHandler, quorumFeatures, Time.SYSTEM);
+    }
+
 
     public void start() {
         eventQueue.prepend(new PollEvent());
@@ -147,6 +166,15 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         // Transition to INACTIVE state and wait for leadership events.
         transitionTo(MigrationDriverState.INACTIVE);
+    }
+
+    private boolean isControllerQuorumReadyForMigration() {
+        Optional<String> notReadyMsg = this.quorumFeatures.reasonAllControllersZkMigrationNotReady();
+        if (notReadyMsg.isPresent()) {
+            log.info("Still waiting for all controller nodes ready to begin the migration. due to:" + notReadyMsg.get());
+            return false;
+        }
+        return true;
     }
 
     private boolean imageDoesNotContainAllBrokers(MetadataImage image, Set<Integer> brokerIds) {
@@ -432,9 +460,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         transitionTo(MigrationDriverState.INACTIVE);
                         break;
                     case PRE_MIGRATION:
-                        // Base case when starting the migration
-                        log.debug("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
-                        transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
+                        if (isControllerQuorumReadyForMigration()) {
+                            // Base case when starting the migration
+                            log.debug("Controller Quorum is ready for Zk to KRaft migration. Now waiting for ZK brokers.");
+                            transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
+                        }
                         break;
                     case MIGRATION:
                         if (!migrationLeadershipState.zkMigrationComplete()) {
