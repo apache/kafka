@@ -19,6 +19,7 @@ package kafka.server
 
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.storage.internals.log.{FetchParams, FetchPartitionData, LogOffsetMetadata, RemoteLogReadResult, RemoteStorageFetchInfo}
 
 import java.util.concurrent.{CompletableFuture, Future}
@@ -75,18 +76,21 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
       false
   }
 
-  override def onExpiration():Unit = {
+  override def onExpiration(): Unit = {
     // cancel the remote storage read task, if it has not been executed yet
-    remoteFetchTask.cancel(false)
+    val cancelled = remoteFetchTask.cancel(true)
+    if (!cancelled) debug(s"Remote fetch task for for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
   }
 
   /**
    * Upon completion, read whatever data is available and pass to the complete callback
    */
-  override def onComplete():Unit = {
+  override def onComplete(): Unit = {
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
-      if (tp.topicPartition().equals(remoteFetchInfo.topicPartition) && remoteFetchResult.isDone
-        && result.exception.isEmpty && result.info.delayedRemoteStorageFetch.isPresent) {
+      if (tp.topicPartition().equals(remoteFetchInfo.topicPartition)
+        && remoteFetchResult.isDone
+        && result.error == Errors.NONE
+        && result.info.delayedRemoteStorageFetch.isPresent) {
         if (remoteFetchResult.get.error.isPresent) {
           tp -> replicaManager.createLogReadResult(remoteFetchResult.get.error.get).toFetchPartitionData(false)
         } else {

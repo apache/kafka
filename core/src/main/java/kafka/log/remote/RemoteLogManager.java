@@ -668,21 +668,21 @@ public class RemoteLogManager implements Closeable {
 
             // An empty record is sent instead of an incomplete batch when there is no minimum-one-message constraint
             // and for FetchRequest version 3 and above and the first batch size is more than maximum bytes that can be sent.
+            int firstBatchSize = firstBatch.sizeInBytes();
             if (!remoteStorageFetchInfo.minOneMessage &&
                     !remoteStorageFetchInfo.hardMaxBytesLimit &&
-                    firstBatch.sizeInBytes() > maxBytes) {
+                    firstBatchSize > maxBytes) {
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
             }
 
             int updatedFetchSize =
-                    remoteStorageFetchInfo.minOneMessage && firstBatch.sizeInBytes() > maxBytes
-                            ? firstBatch.sizeInBytes() : maxBytes;
+                    remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes ? firstBatchSize : maxBytes;
 
             ByteBuffer buffer = ByteBuffer.allocate(updatedFetchSize);
             int remainingBytes = updatedFetchSize;
 
             firstBatch.writeTo(buffer);
-            remainingBytes -= firstBatch.sizeInBytes();
+            remainingBytes -= firstBatchSize;
 
             if (remainingBytes > 0) {
                 // read the input stream until min of (EOF stream or buffer's remaining capacity).
@@ -875,6 +875,14 @@ public class RemoteLogManager implements Closeable {
                 } catch (InterruptedException e) {
                     // ignore
                 }
+                remoteStorageReaderThreadPool.shutdownNow();
+                //waits for 2 mins to terminate the current tasks
+                try {
+                    remoteStorageReaderThreadPool.awaitTermination(2, TimeUnit.MINUTES);
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+
                 leaderOrFollowerTasks.clear();
                 closed = true;
             }
