@@ -35,11 +35,14 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics => kMetrics}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
+import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, MessageUtil}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -640,6 +643,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
+
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
@@ -1179,6 +1183,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1214,6 +1220,8 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1289,6 +1297,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1328,6 +1338,8 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1387,6 +1399,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1434,6 +1448,8 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1585,6 +1601,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1689,6 +1707,8 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     verify(replicaManager, times(2)).getMagic(any())
@@ -2467,6 +2487,217 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testSerializeGroupMetadataValueToHighestNonFlexibleVersion(): Unit = {
+    val generation = 935
+    val protocolType = "consumer"
+    val protocol = "range"
+    val memberId = "98098230493"
+    val assignmentBytes = Utils.toArray(ConsumerProtocol.serializeAssignment(
+      new ConsumerPartitionAssignor.Assignment(List(new TopicPartition("topic", 0)).asJava, null)
+    ))
+    val record = TestUtils.records(Seq(
+      buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, assignmentBytes)
+    )).records.asScala.head
+    assertEquals(3, record.value.getShort)
+  }
+
+  @Test
+  def testSerializeOffsetCommitValueToHighestNonFlexibleVersion(): Unit = {
+    val committedOffsets = Map(
+      new TopicPartition("foo", 0) -> 23L,
+      new TopicPartition("foo", 1) -> 455L,
+    )
+
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
+    offsetCommitRecords.foreach { record =>
+      assertEquals(3, record.value.getShort)
+    }
+  }
+
+  @Test
+  def testDeserializeHighestSupportedGroupMetadataValueVersion(): Unit = {
+    val member = new GroupMetadataValue.MemberMetadata()
+      .setMemberId("member")
+      .setClientId("client")
+      .setClientHost("host")
+
+    val generation = 935
+    val protocolType = "consumer"
+    val protocol = "range"
+    val leader = "leader"
+    val groupMetadataValue = new GroupMetadataValue()
+      .setProtocolType(protocolType)
+      .setGeneration(generation)
+      .setProtocol(protocol)
+      .setLeader(leader)
+      .setMembers(java.util.Collections.singletonList(member))
+
+    val deserialized = GroupMetadataManager.readGroupMessageValue("groupId",
+      MessageUtil.toVersionPrefixedByteBuffer(4, groupMetadataValue), time)
+
+    assertEquals(generation, deserialized.generationId)
+    assertEquals(protocolType, deserialized.protocolType.get)
+    assertEquals(protocol, deserialized.protocolName.get)
+    assertEquals(leader, deserialized.leaderOrNull)
+
+    val actualMember = deserialized.allMemberMetadata.head
+    assertEquals(member.memberId, actualMember.memberId)
+    assertEquals(member.clientId, actualMember.clientId)
+    assertEquals(member.clientHost, actualMember.clientHost)
+  }
+
+  @Test
+  def testDeserializeHighestSupportedOffsetCommitValueVersion(): Unit = {
+    val offsetCommitValue = new OffsetCommitValue()
+      .setOffset(1000L)
+      .setMetadata("metadata")
+      .setCommitTimestamp(1500L)
+      .setLeaderEpoch(1)
+
+    val serialized = MessageUtil.toVersionPrefixedByteBuffer(4, offsetCommitValue)
+    val deserialized = GroupMetadataManager.readOffsetMessageValue(serialized)
+
+    assertEquals(1000L, deserialized.offset)
+    assertEquals("metadata", deserialized.metadata)
+    assertEquals(1500L, deserialized.commitTimestamp)
+    assertEquals(1, deserialized.leaderEpoch.get)
+  }
+
+  @Test
+  def testDeserializeFutureOffsetCommitValue(): Unit = {
+    // Copy of OffsetCommitValue.SCHEMA_4 with a few
+    // additional tagged fields.
+    val futureOffsetCommitSchema = new Schema(
+      new Field("offset", Type.INT64, ""),
+      new Field("leader_epoch", Type.INT32, ""),
+      new Field("metadata", Type.COMPACT_STRING, ""),
+      new Field("commit_timestamp", Type.INT64, ""),
+      TaggedFieldsSection.of(
+        Int.box(0), new Field("offset_foo", Type.STRING, ""),
+        Int.box(1), new Field("offset_bar", Type.INT32, "")
+      )
+    )
+
+    // Create OffsetCommitValue with tagged fields
+    val offsetCommit = new Struct(futureOffsetCommitSchema)
+    offsetCommit.set("offset", 1000L)
+    offsetCommit.set("leader_epoch", 100)
+    offsetCommit.set("metadata", "metadata")
+    offsetCommit.set("commit_timestamp", 2000L)
+    val offsetCommitTaggedFields = new java.util.TreeMap[Integer, Any]()
+    offsetCommitTaggedFields.put(0, "foo")
+    offsetCommitTaggedFields.put(1, 4000)
+    offsetCommit.set("_tagged_fields", offsetCommitTaggedFields)
+
+    // Prepare the buffer.
+    val buffer = ByteBuffer.allocate(offsetCommit.sizeOf() + 2)
+    buffer.put(0.toByte)
+    buffer.put(4.toByte) // Add 4 as version.
+    offsetCommit.writeTo(buffer)
+    buffer.flip()
+
+    // Read the buffer with the real schema and verify that tagged
+    // fields were read but ignored.
+    buffer.getShort() // Skip version.
+    val value = new OffsetCommitValue(new ByteBufferAccessor(buffer), 4.toShort)
+    assertEquals(Seq(0, 1), value.unknownTaggedFields().asScala.map(_.tag))
+
+    // Read the buffer with readOffsetMessageValue.
+    buffer.rewind()
+    val offsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
+    assertEquals(1000L, offsetAndMetadata.offset)
+    assertEquals(100, offsetAndMetadata.leaderEpoch.get)
+    assertEquals("metadata", offsetAndMetadata.metadata)
+    assertEquals(2000L, offsetAndMetadata.commitTimestamp)
+  }
+
+  @Test
+  def testDeserializeFutureGroupMetadataValue(): Unit = {
+    // Copy of GroupMetadataValue.MemberMetadata.SCHEMA_4 with a few
+    // additional tagged fields.
+    val futureMemberSchema = new Schema(
+      new Field("member_id", Type.COMPACT_STRING, ""),
+      new Field("group_instance_id", Type.COMPACT_NULLABLE_STRING, ""),
+      new Field("client_id", Type.COMPACT_STRING, ""),
+      new Field("client_host", Type.COMPACT_STRING, ""),
+      new Field("rebalance_timeout", Type.INT32, ""),
+      new Field("session_timeout", Type.INT32, ""),
+      new Field("subscription", Type.COMPACT_BYTES, ""),
+      new Field("assignment", Type.COMPACT_BYTES, ""),
+      TaggedFieldsSection.of(
+        Int.box(0), new Field("member_foo", Type.STRING, ""),
+        Int.box(1), new Field("member_foo", Type.INT32, "")
+      )
+    )
+
+    // Copy of GroupMetadataValue.SCHEMA_4 with a few
+    // additional tagged fields.
+    val futureGroupSchema = new Schema(
+      new Field("protocol_type", Type.COMPACT_STRING, ""),
+      new Field("generation", Type.INT32, ""),
+      new Field("protocol", Type.COMPACT_NULLABLE_STRING, ""),
+      new Field("leader", Type.COMPACT_NULLABLE_STRING, ""),
+      new Field("current_state_timestamp", Type.INT64, ""),
+      new Field("members", new CompactArrayOf(futureMemberSchema), ""),
+      TaggedFieldsSection.of(
+        Int.box(0), new Field("group_foo", Type.STRING, ""),
+        Int.box(1), new Field("group_bar", Type.INT32, "")
+      )
+    )
+
+    // Create a member with tagged fields.
+    val member = new Struct(futureMemberSchema)
+    member.set("member_id", "member_id")
+    member.set("group_instance_id", "group_instance_id")
+    member.set("client_id", "client_id")
+    member.set("client_host", "client_host")
+    member.set("rebalance_timeout", 1)
+    member.set("session_timeout", 2)
+    member.set("subscription", ByteBuffer.allocate(0))
+    member.set("assignment", ByteBuffer.allocate(0))
+
+    val memberTaggedFields = new java.util.TreeMap[Integer, Any]()
+    memberTaggedFields.put(0, "foo")
+    memberTaggedFields.put(1, 4000)
+    member.set("_tagged_fields", memberTaggedFields)
+
+    // Create a group with tagged fields.
+    val group = new Struct(futureGroupSchema)
+    group.set("protocol_type", "consumer")
+    group.set("generation", 10)
+    group.set("protocol", "range")
+    group.set("leader", "leader")
+    group.set("current_state_timestamp", 1000L)
+    group.set("members", Array(member))
+
+    val groupTaggedFields = new java.util.TreeMap[Integer, Any]()
+    groupTaggedFields.put(0, "foo")
+    groupTaggedFields.put(1, 4000)
+    group.set("_tagged_fields", groupTaggedFields)
+
+    // Prepare the buffer.
+    val buffer = ByteBuffer.allocate(group.sizeOf() + 2)
+    buffer.put(0.toByte)
+    buffer.put(4.toByte) // Add 4 as version.
+    group.writeTo(buffer)
+    buffer.flip()
+
+    // Read the buffer with the real schema and verify that tagged
+    // fields were read but ignored.
+    buffer.getShort() // Skip version.
+    val value = new GroupMetadataValue(new ByteBufferAccessor(buffer), 4.toShort)
+    assertEquals(Seq(0, 1), value.unknownTaggedFields().asScala.map(_.tag))
+    assertEquals(Seq(0, 1), value.members().get(0).unknownTaggedFields().asScala.map(_.tag))
+
+    // Read the buffer with readGroupMessageValue.
+    buffer.rewind()
+    val groupMetadata = GroupMetadataManager.readGroupMessageValue("group", buffer, time)
+    assertEquals("consumer", groupMetadata.protocolType.get)
+    assertEquals("leader", groupMetadata.leaderOrNull)
+    assertTrue(groupMetadata.allMembers.contains("member_id"))
+  }
+
+  @Test
   def testLoadOffsetsWithEmptyControlBatch(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val startOffset = 15L
@@ -2584,6 +2815,8 @@ class GroupMetadataManagerTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
+      any(),
       any())
     capturedArgument
   }
@@ -2598,6 +2831,8 @@ class GroupMetadataManagerTest {
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any())
     ).thenAnswer(_ => {
@@ -2761,5 +2996,61 @@ class GroupMetadataManagerTest {
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), now - diff)
     assertTrue(partitionLoadTime("partition-load-time-max") >= diff)
     assertTrue(partitionLoadTime("partition-load-time-avg") >= diff)
+  }
+
+  @Test
+  def testReadMessageKeyCanReadUnknownMessage(): Unit = {
+    val record = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
+    val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
+    val key = GroupMetadataManager.readMessageKey(ByteBuffer.wrap(unknownRecord))
+    assertEquals(UnknownKey(Short.MaxValue), key)
+  }
+
+  @Test
+  def testLoadGroupsAndOffsetsWillIgnoreUnknownMessage(): Unit = {
+    val generation = 935
+    val protocolType = "consumer"
+    val protocol = "range"
+    val startOffset = 15L
+    val committedOffsets = Map(
+      new TopicPartition("foo", 0) -> 23L,
+      new TopicPartition("foo", 1) -> 455L,
+      new TopicPartition("bar", 0) -> 8992L
+    )
+
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
+    val memberId = "98098230493"
+    val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
+
+    // Should ignore unknown record
+    val unknownKey = new org.apache.kafka.coordinator.group.generated.GroupMetadataKey()
+    val lowestUnsupportedVersion = (org.apache.kafka.coordinator.group.generated.GroupMetadataKey
+      .HIGHEST_SUPPORTED_VERSION + 1).toShort
+
+    val unknownMessage1 = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
+    val unknownMessage2 = MessageUtil.toVersionPrefixedBytes(lowestUnsupportedVersion, unknownKey)
+    val unknownRecord1 = new SimpleRecord(unknownMessage1, unknownMessage1)
+    val unknownRecord2 = new SimpleRecord(unknownMessage2, unknownMessage2)
+
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      (offsetCommitRecords ++ Seq(unknownRecord1, unknownRecord2) ++ Seq(groupMetadataRecord)).toArray: _*)
+
+    expectGroupMetadataLoad(groupTopicPartition, startOffset, records)
+
+    groupMetadataManager.loadGroupsAndOffsets(groupTopicPartition, 1, _ => (), 0L)
+
+    val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
+    assertEquals(groupId, group.groupId)
+    assertEquals(Stable, group.currentState)
+    assertEquals(memberId, group.leaderOrNull)
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertEquals(protocol, group.protocolName.orNull)
+    assertEquals(Set(memberId), group.allMembers)
+    assertEquals(committedOffsets.size, group.allOffsets.size)
+    committedOffsets.foreach { case (topicPartition, offset) =>
+      assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+      assertTrue(group.offset(topicPartition).map(_.expireTimestamp).contains(None))
+    }
   }
 }

@@ -190,7 +190,7 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public void maybeRecordRestored(final Time time, final long numRecords) {
+    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
         throw new UnsupportedOperationException("This task is read-only");
     }
 

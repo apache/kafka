@@ -48,7 +48,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("unchecked")
@@ -216,7 +216,7 @@ public class KafkaStatusBackingStoreFormatTest {
         }).when(kafkaBasedLog).send(eq(key), valueCaptor.capture(), any(Callback.class));
 
         store.put(topicStatus);
-        verify(kafkaBasedLog, times(2)).send(any(), any(), any());
+        verify(kafkaBasedLog, timeout(1000).times(2)).send(any(), any(), any());
 
         // check capture state
         assertEquals(topicStatus, store.parseTopicStatus(valueCaptor.getValue()));

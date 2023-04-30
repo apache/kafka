@@ -309,7 +309,7 @@
     <h3 class="anchor-heading"><a id="streams_out_of_ordering" class="anchor-link"></a><a href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>
 
     <p>
-        Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing application will face is how to
+        Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing applications will face is how to
         handle <a href="https://dl.acm.org/citation.cfm?id=3242155">out-of-order data</a> that may impact their business logic. In Kafka Streams, there are two causes that could potentially
         result in out-of-order data arrivals with respect to their timestamps:
     </p>
@@ -328,13 +328,16 @@
         for stateful operations such as aggregations and joins, however, out-of-order data could cause the processing logic to be incorrect. If users want to handle such out-of-order data, generally they need to allow their applications
         to wait for longer time while bookkeeping their states during the wait time, i.e. making trade-off decisions between latency, cost, and correctness.
         In Kafka Streams specifically, users can configure their window operators for windowed aggregations to achieve such trade-offs (details can be found in <a href="/{{version}}/documentation/streams/developer-guide"><b>Developer Guide</b></a>).
-        As for Joins, users have to be aware that some of the out-of-order data cannot be handled by increasing on latency and cost in Streams yet:
+        As for Joins, users may use <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#versioned-state-stores">versioned state stores</a> to address concerns with out-of-order data, but out-of-order data will not be handled by default:
     </p>
 
     <ul>
-        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly, but the resulted stream may contain unnecessary leftRecord-null for left joins, and leftRecord-null or null-rightRecord for outer joins. </li>
-        <li> For Stream-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order), and hence it may produce unpredictable results. </li>
-        <li> For Table-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order). However, the join result is a changelog stream and hence will be eventually consistent. </li>
+        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly.</li>
+        <li> For Stream-Table joins, if not using versioned stores, then out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order),
+            and hence it may produce unpredictable results. With versioned stores, stream-side out-of-order data will be properly handled by performing a timestamp-based lookup in the table. Table-side out-of-order data is still not handled.</li>
+        <li> For Table-Table joins, if not using versioned stores, then out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order).
+            However, the join result is a changelog stream and hence will be eventually consistent. With versioned stores, table-table join semantics change from offset-based semantics to
+            <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#versioned-state-stores">timestamp-based semantics</a> and out-of-order records are handled accordingly.</li>
     </ul>
 
     <div class="pagination">

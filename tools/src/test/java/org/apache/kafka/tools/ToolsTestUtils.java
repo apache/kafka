@@ -46,6 +46,9 @@ public class ToolsTestUtils {
                 System.setErr(currentStream);
             else
                 System.setOut(currentStream);
+
+            currentStream.close();
+            tempStream.close();
         }
     }
 

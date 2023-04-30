@@ -40,7 +40,7 @@ public interface MigrationClient {
      * Read or initialize the ZK migration leader state in ZK. If the ZNode is absent, the given {@code initialState}
      * will be written and subsequently returned with the zkVersion of the node. If the ZNode is present, it will be
      * read and returned.
-     * @param initialState  An initial, emtpy, state to write to ZooKeeper for the migration state.
+     * @param initialState  An initial, empty, state to write to ZooKeeper for the migration state.
      * @return  The existing migration state, or the initial state given.
      */
     ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState);

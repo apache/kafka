@@ -21,13 +21,17 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -38,6 +42,7 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertThrows;
 
 @SuppressWarnings("deprecation")
 public class SuppressTopologyTest {
@@ -208,5 +213,34 @@ public class SuppressTopologyTest {
 
         // without the name, the suppression node does not increment the topology index
         assertThat(namedNodeTopology, is(NAMED_INTERMEDIATE_TOPOLOGY));
+    }
+
+    @Test
+    public void shouldThrowOnSuppressForMaterializedVersionedTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Object, Object> versionedTable = builder.table(
+            "input",
+            Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+        );
+
+        assertThrows(
+            TopologyException.class,
+            () -> versionedTable.suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()))
+        );
+    }
+
+    @Test
+    public void shouldThrowOnSuppressForNonMaterializedVersionedTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+                "input",
+                Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+        ).filter((k, v) -> true)
+        .suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()));
+
+        assertThrows(
+            TopologyException.class,
+            builder::build
+        );
     }
 }

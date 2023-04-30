@@ -369,6 +369,8 @@ public class StreamsBuilder {
      * <p>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig} or {@link Consumed}.
+     * Furthermore, {@link GlobalKTable} cannot be a {@link org.apache.kafka.streams.state.VersionedBytesStoreSupplier
+     * versioned state store}.
      *
      * @param topic the topic name; cannot be {@code null}
      * @param consumed  the instance of {@link Consumed} used to define optional parameters
@@ -400,6 +402,8 @@ public class StreamsBuilder {
      * <p>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig}.
+     * Furthermore, {@link GlobalKTable} cannot be a {@link org.apache.kafka.streams.state.VersionedBytesStoreSupplier
+     * versioned state store}.
      *
      * @param topic the topic name; cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
@@ -434,6 +438,8 @@ public class StreamsBuilder {
      * }</pre>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig} or {@link Consumed}.
+     * Furthermore, {@link GlobalKTable} cannot be a {@link org.apache.kafka.streams.state.VersionedBytesStoreSupplier
+     * versioned state store}.
      *
      * @param topic         the topic name; cannot be {@code null}
      * @param consumed      the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
@@ -476,6 +482,8 @@ public class StreamsBuilder {
      * }</pre>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig}.
+     * Furthermore, {@link GlobalKTable} cannot be a {@link org.apache.kafka.streams.state.VersionedBytesStoreSupplier
+     * versioned state store}.
      *
      * @param topic         the topic name; cannot be {@code null}
      * @param materialized   the instance of {@link Materialized} used to materialize a state store; cannot be {@code null}

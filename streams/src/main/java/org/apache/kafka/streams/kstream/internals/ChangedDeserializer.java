@@ -26,7 +26,8 @@ import java.nio.ByteBuffer;
 
 public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, Void, T> {
 
-    private static final int NEW_OLD_FLAG_SIZE = 1;
+    private static final int ENCODING_FLAG_SIZE = 1;
+    private static final int IS_LATEST_FLAG_SIZE = 1;
 
     private Deserializer<T> inner;
 
@@ -49,40 +50,93 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
     @Override
     public Change<T> deserialize(final String topic, final Headers headers, final byte[] data) {
         // The format we need to deserialize is:
-        // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
-        // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
-        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
+        // {BYTE_ARRAY oldValue}{BYTE encodingFlag=0}
+        // {BYTE_ARRAY newValue}{BYTE encodingFlag=1}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE encodingFlag=2}
+        // {BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=3}
+        // {BYTE_ARRAY newValue}{BYTE isLatest}{BYTE encodingFlag=4}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE isLatest}{BYTE encodingFlag=5}
         final ByteBuffer buffer = ByteBuffer.wrap(data);
-        final byte newOldFlag = buffer.get(data.length - NEW_OLD_FLAG_SIZE);
+        final byte encodingFlag = buffer.get(data.length - ENCODING_FLAG_SIZE);
 
         final byte[] newData;
         final byte[] oldData;
-        if (newOldFlag == (byte) 0) {
-            newData = null;
-            final int oldDataLength = data.length - NEW_OLD_FLAG_SIZE;
-            oldData = new byte[oldDataLength];
-            buffer.get(oldData);
-        } else if (newOldFlag == (byte) 1) {
-            oldData = null;
-            final int newDataLength = data.length - NEW_OLD_FLAG_SIZE;
-            newData = new byte[newDataLength];
-            buffer.get(newData);
-        } else if (newOldFlag == (byte) 2) {
-            final int newDataLength = Math.toIntExact(ByteUtils.readUnsignedInt(buffer));
-            newData = new byte[newDataLength];
+        final boolean isLatest;
+        switch (encodingFlag) {
+            case (byte) 0: {
+                newData = null;
+                final int oldDataLength = data.length - ENCODING_FLAG_SIZE;
+                oldData = new byte[oldDataLength];
+                buffer.get(oldData);
+                isLatest = true;
+                break;
+            }
+            case (byte) 1: {
+                oldData = null;
+                final int newDataLength = data.length - ENCODING_FLAG_SIZE;
+                newData = new byte[newDataLength];
+                buffer.get(newData);
+                isLatest = true;
+                break;
+            }
+            case (byte) 2: {
+                final int newDataLength = ByteUtils.readVarint(buffer);
+                newData = new byte[newDataLength];
+                buffer.get(newData);
 
-            final int oldDataLength = data.length - Integer.BYTES - newDataLength - NEW_OLD_FLAG_SIZE;
-            oldData = new byte[oldDataLength];
+                final int oldDataLength = buffer.capacity() - buffer.position() - ENCODING_FLAG_SIZE;
+                oldData = new byte[oldDataLength];
+                buffer.get(oldData);
+                isLatest = true;
+                break;
+            }
+            case (byte) 3: {
+                newData = null;
+                final int oldDataLength = data.length - IS_LATEST_FLAG_SIZE - ENCODING_FLAG_SIZE;
+                oldData = new byte[oldDataLength];
+                buffer.get(oldData);
+                isLatest = readIsLatestFlag(buffer);
+                break;
+            }
+            case (byte) 4: {
+                oldData = null;
+                final int newDataLength = data.length - IS_LATEST_FLAG_SIZE - ENCODING_FLAG_SIZE;
+                newData = new byte[newDataLength];
+                buffer.get(newData);
+                isLatest = readIsLatestFlag(buffer);
+                break;
+            }
+            case (byte) 5: {
+                final int newDataLength = ByteUtils.readVarint(buffer);
+                newData = new byte[newDataLength];
+                buffer.get(newData);
 
-            buffer.get(newData);
-            buffer.get(oldData);
-        } else {
-            throw new StreamsException("Encountered unknown byte value `" + newOldFlag + "` for oldNewFlag in ChangedDeserializer.");
+                final int oldDataLength = buffer.capacity() - buffer.position() - IS_LATEST_FLAG_SIZE - ENCODING_FLAG_SIZE;
+                oldData = new byte[oldDataLength];
+                buffer.get(oldData);
+
+                isLatest = readIsLatestFlag(buffer);
+                break;
+            }
+            default:
+                throw new StreamsException("Encountered unknown byte value `" + encodingFlag + "` for encodingFlag in ChangedDeserializer.");
         }
 
         return new Change<>(
-                inner.deserialize(topic, headers, newData),
-                inner.deserialize(topic, headers, oldData));
+            inner.deserialize(topic, headers, newData),
+            inner.deserialize(topic, headers, oldData),
+            isLatest);
+    }
+
+    private boolean readIsLatestFlag(final ByteBuffer buffer) {
+        final byte isLatestFlag = buffer.get(buffer.capacity() - IS_LATEST_FLAG_SIZE - ENCODING_FLAG_SIZE);
+        if (isLatestFlag == (byte) 1) {
+            return true;
+        } else if (isLatestFlag == (byte) 0) {
+            return false;
+        } else {
+            throw new StreamsException("Encountered unexpected byte value `" + isLatestFlag + "` for isLatestFlag in ChangedDeserializer.");
+        }
     }
 
     @Override
