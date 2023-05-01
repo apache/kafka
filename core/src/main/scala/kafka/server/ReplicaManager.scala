@@ -334,6 +334,7 @@ class ReplicaManager(val config: KafkaConfig,
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
+    delayedRemoteFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
   }
 
   /**
@@ -2156,6 +2157,7 @@ class ReplicaManager(val config: KafkaConfig,
     replicaFetcherManager.shutdown()
     replicaAlterLogDirsManager.shutdown()
     delayedFetchPurgatory.shutdown()
+    delayedRemoteFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
     delayedElectLeaderPurgatory.shutdown()
