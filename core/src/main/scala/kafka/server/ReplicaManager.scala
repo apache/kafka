@@ -751,7 +751,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
         // map not yet verified partitions to a request object
-        // verification only occurs on produce requests and those will always have one batch for versions that support transactions.
+        // Since verification occurs on produce requests only, and each produce request has one batch, we can just grab the first one.
         val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
         val notYetVerifiedTransaction = new AddPartitionsToTxnTransaction()
           .setTransactionalId(transactionalId)
