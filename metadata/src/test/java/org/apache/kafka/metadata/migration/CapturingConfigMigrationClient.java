@@ -18,7 +18,6 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.metadata.ClientQuotaRecord;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

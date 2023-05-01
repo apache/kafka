@@ -30,7 +30,6 @@ import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.image.AclsDelta;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotaImage;
-import org.apache.kafka.image.ClientQuotasDelta;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.image.ConfigurationsImage;
@@ -240,10 +239,8 @@ public class KRaftMigrationZkWriter {
                 entityDataList.forEach(entityData -> entityMap.put(entityData.entityType(), entityData.entityName()));
                 ClientQuotaEntity entity = new ClientQuotaEntity(entityMap);
                 if (!clientQuotasImage.entities().getOrDefault(entity, ClientQuotaImage.EMPTY).quotaMap().equals(quotas)) {
-                    if (
-                        entity.entries().containsKey(ClientQuotaEntity.USER) &&
-                        !entity.entries().containsKey(ClientQuotaEntity.CLIENT_ID)
-                    ) {
+                    if (entity.entries().containsKey(ClientQuotaEntity.USER) &&
+                        !entity.entries().containsKey(ClientQuotaEntity.CLIENT_ID)) {
                         // Track regular user entities separately
                         changedUsers.add(entityMap.get(ClientQuotaEntity.USER));
                     } else {
