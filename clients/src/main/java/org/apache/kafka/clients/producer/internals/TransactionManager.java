@@ -201,22 +201,27 @@ public class TransactionManager {
 
     /**
      * During the normal course of operations for the transaction manager, it transitions through different internal
-     * states defined in {@link State} by updating {@link #currentState}. These state transitions are caused by either
-     * the <em>user</em> performing an operation on the {@link Producer}, or as the <em>indirect</em> result of those
-     * operations inside the transaction manager. The validity of the state transactions are defined by the logic in
-     * {@link State#isTransitionValid(State, State)}. Some unexpected scenarios occasionally arise in which
-     * an invalid state transition is detected by that method.
+     * states (i.e. by updating {@link #currentState}) to one of those defined in {@link State}. These state transitions
+     * result from:
+     *
+     * <ul>
+     *     <li><em>Transactional {@link Producer} API call</em></li>
+     *     <li><em>Internal background threads</em></li>
+     * </ul>
      *
      * <p/>
      *
-     * When a user calls the {@link Producer}'s transactional APIs, these will in turn call methods on the transaction
-     * manager, resulting in a state transition. The {@link Producer}'s transactional APIs include:
+     * When an invalid state transition is detected during a <em>transactional {@link Producer} API call</em>, the
+     * {@link #currentState} is not updated and an {@link IllegalStateException} is thrown. This gives the user the
+     * opportunity to fix the issue without permanently poisoning the state of the transaction manager. The
+     * transactional {@link Producer} API calls that result in a state transition include:
      *
      * <ul>
      *     <li>{@link Producer#initTransactions()} calls {@link TransactionManager#initializeTransactions()}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link TransactionManager#beginTransaction()}</li>
      *     <li>{@link Producer#commitTransaction()}} calls {@link TransactionManager#beginCommit()}</li>
-     *     <li>{@link Producer#abortTransaction()}} calls {@link TransactionManager#beginAbort()}</li>
+     *     <li>{@link Producer#abortTransaction()} calls {@link TransactionManager#beginAbort()}
+     *     </li>
      *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls
      *         {@link TransactionManager#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
      *     </li>
@@ -226,26 +231,24 @@ public class TransactionManager {
      *     </li>
      * </ul>
      *
-     * When an invalid state transition is detected when executing one of the {@link Producer}'s transactional APIs, an
-     * {@link IllegalStateException} is thrown. This is the existing behavior and will not be changed. This gives the
-     * user the opportunity to fix the issue without permanently poisoning the state of the transaction manager.
+     * <p/>
+     *
+     * Some of the above API calls perform a portion of their work asynchronously using <em>internal background
+     * threads</em> for batching, network I/O, and broker response handlers. If an invalid state transition were
+     * detected in a background thread, throwing an {@link IllegalStateException} would not bubble up to the user,
+     * and thus would not give the user a chance to respond to the error. So for the case of invalid state
+     * transitions detected in a background, the transaction manager intentionally "poisons" itself by setting
+     * {@link #currentState} to {@link State#FATAL_ERROR}, which is a state from which it cannot recover.
      *
      * <p/>
      *
-     * In addition to the state transitions that are caused by the user executing one of the {@link Producer}'s
-     * transactional APIs, the transaction manager itself will also transition between states as it performs its
-     * internal logic in response to the user's actions. If an invalid state transition is detected in this case, the
-     * transaction manager "poisons" itself by setting {@link #currentState} to {@link State#FATAL_ERROR}. This is a
-     * state from which it cannot recover.
-     *
-     * <p/>
-     *
-     * It's important to prevent possible corruption of any in-process or future operations. If the user calls
-     * one of the {@link Producer}'s transactional APIs while in the {@link State#FATAL_ERROR} state, the transaction
-     * manager will prevent this when the {@link #maybeFailWithError()} method is called. This method will throw an
-     * exception to the user. If the transaction manager detects the {@link State#FATAL_ERROR} state when performing
-     * internal logic, this fact will be logged and the appropriate error handling logic will be performed. In both
-     * cases, the transaction manager's stated guarantees will not be violated.
+     * It's important to prevent possible corruption of any new or in-process transactions. New transactions are
+     * prevented because when the {@link Producer} calls the transaction manager, it will in turn call the
+     * {@link #maybeFailWithError()} method which will throw a {@link KafkaException} if the transaction manager
+     * has entered the {@link State#FATAL_ERROR} state. If the transaction manager detects the
+     * {@link State#FATAL_ERROR} state when performing internal logic on a background thread, this invalid state
+     * will be logged and the method operation will return. In either case, the transaction manager's stated
+     * guarantees will not be violated.
      *
      * <p/>
      *
