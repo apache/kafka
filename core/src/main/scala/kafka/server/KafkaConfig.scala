@@ -749,7 +749,7 @@ object KafkaConfig {
     s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
     "if running in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.\n " +
-    "Note: The ZK-based controller should not set this configuration."
+    "Note: The ZooKeeper based controller should not set this configuration."
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
   val MetadataLogSegmentBytesDoc = "The maximum size of a single metadata log file."
   val MetadataLogSegmentMinBytesDoc = "Override the minimum size for a single metadata log file. This should be used for testing only."
@@ -802,18 +802,18 @@ object KafkaConfig {
     "is assumed if no explicit mapping is provided and no other security protocol is in use."
   val controlPlaneListenerNameDoc = "Name of listener used for communication between controller and brokers. " +
     s"Broker will use the $ControlPlaneListenerNameProp to locate the endpoint in $ListenersProp list, to listen for connections from the controller. " +
-    "For example, if a broker's config is :\n" +
-    "listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094\n" +
-    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL\n" +
-    "control.plane.listener.name = CONTROLLER\n" +
+    "For example, if a broker's config is:\n" +
+    "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
+    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
+    "control.plane.listener.name = CONTROLLER</code>\n" +
     "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".\n" +
     s"On controller side, when it discovers a broker's published endpoints through zookeeper, it will use the $ControlPlaneListenerNameProp " +
     "to find the endpoint, which it will use to establish connection to the broker.\n" +
-    "For example, if the broker's published endpoints on zookeeper are :\n" +
+    "For example, if the broker's published endpoints on ZooKeeper are :\n" +
     "\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]\n" +
     " and the controller's config is :\n" +
-    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL\n" +
-    "control.plane.listener.name = CONTROLLER\n" +
+    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL\n" +
+    "control.plane.listener.name = CONTROLLER</code>\n" +
     "then controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.\n" +
     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.\n" +
     s"If explicitly configured, the value cannot be the same as the value of <code>$InterBrokerListenerNameProp</code>."
