@@ -46,7 +46,7 @@ object LeaderElectionCommand extends Logging {
     val commandOptions = new LeaderElectionCommandOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(
       commandOptions,
-      "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas."
+      "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas. For recommended-leader elections, use RecommendedLeaderElectionCommand instead."
     )
 
     validate(commandOptions)
@@ -65,9 +65,9 @@ object LeaderElectionCommand extends Logging {
       case _ => None
     }
 
-    /* Note: No need to look at --all-topic-partitions as we want this to be None if it is use.
-     * The validate function should be checking that this option is required if the --topic and --path-to-json-file
-     * are not specified.
+    /* Note: No need to look at --all-topic-partitions as we want this value to be None if it is used.
+     * The validate function should be checking that the --all-topic-partitions option is required if
+     * neither --topic nor --path-to-json-file is specified.
      */
     val topicPartitions = jsonFileTopicPartitions.orElse(singleTopicPartition)
 
@@ -249,7 +249,7 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
   val pathToJsonFile = parser
     .accepts(
       "path-to-json-file",
-      "The JSON file with the list  of partition for which leader elections should be performed. This is an example format. \n{\"partitions\":\n\t[{\"topic\": \"foo\", \"partition\": 1},\n\t {\"topic\": \"foobar\", \"partition\": 2}]\n}\nNot allowed if --all-topic-partitions or --topic flags are specified.")
+      "The JSON file with the list  of partitions for which leader elections should be performed. This is an example format: \n{\"partitions\":\n\t[{\"topic\": \"foo\", \"partition\": 1},\n\t {\"topic\": \"foobar\", \"partition\": 2}]\n}\nNot allowed if either the --all-topic-partitions flag or --topic flag is specified.")
     .withRequiredArg
     .describedAs("Path to JSON file")
     .ofType(classOf[String])
@@ -257,7 +257,7 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
   val topic = parser
     .accepts(
       "topic",
-      "Name of topic for which to perform an election. Not allowed if --path-to-json-file or --all-topic-partitions is specified.")
+      "Name of the topic for which to perform an election. Not allowed if --path-to-json-file or --all-topic-partitions is specified.")
     .withRequiredArg
     .describedAs("topic name")
     .ofType(classOf[String])
@@ -278,7 +278,7 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
   val electionType = parser
     .accepts(
       "election-type",
-      "Type of election to attempt. Possible values are \"preferred\" for preferred leader election or \"unclean\" for unclean leader election. If preferred election is selection, the election is only performed if the current leader is not the preferred leader for the topic partition. If unclean election is selected, the election is only performed if there are no leader for the topic partition. REQUIRED.")
+      "Type of election to attempt. Possible values are \"preferred\" for preferred leader election or \"unclean\" for unclean leader election. (For \"recommended\" leader elections, please use RecommendedLeaderElectionCommand instead.) If preferred election is selected, the election is performed only if the current leader is not the preferred leader for the topic partition. If unclean election is selected, the election is performed only if there are no leaders for the topic partition. REQUIRED.")
     .withRequiredArg
     .describedAs("election type")
     .withValuesConvertedBy(ElectionTypeConverter)

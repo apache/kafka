@@ -24,7 +24,7 @@ import java.nio.file.Path
 import kafka.common.AdminCommandFailedException
 import kafka.server.KafkaConfig
 import kafka.server.KafkaServer
-import kafka.utils.TestUtils
+import kafka.utils.{Json, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.TopicPartition
@@ -44,9 +44,9 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   import LeaderElectionCommandTest._
 
   var servers = Seq.empty[KafkaServer]
-  val broker1 = 0
-  val broker2 = 1
-  val broker3 = 2
+  //val broker0 = 0
+  val broker1 = 1
+  val broker2 = 2
 
   @BeforeEach
   override def setUp(): Unit = {
@@ -74,19 +74,19 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
-      val assignment = Seq(broker2, broker3)
+      val assignment = Seq(broker1, broker2)
 
       TestUtils.createTopic(zkClient, topic, Map(partition -> assignment), servers)
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.assertLeader(client, topicPartition, broker2)
+      TestUtils.assertLeader(client, topicPartition, broker1)
 
-      servers(broker3).shutdown()
-      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
+      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker2))
+      servers(broker1).shutdown()
       TestUtils.assertNoLeader(client, topicPartition)
-      servers(broker3).startup()
+      servers(broker2).startup()
 
       LeaderElectionCommand.main(
         Array(
@@ -96,7 +96,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.assertLeader(client, topicPartition, broker3)
+      TestUtils.assertLeader(client, topicPartition, broker2)
     }
   }
 
@@ -105,19 +105,19 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
-      val assignment = Seq(broker2, broker3)
+      val assignment = Seq(broker1, broker2)
 
       TestUtils.createTopic(zkClient, topic, Map(partition -> assignment), servers)
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.assertLeader(client, topicPartition, broker2)
+      TestUtils.assertLeader(client, topicPartition, broker1)
 
-      servers(broker3).shutdown()
-      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
+      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker2))
+      servers(broker1).shutdown()
       TestUtils.assertNoLeader(client, topicPartition)
-      servers(broker3).startup()
+      servers(broker2).startup()
 
       LeaderElectionCommand.main(
         Array(
@@ -128,7 +128,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.assertLeader(client, topicPartition, broker3)
+      TestUtils.assertLeader(client, topicPartition, broker2)
     }
   }
 
@@ -137,19 +137,19 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
-      val assignment = Seq(broker2, broker3)
+      val assignment = Seq(broker1, broker2)
 
       TestUtils.createTopic(zkClient, topic, Map(partition -> assignment), servers)
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.assertLeader(client, topicPartition, broker2)
+      TestUtils.assertLeader(client, topicPartition, broker1)
 
-      servers(broker3).shutdown()
-      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
+      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker2))
+      servers(broker1).shutdown()
       TestUtils.assertNoLeader(client, topicPartition)
-      servers(broker3).startup()
+      servers(broker2).startup()
 
       val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
 
@@ -161,7 +161,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.assertLeader(client, topicPartition, broker3)
+      TestUtils.assertLeader(client, topicPartition, broker2)
     }
   }
 
@@ -170,18 +170,18 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
-      val assignment = Seq(broker2, broker3)
+      val assignment = Seq(broker1, broker2)
 
       TestUtils.createTopic(zkClient, topic, Map(partition -> assignment), servers)
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.assertLeader(client, topicPartition, broker2)
+      TestUtils.assertLeader(client, topicPartition, broker1)
 
-      servers(broker2).shutdown()
-      TestUtils.assertLeader(client, topicPartition, broker3)
-      servers(broker2).startup()
-      TestUtils.waitForBrokersInIsr(client, topicPartition, Set(broker2))
+      servers(broker1).shutdown()
+      TestUtils.assertLeader(client, topicPartition, broker2)
+      servers(broker1).startup()
+      TestUtils.waitForBrokersInIsr(client, topicPartition, Set(broker1))
 
       LeaderElectionCommand.main(
         Array(
@@ -191,7 +191,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.assertLeader(client, topicPartition, broker2)
+      TestUtils.assertLeader(client, topicPartition, broker1)
     }
   }
 
@@ -248,6 +248,100 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testRecommendedElectionTopicAndPartitionWithoutLeader(): Unit = {
+    val e = assertThrows(classOf[Throwable], () => RecommendedLeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--topic", "some-topic",
+        "--partition", "0"
+      )
+    ))
+    assertTrue(e.getMessage.startsWith("Exactly one of the following combinations is required"))
+  }
+
+  @Test
+  def testRecommendedElectionTopicAndLeaderWithoutPartition(): Unit = {
+    val e = assertThrows(classOf[Throwable], () => RecommendedLeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--topic", "some-topic",
+        "--leader", "2"
+      )
+    ))
+    assertTrue(e.getMessage.startsWith("Exactly one of the following combinations is required"))
+  }
+
+  @Test
+  def testRecommendedElectionBothJsonAndTopic(): Unit = {
+    val fakeJsonFile = "/tmp/fakeTopicPartitions.json"
+    val e = assertThrows(classOf[Throwable], () => RecommendedLeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--path-to-json-file", fakeJsonFile,
+        "--topic", "some-topic"
+      )
+    ))
+    assertTrue(e.getMessage.startsWith("Exactly one of the following combinations is required"))
+  }
+
+  @Test
+  def testRecommendedElectionHappyPathTopicPartitionLeader(): Unit = {
+    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
+      val topic = "random-topic"
+      val partition = 0
+      val recommendedLeader = broker2
+      val assignment = Seq(broker1, broker2)
+
+      TestUtils.createTopic(zkClient, topic, Map(partition -> assignment), servers)
+
+      val topicPartition = new TopicPartition(topic, partition)
+
+      TestUtils.assertLeader(client, topicPartition, broker1)
+
+      RecommendedLeaderElectionCommand.main(
+        Array(
+          "--bootstrap-server", bootstrapServers(servers),
+          "--topic", topic,
+          "--partition", partition.toString,
+          "--leader", recommendedLeader.toString,
+          "--preferred-brokers", "0,2" // broker0 and broker2 "healthy"; broker1 not
+        )
+      )
+
+      TestUtils.assertLeader(client, topicPartition, broker2)
+    }
+  }
+
+  @Test
+  def testRecommendedElectionHappyPathJson(): Unit = {
+    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
+      val topic = "random-topic"
+      val partition = 0
+      val assignment = Seq(broker1, broker2)
+
+      TestUtils.createTopic(zkClient, topic, Map(partition -> assignment), servers)
+
+      val topicPartition = new TopicPartition(topic, partition)
+
+      TestUtils.assertLeader(client, topicPartition, broker1)
+
+      val jsonPath = tempTopicPartitionLeaderIsrFile(topicPartition, broker1, assignment)
+
+      RecommendedLeaderElectionCommand.main(
+        Array(
+          "--bootstrap-server", bootstrapServers(servers),
+          "--path-to-json-file", jsonPath.toString,
+          "--preferred-brokers", "0,2" // broker0 and broker2 "healthy"; broker1 not
+        )
+      )
+
+      // broker2 is the only healthy (preferred) broker that's also in the ISR (= assignment), so the
+      // controller should pick it:
+      TestUtils.assertLeader(client, topicPartition, broker2)
+    }
+  }
+
+  @Test
   def testMissingTopicPartitionSelection(): Unit = {
     val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
       Array(
@@ -280,22 +374,22 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
       val topic = "non-preferred-topic"
       val partition0 = 0
       val partition1 = 1
-      val assignment0 = Seq(broker2, broker3)
-      val assignment1 = Seq(broker3, broker2)
+      val assignment0 = Seq(broker1, broker2)
+      val assignment1 = Seq(broker2, broker1)
 
       TestUtils.createTopic(zkClient, topic, Map(partition0 -> assignment0, partition1 -> assignment1), servers)
 
       val topicPartition0 = new TopicPartition(topic, partition0)
       val topicPartition1 = new TopicPartition(topic, partition1)
 
-      TestUtils.assertLeader(client, topicPartition0, broker2)
-      TestUtils.assertLeader(client, topicPartition1, broker3)
+      TestUtils.assertLeader(client, topicPartition0, broker1)
+      TestUtils.assertLeader(client, topicPartition1, broker2)
 
-      servers(broker2).shutdown()
-      TestUtils.assertLeader(client, topicPartition0, broker3)
-      servers(broker2).startup()
-      TestUtils.waitForBrokersInIsr(client, topicPartition0, Set(broker2))
-      TestUtils.waitForBrokersInIsr(client, topicPartition1, Set(broker2))
+      servers(broker1).shutdown()
+      TestUtils.assertLeader(client, topicPartition0, broker2)
+      servers(broker1).startup()
+      TestUtils.waitForBrokersInIsr(client, topicPartition0, Set(broker1))
+      TestUtils.waitForBrokersInIsr(client, topicPartition1, Set(broker1))
 
       val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition0, topicPartition1))
       val output = TestUtils.grabConsoleOutput(
@@ -335,6 +429,47 @@ object LeaderElectionCommandTest {
     file.deleteOnExit()
 
     val jsonString = TestUtils.stringifyTopicPartitions(partitions)
+
+    Files.write(file.toPath, jsonString.getBytes(StandardCharsets.UTF_8))
+
+    file.toPath
+  }
+
+  def tempTopicPartitionLeaderIsrFile(tp: TopicPartition, currentLeader: Int, currentIsr: Seq[Int]): Path = {
+    val file = File.createTempFile("leader-election-command", ".json")
+    file.deleteOnExit()
+
+    // This is more or less our target syntax, in pretty-print form (except this method supports only one element):
+    //
+    // val fakeJsonString = "{
+    //   \"partitions\":[
+    //     {
+    //       \"topic\": \"foo\",
+    //       \"partition\": 1,
+    //       \"leader\": 8001,
+    //       \"in-sync\": [6221, 1309, 8001]
+    //     },
+    //     {
+    //       \"topic\": \"foobar\",
+    //       \"partition\": 2,
+    //       \"leader\": 7911,
+    //       \"in-sync\": [5577, 7911, 7174]
+    //     }
+    //   ]
+    // }"
+    val jsonString = Json.encodeAsString(
+      Map(
+        "partitions" -> Seq(
+          Map(
+            "topic" -> tp.topic,
+            "partition" -> tp.partition,
+            "leader" -> currentLeader,
+            "in-sync" -> currentIsr.asJava
+          ).asJava
+        ).asJava
+      ).asJava
+    )
+    //println(s"\n\nDEBUG:  jsonString = ${jsonString}\n\n")
 
     Files.write(file.toPath, jsonString.getBytes(StandardCharsets.UTF_8))
 
