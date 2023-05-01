@@ -568,8 +568,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       try {
         ProduceRequest.validateProducerIds(request.header.apiVersion, produceRequest.data)
       } catch {
-        case e: InvalidRecordException =>
+        case _: InvalidRecordException =>
           requestHelper.sendErrorResponseMaybeThrottle(request, Errors.INVALID_RECORD.exception)
+          return
       }
     }
 
