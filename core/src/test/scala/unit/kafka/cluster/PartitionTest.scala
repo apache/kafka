@@ -997,8 +997,8 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.transactionNeedsVerifying(1L,0 )
-    partition.compareAndSetVerificationState(1L, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+    partition.transactionNeedsVerifying(1L, 0, 0)
+    partition.compareAndSetVerificationState(1L, 0, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
     partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
@@ -3293,14 +3293,14 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
 
     // Before appendRecordsToLeader is called, ReplicaManager will call transactionNeedsVerifying.
-    partition.transactionNeedsVerifying(producerId, 0)
+    partition.transactionNeedsVerifying(producerId, 0, 3)
     assertEquals(ProducerStateEntry.VerificationState.VERIFYING, verificationState(producerId))
     
     // Before we verify, the append should fail.
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
     
     // Upon receiving a non-error verification callback, we set to verified.
-    partition.compareAndSetVerificationState(producerId, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+    partition.compareAndSetVerificationState(producerId, 0, 3, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
     assertEquals(ProducerStateEntry.VerificationState.VERIFIED, verificationState(producerId))
     
     // Append should proceed.

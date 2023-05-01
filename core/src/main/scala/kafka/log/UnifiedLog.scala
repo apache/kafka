@@ -579,20 +579,21 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     result
   }
 
-  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short): Boolean = lock synchronized {
-    val entry = producerStateManager.entryForVerification(producerId, producerEpoch)
+  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short, baseSequence: Int): Boolean = lock synchronized {
+    val entry = producerStateManager.entryForVerification(producerId, producerEpoch, baseSequence)
     (!entry.currentTxnFirstOffset.isPresent) &&
       (entry.compareAndSetVerificationState(producerEpoch, ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFYING) ||
         entry.verificationState() == ProducerStateEntry.VerificationState.VERIFYING)
   }
   
   def compareAndSetVerificationState(producerId: Long,
-                                     producerEpoch: Short, 
+                                     producerEpoch: Short,
+                                     baseSequence: Int,
                                      expectedVerificationState: ProducerStateEntry.VerificationState,
                                      newVerificationState: ProducerStateEntry.VerificationState): Unit = { lock synchronized {
-      val entry = producerStateManager.entryForVerification(producerId, producerEpoch)
+      val entry = producerStateManager.entryForVerification(producerId, producerEpoch, baseSequence)
       if (!entry.compareAndSetVerificationState(producerEpoch, expectedVerificationState, newVerificationState))
-        warn("The expected state did not match the current verification state, so the verification state was not updated.")
+        warn(s"The expected state: $expectedVerificationState did not match the current verification state, so the verification state was not updated.")
     }
   }
   
@@ -1007,8 +1008,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
           // otherwise throw error? not sure yet how to handle.
           if (batch.isTransactional && producerStateManager.producerStateManagerConfig().transactionVerificationEnabled()) {
-            if (verificationState(batch.producerId()) != ProducerStateEntry.VerificationState.VERIFIED)
+            if (verificationState(batch.producerId()) != ProducerStateEntry.VerificationState.VERIFIED) {
               throw new InvalidRecordException("Record was not part of an ongoing transaction")
+            } else if (maybeLastEntry.isPresent && maybeLastEntry.get.tentativeSequence.isPresent && maybeLastEntry.get.tentativeSequence.getAsInt < batch.baseSequence)
+              throw new OutOfOrderSequenceException("Partition previously saw a lower sequence, will retry")  
           }
         }
         // verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.

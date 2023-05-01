@@ -86,12 +86,14 @@ class ReplicaManagerTest {
   val topicId = Uuid.randomUuid()
   val topicIds = scala.Predef.Map("test-topic" -> topicId)
   val topicNames = scala.Predef.Map(topicId -> "test-topic")
+  val transactionalId = "txn"
   val time = new MockTime
   val scheduler = new MockScheduler(time)
   val metrics = new Metrics
   var alterPartitionManager: AlterPartitionManager = _
   var config: KafkaConfig = _
   var quotaManager: QuotaManagers = _
+  var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
 
   // Constants defined for readability
   val zkVersion = 0
@@ -105,6 +107,14 @@ class ReplicaManagerTest {
     config = KafkaConfig.fromProps(props)
     alterPartitionManager = mock(classOf[AlterPartitionManager])
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
+    addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
+
+    // Anytime we try to verify, just automatically run the callback as though the transaction was verified.
+    when(addPartitionsToTxnManager.addTxnData(any(), any(), any())).thenAnswer {
+      invocationOnMock =>
+        val callback = invocationOnMock.getArgument(2, classOf[AddPartitionsToTxnManager.AppendCallback])
+        callback(Map.empty[TopicPartition, Errors].toMap)
+    }
   }
 
   @AfterEach
@@ -590,7 +600,7 @@ class ReplicaManagerTest {
       val sequence = 9
       val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
         new SimpleRecord(time.milliseconds(), s"message $sequence".getBytes))
-      appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
+      appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId, transactionStatePartition = Some(0)).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }
       assertLateTransactionCount(Some(0))
@@ -654,7 +664,7 @@ class ReplicaManagerTest {
       for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
-        appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
+        appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId, transactionStatePartition = Some(0)).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
       }
@@ -775,7 +785,7 @@ class ReplicaManagerTest {
       for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
-        appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
+        appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId, transactionStatePartition = Some(0)).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
       }
@@ -2059,7 +2069,6 @@ class ReplicaManagerTest {
   @Test
   def testVerificationForTransactionalPartitions(): Unit = {
     val tp = new TopicPartition(topic, 0)
-    val transactionalId = "txn1"
     val producerId = 24L
     val producerEpoch = 0.toShort
     val sequence = 0
@@ -2655,6 +2664,18 @@ class ReplicaManagerTest {
     val mockDelayedElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
+    // Set up transactions
+    val metadataResponseTopic = Seq(new MetadataResponseTopic()
+      .setName(Topic.TRANSACTION_STATE_TOPIC_NAME)
+      .setPartitions(Seq(
+        new MetadataResponsePartition()
+          .setPartitionIndex(0)
+          .setLeaderId(0)).asJava))
+    when(metadataCache.contains(new TopicPartition(topic, 0))).thenReturn(true)
+    when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).thenReturn(metadataResponseTopic)
+    // Transactional appends attempt to schedule to the request handler thread using a non request handler thread. Set this to avoid error.
+    KafkaRequestHandler.setBypassThreadCheck(true)
+    
     new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -2670,7 +2691,8 @@ class ReplicaManagerTest {
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedElectLeaderPurgatoryParam = Some(mockDelayedElectLeaderPurgatory),
-      threadNamePrefix = Option(this.getClass.getName)) {
+      threadNamePrefix = Option(this.getClass.getName),
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager)) {
 
       override protected def createReplicaFetcherManager(
         metrics: Metrics,

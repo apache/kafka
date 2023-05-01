@@ -18,12 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.record.RecordBatch;
 
-import java.util.ArrayDeque;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.Optional;
-import java.util.OptionalLong;
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -44,6 +39,9 @@ public class ProducerStateEntry {
     
     private VerificationState verificationState;
     
+    // Before any batches are associated with the entry, the tentative sequence represents the lowest sequence seen.
+    private OptionalInt tentativeSequence;
+    
     public enum VerificationState {
         EMPTY,
         VERIFYING,
@@ -51,14 +49,14 @@ public class ProducerStateEntry {
     }
 
     public static ProducerStateEntry empty(long producerId) {
-        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY);
+        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY, OptionalInt.empty());
     }
 
     public static ProducerStateEntry forVerification(long producerId, short producerEpoch, long milliseconds) {
-        return new ProducerStateEntry(producerId, producerEpoch, -1, milliseconds, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY);
+        return new ProducerStateEntry(producerId, producerEpoch, -1, milliseconds, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY, OptionalInt.empty());
     }
 
-    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata, VerificationState verificationState) {
+    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata, VerificationState verificationState, OptionalInt tentativeSequence) {
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
@@ -66,6 +64,7 @@ public class ProducerStateEntry {
         this.currentTxnFirstOffset = currentTxnFirstOffset;
         firstBatchMetadata.ifPresent(batchMetadata::add);
         this.verificationState = verificationState;
+        this.tentativeSequence = tentativeSequence;
     }
 
     public int firstSeq() {
@@ -98,7 +97,7 @@ public class ProducerStateEntry {
      */
     public ProducerStateEntry withProducerIdAndBatchMetadata(long producerId, Optional<BatchMetadata> batchMetadata) {
         return new ProducerStateEntry(producerId, this.producerEpoch(), this.coordinatorEpoch, this.lastTimestamp,
-            this.currentTxnFirstOffset, batchMetadata, this.verificationState);
+            this.currentTxnFirstOffset, batchMetadata, this.verificationState, this.tentativeSequence);
     }
 
     public void addBatch(short producerEpoch, int lastSeq, long lastOffset, int offsetDelta, long timestamp) {
@@ -116,8 +115,15 @@ public class ProducerStateEntry {
             return false;
         }
     }
+    
+    public void maybeUpdateTentaitiveSequence(int sequence) {
+        if (batchMetadata.isEmpty() && (!this.tentativeSequence.isPresent() || this.tentativeSequence.getAsInt() > sequence))
+            this.tentativeSequence = OptionalInt.of(sequence);
+    }
 
     private void addBatchMetadata(BatchMetadata batch) {
+        // When appending a batch, we no longer need tentative sequence.
+        this.tentativeSequence = OptionalInt.empty();
         if (batchMetadata.size() == ProducerStateEntry.NUM_BATCHES_TO_RETAIN) batchMetadata.removeFirst();
         batchMetadata.add(batch);
     }
@@ -190,6 +196,10 @@ public class ProducerStateEntry {
     
     public VerificationState verificationState() {
         return verificationState;
+    }
+    
+    public OptionalInt tentativeSequence() {
+        return tentativeSequence;
     }
 
     @Override

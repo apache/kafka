@@ -38,17 +38,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -184,14 +174,17 @@ public class ProducerStateManager {
         producerIdCount = 0;
     }
     
-    public ProducerStateEntry entryForVerification(long producerId, short producerEpoch) {
-        if (producers.containsKey(producerId))
-            return producers.get(producerId);
-        else {
-            ProducerStateEntry entry = ProducerStateEntry.forVerification(producerId, producerEpoch, time.milliseconds());
+    public ProducerStateEntry entryForVerification(long producerId, short producerEpoch, int firstSequence) {
+        ProducerStateEntry entry;
+        if (producers.containsKey(producerId)) {
+            entry = producers.get(producerId);
+            entry.maybeUpdateProducerEpoch(producerEpoch);
+        } else {
+            entry = ProducerStateEntry.forVerification(producerId, producerEpoch, time.milliseconds());
             addProducerId(producerId, entry);
-            return entry;
         }
+        entry.maybeUpdateTentaitiveSequence(firstSequence);
+        return entry;
     }
 
     /**
@@ -651,7 +644,7 @@ public class ProducerStateManager {
                 ProducerStateEntry.VerificationState verificationState = currentTxnFirstOffsetVal.isPresent() ? ProducerStateEntry.VerificationState.VERIFIED : ProducerStateEntry.VerificationState.EMPTY;
                 Optional<BatchMetadata> batchMetadata =
                         (offset >= 0) ? Optional.of(new BatchMetadata(seq, offset, offsetDelta, timestamp)) : Optional.empty();
-                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata, verificationState));
+                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata, verificationState, OptionalInt.empty()));
             }
 
             return entries;

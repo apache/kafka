@@ -642,7 +642,7 @@ class ReplicaManager(val config: KafkaConfig,
           (entriesPerPartition, Map.empty)
         else
           entriesPerPartition.partition { case (topicPartition, records) =>
-            !getPartitionOrException(topicPartition).transactionNeedsVerifying(records.firstBatch().producerId(), records.firstBatch().producerEpoch())
+            !getPartitionOrException(topicPartition).transactionNeedsVerifying(records.firstBatch().producerId(), records.firstBatch().producerEpoch(), records.firstBatch().baseSequence())
           }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
@@ -756,7 +756,7 @@ class ReplicaManager(val config: KafkaConfig,
           val verifiedPartitions = notYetVerifiedEntriesPerPartition.keySet.map(_.asInstanceOf[TopicPartition]).diff(unverifiedEntries.keySet)
           verifiedPartitions.foreach { tp => 
             getPartitionOrException(tp).compareAndSetVerificationState(
-              batchInfo.producerId(), batchInfo.producerEpoch(), ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+              batchInfo.producerId, batchInfo.producerEpoch, batchInfo.baseSequence, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
           }
           appendEntries(allEntries)(unverifiedEntries)
         }
@@ -1060,9 +1060,8 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
-          val producerId = records.firstBatch().producerId()
-          val producerEpoch = records.firstBatch().producerEpoch()
-          partition.compareAndSetVerificationState(producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+          val firstBatch = records.firstBatch()
+          partition.compareAndSetVerificationState(firstBatch.producerId, firstBatch.producerEpoch, firstBatch.baseSequence, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal)
           val numAppendedMessages = info.numMessages
 
