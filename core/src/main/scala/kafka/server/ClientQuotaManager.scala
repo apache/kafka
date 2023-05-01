@@ -19,7 +19,6 @@ package kafka.server
 import java.{lang, util}
 import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
@@ -200,6 +199,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private val staticConfigClientIdQuota = Quota.upperBound(config.quotaDefault.toDouble)
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)
 
+  // The map storing the quota violation count and throttle time for each client.
+  // The key is the client name which violate the quota, and the value is (violation count, throttle time in milliseconds).
+  private var quotaViolationStatBySensorId = new ConcurrentHashMap[String, (Int, Long)]()
+
   @volatile
   private var quotaTypesEnabled = clientQuotaCallback match {
     case Some(_) => QuotaTypes.CustomQuotas
@@ -220,6 +223,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     schedulerOpt match {
       case Some(scheduler) =>
         scheduler.schedule("quota-metrics-logger-%s".format(quotaType), logQuotaMetrics, 60, 60, TimeUnit.SECONDS)
+        scheduler.schedule("quota-violation-logger", logQuotaViolations, 60, 60, TimeUnit.SECONDS)
       case _ =>
     }
   }
@@ -270,6 +274,18 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
+  def logQuotaViolations(): Unit = {
+    // Create a tmp reference to original map for logging purpose, and create a new map for quotaViolationStatBySensorId.
+    // This is to avoid data changes to cause race conditions to the ongoing logging.
+    val tmpQuotaViolationStatBySensorId = quotaViolationStatBySensorId
+    quotaViolationStatBySensorId = new ConcurrentHashMap[String, (Int, Long)]();
+
+    tmpQuotaViolationStatBySensorId.forEach {
+      case (quotaSensorName, (violateCount, violateTime)) =>
+        info((s"Quota violated ${violateCount} times for sensor (${quotaSensorName}) for ${violateTime} milliseconds"))
+    }
+  }
+
   /**
    * Returns true if any quotas are enabled for this quota manager. This is used
    * to determine if quota related metrics should be created.
@@ -311,13 +327,17 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
+    val quotaSensor = clientSensors.quotaSensor
     try {
-      clientSensors.quotaSensor.record(value, timeMs, true)
+      quotaSensor.record(value, timeMs, true)
       0
     } catch {
       case e: QuotaViolationException =>
         val throttleTimeMs = throttleTime(e, timeMs).toInt
-        debug(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
+        quotaViolationStatBySensorId.compute(quotaSensor.name(), (_, value) =>
+          if (value != null) (value._1 + 1, value._2 + throttleTimeMs)
+          else (1, throttleTimeMs)
+        )
         throttleTimeMs
     }
   }
