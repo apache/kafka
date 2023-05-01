@@ -110,12 +110,29 @@ public class SnapshottableHashTableTest {
         set.add("bar");
         registry.getOrCreateSnapshot(200);
         set.add("baz");
+
+        // The deltatable of epoch 200 is null, it should not throw exception while reverting (deltatable merge)
         registry.revertToSnapshot(100);
         assertTrue(set.isEmpty());
         set.add("foo");
         registry.getOrCreateSnapshot(300);
+        // "bar" is not existed in snapshot of epoch 100 now due to revert
         set.remove("bar");
+        // No deltatable merging is needed because nothing change in snapshot epoch 300
         registry.revertToSnapshot(100);
+        assertTrue(set.isEmpty());
+
+        set.add("qux");
+        registry.getOrCreateSnapshot(400);
+        set.add("fred");
+        registry.getOrCreateSnapshot(500);
+
+        // remove the value in epoch 100, it'll create an entry in deltatable in the snapshot of epoch 500 for the deleted value in epoch 100
+        set.remove("qux");
+        // When reverting to snapshot of epoch 400, we'll merge the deltatable in epoch 500 with the one in epoch 400.
+        // The deltatable in epoch 500 has an entry created above, but the deltatable in epoch 400 is null.
+        // It should not throw exception while reverting (deltatable merge)
+        registry.revertToSnapshot(400);
         assertTrue(set.isEmpty());
     }
 

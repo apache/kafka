@@ -113,7 +113,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
             HashTier<T> other = (HashTier<T>) source;
             // As an optimization, the deltaTable might not exist for a new key
             // as there is no previous value
-            if (other.deltaTable != null) {
+            if (deltaTable != null && other.deltaTable != null) {
                 List<T> list = new ArrayList<>();
                 Object[] otherElements = other.deltaTable.baseElements();
                 for (int slot = 0; slot < otherElements.length; slot++) {
