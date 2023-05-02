@@ -156,7 +156,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     val topicChildZNodes = zkClient.retryRequestUntilConnected(GetChildrenRequest(path, registerWatch = false))
     topicChildZNodes.children.foreach { child =>
       recursiveChildren(s"$path/$child", acc)
-      acc.addOne(s"$path/$child")
+      acc.append(s"$path/$child")
     }
   }
 
