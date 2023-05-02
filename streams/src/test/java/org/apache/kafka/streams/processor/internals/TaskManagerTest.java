@@ -2591,7 +2591,6 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(emptySet());
         consumer.resume(eq(emptySet()));
         expectLastCall();
-        expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(singletonList(task00));
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
         replay(consumer, activeTaskCreator, standbyTaskCreator);
@@ -2632,7 +2631,6 @@ public class TaskManagerTest {
         expectLastCall();
         expect(consumer.assignment()).andReturn(emptySet());
         consumer.resume(eq(emptySet()));
-        expectLastCall();
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(task00, task01));
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
@@ -3053,6 +3051,7 @@ public class TaskManagerTest {
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         Mockito.verify(changeLogReader).enforceRestoreActive();
+        Mockito.verify(changeLogReader).completedChangelogs();
 
         final RuntimeException exception = assertThrows(
             RuntimeException.class,
@@ -3113,6 +3112,7 @@ public class TaskManagerTest {
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         Mockito.verify(changeLogReader).enforceRestoreActive();
+        Mockito.verify(changeLogReader).completedChangelogs();
 
         final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
 
@@ -3162,6 +3162,7 @@ public class TaskManagerTest {
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         Mockito.verify(changeLogReader).enforceRestoreActive();
+        Mockito.verify(changeLogReader).completedChangelogs();
 
         final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
 
@@ -3295,6 +3296,7 @@ public class TaskManagerTest {
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         Mockito.verify(changeLogReader).enforceRestoreActive();
+        Mockito.verify(changeLogReader).completedChangelogs();
 
         taskManager.shutdown(false);
 
