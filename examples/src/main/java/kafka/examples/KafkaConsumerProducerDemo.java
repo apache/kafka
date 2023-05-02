@@ -59,12 +59,12 @@ public class KafkaConsumerProducerDemo {
 
             // stage 3: consume records from topic1
             Consumer consumerThread = new Consumer(
-                "consumer", BOOTSTRAP_SERVERS, TOPIC_NAME, GROUP_NAME, Optional.empty(), false, 10000, latch);
+                "consumer", BOOTSTRAP_SERVERS, TOPIC_NAME, GROUP_NAME, Optional.empty(), false, numRecords, latch);
             consumerThread.start();
 
             if (!latch.await(5, TimeUnit.MINUTES)) {
                 Utils.printErr("Timeout after 5 minutes waiting for termination");
-                //producerThread.shutdown();
+                producerThread.shutdown();
                 consumerThread.shutdown();
             }
         } catch (Throwable e) {

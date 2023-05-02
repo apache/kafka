@@ -16,6 +16,7 @@
  */
 package kafka.examples;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -31,11 +32,11 @@ import java.util.stream.IntStream;
  * 3. Set up the transactional instances in separate threads, each one executing a read-process-write loop
  *    (See {@link ExactlyOnceMessageProcessor}). Each EOS instance will drain all records from either given
  *    partitions or auto assigned partitions by actively comparing log end offset with committed offset.
- *    Each record will be processed exactly once, dividing the key by 2 and extending the value record.
+ *    Each record will be processed exactly-once with strong partition level ordering guarantee.
  *    The demo will block until all records are processed and written to the output topic.
- * 4. Create a read_committed consumer  thread to verify we have all records in the output topic,
+ * 4. Create a read_committed consumer thread to verify we have all records in the output topic,
  *    and record ordering at the partition level is maintained.
- *    The demo will block for the consumption of all committed records.
+ *    The demo will block for the consumption of all committed records, with transactional guarantee.
  *
  * Broker version must be >= 2.5.0 in order to run, otherwise the example will throw
  * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
@@ -80,14 +81,14 @@ public class KafkaExactlyOnceDemo {
 
             // stage 3: read from input-topic, process once and write to the output-topic
             CountDownLatch processorsLatch = new CountDownLatch(numInstances);
-            for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
-                ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(
-                    INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx, processorsLatch);
-                messageProcessor.start();
-            }
+            List<ExactlyOnceMessageProcessor> processors = IntStream.range(0, numInstances)
+                .mapToObj(id -> new ExactlyOnceMessageProcessor(
+                    "processor-" + id, BOOTSTRAP_SERVERS, INPUT_TOPIC, OUTPUT_TOPIC, processorsLatch))
+                .collect(Collectors.toList());
+            processors.forEach(ExactlyOnceMessageProcessor::start);
             if (!processorsLatch.await(2, TimeUnit.MINUTES)) {
                 Utils.printErr("Timeout after 2 minutes waiting for record copy");
-                //processors.forEach(ExactlyOnceMessageProcessor::shutdown);
+                processors.forEach(ExactlyOnceMessageProcessor::shutdown);
                 return;
             }
 
