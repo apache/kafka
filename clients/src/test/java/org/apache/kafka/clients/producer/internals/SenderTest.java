@@ -2967,7 +2967,7 @@ public class SenderTest {
         // Append a record to the accumulator.
         FutureRecordMetadata metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
         // Now abort the transaction manually.
-        txnManager.beginAbort();
+        txnManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.BACKGROUND);
         // Try to send.
         // This should abort the existing transaction and
         // drain all the unsent batches with a TransactionAbortedException.

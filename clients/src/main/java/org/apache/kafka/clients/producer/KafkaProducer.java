@@ -833,7 +833,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfProducerClosed();
         log.info("Aborting incomplete transaction");
         long abortStart = time.nanoseconds();
-        TransactionalRequestResult result = transactionManager.beginAbort();
+        TransactionalRequestResult result = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);

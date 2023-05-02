@@ -268,7 +268,7 @@ public class Sender implements Runnable {
                 try {
                     // It is possible for the transaction manager to throw errors when aborting. Catch these
                     // so as not to interfere with the rest of the shutdown logic.
-                    transactionManager.beginAbort();
+                    transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.BACKGROUND);
                 } catch (Exception e) {
                     log.error("Error in kafka producer I/O thread while aborting transaction: ", e);
                 }
