@@ -38,7 +38,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
-import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 
 /**
