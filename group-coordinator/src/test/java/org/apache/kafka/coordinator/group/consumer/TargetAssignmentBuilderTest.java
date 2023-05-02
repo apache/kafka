@@ -55,8 +55,8 @@ public class TargetAssignmentBuilderTest {
         private final Map<String, ConsumerGroupMember> members = new HashMap<>();
         private final Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
-        private final Map<String, Assignment> targetAssignments = new HashMap<>();
-        private final Map<String, MemberAssignment> assignments = new HashMap<>();
+        private final Map<String, Assignment> targetAssignment = new HashMap<>();
+        private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
@@ -73,10 +73,9 @@ public class TargetAssignmentBuilderTest {
         ) {
             members.put(memberId, new ConsumerGroupMember.Builder(memberId)
                 .setSubscribedTopicNames(subscriptions)
-                .setRebalanceTimeoutMs(5000)
                 .build());
 
-            targetAssignments.put(memberId, new Assignment(
+            targetAssignment.put(memberId, new Assignment(
                 (byte) 0,
                 targetPartitions,
                 VersionedMetadata.EMPTY
@@ -138,7 +137,7 @@ public class TargetAssignmentBuilderTest {
             String memberId,
             Map<Uuid, Set<Integer>> assignment
         ) {
-            assignments.put(memberId, new MemberAssignment(assignment));
+            memberAssignments.put(memberId, new MemberAssignment(assignment));
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
@@ -149,7 +148,7 @@ public class TargetAssignmentBuilderTest {
             members.forEach((memberId, member) -> {
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     member,
-                    targetAssignments.getOrDefault(memberId, Assignment.EMPTY),
+                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                     subscriptionMetadata
                 ));
             });
@@ -162,7 +161,7 @@ public class TargetAssignmentBuilderTest {
                 } else {
                     memberSpecs.put(memberId, createAssignmentMemberSpec(
                         updatedMemberOrNull,
-                        targetAssignments.getOrDefault(memberId, Assignment.EMPTY),
+                        targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                         subscriptionMetadata
                     ));
                 }
@@ -182,13 +181,13 @@ public class TargetAssignmentBuilderTest {
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
-            when(assignor.assign(any())).thenReturn(new GroupAssignment(assignments));
+            when(assignor.assign(any())).thenReturn(new GroupAssignment(memberAssignments));
 
             // Create and populate the assignment builder.
             TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor)
                 .withMembers(members)
                 .withSubscriptionMetadata(subscriptionMetadata)
-                .withTargetAssignments(targetAssignments);
+                .withTargetAssignment(targetAssignment);
 
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -259,7 +258,7 @@ public class TargetAssignmentBuilderTest {
             "my-group",
             20
         )), result.records());
-        assertEquals(Collections.emptyMap(), result.assignments());
+        assertEquals(Collections.emptyMap(), result.targetAssignment());
     }
 
     @Test
@@ -309,7 +308,7 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 4, 5, 6)
         )));
 
-        assertEquals(expectedAssignment, result.assignments());
+        assertEquals(expectedAssignment, result.targetAssignment());
     }
 
     @Test
@@ -372,7 +371,7 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 4, 5, 6)
         )));
 
-        assertEquals(expectedAssignment, result.assignments());
+        assertEquals(expectedAssignment, result.targetAssignment());
     }
 
     @Test
@@ -450,7 +449,7 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 5, 6)
         )));
 
-        assertEquals(expectedAssignment, result.assignments());
+        assertEquals(expectedAssignment, result.targetAssignment());
     }
 
     @Test
@@ -537,7 +536,7 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 5, 6)
         )));
 
-        assertEquals(expectedAssignment, result.assignments());
+        assertEquals(expectedAssignment, result.targetAssignment());
     }
 
     @Test
@@ -615,7 +614,7 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 6)
         )));
 
-        assertEquals(expectedAssignment, result.assignments());
+        assertEquals(expectedAssignment, result.targetAssignment());
     }
 
     @Test
@@ -685,7 +684,7 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 4, 5, 6)
         )));
 
-        assertEquals(expectedAssignment, result.assignments());
+        assertEquals(expectedAssignment, result.targetAssignment());
     }
 
     public static <T> void assertUnorderedList(

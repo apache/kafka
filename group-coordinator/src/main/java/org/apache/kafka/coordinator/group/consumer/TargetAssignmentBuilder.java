@@ -63,18 +63,18 @@ public class TargetAssignmentBuilder {
         private final List<Record> records;
 
         /**
-         * The new target assignment for all members.
+         * The new target assignment for the group.
          */
-        private final Map<String, Assignment> assignments;
+        private final Map<String, Assignment> targetAssignment;
 
         TargetAssignmentResult(
             List<org.apache.kafka.coordinator.group.Record> records,
-            Map<String, Assignment> assignments
+            Map<String, Assignment> targetAssignment
         ) {
             Objects.requireNonNull(records);
-            Objects.requireNonNull(assignments);
+            Objects.requireNonNull(targetAssignment);
             this.records = records;
-            this.assignments = assignments;
+            this.targetAssignment = targetAssignment;
         }
 
         /**
@@ -85,10 +85,10 @@ public class TargetAssignmentBuilder {
         }
 
         /**
-         * @return The assignments.
+         * @return The target assignment.
          */
-        public Map<String, Assignment> assignments() {
-            return assignments;
+        public Map<String, Assignment> targetAssignment() {
+            return targetAssignment;
         }
     }
 
@@ -120,7 +120,7 @@ public class TargetAssignmentBuilder {
     /**
      * The existing target assignment.
      */
-    private Map<String, Assignment> assignments = Collections.emptyMap();
+    private Map<String, Assignment> targetAssignment = Collections.emptyMap();
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -172,15 +172,15 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the existing target assignments.
+     * Adds the existing target assignment.
      *
-     * @param assignments   The existing target assignments.
+     * @param targetAssignment   The existing target assignment.
      * @return This object.
      */
-    public TargetAssignmentBuilder withTargetAssignments(
-        Map<String, Assignment> assignments
+    public TargetAssignmentBuilder withTargetAssignment(
+        Map<String, Assignment> targetAssignment
     ) {
-        this.assignments = assignments;
+        this.targetAssignment = targetAssignment;
         return this;
     }
 
@@ -218,7 +218,7 @@ public class TargetAssignmentBuilder {
      *
      * @return A TargetAssignmentResult which contains the records to update
      *         the existing target assignment.
-     * @throws PartitionAssignorException if the assignment can not be computed.
+     * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
@@ -226,7 +226,7 @@ public class TargetAssignmentBuilder {
         // Prepare the member spec for all members.
         members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
             member,
-            assignments.getOrDefault(memberId, Assignment.EMPTY),
+            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
             subscriptionMetadata
         )));
 
@@ -237,7 +237,7 @@ public class TargetAssignmentBuilder {
             } else {
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
-                    assignments.getOrDefault(memberId, Assignment.EMPTY),
+                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                     subscriptionMetadata
                 ));
             }
@@ -255,13 +255,13 @@ public class TargetAssignmentBuilder {
             Collections.unmodifiableMap(topics)
         ));
 
-        // Compute delta from previous to new assignment and create the
+        // Compute delta from previous to new target assignment and create the
         // relevant records.
         List<Record> records = new ArrayList<>();
         Map<String, Assignment> newTargetAssignment = new HashMap<>();
 
         memberSpecs.keySet().forEach(memberId -> {
-            Assignment oldMemberAssignment = assignments.get(memberId);
+            Assignment oldMemberAssignment = targetAssignment.get(memberId);
             Assignment newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
 
             newTargetAssignment.put(memberId, newMemberAssignment);
@@ -286,7 +286,7 @@ public class TargetAssignmentBuilder {
             }
         });
 
-        // Bump the assignment epoch.
+        // Bump the target assignment epoch.
         records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
