@@ -238,37 +238,6 @@ public class ProduceRequestTest {
         // Works fine with current version (>= 7)
         ProduceRequest.forCurrentMagic(produceData);
     }
-    
-    @Test
-    public void testNoMixedProducerIds() {
-        final long producerId1 = 15L;
-        final long producerId2 = 16L;
-        final short producerEpoch = 5;
-        final int sequence = 10;
-
-        final MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
-                new SimpleRecord("foo".getBytes()));
-        final MemoryRecords txnRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId1,
-                producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
-        final MemoryRecords idempotentRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId2,
-                producerEpoch, sequence, new SimpleRecord("bee".getBytes()));
-
-
-        ProduceRequest.Builder requestBuilder = ProduceRequest.forCurrentMagic(
-                new ProduceRequestData()
-                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
-                                new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
-                                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(records))),
-                                new ProduceRequestData.TopicProduceData().setName("bar").setPartitionData(Collections.singletonList(
-                                        new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(txnRecords))),
-                                new ProduceRequestData.TopicProduceData().setName("bee").setPartitionData(Collections.singletonList(
-                                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(idempotentRecords))))
-                        .iterator()))
-                .setAcks((short) 1)
-                .setTimeoutMs(5000));
-        IntStream.range(3, ApiKeys.PRODUCE.latestVersion())
-                .forEach(version -> assertThrows(InvalidRecordException.class, () -> requestBuilder.build((short) version).serialize()));
-    }
 
     @Test
     public void testMixedTransactionalData() {
