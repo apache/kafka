@@ -119,15 +119,9 @@ public class KStreamKTableJoinWithGraceTest {
 
     @Test
     public void shouldName() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final Properties props = new Properties();
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
-        final KTable<String, String> tableB = builder.table("topic2", Materialized.as(Stores.persistentVersionedKeyValueStore("grace", Duration.ofSeconds(2))));
-        final KStream<String, String> rekeyedStream = streamA.map((k, v) -> new KeyValue<>(v, k));
-        rekeyedStream.join(tableB, (value1, value2) -> value1 + value2).to("out-one");
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
         final Topology topology = builder.build(props);
-        assertEquals(expectedTopologyWithGeneratedRepartitionTopicNames, topology.describe().toString());
+        assertEquals(expectedTopologyBasicJoin, topology.describe().toString());
     }
 
     @Test
@@ -359,4 +353,24 @@ public class KStreamKTableJoinWithGraceTest {
                     + "    Processor: KTABLE-SOURCE-0000000006 (stores: [topic3-STATE-STORE-0000000004])\n"
                     + "      --> none\n"
                     + "      <-- KSTREAM-SOURCE-0000000005\n\n";
+
+    private final String expectedTopologyBasicJoin =
+        "Topologies:\n" +
+            "   Sub-topology: 0\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [streamTopic])\n" +
+            "      --> Grace-buffer\n" +
+            "    Processor: Grace-buffer (stores: [])\n" +
+            "      --> Grace\n" +
+            "      <-- KSTREAM-SOURCE-0000000000\n" +
+            "    Processor: Grace (stores: [tableTopic-STATE-STORE-0000000001])\n" +
+            "      --> KSTREAM-PROCESSOR-0000000005\n" +
+            "      <-- Grace-buffer\n" +
+            "    Source: KSTREAM-SOURCE-0000000002 (topics: [tableTopic])\n" +
+            "      --> KTABLE-SOURCE-0000000003\n" +
+            "    Processor: KSTREAM-PROCESSOR-0000000005 (stores: [])\n" +
+            "      --> none\n" +
+            "      <-- Grace\n" +
+            "    Processor: KTABLE-SOURCE-0000000003 (stores: [tableTopic-STATE-STORE-0000000001])\n" +
+            "      --> none\n" +
+            "      <-- KSTREAM-SOURCE-0000000002\n\n";
 }
