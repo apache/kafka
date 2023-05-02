@@ -947,8 +947,8 @@ public class MockAdminClient extends AdminClient {
                                                               DescribeLogDirsOptions options) {
         Map<Integer, Map<String, LogDirDescription>> unwrappedResults = new HashMap<>();
 
-        for (Node broker : brokers()) {
-            unwrappedResults.putIfAbsent(broker.id(), new HashMap<>());
+        for (Integer broker : brokers) {
+            unwrappedResults.putIfAbsent(broker, new HashMap<>());
         }
 
         for (Map.Entry<String, TopicMetadata> entry : allTopics.entrySet()) {

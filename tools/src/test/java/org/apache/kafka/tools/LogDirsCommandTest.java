@@ -16,15 +16,21 @@
  */
 package org.apache.kafka.tools;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LogDirsCommandTest {
 
@@ -37,32 +43,62 @@ public class LogDirsCommandTest {
     }
 
     @Test
-    public void shouldThrowWhenDuplicatedBrokers() {
+    public void shouldNotThrowWhenDuplicatedBrokers() throws JsonProcessingException {
         Node broker = new Node(1, "hostname", 9092);
         try (MockAdminClient adminClient = new MockAdminClient(Collections.singletonList(broker), broker)) {
-            assertThrows(RuntimeException.class, () -> execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "0,0,1,2,2", "--describe"), adminClient));
+            String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "1,1", "--describe"), adminClient);
+            String[] standardOutputLines = standardOutput.split("\n");
+            assertEquals(3, standardOutputLines.length);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
+            @SuppressWarnings("unchecked")
+            List<Object> brokerInformation = (List<Object>) information.get("brokers");
+            @SuppressWarnings("unchecked")
+            Integer brokerId = (Integer) ((HashMap<String, Object>) brokerInformation.get(0)).get("broker");
+            assertEquals(1, brokerInformation.size());
+            assertEquals(1, brokerId);
         }
     }
 
     @Test
-    public void shouldQueryAllBrokersIfNonSpecified() {
-        Node broker = new Node(1, "hostname", 9092);
-        try (MockAdminClient adminClient = new MockAdminClient(Collections.singletonList(broker), broker)) {
+    public void shouldQueryAllBrokersIfNonSpecified() throws JsonProcessingException {
+        Node brokerOne = new Node(1, "hostname", 9092);
+        Node brokerTwo = new Node(2, "hostname", 9092);
+        try (MockAdminClient adminClient = new MockAdminClient(Arrays.asList(brokerOne, brokerTwo), brokerOne)) {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
-            assertTrue(standardOutputLines.length != 0);
-            assertTrue(standardOutputLines[0].contains("Querying brokers for log directories information"));
+            assertEquals(3, standardOutputLines.length);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
+            @SuppressWarnings("unchecked")
+            List<Object> brokerInformation = (List<Object>) information.get("brokers");
+            @SuppressWarnings("unchecked")
+            Integer brokerOneId = (Integer) ((HashMap<String, Object>) brokerInformation.get(0)).get("broker");
+            @SuppressWarnings("unchecked")
+            Integer brokerTwoId = (Integer) ((HashMap<String, Object>) brokerInformation.get(1)).get("broker");
+            assertEquals(2, brokerInformation.size());
+            assertEquals(1, brokerOneId);
+            assertEquals(2, brokerTwoId);
         }
     }
 
     @Test
-    public void shouldQuerySpecifiedBroker() {
-        Node broker = new Node(1, "hostname", 9092);
-        try (MockAdminClient adminClient = new MockAdminClient(Collections.singletonList(broker), broker)) {
+    public void shouldQuerySpecifiedBroker() throws JsonProcessingException {
+        Node brokerOne = new Node(1, "hostname", 9092);
+        Node brokerTwo = new Node(2, "hostname", 9092);
+        try (MockAdminClient adminClient = new MockAdminClient(Arrays.asList(brokerOne, brokerTwo), brokerOne)) {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "1", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
-            assertTrue(standardOutputLines.length != 0);
-            assertTrue(standardOutputLines[0].contains("Querying brokers for log directories information"));
+            assertEquals(3, standardOutputLines.length);
+            System.out.println(Arrays.toString(standardOutputLines));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
+            @SuppressWarnings("unchecked")
+            List<Object> brokerInformation = (List<Object>) information.get("brokers");
+            @SuppressWarnings("unchecked")
+            Integer brokerId = (Integer) ((HashMap<String, Object>) brokerInformation.get(0)).get("broker");
+            assertEquals(1, brokerInformation.size());
+            assertEquals(1, brokerId);
         }
     }
 
