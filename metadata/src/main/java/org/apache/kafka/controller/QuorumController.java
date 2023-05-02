@@ -1021,7 +1021,7 @@ public final class QuorumController implements Controller {
                         List<ApiMessageAndVersion> messages = batch.records();
 
                         log.debug("Replaying snapshot {} batch with last offset of {}",
-                            reader.snapshotId(), offset);
+                            snapshotName, offset);
 
                         int i = 1;
                         for (ApiMessageAndVersion message : messages) {
