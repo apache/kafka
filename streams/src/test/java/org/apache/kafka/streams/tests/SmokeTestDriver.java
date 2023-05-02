@@ -106,7 +106,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
 
         int next() {
-            return (index < values.length) ? values[index++] : -1;
+            final int v = values[index++];
+            if (index >= values.length) {
+                index = 0;
+            }
+            return v;
         }
     }
 
@@ -126,7 +130,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             data[i] = new ValueList(i, i + maxRecordsPerKey - 1);
         }
 
-        final Random rand = new Random();
+        final Random rand = new Random(System.currentTimeMillis());
 
         try (final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps)) {
             while (true) {
@@ -313,7 +317,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static void shuffle(final int[] data, @SuppressWarnings("SameParameterValue") final int windowSize) {
-        final Random rand = new Random();
+        final Random rand = new Random(System.currentTimeMillis());
         for (int i = 0; i < data.length; i++) {
             // we shuffle data within windowSize
             final int j = rand.nextInt(Math.min(data.length - i, windowSize)) + i;

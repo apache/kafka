@@ -93,6 +93,7 @@ public class StreamsUpgradeTest {
         System.out.println("StreamsTest instance started (StreamsUpgradeTest trunk)");
         System.out.println("props=" + streamsProperties);
 
+        // Do not use try-with-resources here; otherwise KafkaStreams will be closed when `main()` exits
         final KafkaStreams streams = buildStreams(streamsProperties);
         streams.start();
 
@@ -129,18 +130,18 @@ public class StreamsUpgradeTest {
             }
         }
         if (runTableAgg) {
-            final String aggProducePrefix = streamsProperties.getProperty("test.agg_produce_prefix", "");
-            if (aggProducePrefix.isEmpty()) {
-                System.err.printf("'%s' must be specified when '%s' is true.", "test.agg_produce_prefix", "test.run_table_agg");
+            final String aggProduceValue = streamsProperties.getProperty("test.agg_produce_value", "");
+            if (aggProduceValue.isEmpty()) {
+                System.err.printf("'%s' must be specified when '%s' is true.", "test.agg_produce_value", "test.run_table_agg");
             }
-            final String expectedAggPrefixesStr = streamsProperties.getProperty("test.expected_agg_prefixes", "");
-            if (expectedAggPrefixesStr.isEmpty()) {
-                System.err.printf("'%s' must be specified when '%s' is true.", "test.expected_agg_prefixes", "test.run_table_agg");
+            final String expectedAggValuesStr = streamsProperties.getProperty("test.expected_agg_values", "");
+            if (expectedAggValuesStr.isEmpty()) {
+                System.err.printf("'%s' must be specified when '%s' is true.", "test.expected_agg_values", "test.run_table_agg");
             }
-            final List<String> expectedAggPrefixes = Arrays.asList(expectedAggPrefixesStr.split(","));
+            final List<String> expectedAggValue = Arrays.asList(expectedAggValuesStr.split(","));
 
             try {
-                buildTableAgg(dataTable, aggProducePrefix, expectedAggPrefixes);
+                buildTableAgg(dataTable, aggProduceValue, expectedAggValue);
             } catch (final Exception e) {
                 System.err.println("Caught " + e.getMessage());
             }
@@ -173,72 +174,77 @@ public class StreamsUpgradeTest {
     }
 
     private static void buildTableAgg(final KTable<String, Integer> sourceTable,
-                                      final String aggProducePrefix,
-                                      final List<String> expectedAggPrefixes) {
-        sourceTable
+                                      final String aggProduceValue,
+                                      final List<String> expectedAggValues) {
+        final KStream<Integer, String> result = sourceTable
             .groupBy(
-                (k, v) -> new KeyValue<>((int) (Math.random() * 15), aggProducePrefix), // group into smaller number of keys, while still allowing for distribution to all downstream tasks
+                (k, v) -> new KeyValue<>(v, aggProduceValue),
                 Grouped.with(intSerde, stringSerde))
             .aggregate(
                 () -> new Agg(Collections.emptyList(), 0),
                 (k, v, agg) -> {
-                    final List<String> seenPrefixes;
+                    final List<String> seenValues;
                     final boolean updated;
-                    if (!agg.seenPrefixes.contains(v)) {
-                        seenPrefixes = new ArrayList<>(agg.seenPrefixes);
-                        seenPrefixes.add(v);
-                        Collections.sort(seenPrefixes);
+                    if (!agg.seenValues.contains(v)) {
+                        seenValues = new ArrayList<>(agg.seenValues);
+                        seenValues.add(v);
+                        Collections.sort(seenValues);
                         updated = true;
                     } else {
-                        seenPrefixes = agg.seenPrefixes;
+                        seenValues = agg.seenValues;
                         updated = false;
                     }
 
                     final boolean shouldLog = updated || (agg.recordsProcessed % 10 == 0); // value of 10 is chosen for debugging purposes. can increase to 100 once test is passing.
-                    if (shouldLog && seenPrefixes.containsAll(expectedAggPrefixes)) {
-                        System.out.printf("Table aggregate processor saw expected prefixes: %s%n", String.join(",", expectedAggPrefixes));
-                    } else {
-                        System.out.printf("Table aggregate processor did not see expected prefixes. Seen: %s. Expected: %s%n", String.join(",", seenPrefixes), String.join(",", expectedAggPrefixes)); // this line for debugging purposes only.
+                    if (shouldLog) {
+                        if (seenValues.containsAll(expectedAggValues)) {
+                            System.out.printf("Table aggregate processor saw expected values. Seen: %s. Expected: %s%n", String.join(",", seenValues), String.join(",", expectedAggValues));
+                        } else {
+                            System.out.printf("Table aggregate processor did not see expected values. Seen: %s. Expected: %s%n", String.join(",", seenValues), String.join(",", expectedAggValues)); // this line for debugging purposes only.
+                        }
                     }
 
-                    return new Agg(seenPrefixes, agg.recordsProcessed + 1);
+                    return new Agg(seenValues, agg.recordsProcessed + 1);
                 },
                 (k, v, agg) -> agg,
                 Materialized.with(intSerde, new AggSerde()))
-            .mapValues((k, vAgg) -> String.join(",", vAgg.seenPrefixes))
-            .toStream()
-            .to("table-agg-result", Produced.with(intSerde, stringSerde));
+            .mapValues((k, vAgg) -> String.join(",", vAgg.seenValues))
+            .toStream();
+
+        // adding dummy processor for better debugging (will print assigned tasks)
+        result.process(SmokeTestUtil.printTaskProcessorSupplier("table-repartition"));
+        result.to("table-agg-result", Produced.with(intSerde, stringSerde));
     }
 
     private static class Agg {
-        private final List<String> seenPrefixes;
+        private final List<String> seenValues;
         private final long recordsProcessed;
 
-        Agg(final List<String> seenPrefixes, final long recordsProcessed)  {
-            this.seenPrefixes = seenPrefixes;
+        Agg(final List<String> seenValues, final long recordsProcessed)  {
+            this.seenValues = seenValues;
             this.recordsProcessed = recordsProcessed;
         }
 
         byte[] serialize() {
-            final byte[] rawSeenPrefixes = stringSerde.serializer().serialize("", String.join(",", seenPrefixes));
+            final byte[] rawSeenValues = stringSerde.serializer().serialize("", String.join(",", seenValues));
             final byte[] rawRecordsProcessed = longSerde.serializer().serialize("", recordsProcessed);
             return ByteBuffer
-                .allocate(rawSeenPrefixes.length + rawRecordsProcessed.length)
-                .put(rawSeenPrefixes)
+                .allocate(rawSeenValues.length + rawRecordsProcessed.length)
+                .put(rawSeenValues)
                 .put(rawRecordsProcessed)
                 .array();
         }
 
         static Agg deserialize(final byte[] rawAgg) {
-            final byte[] rawSeenPrefixes = new byte[rawAgg.length - 8];
-            System.arraycopy(rawAgg, 0, rawSeenPrefixes, 0, rawSeenPrefixes.length);
-            final List<String> seenPrefixes = Arrays.asList(stringSerde.deserializer().deserialize("", rawSeenPrefixes).split(","));
+            final byte[] rawSeenValues = new byte[rawAgg.length - 8];
+            System.arraycopy(rawAgg, 0, rawSeenValues, 0, rawSeenValues.length);
+            final List<String> seenValues = Arrays.asList(stringSerde.deserializer().deserialize("", rawSeenValues).split(","));
 
             final byte[] rawRecordsProcessed = new byte[8];
             System.arraycopy(rawAgg, rawAgg.length - 8, rawRecordsProcessed, 0, 8);
             final long recordsProcessed = longSerde.deserializer().deserialize("", rawRecordsProcessed);
 
-            return new Agg(seenPrefixes, recordsProcessed);
+            return new Agg(seenValues, recordsProcessed);
         }
     }
 

@@ -176,7 +176,7 @@ class StreamsUpgradeTest(Test):
                     self.perform_broker_upgrade(to_version)
 
                     log_monitor.wait_until(connected_message,
-                                           timeout_sec=120,
+                                           timeout_sec=60,
                                            err_msg=("Never saw output '%s' on " % connected_message) + str(processor.node.account))
 
                     stdout_monitor.wait_until(self.processed_data_msg,
@@ -253,9 +253,14 @@ class StreamsUpgradeTest(Test):
 
         self.driver.start()
 
+        # encoding different target values for different versions
+        #  - old version: value=A
+        #  - new version with `upgrade_from` flag set: value=B
+        #  - new version w/o `upgrade_from` set set: value=C
+
         extra_properties = extra_properties.copy()
-        extra_properties['test.agg_produce_prefix'] = 'A'
-        extra_properties['test.expected_agg_prefixes'] = 'A'
+        extra_properties['test.agg_produce_value'] = 'A'
+        extra_properties['test.expected_agg_values'] = 'A'
         self.start_all_nodes_with(from_version, extra_properties)
 
         counter = 1
@@ -270,8 +275,8 @@ class StreamsUpgradeTest(Test):
         # bounce two instances to new version (verifies that new version can process records
         # written by old version)
         extra_properties = extra_properties.copy()
-        extra_properties['test.agg_produce_prefix'] = 'B'
-        extra_properties['test.expected_agg_prefixes'] = 'A,B'
+        extra_properties['test.agg_produce_value'] = 'B'
+        extra_properties['test.expected_agg_values'] = 'A,B'
         for p in self.processors[:-1]:
             self.do_stop_start_bounce(p, from_version[:-2], to_version, counter, extra_properties)
             counter = counter + 1
@@ -279,8 +284,8 @@ class StreamsUpgradeTest(Test):
         # bounce remaining instance on old version (just for verification purposes, to verify that
         # instance on old version can process records written by new version)
         extra_properties = extra_properties.copy()
-        extra_properties['test.agg_produce_prefix'] = 'A'
-        extra_properties['test.expected_agg_prefixes'] = 'A,B'
+        extra_properties['test.agg_produce_value'] = 'A'
+        extra_properties['test.expected_agg_values'] = 'A,B'
         self.do_stop_start_bounce(p3, None, from_version, counter, extra_properties)
         counter = counter + 1
 
@@ -289,16 +294,16 @@ class StreamsUpgradeTest(Test):
         # bounce remaining instance to new version (verifies that new version without upgrade_from
         # can process records written by new version with upgrade_from)
         extra_properties = extra_properties.copy()
-        extra_properties['test.agg_produce_prefix'] = 'C'
-        extra_properties['test.expected_agg_prefixes'] = 'A,B,C'
+        extra_properties['test.agg_produce_value'] = 'C'
+        extra_properties['test.expected_agg_values'] = 'A,B,C'
         self.do_stop_start_bounce(p3, None, to_version, counter, extra_properties)
         counter = counter + 1
 
         # bounce first instances again without removing upgrade_from (just for verification purposes,
         # to verify that instance with upgrade_from can process records written without upgrade_from)
         extra_properties = extra_properties.copy()
-        extra_properties['test.agg_produce_prefix'] = 'B'
-        extra_properties['test.expected_agg_prefixes'] = 'A,B,C'
+        extra_properties['test.agg_produce_value'] = 'B'
+        extra_properties['test.expected_agg_values'] = 'A,B,C'
         for p in self.processors[:-1]:
             self.do_stop_start_bounce(p, from_version[:-2], to_version, counter, extra_properties)
             counter = counter + 1
@@ -307,20 +312,20 @@ class StreamsUpgradeTest(Test):
 
         self.stop_and_await()
 
-    def wait_for_table_agg_success(self, expected_prefixes):
-        agg_success_str = "Table aggregate processor saw expected prefixes: " + expected_prefixes
-        with self.processor1.node.account.monitor_log(self.processor1.LOG_FILE) as first_monitor:
-            with self.processor2.node.account.monitor_log(self.processor2.LOG_FILE) as second_monitor:
-                with self.processor3.node.account.monitor_log(self.processor3.LOG_FILE) as third_monitor:
+    def wait_for_table_agg_success(self, expected_values):
+        agg_success_str = "Table aggregate processor saw expected values. Seen: " + expected_values
+        with self.processor1.node.account.monitor_log(self.processor1.STDOUT_FILE) as first_monitor:
+            with self.processor2.node.account.monitor_log(self.processor2.STDOUT_FILE) as second_monitor:
+                with self.processor3.node.account.monitor_log(self.processor3.STDOUT_FILE) as third_monitor:
                     first_monitor.wait_until(agg_success_str,
                                              timeout_sec=60,
-                                             err_msg="Could not verify table aggregate processor success for '" + expected_prefixes + "' in " + str(self.processor1.node.account))
+                                             err_msg="Could not verify table aggregate processor success for '" + expected_values + "' in " + str(self.processor1.node.account))
                     second_monitor.wait_until(agg_success_str,
                                               timeout_sec=60,
-                                              err_msg="Could not verify table aggregate processor success for '" + expected_prefixes + "' in " + str(self.processor2.node.account))
+                                              err_msg="Could not verify table aggregate processor success for '" + expected_values + "' in " + str(self.processor2.node.account))
                     third_monitor.wait_until(agg_success_str,
                                              timeout_sec=60,
-                                             err_msg="Could not verify table aggregate processor success for '" + expected_prefixes + "' in " + str(self.processor3.node.account))
+                                             err_msg="Could not verify table aggregate processor success for '" + expected_values + "' in " + str(self.processor3.node.account))
 
     @cluster(num_nodes=6)
     def test_version_probing_upgrade(self):
