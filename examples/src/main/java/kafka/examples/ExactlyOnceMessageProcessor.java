@@ -57,6 +57,9 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
     private final String transactionalId;
     private volatile boolean closed;
 
+    private final KafkaProducer<Integer, String> producer;
+    private final KafkaConsumer<Integer, String> consumer;
+
     public ExactlyOnceMessageProcessor(String threadName,
                                        String bootstrapServers,
                                        String inputTopic,
@@ -66,7 +69,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
         this.bootstrapServers = bootstrapServers;
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
-        this.transactionalId = "Processor-" + instanceIdx;
+        this.transactionalId = threadName;
         // It is recommended to have a relatively short txn timeout in order to clear pending offsets faster.
         final int transactionTimeoutMs = 10000;
         // A unique transactional.id must be provided in order to properly use EOS.
@@ -75,7 +78,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                 .createKafkaProducer();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
-        this.groupInstanceId = "Txn-consumer-" + instanceIdx;
+        this.groupInstanceId = threadName;
         boolean readCommitted = true;
         consumer = new Consumer(
             "processor-consumer", KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT, inputTopic, "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null)
@@ -95,8 +98,9 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
 
             // consumer must be in read_committed mode, which means it won't be able to read uncommitted data
             boolean readCommitted = true;
-            KafkaConsumer<Integer, String> consumer =
-                new Consumer(inputTopic, "Eos-consumer", Optional.of(groupInstanceId), readCommitted, -1, null).get();
+            KafkaConsumer<Integer, String> consumer = new Consumer(
+                "processor-consumer", bootstrapServers, inputTopic, "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null)
+                    .createKafkaConsumer();
 
             // called first and once to fence zombies and abort any pending transaction
             producer.initTransactions();
