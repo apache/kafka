@@ -160,7 +160,8 @@ class GroupMetadataTest {
     assertThrows(classOf[IllegalStateException], () => group.transitionTo(CompletingRebalance))
   }
 
-  def testDeadToDeadIllegalTransition(): Unit = {
+  @Test
+  def testDeadToDeadTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     group.transitionTo(Dead)

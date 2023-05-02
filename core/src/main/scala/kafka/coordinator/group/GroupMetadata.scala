@@ -98,7 +98,7 @@ private[group] case object Stable extends GroupState {
  *         respond to leave group with UNKNOWN_MEMBER_ID
  *         respond to offset commit with UNKNOWN_MEMBER_ID
  *         allow offset fetch requests
- * transition: Dead is a final state before group metadata is cleaned up, so there are no transitions
+ * transition: Dead is a final state before group metadata is cleaned up, so there is only one transition between Dead and Dead
  */
 private[group] case object Dead extends GroupState {
   val validPreviousStates: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead)
