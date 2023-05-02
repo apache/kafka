@@ -120,6 +120,11 @@ class ZkMigrationIntegrationTest {
     }
   }
 
+  /**
+   * Test ZkMigrationClient against a real ZooKeeper-backed Kafka cluster. This test creates a ZK cluster
+   * and modifies data using AdminClient. The ZkMigrationClient is then used to read the metadata from ZK
+   * as would happen during a migration. The generated records are then verified.
+   */
   @ClusterTest(brokers = 3, clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0)
   def testMigrate(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.createAdminClient()

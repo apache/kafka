@@ -49,7 +49,7 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     public void put(final Bytes key,
                     final byte[] valueWithTimestamp,
                     final long windowStartTimestamp) {
-        store.put(key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp), windowStartTimestamp);
+        store.put(key, rawValue(valueWithTimestamp), windowStartTimestamp);
     }
 
     @Override

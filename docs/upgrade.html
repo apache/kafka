@@ -19,6 +19,46 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_3_6_0" href="#upgrade_3_6_0">Upgrading to 3.6.0 from any version 0.8.x through 3.5.x</a></h4>
+
+    <h5><a id="upgrade_360_notable" href="#upgrade_360_notable">Notable changes in 3.6.0</a></h5>
+    <ul>
+        <li>Apache Kafka now supports having both an IPv4 and an IPv6 listener on the same port. This change only applies to
+            non advertised listeners (advertised listeners already have this feature)</li>
+    </ul>
+
+<h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>
+
+    <h5><a id="upgrade_350_notable" href="#upgrade_350_notable">Notable changes in 3.5.0</a></h5>
+    <ul>
+        <li>Kafka Streams has introduced a new state store type, versioned key-value stores,
+            for storing multiple record versions per key, thereby enabling timestamped retrieval
+            operations to return the latest record (per key) as of a specified timestamp.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889%3A+Versioned+State+Stores">KIP-889</a>
+            and <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>
+            for more details.
+            If the new store typed is used in the DSL, improved processing semantics are applied as described in 
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>.
+        </li>
+        <li>KTable aggregation semantics got further improved via 
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-904%3A+Kafka+Streams+-+Guarantee+subtractor+is+called+before+adder+if+key+has+not+changed">KIP-904</a>,
+	    now avoiding spurious itermedite results.
+        </li>
+        <li>Kafka Streams' <code>ProductionExceptionHandler</code> is improved via 
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-399%3A+Extend+ProductionExceptionHandler+to+cover+serialization+exceptions">KIP-399</a>,
+            now also covering serialiation errors.
+        </li>
+        <li>MirrorMaker now uses incrementalAlterConfigs API by default to synchronize topic configurations instead of the deprecated alterConfigs API.
+            A new settings called <code>use.incremental.alter.configs</code> is introduced to allow users to control which API to use.
+            This new setting is marked deprecated and will be removed in the next major release when incrementalAlterConfigs API is always used.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-894%3A+Use+incrementalAlterConfigs+API+for+syncing+topic+configurations">KIP-894</a> for more details.
+        </li>
+        <li>The JmxTool, EndToEndLatency, StreamsResetter, ConsumerPerformance and ClusterTool have been migrated to the tools module.
+            The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-14525">KAFKA-14525</a> for more details.
+        </li>
+    </ul>
+
 <h4><a id="upgrade_3_4_0" href="#upgrade_3_4_0">Upgrading to 3.4.0 from any version 0.8.x through 3.3.x</a></h4>
 
     <p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.

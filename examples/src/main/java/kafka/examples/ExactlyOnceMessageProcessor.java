@@ -70,8 +70,10 @@ public class ExactlyOnceMessageProcessor extends Thread {
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
         this.groupInstanceId = "Txn-consumer-" + instanceIdx;
-        consumer = new Consumer(inputTopic, "Eos-consumer",
-            Optional.of(groupInstanceId), READ_COMMITTED, -1, null).get();
+        boolean readCommitted = true;
+        consumer = new Consumer(
+            "processor-consumer", KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT, inputTopic, "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null)
+                .createKafkaConsumer();
         this.latch = latch;
     }
 
