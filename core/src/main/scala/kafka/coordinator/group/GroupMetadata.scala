@@ -451,7 +451,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val (protocol, _) = allMemberMetadata
       .map(_.vote(candidates))
       .groupBy(identity)
-      .maxBy { case (_, votes) => votes.size }
+      .maxBy { case (a, votes) => votes.size }
 
     protocol
   }
@@ -507,7 +507,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
               // future versions of the consumer protocol. VO must prefix all new versions.
               val buffer = ByteBuffer.wrap(member.metadata(protocolName.get))
               ConsumerProtocol.deserializeVersion(buffer)
-              ConsumerProtocol.deserializeSubscription(buffer, 0).topics.asScala.toSet
+              val a = ConsumerProtocol.deserializeSubscription(buffer, 0).topics.asScala.toSet
+              a
             }.reduceLeft(_ ++ _)
           )
         } catch {
