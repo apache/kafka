@@ -942,6 +942,87 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
+    public void testEnsurePartitionsAssignedToHighestGeneration() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        partitionsPerTopic.put(topic2, 3);
+        partitionsPerTopic.put(topic3, 3);
+
+        int currentGeneration = 10;
+
+        // ensure partitions are always assigned to the member with the highest generation
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic, topic2, topic3),
+            partitions(tp(topic, 0), tp(topic2, 0), tp(topic3, 0)), currentGeneration));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic, topic2, topic3),
+            partitions(tp(topic, 1), tp(topic2, 1), tp(topic3, 1)), currentGeneration - 1));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic, topic2, topic3),
+            partitions(tp(topic2, 1), tp(topic3, 0), tp(topic3, 2)), currentGeneration - 2));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic2, 0), tp(topic3, 0))),
+            new HashSet<>(assignment.get(consumer1)));
+        assertEquals(new HashSet<>(partitions(tp(topic, 1), tp(topic2, 1), tp(topic3, 1))),
+            new HashSet<>(assignment.get(consumer2)));
+        assertEquals(new HashSet<>(partitions(tp(topic, 2), tp(topic2, 2), tp(topic3, 2))),
+            new HashSet<>(assignment.get(consumer3)));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    public void testNoReassignmentOnCurrentMembers() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        partitionsPerTopic.put(topic1, 3);
+        partitionsPerTopic.put(topic2, 3);
+        partitionsPerTopic.put(topic3, 3);
+
+        int currentGeneration = 10;
+
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1),
+            partitions(), DEFAULT_GENERATION));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1),
+            partitions(tp(topic, 0), tp(topic2, 0), tp(topic1, 0)), currentGeneration - 1));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1),
+            partitions(tp(topic3, 2), tp(topic2, 2), tp(topic1, 1)), currentGeneration - 2));
+        subscriptions.put(consumer4, buildSubscriptionV2Above(topics(topic, topic2, topic3, topic1),
+            partitions(tp(topic3, 1), tp(topic, 1), tp(topic, 2)), currentGeneration - 3));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        // ensure assigned partitions don't get reassigned
+        assertEquals(new HashSet<>(partitions(tp(topic1, 2), tp(topic2, 1), tp(topic3, 0))),
+                new HashSet<>(assignment.get(consumer1)));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testOwnedPartitionsAreInvalidatedForConsumerWithMultipleGeneration() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        partitionsPerTopic.put(topic2, 3);
+
+        int currentGeneration = 10;
+
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic, topic2),
+            partitions(tp(topic, 0), tp(topic2, 1), tp(topic, 1)), currentGeneration));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic, topic2),
+            partitions(tp(topic, 0), tp(topic2, 1), tp(topic2, 2)), currentGeneration - 2));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic2, 1), tp(topic, 1))),
+            new HashSet<>(assignment.get(consumer1)));
+        assertEquals(new HashSet<>(partitions(tp(topic, 2), tp(topic2, 2), tp(topic2, 0))),
+            new HashSet<>(assignment.get(consumer2)));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
     private String getTopicName(int i, int maxNum) {
         return getCanonicalName("t", i, maxNum);
     }
