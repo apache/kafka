@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
@@ -162,10 +163,12 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testAssign() {
-        consumer = spy(newConsumer(time, new StringDeserializer(), new StringDeserializer()));
-        consumer.assign(singleton(new TopicPartition("foo", 3)));
+        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
+        this.consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        final TopicPartition tp = new TopicPartition("foo", 3);
+        consumer.assign(singleton(tp));
         assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().isEmpty());
+        assertTrue(consumer.assignment().contains(tp));
         verify(eventHandler).add(any(CommitApplicationEvent.class));
         verify(eventHandler).add(any(MetadataUpdateApplicationEvent.class));
     }
