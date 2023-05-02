@@ -124,29 +124,37 @@ class LogCleaner(initialConfig: CleanerConfig,
   private def maxOverCleanerThreads(f: CleanerThread => Double): Int =
     cleaners.foldLeft(0.0d)((max: Double, thread: CleanerThread) => math.max(max, f(thread))).toInt
 
+  private val maxBufferUtilizationPercentMetricName =  "max-buffer-utilization-percent"
+  private val cleanerRecopyPercentMetricName =  "cleaner-recopy-percent"
+  private val maxCleanTimeMetricName =  "max-clean-time-secs"
+  private val maxCompactionDelayMetricsName = "max-compaction-delay-secs"
+  private val deadThreadCountMetricName = "DeadThreadCount"
+  private val metricNames = Set.apply(maxBufferUtilizationPercentMetricName,
+                                      cleanerRecopyPercentMetricName,
+                                      maxCleanTimeMetricName,
+                                      maxCompactionDelayMetricsName,
+                                      deadThreadCountMetricName)
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
-  metricsGroup.newGauge("max-buffer-utilization-percent",
+  metricsGroup.newGauge(maxBufferUtilizationPercentMetricName,
     () => maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100)
 
   /* a metric to track the recopy rate of each thread's last cleaning */
-  metricsGroup.newGauge("cleaner-recopy-percent", () => {
+  metricsGroup.newGauge(cleanerRecopyPercentMetricName, () => {
     val stats = cleaners.map(_.lastStats)
     val recopyRate = stats.iterator.map(_.bytesWritten).sum.toDouble / math.max(stats.iterator.map(_.bytesRead).sum, 1)
     (100 * recopyRate).toInt
   })
 
   /* a metric to track the maximum cleaning time for the last cleaning from each thread */
-  metricsGroup.newGauge("max-clean-time-secs",
-    () => maxOverCleanerThreads(_.lastStats.elapsedSecs))
-
+  metricsGroup.newGauge(maxCleanTimeMetricName, () => maxOverCleanerThreads(_.lastStats.elapsedSecs))
 
   // a metric to track delay between the time when a log is required to be compacted
   // as determined by max compaction lag and the time of last cleaner run.
-  metricsGroup.newGauge("max-compaction-delay-secs",
+  metricsGroup.newGauge(maxCompactionDelayMetricsName,
     () => maxOverCleanerThreads(_.lastPreCleanStats.maxCompactionDelayMs.toDouble) / 1000)
 
-  metricsGroup.newGauge("DeadThreadCount", () => deadThreadCount)
+  metricsGroup.newGauge(deadThreadCountMetricName, () => deadThreadCount)
 
   private[log] def deadThreadCount: Int = cleaners.count(_.isThreadFailed)
 
@@ -171,16 +179,12 @@ class LogCleaner(initialConfig: CleanerConfig,
       cleaners.foreach(_.shutdown())
       cleaners.clear()
     } finally {
-      remoteMetrics()
+      removeMetrics()
     }
   }
 
-  def remoteMetrics(): Unit = {
-    metricsGroup.removeMetric("max-buffer-utilization-percent")
-    metricsGroup.removeMetric("cleaner-recopy-percent")
-    metricsGroup.removeMetric("max-clean-time-secs")
-    metricsGroup.removeMetric("max-compaction-delay-secs")
-    metricsGroup.removeMetric("DeadThreadCount")
+  def removeMetrics(): Unit = {
+    metricNames.foreach(metricsGroup.removeMetric);
   }
 
   override def reconfigurableConfigs: Set[String] = {
