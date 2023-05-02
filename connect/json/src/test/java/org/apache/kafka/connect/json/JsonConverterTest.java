@@ -49,6 +49,7 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 
@@ -65,7 +66,7 @@ public class JsonConverterTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper()
         .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-        .setNodeFactory(JsonNodeFactory.withExactBigDecimals(true));
+        .setNodeFactory(new JsonNodeFactory(true));
 
     private final JsonConverter converter = new JsonConverter();
 
@@ -207,7 +208,7 @@ public class JsonConverterTest {
      */
     @Test
     public void emptyBytesToConnect() {
-        // This characterizes the messages with empty data when Json schemas is disabled
+        // This characterizes the messages with empty data when Json schemas are disabled
         Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
         converter.configure(props, true);
         SchemaAndValue converted = converter.toConnectData(TOPIC, "".getBytes());
@@ -219,7 +220,7 @@ public class JsonConverterTest {
      */
     @Test
     public void schemalessWithEmptyFieldValueToConnect() {
-        // This characterizes the messages with empty data when Json schemas is disabled
+        // This characterizes the messages with empty data when Json schemas are disabled
         Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
         converter.configure(props, true);
         String input = "{ \"a\": \"\", \"b\": null}";
@@ -501,7 +502,7 @@ public class JsonConverterTest {
         converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": true }, \"payload\": true }".getBytes());
         assertEquals(2, converter.sizeOfToConnectSchemaCache());
 
-        // Even equivalent, but different JSON encoding of schema, should get different cache entry
+        // Even equivalent, but different JSON encoding of schema should get different cache entry
         converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false }, \"payload\": true }".getBytes());
         assertEquals(3, converter.sizeOfToConnectSchemaCache());
     }
@@ -787,7 +788,7 @@ public class JsonConverterTest {
 
     @Test
     public void nullSchemaAndMapNonStringKeysToJson() {
-        // This still needs to do conversion of data, null schema means "anything goes". Make sure we mix and match
+        // This still needs to do conversion of data; null schema means "anything goes". Make sure we mix and match
         // types to verify conversion still works.
         Map<Object, Object> input = new HashMap<>();
         input.put("string", 12);
@@ -854,7 +855,7 @@ public class JsonConverterTest {
     public void testCacheSchemaToJsonConversion() {
         assertEquals(0, converter.sizeOfFromConnectSchemaCache());
 
-        // Repeated conversion of the same schema, even if the schema object is different should return the same Java
+        // Repeated conversion of the same schema, even if the schema object is different, should return the same Java
         // object
         converter.fromConnectData(TOPIC, SchemaBuilder.bool().build(), true);
         assertEquals(1, converter.sizeOfFromConnectSchemaCache());
@@ -862,14 +863,14 @@ public class JsonConverterTest {
         converter.fromConnectData(TOPIC, SchemaBuilder.bool().build(), true);
         assertEquals(1, converter.sizeOfFromConnectSchemaCache());
 
-        // Validate that a similar, but different schema correctly returns a different schema.
+        // Validate that similar, but different schema correctly returns a different schema.
         converter.fromConnectData(TOPIC, SchemaBuilder.bool().optional().build(), true);
         assertEquals(2, converter.sizeOfFromConnectSchemaCache());
     }
 
     @Test
     public void testJsonSchemaCacheSizeFromConfigFile() throws URISyntaxException, IOException {
-        URL url = getClass().getResource("/connect-test.properties");
+        URL url = Objects.requireNonNull(getClass().getResource("/connect-test.properties"));
         File propFile = new File(url.toURI());
         String workerPropsFile = propFile.getAbsolutePath();
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
