@@ -896,7 +896,7 @@ object KafkaConfig {
     "will cause consumers with older versions to break as they will receive messages with a format that they don't understand."
 
   val LogMessageTimestampTypeDoc = "Define whether the timestamp in the message is message create time or log append time. The value should be either " +
-    "`CreateTime` or `LogAppendTime."
+    "`CreateTime` or `LogAppendTime`."
 
   val LogMessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
     "a message and the timestamp specified in the message. If log.message.timestamp.type=CreateTime, a message will be rejected " +
