@@ -59,7 +59,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 
 /**
  * Implementation of {@link Converter} and {@link HeaderConverter} that uses JSON to store schemas and objects. By
- * default this converter will serialize Connect keys, values, and headers with schemas, although this can be disabled with
+ * default, this converter will serialize Connect keys, values, and headers with schemas, although this can be disabled with
  * the {@link JsonConverterConfig#SCHEMAS_ENABLE_CONFIG schemas.enable} configuration option.
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
@@ -127,7 +127,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 throw new DataException("Structs should be encoded as JSON objects, but found " + value.getNodeType());
 
             // We only have ISchema here but need Schema, so we need to materialize the actual schema. Using ISchema
-            // avoids having to materialize the schema for non-Struct types but it cannot be avoided for Structs since
+            // avoids having to materialize the schema for non-Struct types, but it cannot be avoided for Structs since
             // they require a schema to be provided at construction. However, the schema is only a SchemaBuilder during
             // translation of schemas to JSON; during the more common translation of data to JSON, the call to schema.schema()
             // just returns the schema Object and has no overhead.
@@ -143,7 +143,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     // names specified in the field
     private static final HashMap<String, LogicalTypeConverter> LOGICAL_CONVERTERS = new HashMap<>();
 
-    private static final JsonNodeFactory JSON_NODE_FACTORY = JsonNodeFactory.withExactBigDecimals(true);
+    private static final JsonNodeFactory JSON_NODE_FACTORY = new JsonNodeFactory(true);
 
     static {
         LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
@@ -338,7 +338,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                     " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
 
         // The deserialized data should either be an envelope object containing the schema and the payload or the schema
-        // was stripped during serialization and we need to fill in an all-encompassing schema.
+        // was stripped during serialization, and we need to fill in an all-encompassing schema.
         if (!config.schemasEnabled()) {
             ObjectNode envelope = JSON_NODE_FACTORY.objectNode();
             envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
@@ -569,7 +569,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
      */
     private JsonNode convertToJson(Schema schema, Object value) {
         if (value == null) {
-            if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
+            if (schema == null) // Any schema is valid, and we don't have a default, so treat this as an optional schema
                 return null;
             if (schema.defaultValue() != null && config.replaceNullWithDefault())
                 return convertToJson(schema, schema.defaultValue());
