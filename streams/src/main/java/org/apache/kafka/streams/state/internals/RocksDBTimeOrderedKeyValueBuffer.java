@@ -28,7 +28,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
   private FullChangeSerde<V> valueSerde;
   private String topic;
 
-  RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueSegmentedBytesStore store,
+  public RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueSegmentedBytesStore store,
                                    final Duration gracePeriod,
                                    final String topic) {
     super(store);
@@ -38,9 +38,9 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
     bufferSize = 0;
     this.topic = topic;
   }
-
+  @SuppressWarnings("unchecked")
   @Override
-  public void setSerdesIfNull(SerdeGetter getter) {
+  public void setSerdesIfNull(final SerdeGetter getter) {
     keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
     valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
   }

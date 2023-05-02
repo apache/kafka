@@ -25,7 +25,7 @@ public class StreamTableJoinBufferNode<K, V> extends GraphNode {
 
   private final String[] storeNames;
   private final ProcessorParameters<K, V, ?, ?> processorParameters;
-  public <V, K> StreamTableJoinBufferNode(final String nodeName,
+  public StreamTableJoinBufferNode(final String nodeName,
                                           final ProcessorParameters<K, V, ?, ?> processorParameters,
                                           final String[] storeNames) {
     super(nodeName);

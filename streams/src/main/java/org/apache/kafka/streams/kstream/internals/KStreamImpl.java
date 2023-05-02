@@ -69,6 +69,7 @@ import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.lang.reflect.Array;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -76,6 +77,9 @@ import java.util.Objects;
 import java.util.Set;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueSegmentedBytesStore;
+import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
@@ -1298,14 +1302,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
 
-        TimeOrderedKeyValueBuffer<K, V> supressBuffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(name, joined.keySerde(), joined.valueSerde()).build();
+        final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,  0,false).get();
 
-        final ProcessorSupplier<K, V, K, V> processorSupplier1 = new KStreamJoinSupressBufferProcessSupplier<>(supressBuffer, joined.gracePeriod());
-        final ProcessorParameters<K, V, ?, ?> processorParameters1 = new ProcessorParameters<>(processorSupplier1, name);
-
+        final TimeOrderedKeyValueBuffer<K, V> supressBuffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name);
+        final String bufferName = name + "-buffer";
+        final ProcessorSupplier<K, V, K, V> processorSupplier1 = (ProcessorSupplier<K, V, K, V>) new KStreamJoinSupressBufferProcessSupplier<>(supressBuffer, joined.gracePeriod());
+        final ProcessorParameters<K, V, ?, ?> processorParameters1 = new ProcessorParameters<>(processorSupplier1, bufferName);
 
         final StreamTableJoinBufferNode<K, V> streamTableJoinBufferNode = new StreamTableJoinBufferNode<>(
-            name,
+            bufferName,
             processorParameters1,
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames()
         );

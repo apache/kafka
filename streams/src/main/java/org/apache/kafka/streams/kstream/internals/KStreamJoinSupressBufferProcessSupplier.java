@@ -22,9 +22,10 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import java.time.Duration;
 
-public class KStreamJoinSupressBufferProcessSupplier<K, V> implements ProcessorSupplier<K, V, K, V> {
-  private final TimeOrderedKeyValueBuffer buffer;
+public class KStreamJoinSupressBufferProcessSupplier<K, V> implements KTableProcessorSupplier<K, V, K, V> {
+  private final TimeOrderedKeyValueBuffer<K, V> buffer;
   private final Duration gracePeriod;
+
   public KStreamJoinSupressBufferProcessSupplier(final TimeOrderedKeyValueBuffer<K, V> buffer, final Duration gracePeriod) {
     this.buffer = buffer;
     this.gracePeriod = gracePeriod;
@@ -40,7 +41,31 @@ public class KStreamJoinSupressBufferProcessSupplier<K, V> implements ProcessorS
    * @return a new {@link Processor} instance
    */
   @Override
-  public Processor<K, V, K, V> get() {
+  public Processor<K, Change<V>, K, Change<V>> get() {
     return new KStreamJoinBufferProcessor<>(buffer, gracePeriod);
+  }
+
+  @Override
+  public KTableValueGetterSupplier<K, V> view() {
+    return null;
+  }
+
+  /**
+   * Potentially enables sending old values.
+   * <p>
+   * If {@code forceMaterialization} is {@code true}, the method will force the materialization of upstream nodes to
+   * enable sending old values.
+   * <p>
+   * If {@code forceMaterialization} is {@code false}, the method will only enable the sending of old values <i>if</i>
+   * an upstream node is already materialized.
+   *
+   * @param forceMaterialization indicates if an upstream node should be forced to materialize to enable sending old
+   *                             values.
+   * @return {@code true} if sending old values is enabled, i.e. either because {@code forceMaterialization} was
+   * {@code true} or some upstream node is materialized.
+   */
+  @Override
+  public boolean enableSendingOldValues(boolean forceMaterialization) {
+    return false;
   }
 }
