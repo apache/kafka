@@ -905,12 +905,12 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server."
   val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
-    s"$MinInsyncReplicasProp specifies the minimum number of replicas that must acknowledge " +
+    "<code>min.insync.replicas</code> specifies the minimum number of replicas that must acknowledge " +
     "a write for the write to be considered successful. If this minimum cannot be met, " +
     "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or " +
-    s"<code>NotEnoughReplicasAfterAppend</code>).<br>When used together, $MinInsyncReplicasProp and acks " +
+    "<code>NotEnoughReplicasAfterAppend</code>).<br>When used together, <code>min.insync.replicas</code> and acks " +
     "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-    s"create a topic with a replication factor of 3, set $MinInsyncReplicasProp to 2, and " +
+    "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
     "produce with acks of \"all\". This will ensure that the producer raises an exception " +
     "if a majority of replicas do not receive a write."
 
