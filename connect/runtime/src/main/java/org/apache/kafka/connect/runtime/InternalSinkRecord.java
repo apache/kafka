@@ -55,6 +55,16 @@ public class InternalSinkRecord extends SinkRecord {
             valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers());
     }
 
+    @Override
+    public boolean equals(Object o) {
+        return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
+
     /**
     * Return the original consumer record that this sink record represents.
     *
