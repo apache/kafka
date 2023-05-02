@@ -23,6 +23,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.mirror.MirrorUtils.mergeConnectorConfigDef;
+
 public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
     protected static final String REFRESH_GROUPS = "refresh.groups";
@@ -165,7 +167,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
-    protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(BASE_CONNECTOR_CONFIG_DEF)
+    protected static final ConfigDef CHECKPOINT_CONFIG_DEF = new ConfigDef()
             .define(
                     CONSUMER_POLL_TIMEOUT_MILLIS,
                     ConfigDef.Type.LONG,
@@ -252,7 +254,9 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                     ConfigDef.Importance.LOW,
                     TOPIC_FILTER_CLASS_DOC);
 
+    protected final static ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(mergeConnectorConfigDef(CHECKPOINT_CONFIG_DEF));
+
     public static void main(String[] args) {
-        System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_checkpoint_" + config));
+        System.out.println(CHECKPOINT_CONFIG_DEF.toHtml(4, config -> "mirror_checkpoint_" + config));
     }
 }

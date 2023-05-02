@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.connect.mirror.MirrorUtils.mergeConnectorConfigDef;
 
 public class MirrorSourceConfig extends MirrorConnectorConfig {
 
@@ -225,7 +226,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return getBoolean(ADD_SOURCE_ALIAS_TO_METRICS);
     }
 
-    protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(BASE_CONNECTOR_CONFIG_DEF)
+    protected static final ConfigDef SOURCE_CONFIG_DEF = new ConfigDef()
             .define(
                     TOPICS,
                     ConfigDef.Type.LIST,
@@ -349,7 +350,9 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                     ConfigDef.Importance.LOW,
                     ADD_SOURCE_ALIAS_TO_METRICS_DOC);
 
-    public static void main(String[] args) {
-        System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_source_" + config));
+    protected final static ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(mergeConnectorConfigDef(SOURCE_CONFIG_DEF));
+
+    public static void main(String[] args) {        
+        System.out.println(SOURCE_CONFIG_DEF.toHtml(4, config -> "mirror_source_" + config));
     }
 }

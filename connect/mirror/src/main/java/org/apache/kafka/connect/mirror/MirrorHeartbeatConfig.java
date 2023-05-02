@@ -22,6 +22,8 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import java.time.Duration;
 import java.util.Map;
 
+import static org.apache.kafka.connect.mirror.MirrorUtils.mergeConnectorConfigDef;
+
 public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
 
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
@@ -62,7 +64,7 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
         return getShort(HEARTBEATS_TOPIC_REPLICATION_FACTOR);
     }
 
-    protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(BASE_CONNECTOR_CONFIG_DEF)
+    protected static final ConfigDef HEARTBEAT_CONFIG_DEF = new ConfigDef()
             .define(
                     EMIT_HEARTBEATS_ENABLED,
                     ConfigDef.Type.BOOLEAN,
@@ -82,7 +84,9 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
                     ConfigDef.Importance.LOW,
                     HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC);
 
+    protected final static ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(mergeConnectorConfigDef(HEARTBEAT_CONFIG_DEF));
+
     public static void main(String[] args) {
-        System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_heartbeat_" + config));
+        System.out.println(HEARTBEAT_CONFIG_DEF.toHtml(4, config -> "mirror_heartbeat_" + config));
     }
 }
