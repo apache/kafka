@@ -38,7 +38,7 @@ public class RocksDbTimeOrderedKeyValueBytesStoreSupplier {
             name,
             metricsScope(),
             retentionPeriod,
-            0,
+            1,
             withIndex
         );
   }

@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
@@ -31,7 +32,7 @@ import java.time.temporal.ChronoUnit;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
-public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, Change<V>, K, Change<V>> {
+public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, V, K, V> {
 
   private final TimeOrderedKeyValueBuffer<K, V> buffer;
   private Sensor droppedRecordsSensor;
@@ -44,14 +45,16 @@ public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, Cha
                                     final Duration gracePeriod) {
     this.buffer = buffer;
     this.gracePeriod = gracePeriod;
-    internalProcessorContext = (InternalProcessorContext<K, Change<V>>) context();
   }
 
+  @SuppressWarnings("unchecked")
   @Override
-  public void init(final ProcessorContext<K, Change<V>> context) {
+  public void init(final ProcessorContext<K, V> context) {
     super.init(context);
+    internalProcessorContext = (InternalProcessorContext<K, Change<V>>) context();
     final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
     droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+    buffer.setSerdesIfNull(new SerdeGetter(context));
   }
   /**
    * Process the record. Note that record metadata is undefined in cases such as a forward call from a punctuator.
@@ -59,13 +62,15 @@ public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, Cha
    * @param record the record to process
    */
   @Override
-  public void process(Record<K, Change<V>> record) {
+  public void process(Record<K, V> record) {
     updateObservedStreamTime(record.timestamp());
-    final long deadline = observedStreamTime + gracePeriod.toMillis();
-    if(buffer.minTimestamp() <= deadline) {
+    final long deadline = observedStreamTime - gracePeriod.toMillis();
+    if(record.timestamp() < deadline) {
       droppedRecordsSensor.record();
     } else {
-      buffer.put(observedStreamTime, record, internalProcessorContext.recordContext());
+      final Change<V> change = new Change<>(record.value(), record.value());
+      final Record<K, Change<V>> r = new Record<>(record.key(), change, record.timestamp());
+      buffer.put(observedStreamTime, r, internalProcessorContext.recordContext());
       buffer.evictWhile(() -> buffer.minTimestamp() <= deadline, this::emit);
     }
   }
@@ -77,10 +82,10 @@ public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, Cha
   private void emit(final TimeOrderedKeyValueBuffer.Eviction<K, V> toEmit) {
     final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
     internalProcessorContext.setRecordContext(toEmit.recordContext());
+    final Record<K, V> r = new Record<>(toEmit.key(), toEmit.value().newValue, toEmit.recordContext().timestamp())
+        .withHeaders(toEmit.recordContext().headers());
     try {
-      context().forward(toEmit.record()
-          .withTimestamp(toEmit.recordContext().timestamp())
-          .withHeaders(toEmit.recordContext().headers()));
+      context().forward(r);
     } finally {
       internalProcessorContext.setRecordContext(prevRecordContext);
     }

@@ -98,7 +98,9 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
   public void put(long time, Record<K, Change<V>> record, ProcessorRecordContext recordContext) {
     requireNonNull(record.value(), "value cannot be null");
     requireNonNull(recordContext, "recordContext cannot be null");
-    final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(topic, record.key()));
+    final Bytes serializedKey = WindowKeySchema.toStoreKeyBinary(Bytes.wrap(keySerde.serializer().serialize(topic, record.key())),
+        record.timestamp(),
+        (int) recordContext.offset());
     final Change<byte[]> serialChange = valueSerde.serializeParts(topic, record.value());
     final BufferValue buffered = new BufferValue(serialChange.oldValue, serialChange.oldValue, serialChange.newValue, recordContext);
     wrapped().put(serializedKey, buffered.serialize(0).array());

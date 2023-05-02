@@ -46,6 +46,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
 
     AbstractSegments(final String name, final long retentionPeriod, final long segmentInterval) {
         this.name = name;
+        //segmentInterval != 0
         this.segmentInterval = segmentInterval;
         this.retentionPeriod = retentionPeriod;
         // Create a date formatter. Formatted timestamps are used as segment name suffixes

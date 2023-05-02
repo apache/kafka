@@ -22,7 +22,7 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import java.time.Duration;
 
-public class KStreamJoinSupressBufferProcessSupplier<K, V> implements KTableProcessorSupplier<K, V, K, V> {
+public class KStreamJoinSupressBufferProcessSupplier<K, V> implements ProcessorSupplier<K, V, K, V> {
   private final TimeOrderedKeyValueBuffer<K, V> buffer;
   private final Duration gracePeriod;
 
@@ -34,38 +34,14 @@ public class KStreamJoinSupressBufferProcessSupplier<K, V> implements KTableProc
   /**
    * Return a newly constructed {@link Processor} instance.
    * The supplier should always generate a new instance each time {@link  ProcessorSupplier#get()} gets called.
-   * <p>
+   * <p>x
    * Creating a single {@link Processor} object and returning the same object reference in {@link ProcessorSupplier#get()}
    * is a violation of the supplier pattern and leads to runtime exceptions.
    *
    * @return a new {@link Processor} instance
    */
   @Override
-  public Processor<K, Change<V>, K, Change<V>> get() {
+  public Processor<K, V, K, V> get() {
     return new KStreamJoinBufferProcessor<>(buffer, gracePeriod);
-  }
-
-  @Override
-  public KTableValueGetterSupplier<K, V> view() {
-    return null;
-  }
-
-  /**
-   * Potentially enables sending old values.
-   * <p>
-   * If {@code forceMaterialization} is {@code true}, the method will force the materialization of upstream nodes to
-   * enable sending old values.
-   * <p>
-   * If {@code forceMaterialization} is {@code false}, the method will only enable the sending of old values <i>if</i>
-   * an upstream node is already materialized.
-   *
-   * @param forceMaterialization indicates if an upstream node should be forced to materialize to enable sending old
-   *                             values.
-   * @return {@code true} if sending old values is enabled, i.e. either because {@code forceMaterialization} was
-   * {@code true} or some upstream node is materialized.
-   */
-  @Override
-  public boolean enableSendingOldValues(boolean forceMaterialization) {
-    return false;
   }
 }

@@ -1302,11 +1302,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
 
-        final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,  0,false).get();
+        final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,  1,false).get();
 
         final TimeOrderedKeyValueBuffer<K, V> supressBuffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name);
         final String bufferName = name + "-buffer";
-        final ProcessorSupplier<K, V, K, V> processorSupplier1 = (ProcessorSupplier<K, V, K, V>) new KStreamJoinSupressBufferProcessSupplier<>(supressBuffer, joined.gracePeriod());
+        final ProcessorSupplier<K, V, K, V> processorSupplier1 = new KStreamJoinSupressBufferProcessSupplier<>(supressBuffer, joined.gracePeriod());
         final ProcessorParameters<K, V, ?, ?> processorParameters1 = new ProcessorParameters<>(processorSupplier1, bufferName);
 
         final StreamTableJoinBufferNode<K, V> streamTableJoinBufferNode = new StreamTableJoinBufferNode<>(
