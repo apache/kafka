@@ -1288,6 +1288,7 @@ public class KafkaProducerTest {
         // retry initTransactions after the ClusterAuthorizationException not being thrown
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         TestUtils.retryOnExceptionWithTimeout(1000, 100, producer::initTransactions);
+        producer.close();
     }
 
     @Test
