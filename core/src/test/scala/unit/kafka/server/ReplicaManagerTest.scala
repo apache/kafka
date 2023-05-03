@@ -35,7 +35,7 @@ import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -53,7 +53,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{InvalidRecordException, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
@@ -2181,7 +2181,7 @@ class ReplicaManagerTest {
       transactionalRecords.put(tp1, MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId + 1, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes)))
 
-      assertThrows(classOf[InvalidRecordException],
+      assertThrows(classOf[InvalidPidMappingException],
         () => appendRecordsToMultipleTopics(replicaManager, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0)))
     } finally {
       replicaManager.shutdown()

@@ -51,7 +51,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{ElectionType, InvalidRecordException, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
@@ -645,7 +645,7 @@ class ReplicaManager(val config: KafkaConfig,
           entriesPerPartition.partition { case (topicPartition, records) =>
             // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
             val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
-            transactionalBatches.map(_.producerId()).toSet.foreach(transactionalProducerIds.add(_))
+            transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
             if (transactionalBatches.nonEmpty) {
               getPartitionOrException(topicPartition).hasOngoingTransaction(transactionalBatches.head.producerId)
             } else { 
@@ -656,7 +656,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
       // We should have exactly one producer ID for transactional records
       if (transactionalProducerIds.size > 1) {
-        throw new InvalidRecordException("Transactional records contained more than one producer ID")
+        throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
       }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
