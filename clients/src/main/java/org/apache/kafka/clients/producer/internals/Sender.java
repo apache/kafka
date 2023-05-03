@@ -794,6 +794,8 @@ public class Sender implements Runnable {
     ) {
         if (transactionManager != null) {
             try {
+                // This call can throw an exception in the rare case that there's an invalid state transition
+                // attempted. Catch these so as not to interfere with the rest of the logic.
                 transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers, BACKGROUND);
             } catch (Exception e) {
                 log.debug("Encountered error when handling a failed batch", e);
