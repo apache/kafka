@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
-import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -3457,7 +3456,7 @@ public class TransactionManagerTest {
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will result in a poisoning of the transaction manager for all subsequent transactional operations since
         // it was performed in the background.
-        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new NetworkException(), false, BACKGROUND));
+        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new KafkaException(), false, BACKGROUND));
         assertTrue(transactionManager.hasFatalError());
 
         // Validate that all of these operations will fail after the invalid state transition attempt above.
@@ -3473,7 +3472,7 @@ public class TransactionManagerTest {
     public void testForegroundInvalidStateTransitionIsRecoverable() {
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will not poison the transaction manager since it was performed in the foreground.
-        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new NetworkException(), false, FOREGROUND));
+        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new KafkaException(), false, FOREGROUND));
         assertFalse(transactionManager.hasFatalError());
 
         // Validate that the transactions can still run after the invalid state transition attempt above.
