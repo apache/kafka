@@ -26,8 +26,10 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -43,46 +45,43 @@ public class LogDirsCommandTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldNotThrowWhenDuplicatedBrokers() throws JsonProcessingException {
         Node broker = new Node(1, "hostname", 9092);
         try (MockAdminClient adminClient = new MockAdminClient(Collections.singletonList(broker), broker)) {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "1,1", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
             assertEquals(3, standardOutputLines.length);
-            @SuppressWarnings("unchecked")
             Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
-            @SuppressWarnings("unchecked")
-            List<Object> brokerInformation = (List<Object>) information.get("brokers");
-            @SuppressWarnings("unchecked")
-            Integer brokerId = (Integer) ((HashMap<String, Object>) brokerInformation.get(0)).get("broker");
-            assertEquals(1, brokerInformation.size());
+            List<Object> brokersInformation = (List<Object>) information.get("brokers");
+            Integer brokerId = (Integer) ((HashMap<String, Object>) brokersInformation.get(0)).get("broker");
+            assertEquals(1, brokersInformation.size());
             assertEquals(1, brokerId);
         }
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldQueryAllBrokersIfNonSpecified() throws JsonProcessingException {
         Node brokerOne = new Node(1, "hostname", 9092);
         Node brokerTwo = new Node(2, "hostname", 9092);
-        try (MockAdminClient adminClient = new MockAdminClient(Arrays.asList(brokerOne, brokerTwo), brokerOne)) {
+        try (MockAdminClient adminClient = new MockAdminClient(Arrays.asList(brokerTwo, brokerOne), brokerOne)) {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
             assertEquals(3, standardOutputLines.length);
-            @SuppressWarnings("unchecked")
             Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
-            @SuppressWarnings("unchecked")
-            List<Object> brokerInformation = (List<Object>) information.get("brokers");
-            @SuppressWarnings("unchecked")
-            Integer brokerOneId = (Integer) ((HashMap<String, Object>) brokerInformation.get(0)).get("broker");
-            @SuppressWarnings("unchecked")
-            Integer brokerTwoId = (Integer) ((HashMap<String, Object>) brokerInformation.get(1)).get("broker");
-            assertEquals(2, brokerInformation.size());
-            assertEquals(1, brokerOneId);
-            assertEquals(2, brokerTwoId);
+            List<Object> brokersInformation = (List<Object>) information.get("brokers");
+            Set<Integer> brokerIds = new HashSet<Integer>() {{
+                add((Integer) ((HashMap<String, Object>) brokersInformation.get(0)).get("broker"));
+                add((Integer) ((HashMap<String, Object>) brokersInformation.get(1)).get("broker"));
+            }};
+            assertEquals(2, brokersInformation.size());
+            assertEquals(new HashSet<>(Arrays.asList(2, 1)), brokerIds);
         }
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldQuerySpecifiedBroker() throws JsonProcessingException {
         Node brokerOne = new Node(1, "hostname", 9092);
         Node brokerTwo = new Node(2, "hostname", 9092);
@@ -90,14 +89,10 @@ public class LogDirsCommandTest {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "1", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
             assertEquals(3, standardOutputLines.length);
-            System.out.println(Arrays.toString(standardOutputLines));
-            @SuppressWarnings("unchecked")
             Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
-            @SuppressWarnings("unchecked")
-            List<Object> brokerInformation = (List<Object>) information.get("brokers");
-            @SuppressWarnings("unchecked")
-            Integer brokerId = (Integer) ((HashMap<String, Object>) brokerInformation.get(0)).get("broker");
-            assertEquals(1, brokerInformation.size());
+            List<Object> brokersInformation = (List<Object>) information.get("brokers");
+            Integer brokerId = (Integer) ((HashMap<String, Object>) brokersInformation.get(0)).get("broker");
+            assertEquals(1, brokersInformation.size());
             assertEquals(1, brokerId);
         }
     }
