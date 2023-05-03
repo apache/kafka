@@ -791,7 +791,14 @@ public class Sender implements Runnable {
         boolean adjustSequenceNumbers
     ) {
         if (transactionManager != null) {
-            transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
+            try {
+                transactionManager.handleFailedBatch(batch,
+                        topLevelException,
+                        adjustSequenceNumbers,
+                        TransactionManager.InvalidStateDetectionStrategy.BACKGROUND);
+            } catch (Exception e) {
+                log.debug("Encountered error when handling a failed batch", e);
+            }
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);

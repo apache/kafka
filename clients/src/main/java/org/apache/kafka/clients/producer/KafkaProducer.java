@@ -1080,7 +1080,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors.record();
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
             if (transactionManager != null) {
-                transactionManager.maybeTransitionToErrorState(e);
+                transactionManager.maybeTransitionToErrorState(e, TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
             }
             return new FutureFailure(e);
         } catch (InterruptedException e) {

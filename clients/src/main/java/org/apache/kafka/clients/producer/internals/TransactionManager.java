@@ -227,7 +227,7 @@ public class TransactionManager {
      *     </li>
      *     <li>{@link Producer#send(ProducerRecord)} (and its variants) calls
      *         {@link #maybeAddPartition(TopicPartition)} and
-     *         {@link #maybeTransitionToErrorState(RuntimeException)}
+     *         {@link #maybeTransitionToErrorState(RuntimeException, InvalidStateDetectionStrategy)}
      *     </li>
      * </ul>
      *
@@ -455,7 +455,8 @@ public class TransactionManager {
         return currentState == State.ABORTING_TRANSACTION;
     }
 
-    synchronized void transitionToAbortableError(RuntimeException exception) {
+    synchronized void transitionToAbortableError(RuntimeException exception,
+                                                 InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
         if (currentState == State.ABORTING_TRANSACTION) {
             log.debug("Skipping transition to abortable error state since the transaction is already being " +
                     "aborted. Underlying exception: ", exception);
@@ -463,7 +464,7 @@ public class TransactionManager {
         }
 
         log.info("Transiting to abortable error state due to {}", exception.toString());
-        transitionTo(State.ABORTABLE_ERROR, exception, InvalidStateDetectionStrategy.BACKGROUND);
+        transitionTo(State.ABORTABLE_ERROR, exception, invalidStateDetectionStrategy);
     }
 
     synchronized void transitionToFatalError(RuntimeException exception) {
@@ -685,14 +686,15 @@ public class TransactionManager {
     }
 
     public synchronized void transitionToUninitialized(RuntimeException exception) {
-        transitionTo(State.UNINITIALIZED);
+        transitionTo(State.UNINITIALIZED, exception, InvalidStateDetectionStrategy.BACKGROUND);
         if (pendingTransition != null) {
             pendingTransition.result.fail(exception);
         }
         lastError = null;
     }
 
-    public synchronized void maybeTransitionToErrorState(RuntimeException exception) {
+    public synchronized void maybeTransitionToErrorState(RuntimeException exception,
+                                                         InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
         if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
                 || exception instanceof ProducerFencedException
@@ -702,13 +704,14 @@ public class TransactionManager {
             if (canBumpEpoch() && !isCompleting()) {
                 epochBumpRequired = true;
             }
-            transitionToAbortableError(exception);
+            transitionToAbortableError(exception, invalidStateDetectionStrategy);
         }
     }
     synchronized void handleFailedBatch(ProducerBatch batch,
                                         RuntimeException exception,
-                                        boolean adjustSequenceNumbers) {
-        maybeTransitionToErrorState(exception);
+                                        boolean adjustSequenceNumbers,
+                                        InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
+        maybeTransitionToErrorState(exception, invalidStateDetectionStrategy);
         removeInFlightBatch(batch);
 
         if (hasFatalError()) {
@@ -821,7 +824,7 @@ public class TransactionManager {
                             epochBumpRequired = true;
                             KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
                                     "the transaction and continue.");
-                            transitionToAbortableError(exception);
+                            transitionToAbortableError(exception, InvalidStateDetectionStrategy.BACKGROUND);
                         } else {
                             KafkaException exception = new KafkaException(unackedMessagesErr + "It isn't safe to continue.");
                             transitionToFatalError(exception);
@@ -1256,7 +1259,7 @@ public class TransactionManager {
 
         void abortableError(RuntimeException e) {
             result.fail(e);
-            transitionToAbortableError(e);
+            transitionToAbortableError(e, InvalidStateDetectionStrategy.BACKGROUND);
         }
 
         void abortableErrorIfPossible(RuntimeException e) {

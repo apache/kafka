@@ -104,6 +104,8 @@ import java.util.function.Supplier;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.producer.internals.TransactionManager.InvalidStateDetectionStrategy.BACKGROUND;
+import static org.apache.kafka.clients.producer.internals.TransactionManager.InvalidStateDetectionStrategy.FOREGROUND;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -249,7 +251,7 @@ public class TransactionManagerTest {
     public void testFailIfNotReadyForSendAfterAbortableError() {
         doInitTransactions();
         transactionManager.beginTransaction();
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
         assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
 
@@ -277,7 +279,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(partition, Errors.NONE);
         runUntil(() -> transactionManager.isPartitionAdded(partition));
 
-        transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        transactionManager.beginAbort(FOREGROUND);
         assertTrue(transactionManager.hasOngoingTransaction());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
@@ -325,10 +327,10 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(partition, Errors.NONE);
         runUntil(() -> transactionManager.isPartitionAdded(partition));
 
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
         assertTrue(transactionManager.hasOngoingTransaction());
 
-        transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        transactionManager.beginAbort(FOREGROUND);
         assertTrue(transactionManager.hasOngoingTransaction());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
@@ -457,7 +459,7 @@ public class TransactionManagerTest {
     public void testNotReadyForSendAfterAbortableError() {
         doInitTransactions();
         transactionManager.beginTransaction();
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
         assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
 
@@ -474,7 +476,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartition(tp0);
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
 
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasAbortableError());
@@ -489,7 +491,7 @@ public class TransactionManagerTest {
 
         // Send the AddPartitionsToTxn request and leave it in-flight
         runUntil(transactionManager::hasInFlightRequest);
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
 
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasAbortableError());
@@ -532,7 +534,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
 
         runUntil(() -> !transactionManager.hasPartitionsToAdd());
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
 
         assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasAbortableError());
@@ -1366,7 +1368,7 @@ public class TransactionManagerTest {
         runUntil(() -> !client.hasPendingResponses());
 
         assertTrue(transactionManager.hasAbortableError());
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         runUntil(responseFuture::isDone);
         assertProduceFutureFailed(responseFuture);
 
@@ -1408,7 +1410,7 @@ public class TransactionManagerTest {
         appendToAccumulator(tp0);
         runUntil(() -> transactionManager.isPartitionAdded(tp0));
 
-        TransactionalRequestResult result = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult result = transactionManager.beginAbort(FOREGROUND);
         assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
@@ -1422,7 +1424,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, transactionManager::beginCommit);
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
-        assertSame(result, transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertSame(result, transactionManager.beginAbort(FOREGROUND));
         result.await();
 
         transactionManager.beginTransaction();
@@ -1453,7 +1455,7 @@ public class TransactionManagerTest {
 
         assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
         assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
-        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort(FOREGROUND));
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginCommit());
@@ -1482,7 +1484,7 @@ public class TransactionManagerTest {
         // rejected until they do.
 
         assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
-        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort(FOREGROUND));
         assertThrows(IllegalStateException.class, transactionManager::beginCommit);
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
@@ -1518,7 +1520,7 @@ public class TransactionManagerTest {
         assertFalse(unauthorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
-        TransactionalRequestResult result = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult result = transactionManager.beginAbort(FOREGROUND);
         runUntil(transactionManager::isReady);
         // neither produce request has been sent, so they should both be failed immediately
         assertProduceFutureFailed(authorizedTopicProduceFuture);
@@ -1583,7 +1585,7 @@ public class TransactionManagerTest {
         assertTrue(authorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         runUntil(transactionManager::isReady);
         // neither produce request has been sent, so they should both be failed immediately
         assertTrue(transactionManager.isReady());
@@ -1801,7 +1803,7 @@ public class TransactionManagerTest {
 
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
-        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort(FOREGROUND));
         assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
             Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
     }
@@ -1869,7 +1871,7 @@ public class TransactionManagerTest {
         // make sure the exception was thrown directly from the follow-up calls.
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
-        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort(FOREGROUND));
         assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
             Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
     }
@@ -1899,7 +1901,7 @@ public class TransactionManagerTest {
         // make sure the exception was thrown directly from the follow-up calls.
         assertThrows(KafkaException.class, () -> transactionManager.beginTransaction());
         assertThrows(KafkaException.class, () -> transactionManager.beginCommit());
-        assertThrows(KafkaException.class, () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertThrows(KafkaException.class, () -> transactionManager.beginAbort(FOREGROUND));
         assertThrows(KafkaException.class, () -> transactionManager.sendOffsetsToTransaction(
             Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
     }
@@ -1923,7 +1925,7 @@ public class TransactionManagerTest {
         runUntil(responseFuture::isDone);
         assertTrue(transactionManager.hasError());
 
-        transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        transactionManager.beginAbort(FOREGROUND);
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
 
@@ -1958,7 +1960,7 @@ public class TransactionManagerTest {
         TestUtils.assertFutureThrows(responseFuture, OutOfOrderSequenceException.class);
 
         // Commit is not allowed, so let's abort and try again.
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
         runUntil(abortResult::isCompleted);
@@ -1981,7 +1983,7 @@ public class TransactionManagerTest {
 
         // Because this is a failure that triggers an epoch bump, the abort will trigger an InitProducerId call
         runUntil(transactionManager::hasAbortableError);
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
         runUntil(abortResult::isCompleted);
@@ -2002,7 +2004,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
         runUntil(() -> !accumulator.hasUndrained());
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         assertTrue(transactionManager.isAborting());
         assertFalse(transactionManager.hasError());
 
@@ -2116,7 +2118,7 @@ public class TransactionManagerTest {
         assertFalse(responseFuture.isDone());
         runUntil(transactionManager::hasInFlightRequest);
 
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
         sendAddPartitionsToTxnResponse(Errors.NOT_COORDINATOR, tp0, epoch, producerId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
 
@@ -2137,7 +2139,7 @@ public class TransactionManagerTest {
 
         assertFalse(responseFuture.isDone());
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         // note since no partitions were added to the transaction, no EndTxn will be sent
 
         runUntil(abortResult::isCompleted);
@@ -2160,7 +2162,7 @@ public class TransactionManagerTest {
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(responseFuture.isDone());
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         // we should resend the AddPartitions
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
@@ -2187,7 +2189,7 @@ public class TransactionManagerTest {
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(responseFuture.isDone());
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         // we should resend the ProduceRequest before aborting
         prepareProduceResponse(Errors.NONE, producerId, epoch);
@@ -2342,7 +2344,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.TOPIC_AUTHORIZATION_FAILED, tp0, epoch, producerId);
         runUntil(() -> !client.hasPendingResponses());
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         assertFalse(abortResult.isCompleted());
 
         runUntil(abortResult::isCompleted);
@@ -2359,7 +2361,7 @@ public class TransactionManagerTest {
 
         transactionManager.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         prepareAddOffsetsToTxnResponse(Errors.GROUP_AUTHORIZATION_FAILED, consumerGroupId, producerId, epoch);
         runUntil(abortResult::isCompleted);
@@ -2378,7 +2380,7 @@ public class TransactionManagerTest {
 
         transactionManager.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         prepareAddOffsetsToTxnResponse(Errors.UNKNOWN_SERVER_ERROR, consumerGroupId, producerId, epoch);
 
@@ -2555,7 +2557,7 @@ public class TransactionManagerTest {
 
         assertFalse(responseFuture.isDone());
 
-        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.transitionToAbortableError(new KafkaException(), BACKGROUND);
         prepareProduceResponse(Errors.NONE, producerId, epoch);
         runUntil(responseFuture::isDone);
         assertNotNull(responseFuture.get()); // should throw the exception which caused the transaction to be aborted.
@@ -2706,7 +2708,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.isCompleting());
         assertTrue(transactionManager.transactionContainsPartition(tp0));
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
@@ -2806,7 +2808,7 @@ public class TransactionManagerTest {
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
         assertEquals(Integer.valueOf(2), transactionManager.sequenceNumber(tp0));
         transactionManager.markSequenceUnresolved(b2);
-        transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), false, BACKGROUND);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // We only had one inflight batch, so we should be able to clear the unresolved status
@@ -2834,7 +2836,7 @@ public class TransactionManagerTest {
 
         // The first batch fails with a timeout
         transactionManager.markSequenceUnresolved(b1);
-        transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
+        transactionManager.handleFailedBatch(b1, new TimeoutException(), false, BACKGROUND);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The reset should not occur until sequence numbers have been resolved
@@ -2843,7 +2845,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The second batch fails as well with a timeout
-        transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), false, BACKGROUND);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertTrue(transactionManager.hasUnresolvedSequences());
@@ -2872,7 +2874,7 @@ public class TransactionManagerTest {
 
         // The first batch fails with a timeout
         transactionManager.markSequenceUnresolved(b1);
-        transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
+        transactionManager.handleFailedBatch(b1, new TimeoutException(), false, BACKGROUND);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The second batch succeeds, but sequence numbers are still not resolved
@@ -2883,7 +2885,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // When the last inflight batch fails, we have to bump the epoch
-        transactionManager.handleFailedBatch(b3, new TimeoutException(), false);
+        transactionManager.handleFailedBatch(b3, new TimeoutException(), false, BACKGROUND);
 
         // Run sender loop to trigger epoch bump
         runUntil(() -> transactionManager.producerIdAndEpoch().epoch == 2);
@@ -2901,7 +2903,7 @@ public class TransactionManagerTest {
         TopicPartition tp0 = new TopicPartition("foo", 0);
         ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
         // Handling b1 should bump the epoch after OutOfOrderSequenceException
-        transactionManager.handleFailedBatch(b1, new OutOfOrderSequenceException("out of sequence"), false);
+        transactionManager.handleFailedBatch(b1, new OutOfOrderSequenceException("out of sequence"), false, BACKGROUND);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         ProducerIdAndEpoch idAndEpochAfterFirstBatch = new ProducerIdAndEpoch(producerId, (short) (epoch + 1));
         assertEquals(idAndEpochAfterFirstBatch, transactionManager.producerIdAndEpoch());
@@ -2910,7 +2912,7 @@ public class TransactionManagerTest {
 
         // The second batch should not bump the epoch as txn manager is already in fatal error state
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
-        transactionManager.handleFailedBatch(b2, new TimeoutException(), true);
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), true, BACKGROUND);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(idAndEpochAfterFirstBatch, transactionManager.producerIdAndEpoch());
     }
@@ -2948,7 +2950,7 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasAbortableError());
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
@@ -3008,7 +3010,7 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasAbortableError());
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
@@ -3051,7 +3053,7 @@ public class TransactionManagerTest {
         runUntil(responseFuture2::isDone);
 
         assertTrue(transactionManager.hasAbortableError());
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
@@ -3098,7 +3100,7 @@ public class TransactionManagerTest {
         runUntil(responseFuture2::isDone);
 
         assertTrue(transactionManager.hasAbortableError());
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
@@ -3153,7 +3155,7 @@ public class TransactionManagerTest {
         runUntil(responseFuture2::isDone); // We should try to flush the produce, but expire it instead without sending anything.
 
         assertTrue(transactionManager.hasAbortableError());
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         sender.runOnce();  // handle the abort
         time.sleep(110);  // Sleep to make sure the node backoff period has passed
@@ -3188,7 +3190,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
         prepareAddPartitionsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, tp0, initialEpoch, producerId);
         runUntil(transactionManager::hasAbortableError);
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
         runUntil(abortResult::isCompleted);
@@ -3220,7 +3222,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPendingOffsetCommits());
         prepareAddOffsetsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, consumerGroupId, producerId, initialEpoch);
         runUntil(transactionManager::hasAbortableError);  // Send AddOffsetsRequest
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        TransactionalRequestResult abortResult = transactionManager.beginAbort(FOREGROUND);
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
@@ -3448,51 +3450,50 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testMakeIllegalTransitionFatal() {
+    public void testMakeInvalidBackgroundTransitionFatal() {
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
 
-        // Step 1: create a transaction.
-        transactionManager.beginTransaction();
-        assertTrue(transactionManager.hasOngoingTransaction());
-
-        // Step 2: abort a transaction (wait for it to complete) and then verify that the transaction manager is
-        // left in the READY state.
-        TransactionalRequestResult abortResult = transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
-        runUntil(abortResult::isCompleted);
-        abortResult.await();
-        assertTrue(abortResult.isSuccessful());
-        assertFalse(transactionManager.hasOngoingTransaction());
-        assertTrue(transactionManager.isReady());
-
-        // Step 3: create a batch and simulate the Sender handling a failed batch, which would *attempt* to put
-        // the transaction manager in the ABORTABLE_ERROR state. However, that is an illegal state transition, so
-        // verify that it failed and caused the transaction manager to be put in an unrecoverable FATAL_ERROR state.
-        ProducerBatch batch = batchWithValue(tp0, "test");
-        assertThrowsFatalStateException("handleFailedBatch", () -> transactionManager.handleFailedBatch(batch, new NetworkException("Disconnected from node 4"), false));
+        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new NetworkException(), false, BACKGROUND));
         assertTrue(transactionManager.hasFatalError());
 
         // Step 4: validate that the transactions can't be started, committed
-        assertThrowsFatalStateException("beginTransaction", () -> transactionManager.beginTransaction());
-        assertThrowsFatalStateException("beginAbort", () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
-        assertThrowsFatalStateException("beginCommit", () -> transactionManager.beginCommit());
-        assertThrowsFatalStateException("maybeAddPartition", () -> transactionManager.maybeAddPartition(tp0));
-        assertThrowsFatalStateException("initializeTransactions", () -> transactionManager.initializeTransactions());
-        assertThrowsFatalStateException("sendOffsetsToTransaction", () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
+        assertThrows(KafkaException.class, () -> transactionManager.beginTransaction());
+        assertThrows(KafkaException.class, () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertThrows(KafkaException.class, () -> transactionManager.beginCommit());
+        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(KafkaException.class, () -> transactionManager.initializeTransactions());
+        assertThrows(KafkaException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
     }
 
-    private void assertThrowsFatalStateException(String methodName, Runnable operation) {
-        try {
-            operation.run();
-        } catch (KafkaException t) {
-            assertTrue(t.getMessage().contains("Cannot execute transactional method because we are in an error state"));
-            return;
-        } catch (IllegalStateException t) {
-            assertTrue(t.getMessage().contains("Invalid transition attempted from state"));
-            return;
-        }
+    @Test
+    public void testForegroundInvalidStateTransitionIsRecoverable() {
+        // This is an invalid operation, but it won't poison the state for a FOREGROUND operation.
+        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new NetworkException(), false, FOREGROUND));
+        assertFalse(transactionManager.hasFatalError());
 
-        fail("TransactionManager method " + methodName + " should have thrown an error while in a FATAL_ERROR state");
+        // Validate that the transactions can still run after the invalid state transition attempt above.
+        doInitTransactions();
+        assertTrue(transactionManager.isTransactional());
+
+        transactionManager.beginTransaction();
+        assertFalse(transactionManager.hasFatalError());
+
+        transactionManager.maybeAddPartition(tp1);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(tp1, Errors.NONE);
+        runUntil(() -> transactionManager.isPartitionAdded(tp1));
+
+        TransactionalRequestResult retryResult = transactionManager.beginCommit();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(() -> !transactionManager.hasOngoingTransaction());
+        runUntil(retryResult::isCompleted);
+        retryResult.await();
+        runUntil(retryResult::isAcked);
+        assertFalse(transactionManager.hasOngoingTransaction());
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
@@ -3515,7 +3516,7 @@ public class TransactionManagerTest {
         runUntil(() -> !client.hasPendingResponses());
 
         TransactionalRequestResult result = firstTransactionResult == TransactionResult.COMMIT ?
-                transactionManager.beginCommit() : transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+                transactionManager.beginCommit() : transactionManager.beginAbort(FOREGROUND);
         prepareEndTxnResponse(Errors.NONE, firstTransactionResult, producerId, epoch, true);
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(result.isCompleted());
@@ -3524,7 +3525,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> !client.hasPendingResponses());
         TransactionalRequestResult retryResult = retryTransactionResult == TransactionResult.COMMIT ?
-                transactionManager.beginCommit() : transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+                transactionManager.beginCommit() : transactionManager.beginAbort(FOREGROUND);
         assertEquals(retryResult, result); // check if cached result is reused.
 
         prepareEndTxnResponse(Errors.NONE, retryTransactionResult, producerId, epoch, false);
@@ -3789,7 +3790,7 @@ public class TransactionManagerTest {
         }
 
         assertTrue(transactionManager.hasError());
-        transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+        transactionManager.beginAbort(FOREGROUND);
         assertFalse(transactionManager.hasError());
     }
 
@@ -3797,7 +3798,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasError());
 
         try {
-            transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+            transactionManager.beginAbort(FOREGROUND);
             fail("Should have raised " + cause.getSimpleName());
         } catch (KafkaException e) {
             assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
@@ -3806,7 +3807,7 @@ public class TransactionManagerTest {
 
         // Transaction abort cannot clear fatal error state
         try {
-            transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND);
+            transactionManager.beginAbort(FOREGROUND);
             fail("Should have raised " + cause.getSimpleName());
         } catch (KafkaException e) {
             assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
