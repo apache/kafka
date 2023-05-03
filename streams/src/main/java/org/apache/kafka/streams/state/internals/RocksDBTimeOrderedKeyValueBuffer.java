@@ -36,7 +36,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
                                    final String topic) {
     super(store);
     this.gracePeriod = gracePeriod;
-    minTimestamp = 0;
+    minTimestamp = Long.MAX_VALUE;
     numRec = 0;
     bufferSize = 0;
     this.topic = topic;
@@ -66,7 +66,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
 
     if (predicate.get()) {
       final KeyValueIterator<Bytes, byte[]> iterator = wrapped()
-          .backwardFetchAll(wrapped().observedStreamTime, wrapped().observedStreamTime - gracePeriod.toMillis());
+          .fetchAll(0, wrapped().observedStreamTime - gracePeriod.toMillis());
       if (iterator.hasNext()) {
         keyValue = iterator.next();
       }
@@ -85,10 +85,10 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
       while (keyValue != null && predicate.get() && wrapped().observedStreamTime - gracePeriod.toMillis() > minTimestamp()) {
 
         if (bufferValue.context().timestamp() != minTimestamp) {
-//          throw new IllegalStateException(
-//              "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
-//                  bufferValue.context().timestamp() + "]"
-//          );
+          throw new IllegalStateException(
+              "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
+                  bufferValue.context().timestamp() + "]"
+          );
         }
         callback.accept(new Eviction<>(key, value, bufferValue.context()));
         wrapped().remove(keyValue.key);
