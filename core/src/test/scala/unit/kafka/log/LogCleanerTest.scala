@@ -83,7 +83,7 @@ class LogCleanerTest {
       verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
 
       // verify that all metrics are added to the list of metric name
-      assertEquals(LogCleaner.MetricNames.size, numMetricsRegistered,
+      assertEquals(numMetricsRegistered, LogCleaner.MetricNames.size,
         "All metrics are not part of MetricNames collections")
 
       // verify that each metric is removed
@@ -92,9 +92,7 @@ class LogCleanerTest {
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
     } finally {
-      if (mockMetricsGroupCtor != null) {
-        mockMetricsGroupCtor.close()
-      }
+      mockMetricsGroupCtor.close()
     }
   }
 
