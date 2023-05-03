@@ -63,6 +63,9 @@ public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, V, 
    */
   @Override
   public void process(Record<K, V> record) {
+    if(record.key() == null) {
+      return;
+    }
     updateObservedStreamTime(record.timestamp());
     final long deadline = observedStreamTime - gracePeriod.toMillis();
     if(record.timestamp() < deadline) {
