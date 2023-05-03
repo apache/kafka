@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -114,10 +115,10 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
      *
      * @param event An {{@link Event}}.
      */
-    public void add(T event) {
+    public void add(T event) throws RejectedExecutionException {
         lock.lock();
         try {
-            if (closed) throw new IllegalStateException("Can't accept an event because the accumulator is closed.");
+            if (closed) throw new RejectedExecutionException("Can't accept an event because the accumulator is closed.");
 
             K key = event.key();
             Queue<T> queue = queues.get(key);
