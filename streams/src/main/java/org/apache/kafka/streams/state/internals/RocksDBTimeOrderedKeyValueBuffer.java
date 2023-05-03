@@ -70,15 +70,20 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
       if (iterator.hasNext()) {
         keyValue = iterator.next();
       }
-      while (keyValue != null && predicate.get() && wrapped().observedStreamTime - gracePeriod.toMillis() > minTimestamp()) {
-        final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
-        final K key = keySerde.deserializer().deserialize(topic,
-            PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
+      if (keyValue == null) {
+        minTimestamp = Long.MAX_VALUE;
+        return;
+      }
+      BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
+      K key = keySerde.deserializer().deserialize(topic,
+          PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
 
-        final Change<V> value = valueSerde.deserializeParts(
-            topic,
-            new Change<>(bufferValue.newValue(), bufferValue.oldValue())
-        );
+      Change<V> value = valueSerde.deserializeParts(
+          topic,
+          new Change<>(bufferValue.newValue(), bufferValue.oldValue())
+      );
+      while (keyValue != null && predicate.get() && wrapped().observedStreamTime - gracePeriod.toMillis() > minTimestamp()) {
+
         if (bufferValue.context().timestamp() != minTimestamp) {
 //          throw new IllegalStateException(
 //              "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
@@ -86,7 +91,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
 //          );
         }
         callback.accept(new Eviction<>(key, value, bufferValue.context()));
-//        iterator.remove();
+        wrapped().remove(keyValue.key);
         numRec--;
         bufferSize =- computeRecordSize(keyValue.key, bufferValue);
         if (iterator.hasNext()) {
@@ -94,8 +99,14 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
           if (keyValue == null) {
             minTimestamp = Long.MAX_VALUE;
           } else {
-            final BufferValue nextBufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
-            minTimestamp = nextBufferValue.context().timestamp();
+            bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
+            key = keySerde.deserializer().deserialize(topic,
+                PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
+            value = valueSerde.deserializeParts(
+                topic,
+                new Change<>(bufferValue.newValue(), bufferValue.oldValue())
+            );
+            minTimestamp = bufferValue.context().timestamp();
           }
         } else {
           keyValue = null;

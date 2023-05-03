@@ -26,12 +26,17 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Duration;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, V, K, V> {
+  final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 
   private final TimeOrderedKeyValueBuffer<K, V> buffer;
   private Sensor droppedRecordsSensor;
@@ -64,6 +69,11 @@ public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, V, 
   @Override
   public void process(Record<K, V> record) {
     if(record.key() == null) {
+      LOG.warn(
+          "Skipping record due to null join key or value. "
+              + "topic=[{}] partition=[{}] offset=[{}]",
+          internalProcessorContext.recordContext().topic(), internalProcessorContext.recordContext().partition(), internalProcessorContext.recordContext().offset());
+
       return;
     }
     updateObservedStreamTime(record.timestamp());
