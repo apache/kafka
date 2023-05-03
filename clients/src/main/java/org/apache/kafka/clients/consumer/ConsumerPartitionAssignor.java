@@ -45,7 +45,7 @@ import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
  * <p>
- * the implementation can extend {@link Configurable} to get configs from consumer.
+ * The implementation can extend {@link Configurable} to get configs from consumer.
  */
 public interface ConsumerPartitionAssignor {
 
