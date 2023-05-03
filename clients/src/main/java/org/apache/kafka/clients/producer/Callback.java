@@ -36,7 +36,7 @@ public interface Callback {
      *                  Non-Retriable exceptions (fatal, the message will never be sent):
      *                  <ul>
      *                  <li>InvalidTopicException
-     *                  <li>OffsetMetadataTooLargeException
+     *                  <li>OffsetMetadataTooLarge
      *                  <li>RecordBatchTooLargeException
      *                  <li>RecordTooLargeException
      *                  <li>UnknownServerException
