@@ -329,6 +329,12 @@ public class ProducerConfig extends AbstractConfig {
             "By default the TransactionId is not configured, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+
+    /** <code> transactional.id </code> */
+    public static final String TRANSACTIONAL_ID_FOR_FENCING_ONLY_CONFIG = "transactional.id.for.fencing.only";
+    public static final String TRANSACTIONAL_ID_FOR_FENCING_ONLY_DOC = "Don't use transactions, but use the transactional id for fencing.";
+
+
     /**
      * <code>security.providers</code>
      */
@@ -484,7 +490,12 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                            TRANSACTIONAL_ID_DOC)
+                                .define(TRANSACTIONAL_ID_FOR_FENCING_ONLY_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        TRANSACTIONAL_ID_FOR_FENCING_ONLY_DOC);
     }
 
     @Override

@@ -581,14 +581,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+            final boolean onlyFencing = config.getBoolean(ProducerConfig.TRANSACTIONAL_ID_FOR_FENCING_ONLY_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             transactionManager = new TransactionManager(
                 logContext,
                 transactionalId,
                 transactionTimeoutMs,
                 retryBackoffMs,
-                apiVersions
-            );
+                apiVersions,
+                onlyFencing);
 
             if (transactionManager.isTransactional())
                 log.info("Instantiated a transactional producer.");
