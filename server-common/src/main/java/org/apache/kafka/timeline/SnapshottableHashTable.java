@@ -113,7 +113,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
             HashTier<T> other = (HashTier<T>) source;
             // As an optimization, the deltaTable might not exist for a new key
             // as there is no previous value
-            if (deltaTable != null && other.deltaTable != null) {
+            if (other.deltaTable != null) {
                 List<T> list = new ArrayList<>();
                 Object[] otherElements = other.deltaTable.baseElements();
                 for (int slot = 0; slot < otherElements.length; slot++) {
@@ -122,6 +122,9 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                         // When merging in a later hash tier, we want to keep only the elements
                         // that were present at our epoch.
                         if (element.startEpoch() <= epoch) {
+                            if (deltaTable == null) {
+                                deltaTable = new BaseHashTable<>(1);
+                            }
                             deltaTable.baseAddOrReplace(element);
                         }
                     }
