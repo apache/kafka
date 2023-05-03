@@ -30,101 +30,28 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * Java rewrite of {@link kafka.coordinator.group.MemberMetadata} that is used
- * by the new group coordinator (KIP-848).
+ * This class encapsulates a generic group member's metadata.
+ *
+ * Member metadata contains the following:
+ *
+ * Heartbeat metadata:
+ * 1. negotiated heartbeat session timeout
+ * 2. timestamp of the latest heartbeat
+ *
+ * Protocol metadata:
+ * 1. the list of supported protocols (ordered by preference)
+ * 2. the metadata associated with each protocol
+ *
+ * In addition, it also contains the following state information:
+ *
+ * 1. Awaiting rebalance callback: when the group is in the prepare-rebalance state,
+ *                                 its rebalance callback will be kept in the metadata if the
+ *                                 member has sent the join group request
+ * 2. Awaiting sync callback: when the group is in the awaiting-sync state, its sync callback
+ *                            is kept in metadata until the leader provides the group assignment
+ *                            and the group transitions to stable
  */
 public class GenericGroupMember {
-
-    /**
-     * A builder allowing to create a new generic member or update an
-     * existing one.
-     *
-     * Please refer to the javadoc of {{@link GenericGroupMember}} for the
-     * definition of the fields.
-     */
-    public static class Builder {
-        private final String memberId;
-        private Optional<String> groupInstanceId = Optional.empty();
-        private String clientId = "";
-        private String clientHost = "";
-        private int rebalanceTimeoutMs = -1;
-        private int sessionTimeoutMs = -1;
-        private String protocolType = "";
-        private List<Protocol> supportedProtocols = Collections.emptyList();
-        private byte[] assignment = new byte[0];
-
-        public Builder(String memberId) {
-            this.memberId = Objects.requireNonNull(memberId);
-        }
-
-        public Builder(GenericGroupMember member) {
-            Objects.requireNonNull(member);
-
-            this.memberId = member.memberId;
-            this.groupInstanceId = member.groupInstanceId;
-            this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
-            this.sessionTimeoutMs = member.sessionTimeoutMs;
-            this.clientId = member.clientId;
-            this.clientHost = member.clientHost;
-            this.protocolType = member.protocolType;
-            this.supportedProtocols = member.supportedProtocols;
-            this.assignment = member.assignment;
-        }
-
-        public Builder setGroupInstanceId(Optional<String> groupInstanceId) {
-            this.groupInstanceId = groupInstanceId;
-            return this;
-        }
-
-        public Builder setClientId(String clientId) {
-            this.clientId = clientId;
-            return this;
-        }
-
-        public Builder setClientHost(String clientHost) {
-            this.clientHost = clientHost;
-            return this;
-        }
-
-        public Builder setRebalanceTimeoutMs(int rebalanceTimeoutMs) {
-            this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-            return this;
-        }
-
-        public Builder setSessionTimeoutMs(int sessionTimeoutMs) {
-            this.sessionTimeoutMs = sessionTimeoutMs;
-            return this;
-        }
-
-        public Builder setProtocolType(String protocolType) {
-            this.protocolType = protocolType;
-            return this;
-        }
-
-        public Builder setSupportedProtocols(List<Protocol> protocols) {
-            this.supportedProtocols = protocols;
-            return this;
-        }
-
-        public Builder setAssignment(byte[] assignment) {
-            this.assignment = assignment;
-            return this;
-        }
-
-        public GenericGroupMember build() {
-            return new GenericGroupMember(
-                memberId,
-                groupInstanceId,
-                clientId,
-                clientHost,
-                rebalanceTimeoutMs,
-                sessionTimeoutMs,
-                protocolType,
-                supportedProtocols,
-                assignment
-            );
-        }
-    }
 
     private static class MemberSummary {
         private final String memberId;
@@ -245,36 +172,40 @@ public class GenericGroupMember {
     private boolean heartbeatSatisfied = false;
 
 
-    public GenericGroupMember(String memberId,
-                              Optional<String> groupInstanceId,
-                              String clientId,
-                              String clientHost,
-                              int rebalanceTimeoutMs,
-                              int sessionTimeoutMs,
-                              String protocolType,
-                              List<Protocol> supportedProtocols) {
-
-        this(memberId,
-             groupInstanceId,
-             clientId,
-             clientHost,
-             rebalanceTimeoutMs,
-             sessionTimeoutMs,
-             protocolType,
-             supportedProtocols,
-             new byte[0]);
+    public GenericGroupMember(
+        String memberId,
+        Optional<String> groupInstanceId,
+        String clientId,
+        String clientHost,
+        int rebalanceTimeoutMs,
+        int sessionTimeoutMs,
+        String protocolType,
+        List<Protocol> supportedProtocols
+    ) {
+        this(
+            memberId,
+            groupInstanceId,
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            supportedProtocols,
+            new byte[0]
+        );
     }
 
-    public GenericGroupMember(String memberId,
-                              Optional<String> groupInstanceId,
-                              String clientId,
-                              String clientHost,
-                              int rebalanceTimeoutMs,
-                              int sessionTimeoutMs,
-                              String protocolType,
-                              List<Protocol> supportedProtocols,
-                              byte[] assignment) {
-
+    public GenericGroupMember(
+        String memberId,
+        Optional<String> groupInstanceId,
+        String clientId,
+        String clientHost,
+        int rebalanceTimeoutMs,
+        int sessionTimeoutMs,
+        String protocolType,
+        List<Protocol> supportedProtocols,
+        byte[] assignment
+    ) {
         this.memberId = memberId;
         this.groupInstanceId = groupInstanceId;
         this.clientId = clientId;
@@ -459,6 +390,9 @@ public class GenericGroupMember {
         return supportedProtocols;
     }
 
+    /**
+     * @return the member's assignment.
+     */
     public byte[] assignment() {
         return assignment;
     }
@@ -505,10 +439,16 @@ public class GenericGroupMember {
         this.isNew = value;
     }
 
+    /**
+     * @return true if the existing heartbeat was satisfied, false otherwise.
+     */
     public boolean heartBeatSatisfied() {
         return heartbeatSatisfied;
     }
 
+    /**
+     * @param value whether the heartbeat was satisfied.
+     */
     public void setHeartBeatSatisfied(boolean value) {
         this.heartbeatSatisfied = value;
     }

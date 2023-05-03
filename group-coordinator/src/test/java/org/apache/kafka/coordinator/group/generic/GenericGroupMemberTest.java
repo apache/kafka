@@ -19,78 +19,53 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class GenericGroupMemberTest {
 
     @Test
-    public void testNewMember() {
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(Collections.singletonList(
-                new Protocol("range", new byte[0])
-            ))
-            .setAssignment(new byte[0])
-            .build();
-
-        assertEquals("member", member.memberId());
-        assertEquals("group-instance-id", member.groupInstanceId().get());
-        assertEquals("client-id", member.clientId());
-        assertEquals("client-host", member.clientHost());
-        assertEquals(10, member.rebalanceTimeoutMs());
-        assertEquals(4500, member.sessionTimeoutMs());
-        assertEquals("generic", member.protocolType());
-        assertEquals(Collections.singletonList(
-            new Protocol("range", new byte[0])
-        ), member.supportedProtocols());
-        assertArrayEquals(new byte[0], member.assignment());
-    }
-
-    @Test
     public void testEquals() {
-        GenericGroupMember member1 = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(Collections.singletonList(
+        GenericGroupMember member1 = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            Collections.singletonList(
                 new Protocol("range", new byte[0])
-            ))
-            .setAssignment(new byte[0])
-            .build();
+            ),
+            new byte[0]
+        );
 
-        GenericGroupMember member2 = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(Collections.singletonList(
+        GenericGroupMember member2 = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            Collections.singletonList(
                 new Protocol("range", new byte[0])
-            ))
-            .setAssignment(new byte[0])
-            .build();
+            ),
+            new byte[0]
+        );;
 
         assertEquals(member1, member2);
     }
 
     @Test
     public void testMatchesSupportedProtocols() {
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(Collections.singletonList(
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            Collections.singletonList(
                 new Protocol("range", new byte[] {0})
-            ))
-            .setAssignment(new byte[0])
-            .build();
+            ),
+            new byte[0]
+        );
 
         assertTrue(member.matches(Collections.singletonList(
             new Protocol("range", new byte[] {0})
@@ -114,16 +89,17 @@ public class GenericGroupMemberTest {
         protocols.add(new Protocol("range", new byte[0]));
         protocols.add(new Protocol("roundrobin", new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(protocols)
-            .setAssignment(new byte[0])
-            .build();
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            protocols,
+            new byte[0]
+        );
 
         Set<String> expectedProtocolNames = new HashSet<>();
         expectedProtocolNames.add("range");
@@ -143,16 +119,17 @@ public class GenericGroupMemberTest {
         protocols.add(new Protocol("range", new byte[]{0}));
         protocols.add(new Protocol("roundrobin", new byte[]{1}));
 
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(protocols)
-            .setAssignment(new byte[0])
-            .build();
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            protocols,
+            new byte[0]
+        );;
 
         assertArrayEquals(new byte[]{0}, member.metadata("range"));
         assertArrayEquals(new byte[]{1}, member.metadata("roundrobin"));
@@ -164,16 +141,17 @@ public class GenericGroupMemberTest {
         protocols.add(new Protocol("range", new byte[]{0}));
         protocols.add(new Protocol("roundrobin", new byte[]{1}));
 
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(protocols)
-            .setAssignment(new byte[0])
-            .build();
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            protocols,
+            new byte[0]
+        );
 
         assertThrows(IllegalArgumentException.class, () ->
             member.metadata("unknown")
@@ -186,16 +164,17 @@ public class GenericGroupMemberTest {
         protocols.add(new Protocol("range", new byte[]{0}));
         protocols.add(new Protocol("roundrobin", new byte[]{1}));
 
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(protocols)
-            .setAssignment(new byte[0])
-            .build();
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            protocols,
+            new byte[0]
+        );
 
         assertThrows(IllegalArgumentException.class, () ->
             member.vote(Collections.singleton("unknown"))
@@ -208,16 +187,17 @@ public class GenericGroupMemberTest {
         protocols.add(new Protocol("range", new byte[]{0}));
         protocols.add(new Protocol("roundrobin", new byte[]{1}));
 
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(protocols)
-            .setAssignment(new byte[0])
-            .build();
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            protocols,
+            new byte[0]
+        );
 
         assertTrue(member.isStaticMember());
         assertEquals(Optional.of("group-instance-id"), member.groupInstanceId());
@@ -238,18 +218,19 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testHasHeartbeatSatisfied() {
-        GenericGroupMember member = new GenericGroupMember.Builder("member")
-            .setGroupInstanceId(Optional.of("group-instance-id"))
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setRebalanceTimeoutMs(10)
-            .setSessionTimeoutMs(4500)
-            .setProtocolType("generic")
-            .setSupportedProtocols(Collections.singletonList(
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            Collections.singletonList(
                 new Protocol("range", new byte[0])
-            ))
-            .setAssignment(new byte[0])
-            .build();
+            ),
+            new byte[0]
+        );
 
         assertFalse(member.hasSatisfiedHeartbeat());
 
