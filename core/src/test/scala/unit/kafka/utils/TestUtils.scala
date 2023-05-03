@@ -355,7 +355,6 @@ object TestUtils extends Logging {
     rack.foreach(props.put(KafkaConfig.RackProp, _))
     // Reduce number of threads per broker
     props.put(KafkaConfig.NumNetworkThreadsProp, "2")
-    props.put(KafkaConfig.NumIoThreadsProp, "2")
     props.put(KafkaConfig.BackgroundThreadsProp, "2")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })

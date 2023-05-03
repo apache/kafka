@@ -610,7 +610,6 @@ class DynamicBrokerConfigTest {
     when(zkClient.getEntityConfigs(anyString(), anyString())).thenReturn(new java.util.Properties())
 
     val initialProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
-    initialProps.remove(KafkaConfig.NumIoThreadsProp)
     initialProps.remove(KafkaConfig.BackgroundThreadsProp)
     val oldConfig =  KafkaConfig.fromProps(initialProps)
     val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
