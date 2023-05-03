@@ -30,6 +30,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -164,22 +166,25 @@ public class MultiThreadedEventProcessorTest {
             // Enqueue the blocking event.
             eventProcessor.enqueue(blockingEvent);
 
+            // Ensure that the blocking event is executed.
+            waitForCondition(() -> numEventsExecuted.get() > 0,
+                "Blocking event not executed.");
+
             // Enqueue the other events.
             events.forEach(eventProcessor::enqueue);
+
+            // Events should not be completed.
+            events.forEach(event -> assertFalse(event.future.isDone()));
 
             // Initiate the shutting down.
             eventProcessor.beginShutdown();
 
-            // Events should not be completed.
-            events.forEach(event -> {
-                assertFalse(event.future.isDone());
-            });
-
-            // Release the blocking event.
+            // Release the blocking event to unblock
+            // the thread.
             latch.countDown();
 
             // The blocking event should be completed.
-            blockingEvent.future.get(10, TimeUnit.SECONDS);
+            blockingEvent.future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
             assertTrue(blockingEvent.future.isDone());
             assertFalse(blockingEvent.future.isCompletedExceptionally());
 
@@ -187,7 +192,7 @@ public class MultiThreadedEventProcessorTest {
             events.forEach(event -> {
                 Throwable t = assertThrows(
                     ExecutionException.class,
-                    () -> event.future.get(10, TimeUnit.SECONDS)
+                    () -> event.future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS)
                 );
                 assertEquals(RejectedExecutionException.class, t.getCause().getClass());
             });
