@@ -24,9 +24,17 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
+import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -80,9 +88,9 @@ public class Producer extends Thread {
         try (KafkaProducer<Integer, String> producer = createKafkaProducer()) {
             while (!closed && sentRecords < numRecords) {
                 if (isAsync) {
-                    asyncSend(producer, key, "test");
+                    asyncSend(producer, key, "test" + key);
                 } else {
-                    syncSend(producer, key, "test");
+                    syncSend(producer, key, "test" + key);
                 }
                 key++;
                 sentRecords++;
