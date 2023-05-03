@@ -3450,25 +3450,29 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testMakeInvalidBackgroundTransitionFatal() {
+    public void testBackgroundInvalidStateTransitionIsFatal() {
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
 
+        // Intentionally perform an operation that will cause an invalid state transition. The detection of this
+        // will result in a poisoning of the transaction manager for all subsequent transactional operations since
+        // it was performed in the background.
         assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new NetworkException(), false, BACKGROUND));
         assertTrue(transactionManager.hasFatalError());
 
-        // Step 4: validate that the transactions can't be started, committed
-        assertThrows(KafkaException.class, () -> transactionManager.beginTransaction());
-        assertThrows(KafkaException.class, () -> transactionManager.beginAbort(FOREGROUND));
-        assertThrows(KafkaException.class, () -> transactionManager.beginCommit());
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
-        assertThrows(KafkaException.class, () -> transactionManager.initializeTransactions());
-        assertThrows(KafkaException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
+        // Validate that all of these operations will fail after the invalid state transition attempt above.
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginTransaction());
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort(FOREGROUND));
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginCommit());
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions());
+        assertThrows(IllegalStateException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
     }
 
     @Test
     public void testForegroundInvalidStateTransitionIsRecoverable() {
-        // This is an invalid operation, but it won't poison the state for a FOREGROUND operation.
+        // Intentionally perform an operation that will cause an invalid state transition. The detection of this
+        // will not poison the transaction manager since it was performed in the foreground.
         assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new NetworkException(), false, FOREGROUND));
         assertFalse(transactionManager.hasFatalError());
 

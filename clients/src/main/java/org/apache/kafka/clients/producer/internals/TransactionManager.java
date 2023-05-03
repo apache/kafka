@@ -1108,6 +1108,10 @@ public class TransactionManager {
             throw new InvalidProducerEpochException("Producer with transactionalId '" + transactionalId
                     + "' and " + producerIdAndEpoch + " attempted to produce with an old epoch");
         }
+        if (lastError instanceof IllegalStateException) {
+            throw new IllegalStateException("Producer with transactionalId '" + transactionalId
+                    + "' and " + producerIdAndEpoch + " cannot execute transactional method because we are in an error state", lastError);
+        }
         throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
     }
 
