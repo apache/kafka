@@ -186,11 +186,16 @@ final class ControllerMetricsManagerTest {
         ControllerMetrics metrics = new MockControllerMetrics();
         ControllerMetricsManager manager = new ControllerMetricsManager(metrics);
 
-        Uuid id = Uuid.randomUuid();
-        manager.replay(topicRecord("test", id));
-        manager.replay(partitionRecord(id, 0, 0, Arrays.asList(0, 1, 2)));
-        manager.replay(partitionRecord(id, 1, 0, Arrays.asList(0, 1, 2)));
-        manager.replay(removeTopicRecord(id));
+        Uuid createTopicId = Uuid.randomUuid();
+        Uuid createPartitionTopicId = new Uuid(
+            createTopicId.getMostSignificantBits(),
+            createTopicId.getLeastSignificantBits()
+        );
+        Uuid removeTopicId = new Uuid(createTopicId.getMostSignificantBits(), createTopicId.getLeastSignificantBits());
+        manager.replay(topicRecord("test", createTopicId));
+        manager.replay(partitionRecord(createPartitionTopicId, 0, 0, Arrays.asList(0, 1, 2)));
+        manager.replay(partitionRecord(createPartitionTopicId, 1, 0, Arrays.asList(0, 1, 2)));
+        manager.replay(removeTopicRecord(removeTopicId));
         assertEquals(0, metrics.globalPartitionCount());
     }
 
