@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -26,9 +27,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
-
 import java.time.Duration;
-import java.time.temporal.ChronoUnit;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
@@ -55,6 +54,7 @@ public class KStreamJoinBufferProcessor<K, V> extends ContextualProcessor<K, V, 
     final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
     droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
     buffer.setSerdesIfNull(new SerdeGetter(context));
+    buffer.init((org.apache.kafka.streams.processor.StateStoreContext) context(), (StateStore) null);
   }
   /**
    * Process the record. Note that record metadata is undefined in cases such as a forward call from a punctuator.
