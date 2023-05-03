@@ -66,6 +66,8 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.producer.internals.TransactionManager.InvalidStateDetectionStrategy.BACKGROUND;
+
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
@@ -268,7 +270,7 @@ public class Sender implements Runnable {
                 try {
                     // It is possible for the transaction manager to throw errors when aborting. Catch these
                     // so as not to interfere with the rest of the shutdown logic.
-                    transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.BACKGROUND);
+                    transactionManager.beginAbort(BACKGROUND);
                 } catch (Exception e) {
                     log.error("Error in kafka producer I/O thread while aborting transaction: ", e);
                 }
@@ -792,10 +794,7 @@ public class Sender implements Runnable {
     ) {
         if (transactionManager != null) {
             try {
-                transactionManager.handleFailedBatch(batch,
-                        topLevelException,
-                        adjustSequenceNumbers,
-                        TransactionManager.InvalidStateDetectionStrategy.BACKGROUND);
+                transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers, BACKGROUND);
             } catch (Exception e) {
                 log.debug("Encountered error when handling a failed batch", e);
             }

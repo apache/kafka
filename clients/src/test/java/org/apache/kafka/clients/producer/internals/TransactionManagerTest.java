@@ -3459,7 +3459,7 @@ public class TransactionManagerTest {
 
         // Step 4: validate that the transactions can't be started, committed
         assertThrows(KafkaException.class, () -> transactionManager.beginTransaction());
-        assertThrows(KafkaException.class, () -> transactionManager.beginAbort(TransactionManager.InvalidStateDetectionStrategy.FOREGROUND));
+        assertThrows(KafkaException.class, () -> transactionManager.beginAbort(FOREGROUND));
         assertThrows(KafkaException.class, () -> transactionManager.beginCommit());
         assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
         assertThrows(KafkaException.class, () -> transactionManager.initializeTransactions());
