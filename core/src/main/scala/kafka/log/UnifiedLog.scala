@@ -1005,8 +1005,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
 
-          // verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
-          // otherwise throw error? not sure yet how to handle.
+          // Verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
+          // Also check that we are not appending a record with a higher sequence than one previously seen through verification.
           if (batch.isTransactional && producerStateManager.producerStateManagerConfig().transactionVerificationEnabled()) {
             if (verificationState(batch.producerId()) != ProducerStateEntry.VerificationState.VERIFIED) {
               throw new InvalidRecordException("Record was not part of an ongoing transaction")
