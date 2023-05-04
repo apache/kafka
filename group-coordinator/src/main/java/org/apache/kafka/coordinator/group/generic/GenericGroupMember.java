@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -43,63 +43,16 @@ import java.util.stream.Collectors;
  *
  * In addition, it also contains the following state information:
  *
- * 1. Awaiting rebalance callback: when the group is in the prepare-rebalance state,
- *                                 its rebalance callback will be kept in the metadata if the
+ * 1. Awaiting rebalance future: when the group is in the prepare-rebalance state,
+ *                                 its rebalance future will be kept in the metadata if the
  *                                 member has sent the join group request
- * 2. Awaiting sync callback: when the group is in the awaiting-sync state, its sync callback
+ * 2. Awaiting sync future: when the group is in the awaiting-sync state, its sync future
  *                            is kept in metadata until the leader provides the group assignment
  *                            and the group transitions to stable
  */
 public class GenericGroupMember {
 
-    private static class MemberSummary {
-        private final String memberId;
-        private final Optional<String> groupInstanceId;
-        private final String clientId;
-        private final String clientHost;
-        private final byte[] metadata;
-        private final byte[] assignment;
-        
-        public MemberSummary(String memberId,
-                             Optional<String> groupInstanceId,
-                             String clientId,
-                             String clientHost,
-                             byte[] metadata,
-                             byte[] assignment) {
-            
-            this.memberId = memberId;
-            this.groupInstanceId = groupInstanceId;
-            this.clientId = clientId;
-            this.clientHost = clientHost;
-            this.metadata = metadata;
-            this.assignment = assignment;
-        }
-
-        public String memberId() {
-            return memberId;
-        }
-
-        public Optional<String> getGroupInstanceId() {
-            return groupInstanceId;
-        }
-
-        public String clientId() {
-            return clientId;
-        }
-
-        public String clientHost() {
-            return clientHost;
-        }
-
-        public byte[] metadata() {
-            return metadata;
-        }
-
-        public byte[] assignment() {
-            return assignment;
-        }
-        
-    }
+    public static final byte[] EMPTY_ASSIGNMENT = new byte[0];
 
     /**
      * The member id.
@@ -147,14 +100,14 @@ public class GenericGroupMember {
     private final byte[] assignment;
 
     /**
-     * The callback that is invoked once this member joins the group.
+     * The future that is invoked once this member joins the group.
      */
-    private CompletableFuture<JoinGroupResponseData> awaitingJoinCallback = null;
+    private CompletableFuture<JoinGroupResponseData> awaitingJoinFuture = null;
 
     /**
-     * The callback that is invoked once this member completes the sync group phase.
+     * The future that is invoked once this member completes the sync group phase.
      */
-    private CompletableFuture<SyncGroupResponseData> awaitingSyncCallback = null;
+    private CompletableFuture<SyncGroupResponseData> awaitingSyncFuture = null;
 
     /**
      * Indicates whether the member is a new member of the group.
@@ -190,7 +143,7 @@ public class GenericGroupMember {
             sessionTimeoutMs,
             protocolType,
             supportedProtocols,
-            new byte[0]
+            EMPTY_ASSIGNMENT
         );
     }
 
@@ -227,23 +180,23 @@ public class GenericGroupMember {
      * @return whether the member is awaiting join.
      */
     public boolean isAwaitingJoin() {
-        return awaitingJoinCallback != null;
+        return awaitingJoinFuture != null;
     }
 
     /**
      * @return whether the member is awaiting sync.
      */
     public boolean isAwaitingSync() {
-        return awaitingSyncCallback != null;
+        return awaitingSyncFuture != null;
     }
 
     /**
      * Get the metadata corresponding to the provided protocol.
      */
     public byte[] metadata(String protocolName) {
-        Optional<Protocol> match = supportedProtocols.stream().filter(protocol ->
-            protocol.name().equals(protocolName))
-                .findFirst();
+        Optional<Protocol> match = supportedProtocols.stream()
+            .filter(protocol -> protocol.name().equals(protocolName))
+            .findFirst();
 
         if (match.isPresent()) {
             return match.get().metadata();
@@ -273,6 +226,7 @@ public class GenericGroupMember {
     }
 
     /**
+     * Compare the given list of protocols with the member's supported protocols.
      * @param protocols list of protocols to match.
      * @return true if the given list matches the member's list of supported protocols,
      *         false otherwise.
@@ -282,41 +236,15 @@ public class GenericGroupMember {
     }
 
     /**
-     * @param protocolName the protocol name.
-     * @return MemberSummary object with metadata corresponding to the protocol name.
-     */
-    public MemberSummary summary(String protocolName) {
-        return new MemberSummary(
-            memberId,
-            groupInstanceId,
-            clientId,
-            clientHost,
-            metadata(protocolName),
-            assignment
-        );
-    }
-
-    /**
-     * @return MemberSummary object with no metadata.
-     */
-    public MemberSummary summaryNoMetadata() {
-        return new MemberSummary(
-            memberId,
-            groupInstanceId,
-            clientId,
-            clientHost,
-            new byte[0],
-            new byte[0]
-        );
-    }
-
-    /**
      * Vote for one of the potential group protocols. This takes into account the protocol preference as
      * indicated by the order of supported protocols and returns the first one also contained in the set
+     * @param candidates the protocol names that this member can vote for
+     * @return the first supported protocol that matches one of the candidates
      */
     public String vote(Set<String> candidates) {
-        Optional<Protocol> match = supportedProtocols.stream().filter(protocol ->
-            candidates.contains(protocol.name())).findFirst();
+        Optional<Protocol> match = supportedProtocols.stream()
+            .filter(protocol -> candidates.contains(protocol.name()))
+            .findFirst();
         
         if (match.isPresent()) {
             return match.get().name();
@@ -326,6 +254,7 @@ public class GenericGroupMember {
     }
 
     /**
+     * Transform protocols into their respective names.
      * @param supportedProtocols list of supported protocols.
      * @return a set of protocol names from the given list of supported protocols.
      */
@@ -397,31 +326,31 @@ public class GenericGroupMember {
     }
 
     /**
-     * @return the awaiting join callback.
+     * @return the awaiting join future.
      */
-    public CompletableFuture<JoinGroupResponseData> awaitingJoinCallback() {
-        return awaitingJoinCallback;
+    public CompletableFuture<JoinGroupResponseData> awaitingJoinFuture() {
+        return awaitingJoinFuture;
     }
 
     /**
-     * @param value the updated join callback.
+     * @param value the updated join future.
      */
-    public void setAwaitingJoinCallback(CompletableFuture<JoinGroupResponseData> value) {
-        this.awaitingJoinCallback = value;
+    public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
+        this.awaitingJoinFuture = value;
     }
 
     /**
-     * @return the awaiting sync callback.
+     * @return the awaiting sync future.
      */
-    public CompletableFuture<SyncGroupResponseData> awaitingSyncCallback() {
-        return awaitingSyncCallback;
+    public CompletableFuture<SyncGroupResponseData> awaitingSyncFuture() {
+        return awaitingSyncFuture;
     }
 
     /**
-     * @param value the updated sync callback.
+     * @param value the updated sync future.
      */
-    public void setAwaitingSyncCallback(CompletableFuture<SyncGroupResponseData> value) {
-        this.awaitingSyncCallback = value;
+    public void setAwaitingSyncFuture(CompletableFuture<SyncGroupResponseData> value) {
+        this.awaitingSyncFuture = value;
     }
 
     /**
@@ -464,36 +393,5 @@ public class GenericGroupMember {
             ", protocolType='" + protocolType + '\'' +
             ", supportedProtocols=" + supportedProtocols +
             ')';
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        GenericGroupMember that = (GenericGroupMember) o;
-
-        return memberId.equals(that.memberId) &&
-            groupInstanceId.equals(that.groupInstanceId) &&
-            clientId.equals(that.clientId) &&
-            clientHost.equals(that.clientHost) &&
-            rebalanceTimeoutMs == that.rebalanceTimeoutMs &&
-            sessionTimeoutMs == that.sessionTimeoutMs &&
-            protocolType.equals(that.protocolType) &&
-            supportedProtocols.equals(that.supportedProtocols) &&
-            Arrays.equals(assignment, that.assignment);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(
-            memberId,
-            groupInstanceId,
-            clientId,
-            clientHost,
-            rebalanceTimeoutMs,
-            sessionTimeoutMs,
-            supportedProtocols,
-            Arrays.hashCode(assignment)
-        );
     }
 }

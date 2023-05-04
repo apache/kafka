@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -27,12 +27,12 @@ import java.util.Objects;
 public class Protocol {
 
     /**
-     * the name of the protocol.
+     * The name of the protocol.
      */
     private final String name;
 
     /**
-     * the protocol's metadata.
+     * The protocol's metadata.
      */
     private final byte[] metadata;
 
@@ -41,10 +41,16 @@ public class Protocol {
         this.metadata = metadata;
     }
 
+    /**
+     * @return the name of the protocol.
+     */
     public String name() {
         return this.name;
     }
 
+    /**
+     * @return the metadata stored inside the protocol.
+     */
     public byte[] metadata() {
         return this.metadata;
     }
@@ -54,22 +60,22 @@ public class Protocol {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        Protocol that = (Protocol) o;
-        return name.equals(that.name) &&
-            Arrays.equals(this.metadata, that.metadata);
+        Protocol protocol = (Protocol) o;
+
+        if (!name.equals(protocol.name)) return false;
+        return Arrays.equals(metadata, protocol.metadata);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(
-            name,
-            Arrays.hashCode(metadata)
-        );
+        int result = name.hashCode();
+        result = 31 * result + Arrays.hashCode(metadata);
+        return result;
     }
 
     @Override
     public String toString() {
-        return "Protocol(name= + " + name +
+        return "Protocol(name=" + name +
             ", metadata=" + Arrays.toString(metadata) +
             ")";
     }
