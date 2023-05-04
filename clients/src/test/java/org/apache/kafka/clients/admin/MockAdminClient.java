@@ -391,11 +391,21 @@ public class MockAdminClient extends AdminClient {
             topicIds.put(topicName, topicId);
             topicNames.put(topicId, topicName);
             allTopics.put(topicName, new TopicMetadata(topicId, false, partitions, logDirs, newTopic.configs()));
-            future.complete(null);
+            future.complete(new CreateTopicsResult.TopicMetadataAndConfig(topicId, numberOfPartitions, replicationFactor, config(newTopic)));
             createTopicResult.put(topicName, future);
         }
 
         return new CreateTopicsResult(createTopicResult);
+    }
+
+    private static Config config(NewTopic newTopic) {
+        Collection<ConfigEntry> configEntries = new ArrayList<>();
+        if (newTopic.configs() != null) {
+            for (Map.Entry<String, String> entry : newTopic.configs().entrySet()) {
+                configEntries.add(new ConfigEntry(entry.getKey(), entry.getValue()));
+            }
+        }
+        return new Config(configEntries);
     }
 
     @Override
