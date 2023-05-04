@@ -24,17 +24,10 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.InvalidProducerEpochException;
-import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.RecordBatchTooLargeException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.UnknownProducerIdException;
-import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -167,15 +160,19 @@ public class Producer extends Thread {
             this.value = value;
         }
 
-        public void onCompletion(RecordMetadata metadata, Exception e) {
-            if (e != null) {
-                Utils.printErr(e.getMessage());
-                if (e instanceof AuthorizationException
-                    || e instanceof UnsupportedVersionException
-                    || e instanceof ProducerFencedException
-                    || e instanceof FencedInstanceIdException
-                    || e instanceof OutOfOrderSequenceException
-                    || e instanceof SerializationException) {
+        /**
+         * A callback method the user can implement to provide asynchronous handling of request completion. This method will
+         * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
+         * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
+         *
+         * @param metadata The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
+         *                 with -1 value for all fields except for topicPartition will be returned if an error occurred.
+         * @param exception The exception thrown during processing of this record. Null if no error occurred.
+         */
+        public void onCompletion(RecordMetadata metadata, Exception exception) {
+            if (exception != null) {
+                Utils.printErr(exception.getMessage());
+                if (!(exception instanceof RetriableException)) {
                     // we can't recover from these exceptions
                     shutdown();
                 }
