@@ -225,6 +225,10 @@ public class FetcherTest {
             this.metrics.close();
         if (fetcher != null)
             this.fetcher.close();
+        // consumerClient is closed when the KafkaConsumer#close() is called in actual code. However, in this unit
+        // test, we should close it explicitly to prevent resource leaks.
+        if (consumerClient != null)
+            consumerClient.close();
         if (executorService != null) {
             executorService.shutdownNow();
             assertTrue(executorService.awaitTermination(5, TimeUnit.SECONDS));
