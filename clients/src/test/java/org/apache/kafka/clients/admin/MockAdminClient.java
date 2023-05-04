@@ -945,7 +945,37 @@ public class MockAdminClient extends AdminClient {
     @Override
     synchronized public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers,
                                                               DescribeLogDirsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        Map<Integer, Map<String, LogDirDescription>> unwrappedResults = new HashMap<>();
+
+        for (Integer broker : brokers) {
+            unwrappedResults.putIfAbsent(broker, new HashMap<>());
+        }
+
+        for (Map.Entry<String, TopicMetadata> entry : allTopics.entrySet()) {
+            String topicName = entry.getKey();
+            TopicMetadata topicMetadata = entry.getValue();
+            // For tests, we make the assumption that there will always be only 1 entry.
+            List<String> partitionLogDirs = topicMetadata.partitionLogDirs;
+            List<TopicPartitionInfo> topicPartitionInfos = topicMetadata.partitions;
+            for (TopicPartitionInfo topicPartitionInfo : topicPartitionInfos) {
+                List<Node> nodes = topicPartitionInfo.replicas();
+                for (Node node : nodes) {
+                    Map<String, LogDirDescription> logDirDescriptionMap = unwrappedResults.get(node.id());
+                    LogDirDescription logDirDescription = logDirDescriptionMap.getOrDefault(partitionLogDirs.get(0), new LogDirDescription(null, new HashMap<>()));
+                    logDirDescription.replicaInfos().put(new TopicPartition(topicName, topicPartitionInfo.partition()), new ReplicaInfo(0, 0, false));
+                }
+            }
+        }
+
+        Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> results = new HashMap<>();
+
+        for (Map.Entry<Integer, Map<String, LogDirDescription>> entry : unwrappedResults.entrySet()) {
+            KafkaFutureImpl<Map<String, LogDirDescription>> kafkaFuture = new KafkaFutureImpl<>();
+            kafkaFuture.complete(entry.getValue());
+            results.put(entry.getKey(), kafkaFuture);
+        }
+
+        return new DescribeLogDirsResult(results);
     }
 
     @Override
