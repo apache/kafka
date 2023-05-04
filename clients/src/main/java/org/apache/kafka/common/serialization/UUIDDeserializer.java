@@ -17,8 +17,11 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
@@ -49,6 +52,24 @@ public class UUIDDeserializer implements Deserializer<UUID> {
                 return UUID.fromString(new String(data, encoding));
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when deserializing byte[] to UUID due to unsupported encoding " + encoding, e);
+        } catch (IllegalArgumentException e) {
+            throw new SerializationException("Error parsing data into UUID", e);
+        }
+    }
+
+    @Override
+    public UUID deserialize(String topic, Headers headers, ByteBuffer data) {
+        try {
+            if (data == null) {
+                return null;
+            }
+
+            if (data.hasArray()) {
+                return UUID.fromString(new String(data.array(), data.arrayOffset() + data.position(), data.remaining(), encoding));
+            }
+            return UUID.fromString(new String(Utils.toArray(data), encoding));
+        } catch (UnsupportedEncodingException e) {
+            throw new SerializationException("Error when deserializing ByteBuffer to UUID due to unsupported encoding " + encoding, e);
         } catch (IllegalArgumentException e) {
             throw new SerializationException("Error parsing data into UUID", e);
         }

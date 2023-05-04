@@ -23,11 +23,13 @@ import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -116,6 +118,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public long put(final Bytes key, final byte[] value, final long timestamp) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
 
         if (timestamp < observedStreamTime - gracePeriod) {
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
@@ -135,6 +139,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> delete(final Bytes key, final long timestamp) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
+
         if (timestamp < observedStreamTime - gracePeriod) {
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired delete.");
@@ -157,6 +164,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> get(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
+
         // latest value (if present) is guaranteed to be in the latest value store
         final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
         if (rawLatestValueAndTimestamp != null) {
@@ -171,6 +181,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
             // history retention exceeded. we still check the latest value store in case the
@@ -370,6 +382,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             restoreWriteBuffer.flush();
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error restoring batch to store " + name, e);
+        }
+    }
+
+    private void validateStoreOpen() {
+        if (!open) {
+            throw new InvalidStateStoreException("Store " + name + " is currently closed");
         }
     }
 
@@ -847,7 +865,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     segment.put(key, segmentValue.serialize());
                 }
             }
-            return foundTs;
         } else {
             // insert into segment corresponding to foundTs, as foundTs represents the validTo
             // timestamp of the current put.
@@ -891,8 +908,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     segment.put(key, segmentValue.serialize());
                 }
             }
-            return foundTs;
         }
+        return foundTs;
     }
 
     /**

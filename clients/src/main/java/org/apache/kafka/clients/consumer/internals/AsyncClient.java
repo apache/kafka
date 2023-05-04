@@ -58,10 +58,6 @@ public abstract class AsyncClient<T1, Req extends AbstractRequest, Resp extends 
                 }
             }
 
-            @Override
-            public void onFailure(RuntimeException e, RequestFuture<T2> future1) {
-                future1.raise(e);
-            }
         });
     }
 

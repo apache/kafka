@@ -29,7 +29,8 @@ public class KafkaConsumerProducerDemo {
         Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, -1, latch);
         producerThread.start();
 
-        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", Optional.empty(), false, 10000, latch);
+        Consumer consumerThread = new Consumer(
+            "consumer", KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT, KafkaProperties.TOPIC, "DemoConsumer", Optional.empty(), false, 10000, latch);
         consumerThread.start();
 
         if (!latch.await(5, TimeUnit.MINUTES)) {

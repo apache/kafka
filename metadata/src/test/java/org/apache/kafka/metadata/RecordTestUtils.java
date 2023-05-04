@@ -33,6 +33,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -85,6 +86,13 @@ public class RecordTestUtils {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    public static void replayOne(
+        Object target,
+        ApiMessageAndVersion recordAndVersion
+    ) {
+        replayAll(target, Collections.singletonList(recordAndVersion));
     }
 
     /**

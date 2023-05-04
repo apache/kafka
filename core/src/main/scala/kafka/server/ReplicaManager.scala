@@ -2027,6 +2027,9 @@ class ReplicaManager(val config: KafkaConfig,
     metricsGroup.removeMetric("ReassigningPartitions")
     metricsGroup.removeMetric("PartitionsWithLateTransactionsCount")
     metricsGroup.removeMetric("ProducerIdCount")
+    metricsGroup.removeMetric("IsrExpandsPerSec")
+    metricsGroup.removeMetric("IsrShrinksPerSec")
+    metricsGroup.removeMetric("FailedIsrUpdatesPerSec")
   }
 
   def beginControlledShutdown(): Unit = {

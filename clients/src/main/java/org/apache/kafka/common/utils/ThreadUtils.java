@@ -17,7 +17,9 @@
 
 package org.apache.kafka.common.utils;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -51,5 +53,23 @@ public class ThreadUtils {
                 return thread;
             }
         };
+    }
+
+    /**
+     * Shuts down an executor service with a timeout. After the timeout/on interrupt, the service is forcefully closed.
+     * @param executorService The service to shut down.
+     * @param timeout The timeout of the shutdown.
+     * @param timeUnit The time unit of the shutdown timeout.
+     */
+    public static void shutdownExecutorServiceQuietly(ExecutorService executorService,
+                                                      long timeout, TimeUnit timeUnit) {
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(timeout, timeUnit)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+        }
     }
 }

@@ -29,7 +29,6 @@ import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -150,17 +149,6 @@ public class TestUtils {
     public static File tempFile(final String prefix, final String suffix) throws IOException {
         final File file = Files.createTempFile(prefix, suffix).toFile();
         file.deleteOnExit();
-
-        // Note that we don't use Exit.addShutdownHook here because it allows for the possibility of accidently
-        // overriding the behaviour of this hook leading to leaked files.
-        Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon("delete-temp-file-shutdown-hook", () -> {
-            try {
-                Utils.delete(file);
-            } catch (IOException e) {
-                log.error("Error deleting {}", file.getAbsolutePath(), e);
-            }
-        }));
-
         return file;
     }
 

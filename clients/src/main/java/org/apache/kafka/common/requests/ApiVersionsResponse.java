@@ -119,7 +119,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         return createApiVersionsResponse(
             throttleTimeMs,
             filterApis(RecordVersion.current(), listenerType, true),
-            Features.emptySupportedFeatures()
+            Features.emptySupportedFeatures(),
+            false
         );
     }
 
@@ -131,7 +132,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         return createApiVersionsResponse(
             throttleTimeMs,
             filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion),
-            Features.emptySupportedFeatures()
+            Features.emptySupportedFeatures(),
+            false
         );
     }
 
@@ -139,20 +141,22 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiVersionCollection apiVersions
     ) {
-        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures());
+        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures(), false);
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
         ApiVersionCollection apiVersions,
-        Features<SupportedVersionRange> latestSupportedFeatures
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        boolean zkMigrationEnabled
     ) {
         return createApiVersionsResponse(
             throttleTimeMs,
             apiVersions,
             latestSupportedFeatures,
             Collections.emptyMap(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH);
+            UNKNOWN_FINALIZED_FEATURES_EPOCH,
+            zkMigrationEnabled);
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
@@ -163,7 +167,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         long finalizedFeaturesEpoch,
         NodeApiVersions controllerApiVersions,
         ListenerType listenerType,
-        boolean enableUnstableLastVersion
+        boolean enableUnstableLastVersion,
+        boolean zkMigrationEnabled
     ) {
         ApiVersionCollection apiKeys;
         if (controllerApiVersions != null) {
@@ -186,7 +191,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             apiKeys,
             latestSupportedFeatures,
             finalizedFeatures,
-            finalizedFeaturesEpoch
+            finalizedFeaturesEpoch,
+            zkMigrationEnabled
         );
     }
 
@@ -195,7 +201,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         ApiVersionCollection apiVersions,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Map<String, Short> finalizedFeatures,
-        long finalizedFeaturesEpoch
+        long finalizedFeaturesEpoch,
+        boolean zkMigrationEnabled
     ) {
         return new ApiVersionsResponse(
             createApiVersionsResponseData(
@@ -204,7 +211,8 @@ public class ApiVersionsResponse extends AbstractResponse {
                 apiVersions,
                 latestSupportedFeatures,
                 finalizedFeatures,
-                finalizedFeaturesEpoch
+                finalizedFeaturesEpoch,
+                zkMigrationEnabled
             )
         );
     }
@@ -294,7 +302,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         final ApiVersionCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Map<String, Short> finalizedFeatures,
-        final long finalizedFeaturesEpoch
+        final long finalizedFeaturesEpoch,
+        final boolean zkMigrationEnabled
     ) {
         final ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
@@ -303,6 +312,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
         data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
         data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
+        data.setZkMigrationReady(zkMigrationEnabled);
 
         return data;
     }

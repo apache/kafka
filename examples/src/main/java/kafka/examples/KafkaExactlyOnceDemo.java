@@ -114,7 +114,8 @@ public class KafkaExactlyOnceDemo {
         CountDownLatch consumeLatch = new CountDownLatch(1);
 
         /* Stage 4: consume all processed messages to verify exactly once */
-        Consumer consumerThread = new Consumer(OUTPUT_TOPIC, "Verify-consumer", Optional.empty(), true, numRecords, consumeLatch);
+        Consumer consumerThread = new Consumer(
+            "consumer", "DemoConsumer", OUTPUT_TOPIC, "Verify-consumer", Optional.empty(), true, numRecords, consumeLatch);
         consumerThread.start();
 
         if (!consumeLatch.await(5, TimeUnit.MINUTES)) {

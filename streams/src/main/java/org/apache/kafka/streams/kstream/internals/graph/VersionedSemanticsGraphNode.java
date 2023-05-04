@@ -28,6 +28,6 @@ public interface VersionedSemanticsGraphNode {
     /**
      * @param useVersionedSemantics whether versioned semantics should be enabled
      */
-    void enableVersionedSemantics(final boolean useVersionedSemantics);
+    void enableVersionedSemantics(boolean useVersionedSemantics, String parentNodeName);
 
 }
