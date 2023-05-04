@@ -1075,8 +1075,6 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
-          val firstBatch = records.firstBatch()
-          partition.compareAndSetVerificationState(firstBatch.producerId, firstBatch.producerEpoch, firstBatch.baseSequence, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal)
           val numAppendedMessages = info.numMessages
 

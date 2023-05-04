@@ -1014,8 +1014,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               throw new OutOfOrderSequenceException("Partition previously saw a lower sequence, will retry")  
           }
         }
-        // verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
-        // otherwise throw error? not sure yet how to handle.
 
         // We cache offset metadata for the start of each transaction. This allows us to
         // compute the last stable offset without relying on additional index lookups.
