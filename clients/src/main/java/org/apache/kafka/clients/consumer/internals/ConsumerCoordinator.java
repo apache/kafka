@@ -1358,9 +1358,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final TopicIdAndNameBiMap topicIdAndNames;
 
         private OffsetCommitResponseHandler(
-                Map<TopicPartition, OffsetAndMetadata> offsets,
-                Generation generation,
-                TopicIdAndNameBiMap topicIdAndNames
+            Map<TopicPartition, OffsetAndMetadata> offsets,
+            Generation generation,
+            TopicIdAndNameBiMap topicIdAndNames
         ) {
             super(generation);
             this.offsets = offsets;

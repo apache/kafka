@@ -21,7 +21,6 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Encapsulates the mapping between topic names and ids assuming a 1:1 relationship between
