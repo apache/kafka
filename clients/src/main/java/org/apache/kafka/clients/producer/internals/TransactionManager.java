@@ -1110,7 +1110,7 @@ public class TransactionManager {
         }
         if (lastError instanceof IllegalStateException) {
             throw new IllegalStateException("Producer with transactionalId '" + transactionalId
-                    + "' and " + producerIdAndEpoch + " cannot execute transactional method because we are in an error state", lastError);
+                    + "' and " + producerIdAndEpoch + " cannot execute transactional method because of previous invalid state transition attempt", lastError);
         }
         throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
     }
