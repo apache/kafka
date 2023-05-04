@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.{Sanitizer, Time}
 
 import java.util
 import scala.annotation.nowarn
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -749,10 +750,9 @@ class RequestMetrics(name: String, config: KafkaConfig) extends KafkaMetricsGrou
     else
       None
 
-  // metrics to count the number of requests in different total time buckets. Only populated for fetch and produce
-  // requests (including sub-categories, e.g., FetchConsumer, Produce0To1MbAck1)
+  // metrics to count the number of requests in different total time buckets. Only populated for configured requests
   val totalTimeBucketHist =
-    if (name.startsWith(ApiKeys.FETCH.name) || name.startsWith(ApiKeys.PRODUCE.name))
+    if (config.totalTimeHistogramEnabledMetrics.exists(metricName => metricName.equalsIgnoreCase(name)))
       Some(new Histogram("TotalTime", "Ms", config.requestMetricsTotalTimeBuckets))
     else
       None

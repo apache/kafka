@@ -811,6 +811,7 @@ class KafkaConfigTest {
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
         case KafkaConfig.RequestMetricsSizeBucketsProp =>  assertPropertyInvalid(baseProperties, name, "", "1", "1, 2, 5, not_a_number, 9")
+        case KafkaConfig.TotalTimeHistogramEnabledMetricsProp => // ignore
 
         // Broker-side observer configs
         case KafkaConfig.ObserverClassNameProp => // ignore since even if the class name is invalid, a NoOpObserver class is used instead

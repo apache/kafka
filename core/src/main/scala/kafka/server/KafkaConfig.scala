@@ -268,6 +268,7 @@ object Defaults {
   val MetricReplaceOnDuplicate = false
   val RequestMetricsSizeBuckets = "0,1,10,50,100"
   val RequestMetricsTotalTimeBuckets = "0,5,10,20,30,40,50,100,200,300,500,1000,5000,15000"
+  val TotalTimeHistogramEnabledMetrics = util.Arrays.asList("Produce0To1MbAcks1", "Produce0To1MbAcksAll", "FetchConsumer0To1Mb")
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
@@ -633,6 +634,7 @@ object KafkaConfig {
   val MetricReplaceOnDuplicateProp: String = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_CONFIG
   val RequestMetricsSizeBucketsProp: String = "request.metrics.size.buckets"
   val RequestMetricsTotalTimeBucketsProp: String = "request.metrics.total.time.buckets"
+  val TotalTimeHistogramEnabledMetricsProp: String = "total.time.histogram.enabled.metrics"
 
   /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
   val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
@@ -1088,6 +1090,7 @@ object KafkaConfig {
   val MetricReplaceOnDuplicateDoc = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_DOC
   val RequestMetricsSizeBucketsDoc = "The size buckets used to group requests to provide RequestMetrics for each group"
   val RequestMetricsTotalTimeBucketsDoc = "The bin boundaries used to get the latency histogram. The number of requests with TotalTime latency within these bin boundaries is counted."
+  val TotalTimeHistogramEnabledMetricsDoc = "The list of RequestMetrics names that would have TotalTime latency histogram enabled."
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
@@ -1419,6 +1422,7 @@ object KafkaConfig {
       .define(MetricReplaceOnDuplicateProp, BOOLEAN, Defaults.MetricReplaceOnDuplicate, LOW, MetricReplaceOnDuplicateDoc)
       .define(RequestMetricsSizeBucketsProp, STRING, Defaults.RequestMetricsSizeBuckets, RequestMetricsBucketsValidator, LOW, RequestMetricsSizeBucketsDoc)
       .define(RequestMetricsTotalTimeBucketsProp, STRING, Defaults.RequestMetricsTotalTimeBuckets, RequestMetricsBucketsValidator, LOW, RequestMetricsTotalTimeBucketsDoc)
+      .define(TotalTimeHistogramEnabledMetricsProp, LIST, Defaults.TotalTimeHistogramEnabledMetrics, LOW, TotalTimeHistogramEnabledMetricsDoc)
 
       /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
       .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KafkaMetricReporterClasses, LOW, KafkaMetricsReporterClassesDoc)
@@ -1979,6 +1983,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val metricReplaceOnDuplicate = getBoolean(KafkaConfig.MetricReplaceOnDuplicateProp)
   def requestMetricsSizeBuckets = getRequestMetricsSizeBuckets()
   def requestMetricsTotalTimeBuckets = getRequestMetricsTotalTimeBuckets()
+  def totalTimeHistogramEnabledMetrics = getList(KafkaConfig.TotalTimeHistogramEnabledMetricsProp)
 
   /** ********* SSL/SASL Configuration **************/
   // Security configs may be overridden for listeners, so it is not safe to use the base values

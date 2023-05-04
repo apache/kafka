@@ -1094,6 +1094,7 @@ class SocketServerTest {
 
   private def checkClientDisconnectionUpdatesRequestMetrics(responseBufferSize: Int): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    props.put("total.time.histogram.enabled.metrics", util.Arrays.asList("Produce"))
     val serverMetrics = new Metrics
     var conn: Socket = null
     val overrideServer = new SocketServer(

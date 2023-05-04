@@ -362,11 +362,13 @@ class RequestChannelTest {
     val props = new Properties()
     props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     props.put(KafkaConfig.RequestMetricsTotalTimeBucketsProp, "0, 10, 30, 300")
+    props.put(KafkaConfig.TotalTimeHistogramEnabledMetricsProp, util.Arrays.asList("Produce0To1MbAcks1", "Produce0To1MbAcksAll", "FetchConsumer0To1Mb"))
+
     val config = KafkaConfig.fromProps(props)
-    // totalTimeBucketHist is only enabled for Produce/Fetch related requests.
+    // totalTimeBucketHist is only enabled for RequestMetrics with name defined in TotalTimeHistogramEnabledMetricsProp.
     val requestMetricsNoTotalTimeBucketHist = new RequestMetrics("RequestMetrics", config)
     assertTrue(requestMetricsNoTotalTimeBucketHist.totalTimeBucketHist.isEmpty)
-    val requestMetrics = new RequestMetrics("FetchConsumer", config)
+    val requestMetrics = new RequestMetrics("FetchConsumer0To1Mb", config)
     assertTrue(requestMetrics.totalTimeBucketHist.isDefined)
     val boundaries = Array(0, 10, 30, 300)
     val histogram = new requestMetrics.Histogram("TotalTime", "Ms", boundaries)
