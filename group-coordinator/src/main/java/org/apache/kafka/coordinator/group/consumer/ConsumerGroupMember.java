@@ -38,8 +38,8 @@ import java.util.stream.Collectors;
  */
 public class ConsumerGroupMember {
     /**
-     * A builder allowing to create a new member or update an
-     * existing one.
+     * A builder that facilitates the creation of a new member or the update of
+     * an existing one.
      *
      * Please refer to the javadoc of {{@link ConsumerGroupMember}} for the
      * definition of the fields.
@@ -521,7 +521,7 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The set of partitions awaiting assigning to the member.
+     * @return The set of partitions awaiting assignment to the member.
      */
     public Map<Uuid, Set<Integer>> partitionsPendingAssignment() {
         return partitionsPendingAssignment;
