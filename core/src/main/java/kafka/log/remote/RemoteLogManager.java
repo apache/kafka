@@ -92,6 +92,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -870,23 +871,38 @@ public class RemoteLogManager implements Closeable {
                 Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager");
                 Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager");
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
-                try {
-                    rlmScheduledThreadPool.shutdown();
-                } catch (InterruptedException e) {
-                    // ignore
-                }
-                remoteStorageReaderThreadPool.shutdownNow();
-                //waits for 2 mins to terminate the current tasks
-                try {
-                    remoteStorageReaderThreadPool.awaitTermination(2, TimeUnit.MINUTES);
-                } catch (InterruptedException e) {
-                    // ignore
-                }
+
+                rlmScheduledThreadPool.close();
+                shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
 
                 leaderOrFollowerTasks.clear();
                 closed = true;
             }
         }
+    }
+
+    private static void shutdownAndAwaitTermination(ExecutorService pool, String poolName, long timeout, TimeUnit timeUnit) {
+        // This pattern of shutting down thread pool is adopted from here: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/ExecutorService.html
+        LOGGER.info("Shutting down of thread pool {} is started", poolName);
+        pool.shutdown(); // Disable new tasks from being submitted
+        try {
+            // Wait a while for existing tasks to terminate
+            if (!pool.awaitTermination(timeout, timeUnit)) {
+                LOGGER.info("Shutting down of thread pool {} could not be completed. It will retry cancelling the tasks using shutdownNow.", poolName);
+                pool.shutdownNow(); // Cancel currently executing tasks
+                // Wait a while for tasks to respond to being cancelled
+                if (!pool.awaitTermination(timeout, timeUnit))
+                    LOGGER.warn("Shutting down of thread pool {} could not be completed even after retrying cancellation of the tasks using shutdownNow.", poolName);
+            }
+        } catch (InterruptedException ex) {
+            // (Re-)Cancel if current thread also interrupted
+            LOGGER.warn("Encountered InterruptedException while shutting down thread pool {}. It will retry cancelling the tasks using shutdownNow.", poolName);
+            pool.shutdownNow();
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
+        }
+
+        LOGGER.info("Shutting down of thread pool {} is completed", poolName);
     }
 
     static class RLMScheduledThreadPool {
@@ -921,11 +937,8 @@ public class RemoteLogManager implements Closeable {
             return scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit);
         }
 
-        public boolean shutdown() throws InterruptedException {
-            LOGGER.info("Shutting down scheduled thread pool");
-            scheduledThreadPool.shutdownNow();
-            //waits for 2 mins to terminate the current tasks
-            return scheduledThreadPool.awaitTermination(2, TimeUnit.MINUTES);
+        public void close() {
+            shutdownAndAwaitTermination(scheduledThreadPool, "RLMScheduledThreadPool", 10, TimeUnit.SECONDS);
         }
     }
 
