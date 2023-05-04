@@ -72,9 +72,9 @@ public class LogDirsCommandTest {
             Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
             List<Object> brokersInformation = (List<Object>) information.get("brokers");
             Set<Integer> brokerIds = new HashSet<Integer>() {{
-                add((Integer) ((HashMap<String, Object>) brokersInformation.get(0)).get("broker"));
-                add((Integer) ((HashMap<String, Object>) brokersInformation.get(1)).get("broker"));
-            }};
+                    add((Integer) ((HashMap<String, Object>) brokersInformation.get(0)).get("broker"));
+                    add((Integer) ((HashMap<String, Object>) brokersInformation.get(1)).get("broker"));
+                }};
             assertEquals(2, brokersInformation.size());
             assertEquals(new HashSet<>(Arrays.asList(2, 1)), brokerIds);
         }
