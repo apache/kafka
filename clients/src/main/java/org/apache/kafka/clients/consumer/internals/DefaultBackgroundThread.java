@@ -16,24 +16,35 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+
+import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
+import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_METRIC_GROUP_PREFIX;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -59,6 +70,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ErrorEventHandler errorEventHandler;
     private final GroupState groupState;
     private volatile boolean running;
+    private volatile boolean closed;
 
     private final RequestManagers requestManagers;
 
@@ -97,7 +109,9 @@ public class DefaultBackgroundThread extends KafkaThread {
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                    final ConsumerMetadata metadata,
-                                   final KafkaClient networkClient,
+                                   final ApiVersions apiVersions,
+                                   final Metrics metrics,
+                                   final Sensor fetcherThrottleTimeSensor,
                                    final SubscriptionState subscriptions,
                                    final GroupRebalanceConfig rebalanceConfig) {
         super(BACKGROUND_THREAD_NAME, true);
@@ -108,10 +122,21 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
             this.metadata = metadata;
+
+            final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
+                    logContext,
+                    apiVersions,
+                    time,
+                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                    metadata,
+                    fetcherThrottleTimeSensor);
+
             this.networkClientDelegate = new NetworkClientDelegate(this.time, this.config, logContext, networkClient);
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.groupState = new GroupState(rebalanceConfig);
-            Long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             if (groupState.groupId != null) {
                 CoordinatorRequestManager coordinatorManager = new CoordinatorRequestManager(this.time,
@@ -140,10 +165,14 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     @Override
     public void run() {
+        if (closed)
+            throw new IllegalStateException("Background consumer thread is closed");
+
         running = true;
 
         try {
             log.debug("Background thread started");
+
             while (running) {
                 try {
                     runOnce();
@@ -157,7 +186,6 @@ public class DefaultBackgroundThread extends KafkaThread {
             throw new RuntimeException(t);
         } finally {
             close();
-            running = false;
             log.debug("Exited run loop");
         }
     }
@@ -198,7 +226,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     public boolean isRunning() {
-        return this.running;
+        return running;
     }
 
     public void wakeup() {
@@ -206,8 +234,12 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     public void close() {
-        this.running = false;
-        this.wakeup();
+        if (closed)
+            return;
+
+        closed = true;
+        running = false;
+        wakeup();
         Utils.closeQuietly(networkClientDelegate, "network client utils");
         Utils.closeQuietly(metadata, "consumer metadata client");
     }

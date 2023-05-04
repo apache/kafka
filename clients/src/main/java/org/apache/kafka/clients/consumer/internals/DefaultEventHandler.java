@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
@@ -35,9 +34,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-
-import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
-import static org.apache.kafka.clients.consumer.internals.Utils.CONSUMER_METRIC_GROUP_PREFIX;
 
 /**
  * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
@@ -93,22 +89,15 @@ public class DefaultEventHandler implements EventHandler {
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
         metadata.bootstrap(addresses);
 
-        final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
-                metrics,
-                CONSUMER_METRIC_GROUP_PREFIX,
-                logContext,
-                apiVersions,
-                time,
-                CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-                metadata,
-                fetcherThrottleTimeSensor);
         this.backgroundThread = new DefaultBackgroundThread(time,
                 config,
                 logContext,
                 this.applicationEventQueue,
                 this.backgroundEventQueue,
                 metadata,
-                networkClient,
+                apiVersions,
+                metrics,
+                fetcherThrottleTimeSensor,
                 subscriptions,
                 groupRebalanceConfig);
         this.backgroundThread.start();
