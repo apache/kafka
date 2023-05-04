@@ -145,7 +145,6 @@ class PartitionWriterImplTest {
       (
         Charset.defaultCharset().decode(record.key).toString,
         Charset.defaultCharset().decode(record.value).toString,
-
       )
     }.toList
 
