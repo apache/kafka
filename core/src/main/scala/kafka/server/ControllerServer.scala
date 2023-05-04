@@ -175,7 +175,8 @@ class ControllerServer(
 
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
-        config.unstableApiVersionsEnabled
+        config.unstableApiVersionsEnabled,
+        config.migrationEnabled
       )
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -270,7 +271,8 @@ class ControllerServer(
             "zk migration",
             fatal = false,
             () => {}
-          )
+          ),
+          quorumFeatures
         )
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
