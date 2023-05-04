@@ -52,6 +52,9 @@ import java.util.stream.Collectors;
  */
 public class GenericGroupMember {
 
+    /**
+     * An empty assignment.
+     */
     public static final byte[] EMPTY_ASSIGNMENT = new byte[0];
 
     /**

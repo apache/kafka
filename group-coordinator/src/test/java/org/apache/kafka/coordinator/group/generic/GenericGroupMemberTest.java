@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.coordinator.group.generic.GenericGroupMember.EMPTY_ASSIGNMENT;
+import static org.apache.kafka.coordinator.group.generic.Protocol.EMPTY_METADATA;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,7 +50,7 @@ public class GenericGroupMemberTest {
             Collections.singletonList(
                 new Protocol("range", new byte[] {0})
             ),
-            new byte[0]
+            EMPTY_METADATA
         );
 
         assertTrue(member.matches(Collections.singletonList(
@@ -59,20 +60,20 @@ public class GenericGroupMemberTest {
             new Protocol("range", new byte[] {1})
         )));
         assertFalse(member.matches(Collections.singletonList(
-            new Protocol("roundrobin", new byte[0])
+            new Protocol("roundrobin", EMPTY_METADATA)
         )));
 
         List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", new byte[0]));
-        protocols.add(new Protocol("roundrobin", new byte[0]));
+        protocols.add(new Protocol("range", EMPTY_METADATA));
+        protocols.add(new Protocol("roundrobin", EMPTY_METADATA));
         assertFalse(member.matches(protocols));
     }
 
     @Test
     public void testVoteForPreferredProtocol() {
         List<Protocol> protocols = new ArrayList<>();
-        protocols.add(new Protocol("range", new byte[0]));
-        protocols.add(new Protocol("roundrobin", new byte[0]));
+        protocols.add(new Protocol("range", EMPTY_METADATA));
+        protocols.add(new Protocol("roundrobin", EMPTY_METADATA));
 
         GenericGroupMember member = new GenericGroupMember(
             "member",
@@ -212,7 +213,7 @@ public class GenericGroupMemberTest {
             4500,
             "generic",
             Collections.singletonList(
-                new Protocol("range", new byte[0])
+                new Protocol("range", EMPTY_METADATA)
             ),
             EMPTY_ASSIGNMENT
         );

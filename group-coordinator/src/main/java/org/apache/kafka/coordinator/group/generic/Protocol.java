@@ -27,6 +27,11 @@ import java.util.Objects;
 public class Protocol {
 
     /**
+     * Represents an empty metadata.
+     */
+    public static final byte[] EMPTY_METADATA = new byte[0];
+
+    /**
      * The name of the protocol.
      */
     private final String name;
