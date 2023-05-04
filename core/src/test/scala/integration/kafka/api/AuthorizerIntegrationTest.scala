@@ -489,23 +489,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createOffsetCommitRequest = {
-    val data = new OffsetCommitRequestData()
-      .setGroupId(group)
-      .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-      .setGenerationId(1)
-      .setTopics(Collections.singletonList(
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName(topic)
-          .setPartitions(Collections.singletonList(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(part)
-              .setCommittedOffset(0)
-              .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-              .setCommitTimestamp(OffsetCommitRequest.DEFAULT_TIMESTAMP)
-              .setCommittedMetadata("metadata")
-          )))
-      )
-    new requests.OffsetCommitRequest.Builder(data, true).build()
+    new requests.OffsetCommitRequest.Builder(
+      new OffsetCommitRequestData()
+        .setGroupId(group)
+        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        .setGenerationId(1)
+        .setTopics(Collections.singletonList(
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(topic)
+            .setPartitions(Collections.singletonList(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(part)
+                .setCommittedOffset(0)
+                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                .setCommitTimestamp(OffsetCommitRequest.DEFAULT_TIMESTAMP)
+                .setCommittedMetadata("metadata")
+            )))
+        ),
+      true
+    ).build()
   }
 
   private def createPartitionsRequest = {

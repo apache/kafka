@@ -195,7 +195,7 @@ public abstract class ConsumerCoordinatorTest {
         partitionCounts.put(topic2, 1);
     }
 
-    private final TopicIdAndNameBiMap topicIdAndNames = TopicIdAndNameBiMap.fromTopicIds(topicIds);
+    private final TopicIdAndNameBiMap topicIdAndNameBiMapping = TopicIdAndNameBiMap.fromTopicIds(topicIds);
 
     private MockClient client;
     private MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, topicIds);
@@ -2779,7 +2779,6 @@ public abstract class ConsumerCoordinatorTest {
 
         if (commitSync) {
             assertFalse(coordinator.commitOffsetsSync(offsets, time.timer(timeoutMs)));
-
         } else {
             AtomicBoolean callbackInvoked = new AtomicBoolean();
             coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
@@ -2810,7 +2809,6 @@ public abstract class ConsumerCoordinatorTest {
 
         if (commitSync) {
             assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
-
         } else {
             AtomicBoolean callbackInvoked = new AtomicBoolean();
             coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
@@ -4354,7 +4352,7 @@ public abstract class ConsumerCoordinatorTest {
     ) {
         return body -> {
             OffsetCommitRequest req = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicIdAndNames);
+            Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicIdAndNameBiMapping);
             if (offsets.size() != expectedOffsets.size())
                 return false;
 
