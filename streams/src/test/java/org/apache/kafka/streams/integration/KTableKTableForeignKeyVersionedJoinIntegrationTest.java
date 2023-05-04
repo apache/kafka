@@ -85,7 +85,6 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
             // LHS records with match to existing RHS record
             left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp + 3);
             left.pipeInput("lhs2", "lhsValue2|rhs1", baseTimestamp + 5);
-
             {
                 final Map<String, String> expected = mkMap(
                     mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
@@ -103,8 +102,28 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                 }
             }
 
+            // replace with tombstone, to validate behavior when latest record is null
+            left.pipeInput("lhs2", null, baseTimestamp + 6);
+            {
+                assertThat(
+                    outputTopic.readKeyValuesToMap(),
+                    is(mkMap(
+                        mkEntry("lhs2", null)
+                    ))
+                );
+                if (materialized) {
+                    assertThat(
+                        asMap(store),
+                        is(mkMap(
+                            mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                        ))
+                    );
+                }
+            }
+
             // out-of-order LHS record (for existing key) does not produce a new result iff LHS is versioned
             left.pipeInput("lhs1", "lhsValue1_ooo|rhs1", baseTimestamp + 2);
+            left.pipeInput("lhs2", "lhsValue2_ooo|rhs1", baseTimestamp + 2);
             if (leftVersioned) {
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
@@ -114,25 +133,23 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                     assertThat(
                         asMap(store),
                         is(mkMap(
-                            mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
+                            mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
                         ))
                     );
                 }
             } else {
+                final Map<String, String> expected = mkMap(
+                    mkEntry("lhs1", "(lhsValue1_ooo|rhs1,rhsValue1)"),
+                    mkEntry("lhs2", "(lhsValue2_ooo|rhs1,rhsValue1)")
+                );
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry("lhs1", "(lhsValue1_ooo|rhs1,rhsValue1)")
-                    ))
+                    is(expected)
                 );
                 if (materialized) {
                     assertThat(
                         asMap(store),
-                        is(mkMap(
-                            mkEntry("lhs1", "(lhsValue1_ooo|rhs1,rhsValue1)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
-                        ))
+                        is(expected)
                     );
                 }
             }
@@ -148,8 +165,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                     assertThat(
                         asMap(store),
                         is(mkMap(
-                            mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
+                            mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
                         ))
                     );
                 }
@@ -164,7 +180,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                     assertThat(
                         asMap(store),
                         is(mkMap(
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
+                            mkEntry("lhs2", "(lhsValue2_ooo|rhs1,rhsValue1)")
                         ))
                     );
                 }
@@ -172,20 +188,20 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
 
             // LHS record with larger timestamp always produces a new result
             left.pipeInput("lhs1", "lhsValue1_new|rhs1", baseTimestamp + 8);
+            left.pipeInput("lhs2", "lhsValue2_new|rhs1", baseTimestamp + 8);
             {
+                final Map<String, String> expected = mkMap(
+                    mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)"),
+                    mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1)")
+                );
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)")
-                    ))
+                    is(expected)
                 );
                 if (materialized) {
                     assertThat(
                         asMap(store),
-                        is(mkMap(
-                            mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
-                        ))
+                        is(expected)
                     );
                 }
             }
@@ -202,7 +218,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                         asMap(store),
                         is(mkMap(
                             mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
+                            mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1)")
                         ))
                     );
                 }
@@ -211,7 +227,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                     outputTopic.readKeyValuesToMap(),
                     is(mkMap(
                         mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_ooo)"),
-                        mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1_ooo)")
+                        mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_ooo)")
                     ))
                 );
                 if (materialized) {
@@ -219,7 +235,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                         asMap(store),
                         is(mkMap(
                             mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_ooo)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1_ooo)")
+                            mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_ooo)")
                         ))
                     );
                 }
@@ -237,7 +253,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                         asMap(store),
                         is(mkMap(
                             mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
+                            mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1)")
                         ))
                     );
                 }
@@ -247,7 +263,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                         outputTopic.readKeyValuesToMap(),
                         is(mkMap(
                             mkEntry("lhs1", "(lhsValue1_new|rhs1,null)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,null)")
+                            mkEntry("lhs2", "(lhsValue2_new|rhs1,null)")
                         ))
                     );
                     if (materialized) {
@@ -255,7 +271,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                             asMap(store),
                             is(mkMap(
                                 mkEntry("lhs1", "(lhsValue1_new|rhs1,null)"),
-                                mkEntry("lhs2", "(lhsValue2|rhs1,null)")
+                                mkEntry("lhs2", "(lhsValue2_new|rhs1,null)")
                             ))
                         );
                     }
@@ -283,7 +299,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                     outputTopic.readKeyValuesToMap(),
                     is(mkMap(
                         mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_new)"),
-                        mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1_new)")
+                        mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_new)")
                     ))
                 );
                 if (materialized) {
@@ -291,7 +307,7 @@ public class KTableKTableForeignKeyVersionedJoinIntegrationTest extends KTableKT
                         asMap(store),
                         is(mkMap(
                             mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_new)"),
-                            mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1_new)")
+                            mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_new)")
                         ))
                     );
                 }

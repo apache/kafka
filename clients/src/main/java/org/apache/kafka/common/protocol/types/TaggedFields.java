@@ -59,11 +59,6 @@ public class TaggedFields extends DocumentedType {
         this.fields = fields;
     }
 
-    @Override
-    public boolean isNullable() {
-        return false;
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void write(ByteBuffer buffer, Object o) {

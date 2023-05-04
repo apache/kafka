@@ -86,8 +86,8 @@ public class MeteredVersionedKeyValueStore<K, V>
         extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
         private final VersionedBytesStore inner;
-        private final Serde<V> rawValueSerde;
-        private StateSerdes<K, V> rawValueSerdes;
+        private final Serde<V> plainValueSerde;
+        private StateSerdes<K, V> plainValueSerdes;
 
         MeteredVersionedKeyValueStoreInternal(final VersionedBytesStore inner,
                                               final String metricScope,
@@ -104,13 +104,13 @@ public class MeteredVersionedKeyValueStore<K, V>
                     : new ValueAndTimestampSerde<>(valueSerde)
             );
             this.inner = inner;
-            this.rawValueSerde = valueSerde;
+            this.plainValueSerde = valueSerde;
         }
 
         public long put(final K key, final V value, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                final long validTo = maybeMeasureLatency(() -> inner.put(keyBytes(key), rawValueSerdes.rawValue(value), timestamp), time, putSensor);
+                final long validTo = maybeMeasureLatency(() -> inner.put(keyBytes(key), plainValueSerdes.rawValue(value), timestamp), time, putSensor);
                 maybeRecordE2ELatency();
                 return validTo;
             } catch (final ProcessorStateException e) {
@@ -178,10 +178,10 @@ public class MeteredVersionedKeyValueStore<K, V>
             // additionally init raw value serde
             final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-            rawValueSerdes = new StateSerdes<>(
+            plainValueSerdes = new StateSerdes<>(
                 changelogTopic,
                 prepareKeySerde(keySerde, new SerdeGetter(context)),
-                prepareValueSerde(rawValueSerde, new SerdeGetter(context))
+                prepareValueSerde(plainValueSerde, new SerdeGetter(context))
             );
         }
 
@@ -192,10 +192,10 @@ public class MeteredVersionedKeyValueStore<K, V>
             // additionally init raw value serde
             final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-            rawValueSerdes = new StateSerdes<>(
+            plainValueSerdes = new StateSerdes<>(
                 changelogTopic,
                 prepareKeySerde(keySerde, new SerdeGetter(context)),
-                prepareValueSerde(rawValueSerde, new SerdeGetter(context))
+                prepareValueSerde(plainValueSerde, new SerdeGetter(context))
             );
         }
     }

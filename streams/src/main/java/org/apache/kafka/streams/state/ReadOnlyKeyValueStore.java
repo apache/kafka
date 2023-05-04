@@ -117,6 +117,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @param <PS> Prefix Serializer type
      * @param <P> Prefix Type.
      * @return The iterator for keys having the specified prefix.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     default <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(P prefix, PS prefixKeySerializer) {
         throw new UnsupportedOperationException();
