@@ -79,13 +79,9 @@ class LogCleanerTest {
       logCleaner.shutdown()
 
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
-      val numMetricsRegistered = 5
+      val numMetricsRegistered = LogCleaner.MetricNames.size
       verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
-
-      // verify that all metrics are added to the list of metric name
-      assertEquals(numMetricsRegistered, LogCleaner.MetricNames.size,
-        "All metrics are not part of MetricNames collections")
-
+      
       // verify that each metric is removed
       LogCleaner.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
 
