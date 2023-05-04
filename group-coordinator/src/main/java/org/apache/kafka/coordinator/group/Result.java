@@ -25,7 +25,7 @@ import java.util.Objects;
  *
  * @param <T> The type of the response.
  */
-class Result<T> {
+public class Result<T> {
     /**
      * The records.
      */

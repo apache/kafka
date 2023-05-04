@@ -687,19 +687,10 @@ class ReplicaManager(val config: KafkaConfig,
           () =>
             allResults.foreach {
               case (topicPartition, result) =>
-                val requestKey = TopicPartitionOperationKey(topicPartition)
-                result.info.leaderHwChange match {
-                  case LeaderHwChange.INCREASED =>
-                    // some delayed operations may be unblocked after HW changed
-                    delayedProducePurgatory.checkAndComplete(requestKey)
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                    delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                  case LeaderHwChange.SAME =>
-                    // probably unblock some follower fetch requests since log end offset has been updated
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                  case LeaderHwChange.NONE =>
-                  // nothing
-                }
+                maybeCompletePurgatories(
+                  topicPartition,
+                  result.info.leaderHwChange
+                )
             }
         }
 
@@ -766,6 +757,25 @@ class ReplicaManager(val config: KafkaConfig,
         )
       }
       responseCallback(responseStatus)
+    }
+  }
+
+  def maybeCompletePurgatories(
+    topicPartition: TopicPartition,
+    leaderHwChange: LeaderHwChange
+  ): Unit = {
+    val requestKey = TopicPartitionOperationKey(topicPartition)
+    leaderHwChange match {
+      case LeaderHwChange.INCREASED =>
+        // some delayed operations may be unblocked after HW changed
+        delayedProducePurgatory.checkAndComplete(requestKey)
+        delayedFetchPurgatory.checkAndComplete(requestKey)
+        delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+      case LeaderHwChange.SAME =>
+        // probably unblock some follower fetch requests since log end offset has been updated
+        delayedFetchPurgatory.checkAndComplete(requestKey)
+      case LeaderHwChange.NONE =>
+        // nothing
     }
   }
 
@@ -1019,13 +1029,14 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
-   * Append the messages to the local replica logs
+   * Append the messages to the local replica logs. ReplicaManager#appendRecords should usually be
+   * used instead of this method.
    */
-  private def appendToLocalLog(internalTopicsAllowed: Boolean,
-                               origin: AppendOrigin,
-                               entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                               requiredAcks: Short,
-                               requestLocal: RequestLocal): Map[TopicPartition, LogAppendResult] = {
+  def appendToLocalLog(internalTopicsAllowed: Boolean,
+                       origin: AppendOrigin,
+                       entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                       requiredAcks: Short,
+                       requestLocal: RequestLocal): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
