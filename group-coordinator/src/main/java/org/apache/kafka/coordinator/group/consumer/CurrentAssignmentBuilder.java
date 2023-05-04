@@ -44,7 +44,7 @@ import java.util.function.BiFunction;
  *   or if it does not have to revoke any.
  *
  * - Previous Epoch:
- *   The previous epoch of the member when the state was updated.
+ *   The epoch of the member when the state was last updated.
  *
  * - Assigned Partitions:
  *   The set of partitions currently assigned to the member. This represents what the member should have.
@@ -173,7 +173,7 @@ public class CurrentAssignmentBuilder {
         // A new target assignment has been installed, we need to restart
         // the reconciliation loop from the beginning.
         if (targetAssignmentEpoch != member.nextMemberEpoch()) {
-            return transitionToInitialState();
+            return reinitializeState();
         }
 
         switch (member.state()) {
@@ -194,12 +194,12 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Transitions to the initial state. Here we compute the Assigned,
-     * Revoking and Assigning sets.
+     * Reinitialize the state machine. Here we compute the assigned partitions,
+     * the partitions pending revocation and the partitions pending assignment.
      *
      * @return A new ConsumerGroupMember.
      */
-    private ConsumerGroupMember transitionToInitialState() {
+    private ConsumerGroupMember reinitializeState() {
         Map<Uuid, Set<Integer>> newAssignedPartitions = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingRevocation = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = new HashMap<>();
@@ -218,17 +218,21 @@ public class CurrentAssignmentBuilder {
             Set<Integer> currentRevokingPartitions = member.partitionsPendingRevocation()
                 .getOrDefault(topicId, Collections.emptySet());
 
-            // Assigned_1 = (Assigned_0 + Revoking_0) /\ Target
+            // Assigned_1 = (Assigned_0 + Pending_Revocation_0) ∩ Target
+            // Assigned_0 + Pending_Revocation_0 is used here because the partitions
+            // being revoked are still owned until the revocation is acknowledged.
             Set<Integer> assignedPartitions = new HashSet<>(currentAssignedPartitions);
             assignedPartitions.addAll(currentRevokingPartitions);
             assignedPartitions.retainAll(target);
 
-            // Revoking_1 = (Assigned_0 + Revoking_0) - Assigned_1
+            // Pending_Revocation_1 = (Assigned_0 + Pending_Revocation_0) - Assigned_1
+            // Assigned_0 + Pending_Revocation_0 is used here because the partitions
+            // being revoked are still owned until the revocation is acknowledged.
             Set<Integer> partitionsPendingRevocation = new HashSet<>(currentAssignedPartitions);
             partitionsPendingRevocation.addAll(currentRevokingPartitions);
             partitionsPendingRevocation.removeAll(assignedPartitions);
 
-            // Assigning_1 = Target - Assigned_1
+            // Pending_Assignment_1 = Target - Assigned_1
             Set<Integer> partitionsPendingAssignment = new HashSet<>(target);
             partitionsPendingAssignment.removeAll(assignedPartitions);
 
@@ -246,8 +250,8 @@ public class CurrentAssignmentBuilder {
         }
 
         if (!newPartitionsPendingRevocation.isEmpty()) {
-            // If the revoking set is not empty, we transition to Revoking and we
-            // stay in the current epoch.
+            // If the partition pending revocation set is not empty, we transition to
+            // Revoking and we stay in the current epoch.
             return new ConsumerGroupMember.Builder(member)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(newPartitionsPendingRevocation)
@@ -256,14 +260,14 @@ public class CurrentAssignmentBuilder {
                 .build();
         } else {
             if (!newPartitionsPendingAssignment.isEmpty()) {
-                // If the assigning set is not empty, we check if some or all
-                // partitions are free to use. If they are, we move them to
-                // the assigned set.
+                // If the partitions pending assignment set is not empty, we check
+                // if some or all partitions are free to use. If they are, we move
+                // them to the partitions assigned set.
                 maybeAssignPendingPartitions(newAssignedPartitions, newPartitionsPendingAssignment);
             }
 
-            // We transition to the target epoch. If the assigning set is empty,
-            // the member transition to stable, otherwise to assigning.
+            // We transition to the target epoch. If the partitions pending assignment
+            // set is empty, the member transition to stable, otherwise to assigning.
             return new ConsumerGroupMember.Builder(member)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(Collections.emptyMap())
@@ -295,8 +299,8 @@ public class CurrentAssignmentBuilder {
                 maybeAssignPendingPartitions(newAssignedPartitions, newPartitionsPendingAssignment);
             }
 
-            // We transition to the target epoch. If the assigning set is empty,
-            // the member transition to stable, otherwise to assigning.
+            // We transition to the target epoch. If the partitions pending assignment
+            // set is empty, the member transition to stable, otherwise to assigning.
             return new ConsumerGroupMember.Builder(member)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(Collections.emptyMap())
@@ -339,8 +343,8 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Tries to move partitions from the Assigning set to the Assigned set
-     * if they are no longer owned.
+     * Tries to move partitions from the partitions pending assignment set to
+     * the partitions assigned set if they are no longer owned.
      *
      * @param newAssignedPartitions             The assigned partitions.
      * @param newPartitionsPendingAssignment    The partitions pending assignment.
