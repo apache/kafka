@@ -173,7 +173,7 @@ public class CurrentAssignmentBuilder {
         // A new target assignment has been installed, we need to restart
         // the reconciliation loop from the beginning.
         if (targetAssignmentEpoch != member.nextMemberEpoch()) {
-            return reinitializeState();
+            return transitionToNewTargetAssignmentState();
         }
 
         switch (member.state()) {
@@ -194,12 +194,13 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Reinitialize the state machine. Here we compute the assigned partitions,
-     * the partitions pending revocation and the partitions pending assignment.
+     * Transitions to NewTargetAssignment state. This is a transient state where
+     * we compute the assigned partitions, the partitions pending revocation,
+     * the partitions pending assignment, and transition to the next state.
      *
      * @return A new ConsumerGroupMember.
      */
-    private ConsumerGroupMember reinitializeState() {
+    private ConsumerGroupMember transitionToNewTargetAssignmentState() {
         Map<Uuid, Set<Integer>> newAssignedPartitions = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingRevocation = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = new HashMap<>();
@@ -250,8 +251,9 @@ public class CurrentAssignmentBuilder {
         }
 
         if (!newPartitionsPendingRevocation.isEmpty()) {
-            // If the partition pending revocation set is not empty, we transition to
-            // Revoking and we stay in the current epoch.
+            // If the partition pending revocation set is not empty, we transition the
+            // member to revoking and keep the current epoch. The transition to the new
+            // state is done when the member is updated.
             return new ConsumerGroupMember.Builder(member)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(newPartitionsPendingRevocation)
@@ -268,6 +270,7 @@ public class CurrentAssignmentBuilder {
 
             // We transition to the target epoch. If the partitions pending assignment
             // set is empty, the member transition to stable, otherwise to assigning.
+            // The transition to the new state is done when the member is updated.
             return new ConsumerGroupMember.Builder(member)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(Collections.emptyMap())
@@ -301,6 +304,7 @@ public class CurrentAssignmentBuilder {
 
             // We transition to the target epoch. If the partitions pending assignment
             // set is empty, the member transition to stable, otherwise to assigning.
+            // The transition to the new state is done when the member is updated.
             return new ConsumerGroupMember.Builder(member)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(Collections.emptyMap())
@@ -327,7 +331,8 @@ public class CurrentAssignmentBuilder {
         Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = deepCopy(member.partitionsPendingAssignment());
 
         // If any partition can transition from assigning to assigned, we update
-        // the member. Otherwise, we return the current one.
+        // the member. Otherwise, we return the current one. The transition to the
+        // new state is done when the member is updated.
         if (maybeAssignPendingPartitions(newAssignedPartitions, newPartitionsPendingAssignment)) {
             return new ConsumerGroupMember.Builder(member)
                 .setAssignedPartitions(newAssignedPartitions)
