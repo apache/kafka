@@ -72,6 +72,11 @@ public class MultiThreadedEventProcessorTest {
         public CompletableFuture<T> future() {
             return future;
         }
+
+        @Override
+        public String toString() {
+            return "FutureEvent(key=" + key + ")";
+        }
     }
 
     @Test
