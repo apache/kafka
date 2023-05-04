@@ -158,6 +158,7 @@ public final class ClientUtils {
                                                     Metadata metadata,
                                                     Sensor throttleTimeSensor) {
         return createNetworkClient(config,
+                config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
                 metrics,
                 metricsGroupPrefix,
                 logContext,
@@ -172,6 +173,7 @@ public final class ClientUtils {
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
+                                                    String clientId,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
                                                     LogContext logContext,
@@ -182,6 +184,7 @@ public final class ClientUtils {
                                                     MetadataUpdater metadataUpdater,
                                                     HostResolver hostResolver) {
         return createNetworkClient(config,
+                clientId,
                 metrics,
                 metricsGroupPrefix,
                 logContext,
@@ -196,6 +199,7 @@ public final class ClientUtils {
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
+                                                    String clientId,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
                                                     LogContext logContext,
@@ -221,7 +225,7 @@ public final class ClientUtils {
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,
-                    config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
+                    clientId,
                     maxInFlightRequestsPerConnection,
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),

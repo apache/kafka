@@ -507,6 +507,7 @@ public class KafkaAdminClient extends AdminClient {
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             networkClient = ClientUtils.createNetworkClient(config,
+                    clientId,
                     metrics,
                     "admin-client",
                     logContext,
