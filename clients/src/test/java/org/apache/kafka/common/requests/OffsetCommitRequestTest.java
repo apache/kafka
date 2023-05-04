@@ -108,8 +108,10 @@ public class OffsetCommitRequestTest {
             String topicName = topic.name();
 
             if (request.version() >= 9) {
-                topicName = topicIdAndNames.getTopicName(topic.topicId()).orElseThrow(
-                    () -> new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found."));
+                topicName = topicIdAndNames.topicNameOrNull(topic.topicId());
+                if (topicName == null) {
+                    throw new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found.");
+                }
             }
 
             for (OffsetCommitRequestData.OffsetCommitRequestPartition partition : topic.partitions()) {

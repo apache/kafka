@@ -83,7 +83,6 @@ import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOptional
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -428,23 +427,23 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      val topicIdAndNames = metadataCache.topicIdAndNames()
       val responseBuilder = new OffsetCommitResponse.Builder()
 
       val resolvedTopics =
         if (offsetCommitRequest.version < 9)
           offsetCommitRequest.data.topics.asScala
         else {
+          val topicIdsToNames = metadataCache.topicIdsToNames()
           val topics = new ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
 
           offsetCommitRequest.data.topics.forEach { topic =>
-            topicIdAndNames.getTopicName(topic.topicId).toScala match {
-              case Some(topicName) =>
-                topic.setName(topicName)
-                topics += topic
-              case _ =>
+            topicIdsToNames.get(topic.topicId) match {
+              case null =>
                 responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
                   topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_ID)
+              case topicName =>
+                topic.setName(topicName)
+                topics += topic
             }
           }
           topics

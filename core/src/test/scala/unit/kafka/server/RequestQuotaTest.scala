@@ -299,26 +299,27 @@ class RequestQuotaTest extends BaseRequestTest {
               ApiKeys.CONTROLLED_SHUTDOWN.latestVersion)
 
         case ApiKeys.OFFSET_COMMIT =>
-          val data = new OffsetCommitRequestData()
-            .setGroupId("test-group")
-            .setGenerationId(1)
-            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-            .setTopics(
-              Collections.singletonList(
-                new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                  .setName(topic)
-                  .setPartitions(
-                    Collections.singletonList(
-                      new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                        .setPartitionIndex(0)
-                        .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                        .setCommittedOffset(0)
-                        .setCommittedMetadata("metadata")
+          new OffsetCommitRequest.Builder(
+            new OffsetCommitRequestData()
+              .setGroupId("test-group")
+              .setGenerationId(1)
+              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setTopics(
+                Collections.singletonList(
+                  new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName(topic)
+                    .setPartitions(
+                      Collections.singletonList(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                          .setPartitionIndex(0)
+                          .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                          .setCommittedOffset(0)
+                          .setCommittedMetadata("metadata")
+                      )
                     )
-                  )
-              )
-            )
-          new OffsetCommitRequest.Builder(data, true)
+                )
+              ),
+            true)
 
         case ApiKeys.OFFSET_FETCH =>
           new OffsetFetchRequest.Builder(Map("test-group"-> List(tp).asJava).asJava, false, false)

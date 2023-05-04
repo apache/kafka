@@ -22,7 +22,7 @@ import kafka.server.{CachedControllerId, FinalizedFeaturesAndEpoch, KRaftCachedC
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicIdAndNameBiMap, TopicPartition, Uuid}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -251,11 +251,6 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   override def topicNamesToIds(): util.Map[String, Uuid] = _currentImage.topics.topicNameToIdView()
 
   override def topicIdsToNames(): util.Map[Uuid, String] = _currentImage.topics.topicIdToNameView()
-
-  override def topicIdAndNames(): TopicIdAndNameBiMap = {
-    val image = _currentImage
-    TopicIdAndNameBiMap.wrap(image.topics.topicNameToIdView(), image.topics.topicIdToNameView())
-  }
 
   override def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
     val image = _currentImage

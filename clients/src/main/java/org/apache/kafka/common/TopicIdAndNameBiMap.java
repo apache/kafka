@@ -26,7 +26,6 @@ import java.util.Optional;
 /**
  * Encapsulates the mapping between topic names and ids assuming a 1:1 relationship between
  * a name and an id.
- * <p></p>
  * Note that this class intends to be used for the (reverse) lookup of topic IDs/names, but
  * not to characterize the set of topics which are known by a client. Use the
  * {@link org.apache.kafka.clients.MetadataCache} for that purpose.
@@ -78,14 +77,15 @@ public class TopicIdAndNameBiMap {
     /**
      * Returns the ID of the topic with the given name, if that association exists.
      */
-    public Uuid getTopicIdOrZero(String name) {
-        return Optional.ofNullable(topicIds.get(name)).orElse(Uuid.ZERO_UUID);
+    public Uuid topicIdOrZero(String name) {
+        Uuid uuid = topicIds.get(name);
+        return uuid != null ? uuid : Uuid.ZERO_UUID;
     }
 
     /**
      * Returns the name of the topic corresponding to the given ID, if that association exists.
      */
-    public Optional<String> getTopicName(Uuid uuid) {
-        return Optional.ofNullable(topicNames.get(uuid));
+    public String topicNameOrNull(Uuid uuid) {
+        return topicNames.get(uuid);
     }
 }

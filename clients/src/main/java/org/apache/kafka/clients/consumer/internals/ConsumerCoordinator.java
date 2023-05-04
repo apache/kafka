@@ -1289,7 +1289,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return RequestFuture.failure(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
             }
 
-            Uuid topicId = topicIdAndNames.getTopicIdOrZero(topicPartition.topic());
+            Uuid topicId = topicIdAndNames.topicIdOrZero(topicPartition.topic());
             if (ZERO_UUID.equals(topicId)) {
                 canUseTopicIds = false;
             }
@@ -1376,7 +1376,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 String topicName = topic.name();
 
                 if (this.response.requestHeader().apiVersion() >= 9) {
-                    topicName = topicIdAndNames.getTopicName(topic.topicId()).orElse(null);
+                    topicName = topicIdAndNames.topicNameOrNull(topic.topicId());
 
                     if (topicName == null) {
                         // Could only happen if the broker replied with an ID which was not in the request and
