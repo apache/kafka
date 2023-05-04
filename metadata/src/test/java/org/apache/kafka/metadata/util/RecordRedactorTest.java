@@ -57,8 +57,8 @@ final public class RecordRedactorTest {
 
     @Test
     public void testUserScramCredentialRecordToString() {
-        assertEquals("UserScramCredentialRecord(name=bob, mechanism=0, " +
-            "salt=(redacted), serverKey=(redacted), storedKey=(redacted), iterations=128)",
+        assertEquals("UserScramCredentialRecord(name='bob', mechanism=0, " +
+            "salt=(redacted), storedKey=(redacted), serverKey=(redacted), iterations=128)",
                 REDACTOR.toLoggableString(new UserScramCredentialRecord().
                     setName("bob").
                     setMechanism((byte) 0).
@@ -66,6 +66,19 @@ final public class RecordRedactorTest {
                     setServerKey(new byte[128]).
                     setStoredKey(new byte[128]).
                     setIterations(128)));
+    }
+
+    @Test
+    public void testUserScramCredentialRecordToStringWithNullName() {
+        assertEquals("UserScramCredentialRecord(name=null, mechanism=1, " +
+                        "salt=(redacted), storedKey=(redacted), serverKey=(redacted), iterations=256)",
+                REDACTOR.toLoggableString(new UserScramCredentialRecord().
+                        setName(null).
+                        setMechanism((byte) 1).
+                        setSalt(new byte[512]).
+                        setServerKey(new byte[128]).
+                        setStoredKey(new byte[128]).
+                        setIterations(256)));
     }
 
     @Test

@@ -23,6 +23,8 @@ import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 
+import java.util.Arrays;
+
 
 /**
  * Converts a metadata record to a string suitable for logging to slf4j.
@@ -49,10 +51,11 @@ public final class RecordRedactor {
             case USER_SCRAM_CREDENTIAL_RECORD: {
                 UserScramCredentialRecord record = (UserScramCredentialRecord) message;
                 return "UserScramCredentialRecord("
-                        + "name=" + record.name()
+                        + "name=" + ((record.name() == null) ? "null" : "'" + record.name().toString() + "'")
                         + ", mechanism=" + record.mechanism()
                         + ", salt=(redacted)"
-                        + ", saltedPassword=(redacted)"
+                        + ", storedKey=(redacted)"
+                        + ", serverKey=(redacted)"
                         + ", iterations=" + record.iterations()
                         + ")";
             }
