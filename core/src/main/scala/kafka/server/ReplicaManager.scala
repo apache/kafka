@@ -637,17 +637,31 @@ class ReplicaManager(val config: KafkaConfig,
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       
+      val transactionalProducerIds = mutable.HashSet[Long]()
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) = 
         if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
           (entriesPerPartition, Map.empty)
-        else
+        else {
           entriesPerPartition.partition { case (topicPartition, records) =>
-            getPartitionOrException(topicPartition).hasOngoingTransaction(records.firstBatch().producerId())
+            // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
+            val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
+            transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
+            if (transactionalBatches.nonEmpty) {
+              getPartitionOrException(topicPartition).hasOngoingTransaction(transactionalBatches.head.producerId)
+            } else { 
+              // If there is no producer ID in the batches, no need to verify.
+              true
+            }
           }
+        }
+      // We should have exactly one producer ID for transactional records
+      if (transactionalProducerIds.size > 1) {
+        throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
+      }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
         val verifiedEntries = 
-          if (unverifiedEntries.isEmpty) 
+          if (unverifiedEntries.isEmpty)
             allEntries 
           else
             allEntries.filter { case (tp, _) =>
@@ -743,7 +757,8 @@ class ReplicaManager(val config: KafkaConfig,
             .setPartitions(tps.map(tp => Integer.valueOf(tp.partition())).toList.asJava))
         }
 
-        // map not yet verified partitions to a request object
+        // Map not yet verified partitions to a request object.
+        // We verify above that all partitions use the same producer ID.
         val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
         val notYetVerifiedTransaction = new AddPartitionsToTxnTransaction()
           .setTransactionalId(transactionalId)
