@@ -23,8 +23,6 @@ import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 
-import java.util.Arrays;
-
 
 /**
  * Converts a metadata record to a string suitable for logging to slf4j.
