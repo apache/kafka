@@ -723,13 +723,22 @@ public class SenderTest {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
+        // cluster authorization failed on initProducerId is retriable
         prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFalse(transactionManager.hasProducerId());
         assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
+        assertEquals(-1, transactionManager.producerIdAndEpoch().epoch);
 
-        // cluster authorization is a fatal error for the producer
         assertSendFailure(ClusterAuthorizationException.class);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        // sender retry initProducerId and succeed
+        sender.runOnce();
+        assertFalse(transactionManager.hasFatalError());
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+        // subsequent send should be successful
+        assertSuccessfulSend();
     }
 
     @Test
@@ -3229,6 +3238,22 @@ public class SenderTest {
         metadata.add("test", time.milliseconds());
         if (updateMetadata)
             this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+    }
+
+    private void assertSuccessfulSend() throws InterruptedException {
+        Future<RecordMetadata> future = appendToAccumulator(tp0);
+        sender.runOnce(); // send request
+        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(client.hasInFlightRequests());
+        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce();
+        assertTrue(future.isDone());
+        try {
+            future.get();
+        } catch (ExecutionException e) {
+            fail("Future should not have raised an exception: " + e.getCause());
+        }
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
