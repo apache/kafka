@@ -35,7 +35,7 @@ import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -2162,11 +2162,65 @@ class ReplicaManagerTest {
       callback(Map(tp -> Errors.INVALID_RECORD).toMap)
       assertEquals(Errors.INVALID_RECORD, result.assertFired.error)
 
-      // If we don't supply a transaction coordinator partition, we do not verify, so counter stays the same.
-      val transactionalRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
+      // If we supply no transactional ID and idempotent records, we do not verify, so counter stays the same.
+      val idempotentRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord(s"message $sequence".getBytes))
-      appendRecords(replicaManager, tp, transactionalRecords2)
+      appendRecords(replicaManager, tp, idempotentRecords2)
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
+      
+      // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
+      appendRecordsToMultipleTopics(replicaManager, Map(tp -> transactionalRecords, new TopicPartition(topic, 1) -> idempotentRecords2), transactionalId, Some(0))
+      verify(addPartitionsToTxnManager, times(2)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testExceptionWhenUnverifiedTransactionHasMultipleProducerIds(): Unit = {
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+    val transactionalId = "txn1"
+    val producerId = 24L
+    val producerEpoch = 0.toShort
+    val sequence = 0
+
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val metadataCache = mock(classOf[MetadataCache])
+    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
+
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager,
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
+
+    try {
+      replicaManager.becomeLeaderOrFollower(1,
+        makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
+        (_, _) => ())
+
+      replicaManager.becomeLeaderOrFollower(1,
+        makeLeaderAndIsrRequest(topicIds(tp1.topic), tp1, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
+        (_, _) => ())
+
+      // Append some transactional records with different producer IDs
+      val transactionalRecords = mutable.Map[TopicPartition, MemoryRecords]()
+      transactionalRecords.put(tp0, MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
+        new SimpleRecord(s"message $sequence".getBytes)))
+      transactionalRecords.put(tp1, MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId + 1, producerEpoch, sequence,
+        new SimpleRecord(s"message $sequence".getBytes)))
+
+      assertThrows(classOf[InvalidPidMappingException],
+        () => appendRecordsToMultipleTopics(replicaManager, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0)))
     } finally {
       replicaManager.shutdown()
     }
@@ -2542,6 +2596,27 @@ class ReplicaManagerTest {
       transactionStatePartition = transactionStatePartition)
 
     result
+  }
+
+  private def appendRecordsToMultipleTopics(replicaManager: ReplicaManager,
+                                            entriesToAppend: Map[TopicPartition, MemoryRecords],
+                                            transactionalId: String,
+                                            transactionStatePartition: Option[Int],
+                                            origin: AppendOrigin = AppendOrigin.CLIENT,
+                                            requiredAcks: Short = -1): Unit = {
+    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+      responses.foreach( response => responses.get(response._1).isDefined)
+    }
+
+    replicaManager.appendRecords(
+      timeout = 1000,
+      requiredAcks = requiredAcks,
+      internalTopicsAllowed = false,
+      origin = origin,
+      entriesPerPartition = entriesToAppend,
+      responseCallback = appendCallback,
+      transactionalId = transactionalId,
+      transactionStatePartition = transactionStatePartition)
   }
 
   private def fetchPartitionAsConsumer(

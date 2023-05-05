@@ -708,11 +708,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         }
 
         @Override
-        public long checksum() {
-            return loadBatchHeader().checksum();
-        }
-
-        @Override
         public Integer countOrNull() {
             return loadBatchHeader().countOrNull();
         }

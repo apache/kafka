@@ -128,7 +128,7 @@ public class LoggingResource implements ConnectResource {
      */
     @PUT
     @Path("/{logger}")
-    @Operation(summary = "Set the level for the specified logger")
+    @Operation(summary = "Set the log level for the specified logger")
     public Response setLevel(final @PathParam("logger") String namedLogger,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");

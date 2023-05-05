@@ -300,8 +300,9 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>GET /connectors/{name}/status</code> - get current status of the connector, including if it is running, failed, paused, etc., which worker it is assigned to, error information if it has failed, and the state of all its tasks</li>
         <li><code>GET /connectors/{name}/tasks</code> - get a list of tasks currently running for a connector</li>
         <li><code>GET /connectors/{name}/tasks/{taskid}/status</code> - get current status of the task, including if it is running, failed, paused, etc., which worker it is assigned to, and error information if it has failed</li>
-        <li><code>PUT /connectors/{name}/pause</code> - pause the connector and its tasks, which stops message processing until the connector is resumed</li>
-        <li><code>PUT /connectors/{name}/resume</code> - resume a paused connector (or do nothing if the connector is not paused)</li>
+        <li><code>PUT /connectors/{name}/pause</code> - pause the connector and its tasks, which stops message processing until the connector is resumed. Any resources claimed by its tasks are left allocated, which allows the connector to begin processing data quickly once it is resumed.</li>
+        <li><code>PUT /connectors/{name}/stop</code> - stop the connector and shut down its tasks, deallocating any resources claimed by its tasks. This is more efficient from a resource usage standpoint than pausing the connector, but can cause it to take longer to begin processing data once resumed.</li>
+        <li><code>PUT /connectors/{name}/resume</code> - resume a paused or stopped connector (or do nothing if the connector is not paused or stopped)</li>
         <li><code>POST /connectors/{name}/restart?includeTasks=&lt;true|false&gt;&amp;onlyFailed=&lt;true|false&gt;</code> - restart a connector and its tasks instances.
             <ul>
                 <li>the "includeTasks" parameter specifies whether to restart the connector instance and task instances ("includeTasks=true") or just the connector instance ("includeTasks=false"), with the default ("false") preserving the same behavior as earlier versions.</li>
@@ -312,6 +313,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
         <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
         <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
+        <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details)</li>
     </ul>
 
     <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
@@ -327,7 +329,25 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>GET /</code>- return basic information about the Kafka Connect cluster such as the version of the Connect worker that serves the REST request (including git commit ID of the source code) and the Kafka cluster ID that is connected to.
     </ul>
 
-    <p>For the complete specification of the REST API, see the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a></p>
+    <p>The <code>admin.listeners</code> configuration can be used to configure admin REST APIs on Kafka Connect's REST API server. Similar to the <code>listeners</code> configuration, this field should contain a list of listeners in the following format: <code>protocol://host:port,protocol2://host2:port2</code>. Currently supported protocols are <code>http</code> and <code>https</code>.
+        For example:</p>
+
+    <pre class="brush: text;">
+admin.listeners=http://localhost:8080,https://localhost:8443</pre>
+
+    <p>By default, if <code>admin.listeners</code> is not configured, the admin REST APIs will be available on the regular listeners.</p>
+
+    <p>The following are the currently supported admin REST API endpoints:</p>
+
+    <ul>
+        <li><code>GET /admin/loggers</code> - list the current loggers that have their levels explicitly set and their log levels</li>
+        <li><code>GET /admin/loggers/{name}</code> - get the log level for the specified logger</li>
+        <li><code>PUT /admin/loggers/{name}</code> - set the log level for the specified logger</li>
+    </ul>
+
+    <p>See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-495%3A+Dynamically+Adjust+Log+Levels+in+Connect">KIP-495</a> for more details about the admin logger REST APIs.</p>
+
+    <p>For the complete specification of the Kafka Connect REST API, see the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a></p>
 
     <h4><a id="connect_errorreporting" href="#connect_errorreporting">Error Reporting in Connect</a></h4>
 
