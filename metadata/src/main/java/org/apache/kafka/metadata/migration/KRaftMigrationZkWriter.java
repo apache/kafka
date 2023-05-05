@@ -73,7 +73,7 @@ public class KRaftMigrationZkWriter {
         handleConfigsSnapshot(image.configs());
         handleClientQuotasSnapshot(image.clientQuotas(), image.scram());
         operationConsumer.accept("Setting next producer ID", migrationState ->
-            migrationClient.writeProducerId(image.producerIds().highestSeenProducerId(), migrationState));
+            migrationClient.writeProducerId(image.producerIds().nextProducerId(), migrationState));
         handleAclsSnapshot(image.acls());
     }
 
