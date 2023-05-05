@@ -324,8 +324,9 @@ public class FeatureControlManager {
                 "supports versions " + range);
         }
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            log.info("Setting metadata.version to {}", record.featureLevel());
-            metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
+            MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            log.info("Setting metadata version to {}", mv);
+            metadataVersion.set(mv);
         } else {
             if (record.featureLevel() == 0) {
                 log.info("Removing feature {}", record.name());

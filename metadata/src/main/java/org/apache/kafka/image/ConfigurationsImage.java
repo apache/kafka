@@ -48,7 +48,7 @@ public final class ConfigurationsImage {
         return data.isEmpty();
     }
 
-    Map<ConfigResource, ConfigurationImage> resourceData() {
+    public Map<ConfigResource, ConfigurationImage> resourceData() {
         return data;
     }
 
