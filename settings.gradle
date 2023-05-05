@@ -14,7 +14,7 @@
 // limitations under the License.
 
 plugins {
-    id 'com.gradle.enterprise' version '3.13.1'
+    id 'com.gradle.enterprise' version '3.13.2'
     id 'com.gradle.common-custom-user-data-gradle-plugin' version '1.10'
 }
 
@@ -30,6 +30,8 @@ gradleEnterprise {
         publishAlways()
         publishIfAuthenticated()
         obfuscation {
+            // This obfuscates the IP addresses of the build machine in the build scan.
+            // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
             ipAddresses { addresses -> addresses.collect { address -> "0.0.0.0"} }
         }
     }
