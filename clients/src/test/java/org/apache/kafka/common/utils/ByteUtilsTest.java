@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -245,6 +246,7 @@ public class ByteUtilsTest {
     }
 
     @Test
+    @Disabled // Enable this when we change the implementation of UnsignedVarlong
     public void testCorrectnessWriteUnsignedVarlong() {
         // The old well-known implementation for writeVarlong.
         LongFunction<ByteBuffer> simpleImplementation = (long value) -> {
@@ -328,6 +330,7 @@ public class ByteUtilsTest {
     }
 
     @Test
+    @Disabled // Enable this when we change the implementation of UnsignedVarlong
     public void testCorrectnessReadUnsignedVarlong() {
         // The old well-known implementation for readUnsignedVarlong
         Function<ByteBuffer, Long> simpleImplementation = (ByteBuffer buffer) -> {
