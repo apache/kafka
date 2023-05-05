@@ -275,7 +275,10 @@
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.shell"/>
+    <allow pkg="org.apache.kafka.image"/>
+    <allow pkg="org.apache.kafka.image.loader"/>
     <allow pkg="org.apache.kafka.snapshot"/>
     <allow pkg="org.jline"/>
     <allow pkg="scala.compat"/>
