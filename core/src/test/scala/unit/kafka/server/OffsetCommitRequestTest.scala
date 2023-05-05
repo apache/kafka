@@ -51,28 +51,26 @@ class OffsetCommitRequestTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    consumer = createConsumer()
+    val configOverrides = new Properties()
+    configOverrides.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    consumer = createConsumer(configOverrides = configOverrides)
   }
 
   @AfterEach
   override def tearDown(): Unit = {
-    if (consumer != null)
-      Utils.closeQuietly(consumer, "KafkaConsumer")
     super.tearDown()
   }
 
-  def createTopics(topicNames: String*): Seq[NameAndId] = {
-    topicNames.map(topic => {
+  private def createTopics(topicNames: String*): Seq[NameAndId] = {
+    topicNames.map { topic =>
       createTopic(topic)
       val topicId: Uuid = getTopicIds().get(topic) match {
         case Some(x) => x
         case _ => throw new AssertionError("Topic ID not found for " + topic)
       }
       NameAndId(topic, topicId)
-    })
+    }
   }
-
 
   @Test
   def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
@@ -138,7 +136,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     }
   }
 
-  def offsetsToCommit(topics: Seq[NameAndId], offset: Long): java.util.Map[TopicPartition, OffsetAndMetadata] = {
+  private def offsetsToCommit(topics: Seq[NameAndId], offset: Long): java.util.Map[TopicPartition, OffsetAndMetadata] = {
     topics
       .map(t => new TopicPartition(t.name, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
       .toMap
