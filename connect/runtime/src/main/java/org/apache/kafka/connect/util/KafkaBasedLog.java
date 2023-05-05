@@ -338,6 +338,9 @@ public class KafkaBasedLog<K, V> {
     public void readToEnd(Callback<Void> callback) {
         log.trace("Starting read to end log for topic {}", topic);
         flush();
+        if (unexpectedExceptionCaught.get()) {
+            throw new ConnectException("Unexpected Exception caught", exception);
+        }
         synchronized (this) {
             readLogEndOffsetCallbacks.add(callback);
         }

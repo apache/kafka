@@ -316,9 +316,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         // if we've already read up to the end. However, it also should not be common (offsets should only be read when
         // resetting a task). Always requiring that we read to the end is simpler than trying to differentiate when it
         // is safe not to (which should only be if we *know* we've maintained ownership since the last write).
-        if (offsetLog.unexpectedExceptionCaught.get()) {
-            throw new ConnectException("Unexpected Exception caught", offsetLog.exception);
-        }
         offsetLog.readToEnd(future);
         return future;
     }
