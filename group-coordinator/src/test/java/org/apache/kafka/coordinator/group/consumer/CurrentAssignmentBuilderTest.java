@@ -143,14 +143,14 @@ public class CurrentAssignmentBuilderTest {
         ));
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
-            .withTargetAssignment(10, targetAssignment)
+            .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
             .build();
 
         assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
-        assertEquals(10, updatedMember.memberEpoch());
-        assertEquals(10, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.memberEpoch());
+        assertEquals(11, updatedMember.nextMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
