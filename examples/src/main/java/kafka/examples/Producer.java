@@ -129,7 +129,8 @@ public class Producer extends Thread {
 
     private void asyncSend(KafkaProducer<Integer, String> producer, int key, String value) {
         // send the record asynchronously, setting a callback to be notified of the result
-        // note that send blocks when buffer.memory is full or metadata are not available
+        // note that, even if you set a small batch.size with linger.ms=0, the send operation
+        // will still be blocked when buffer.memory is full or metadata are not available
         producer.send(new ProducerRecord<>(topic, key, value), new ProducerCallback(key, value));
     }
 
