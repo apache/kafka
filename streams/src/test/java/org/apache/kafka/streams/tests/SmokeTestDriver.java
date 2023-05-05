@@ -98,8 +98,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 values[i] = min + i;
             }
             // We want to randomize the order of data to test not completely predictable processing order
-            // However, values are also use as a timestamp of the record. (TODO: separate data and timestamp)
-            // We keep some correlation of time and order. Thus, the shuffling is done with a sliding window
             shuffle(values, 10);
 
             index = 0;

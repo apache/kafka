@@ -35,35 +35,15 @@ public class SmokeTestUtil {
     final static int END = Integer.MAX_VALUE;
 
     static ProcessorSupplier<Object, Object, Void, Void> printTaskProcessorSupplier(final String topic) {
-        return printTaskProcessorSupplier(topic, "");
+        return () -> new SmokeTestProcessor(topic);
     }
 
     static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, "");
     }
 
-    static ProcessorSupplier<Object, Object, Void, Void> printTaskProcessorSupplier(final String topic, final String name) {
-        return () -> new ContextualProcessor<Object, Object, Void, Void>() {
-            @Override
-            public void init(final ProcessorContext<Void, Void> context) {
-                super.init(context);
-                System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
-                System.out.flush();
-            }
-
-            @Override
-            public void process(final Record<Object, Object> record) { }
-
-            @Override
-            public void close() {
-                System.out.printf("Close processor for task %s%n", context().taskId());
-                System.out.flush();
-            }
-        };
-    }
-
     static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name) {
-        return () -> new ContextualProcessor<Object, Object, Void, Void>() {
+        return () -> new SmokeTestProcessor(topic) {
             private int numRecordsProcessed = 0;
             private long smallestOffset = Long.MAX_VALUE;
             private long largestOffset = Long.MIN_VALUE;
@@ -71,8 +51,6 @@ public class SmokeTestUtil {
             @Override
             public void init(final ProcessorContext<Void, Void> context) {
                 super.init(context);
-                System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
-                System.out.flush();
                 numRecordsProcessed = 0;
                 smallestOffset = Long.MAX_VALUE;
                 largestOffset = Long.MIN_VALUE;
@@ -98,7 +76,7 @@ public class SmokeTestUtil {
 
             @Override
             public void close() {
-                System.out.printf("Close processor for task %s%n", context().taskId());
+                super.close();
                 System.out.println("processed " + numRecordsProcessed + " records");
                 final long processed;
                 if (largestOffset >= smallestOffset) {
@@ -152,4 +130,27 @@ public class SmokeTestUtil {
         } catch (final Exception ignore) { }
     }
 
+    private static class SmokeTestProcessor extends ContextualProcessor<Object, Object, Void, Void> {
+        private final String topic;
+
+        public SmokeTestProcessor(String topic) {
+            this.topic = topic;
+        }
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            super.init(context);
+            System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
+            System.out.flush();
+        }
+
+        @Override
+        public void process(final Record<Object, Object> record) { }
+
+        @Override
+        public void close() {
+            System.out.printf("Close processor for task %s%n", context().taskId());
+            System.out.flush();
+        }
+    }
 }
