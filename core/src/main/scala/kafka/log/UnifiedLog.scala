@@ -597,10 +597,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
   
-  def verificationState(producerId: Long): ProducerStateEntry.VerificationState = { lock synchronized {
+  def verificationState(producerId: Long, producerEpoch: Short): ProducerStateEntry.VerificationState = { lock synchronized {
       val entry = producerStateManager.activeProducers.get(producerId)
-      if (entry != null) {
+      if (entry != null && entry.producerEpoch() == producerEpoch) {
         entry.verificationState()
+      } else if (entry != null) {
+        warn("Producer Epoch on the record batch did not match the entry in the producer state manager, so it's state will be returned as EMPTY")
+        ProducerStateEntry.VerificationState.EMPTY
       } else {
         warn("The given producer ID did not have an entry in the producer state manager, so it's state will be returned as EMPTY")
         ProducerStateEntry.VerificationState.EMPTY
@@ -1008,7 +1011,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // Verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
           // Also check that we are not appending a record with a higher sequence than one previously seen through verification.
           if (batch.isTransactional && producerStateManager.producerStateManagerConfig().transactionVerificationEnabled()) {
-            if (verificationState(batch.producerId()) != ProducerStateEntry.VerificationState.VERIFIED) {
+            if (verificationState(batch.producerId(), batch.producerEpoch()) != ProducerStateEntry.VerificationState.VERIFIED) {
               throw new InvalidRecordException("Record was not part of an ongoing transaction")
             } else if (maybeLastEntry.isPresent && maybeLastEntry.get.tentativeSequence.isPresent && maybeLastEntry.get.tentativeSequence.getAsInt < batch.baseSequence)
               throw new OutOfOrderSequenceException("Partition previously saw a lower sequence, will retry")  
