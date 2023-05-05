@@ -117,6 +117,7 @@ class TestMigration(ProduceConsumeValidateTest):
                                         message_validator=is_int, version=DEV_BRANCH)
 
         self.run_produce_consume_validate(core_test_action=self.do_migration)
+        self.kafka.stop()
 
     @parametrize(metadata_quorum=isolated_kraft)
     def test_pre_migration_mode_3_4(self, metadata_quorum):
@@ -254,3 +255,4 @@ class TestMigration(ProduceConsumeValidateTest):
                     continue
 
         assert saw_expected_log, "Did not see expected INFO log after upgrading from a 3.4 migration"
+        self.kafka.stop()
