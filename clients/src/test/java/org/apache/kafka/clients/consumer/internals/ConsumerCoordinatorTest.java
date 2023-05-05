@@ -2793,35 +2793,41 @@ public abstract class ConsumerCoordinatorTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testRetryCommitUnknownTopicId(boolean commitSync) {
+    private Map<TopicPartition, OffsetAndMetadata> testRetryCommitWithUnknownTopicIdSetup() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         client.prepareResponse(offsetCommitResponse(singletonMap(ti1p, Errors.UNKNOWN_TOPIC_ID)));
         client.prepareResponse(offsetCommitResponse(singletonMap(ti1p, Errors.NONE)));
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
-            t1p,
-            new OffsetAndMetadata(100L, "metadata")
+         return singletonMap(
+                t1p,
+                new OffsetAndMetadata(100L, "metadata")
         );
+    }
 
-        if (commitSync) {
-            assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
-        } else {
-            AtomicBoolean callbackInvoked = new AtomicBoolean();
-            coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
-                // Unlike the commit offset sync API, the async API does not retry.
-                assertSame(inputOffsets, offsets);
-                assertEquals(RetriableCommitFailedException.class, exception.getClass());
-                assertEquals(UnknownTopicOrPartitionException.class, exception.getCause().getClass());
-                callbackInvoked.set(true);
-            });
+    @Test
+    public void testRetryCommitAsyncUnknownTopicId() {
+        Map<TopicPartition, OffsetAndMetadata> offsets = testRetryCommitWithUnknownTopicIdSetup();
 
-            coordinator.invokeCompletedOffsetCommitCallbacks();
-            assertTrue(callbackInvoked.get());
-        }
+        AtomicBoolean callbackInvoked = new AtomicBoolean();
+        coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
+            // Unlike the commit offset sync API, the async API does not retry.
+            assertSame(inputOffsets, offsets);
+            assertEquals(RetriableCommitFailedException.class, exception.getClass());
+            assertEquals(UnknownTopicOrPartitionException.class, exception.getCause().getClass());
+            callbackInvoked.set(true);
+        });
+
+        coordinator.invokeCompletedOffsetCommitCallbacks();
+        assertTrue(callbackInvoked.get());
+    }
+
+    @Test
+    public void testRetryCommitSyncUnknownTopicId() {
+        Map<TopicPartition, OffsetAndMetadata> offsets = testRetryCommitWithUnknownTopicIdSetup();
+
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
     }
 
     static Stream<Arguments> commitOffsetTestArgs() {
