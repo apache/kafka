@@ -96,7 +96,7 @@ public class KafkaBasedLog<K, V> {
     private final Callback<ConsumerRecord<K, V>> consumedCallback;
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private final boolean requireAdminForOffsets;
-    private Consumer<K, V> consumer;
+    public Consumer<K, V> consumer;
     private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
 
@@ -338,6 +338,9 @@ public class KafkaBasedLog<K, V> {
     public void readToEnd(Callback<Void> callback) {
         log.trace("Starting read to end log for topic {}", topic);
         flush();
+        if (unexpectedExceptionCaught.get()) {
+            throw new ConnectException("Unexpected Exception caught", exception);
+        }
         synchronized (this) {
             readLogEndOffsetCallbacks.add(callback);
         }
