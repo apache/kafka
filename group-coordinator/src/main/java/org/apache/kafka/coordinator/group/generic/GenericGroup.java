@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -58,49 +58,34 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Stabl
 
 /**
  * Java rewrite of {@link kafka.coordinator.group.GroupMetadata} that is used
- * by the new group coordinator (KIP-848).
+ * by the new group coordinator (KIP-848). Offset management will be handled
+ * by a different component.
+ *
+ * This class holds group metadata for a generic group.
  */
 public class GenericGroup {
 
-    public static class GroupSummary {
-        private final String state;
-        private final String protocolName;
-        private final String protocolType;
-        private final List<MemberSummary> members;
-
-        public GroupSummary(String state,
-                            String protocolName,
-                            String protocolType,
-                            List<MemberSummary> members) {
-
-            this.state = state;
-            this.protocolName = protocolName;
-            this.protocolType = protocolType;
-            this.members = members;
-        }
-
-        public String state() {
-            return this.state;
-        }
-
-        public String protocolName() {
-            return this.protocolName;
-        }
-
-        public String protocolType() {
-            return protocolType;
-        }
-
-        public List<MemberSummary> members() {
-            return this.members;
-        }
-
-    }
-
+    /**
+     * Empty generation.
+     */
     public static final int NO_GENERATION = -1;
+
+    /**
+     * Protocol with empty name.
+     */
     public static final String NO_PROTOCOL_NAME = "";
+
+    /**
+     * No leader.
+     */
     public static final String NO_LEADER = "";
+
+    /**
+     * Delimiter used to join a randomly generated UUID
+     * with client id or group instance id.
+     */
     private static final String MEMBER_ID_DELIMITER = "-";
+
     /**
      * The slf4j log context, used to create new loggers.
      */
@@ -110,28 +95,99 @@ public class GenericGroup {
      * The slf4j logger.
      */
     private final Logger log;
+
+    /**
+     * The group id.
+     */
     private final String groupId;
+
+    /**
+     * The initial group state.
+     */
     private final GenericGroupState initialState;
+
+    /**
+     * The time.
+     */
     private final Time time;
+
+    /**
+     * The lock used to synchronize the group.
+     */
     private final Lock lock = new ReentrantLock();
+
+    /**
+     * The current group state.
+     */
     private GenericGroupState state;
+
+    /**
+     * The timestamp of when the group transitioned
+     * to its current state.
+     */
     private Optional<Long> currentStateTimestamp;
+
+    /**
+     * The protocol type used for rebalance.
+     */
     private Optional<String> protocolType = Optional.empty();
+
+    /**
+     * The protocol name used for rebalance.
+     */
     private Optional<String> protocolName = Optional.empty();
+
+    /**
+     * The generation id.
+     */
     private int generationId = 0;
+
+    /**
+     * The id of the group's leader.
+     */
     private Optional<String> leaderId = Optional.empty();
+
+    /**
+     * The members of the group.
+     */
     private final Map<String, GenericGroupMember> members = new HashMap<>();
+
+    /**
+     * The static members of the group.
+     */
     private final Map<String, String> staticMembers = new HashMap<>();
+
+    /**
+     * Members who have yet to (re)join the group
+     * during the join group phase.
+     */
     private final Set<String> pendingMembers = new HashSet<>();
+
+    /**
+     * The number of members waiting to hear back a join response.
+     */
     private int numMembersAwaitingJoinResponse = 0;
+
+    /**
+     * Map of protocol names to how many members support them.
+     */
     private final Map<String, Integer> supportedProtocols = new HashMap<>();
-    private final Map<TopicPartition, CommitRecordMetadataAndOffset> offsets = new HashMap<>();
-    private final Map<TopicPartition, OffsetAndMetadata> pendingOffsetCommits = new HashMap<>();
-    private final Map<Long, Map<TopicPartition, CommitRecordMetadataAndOffset>> pendingTransactionalOffsetCommits = new HashMap<>();
-    private boolean receivedConsumerOffsetCommits = false;
-    private boolean receivedTransactionOffsetCommits = false;
+
+    /**
+     * Members who have yet to sync with the group
+     * during the sync group phase.
+     */
     private final Set<String> pendingSyncMembers = new HashSet<>();
+
+    /**
+     * The list of topics the group members are subscribed to.
+     */
     private Optional<Set<String>> subscribedTopics = Optional.empty();
+
+    /**
+     * A flag to indiciate whether a new member was added. Used
+     * to further delay initial joins (new group).
+     */
     private boolean newMemberAdded = false;
 
     public GenericGroup(
@@ -140,43 +196,79 @@ public class GenericGroup {
         GenericGroupState initialState,
         Time time
     ) {
-        this.logContext = logContext;
+        this.logContext = Objects.requireNonNull(logContext);
         this.log = logContext.logger(GenericGroup.class);
-        this.groupId = groupId;
-        this.initialState = initialState;
+        this.groupId = Objects.requireNonNull(groupId);
+        this.initialState = Objects.requireNonNull(initialState);
         this.state = initialState;
-        this.time = time;
+        this.time = Objects.requireNonNull(time);
         this.currentStateTimestamp = Optional.of(time.milliseconds());
     }
 
+    /**
+     * Compares the group's current state with the given state.
+     *
+     * @param groupState the state to match against.
+     * @return true if matches, false otherwise.
+     */
     public boolean is(GenericGroupState groupState) {
         return this.state == groupState;
     }
 
+    /**
+     * To identify whether the given member is part of this group.
+     *
+     * @param memberId the given member id.
+     * @return true if the member is part of this group, false otherwise.
+     */
     public boolean has(String memberId) {
         return members.containsKey(memberId);
     }
 
+    /**
+     * Get the member metadata with the provided member id.
+     *
+     * @param memberId the member id.
+     * @return the member metadata if it exists, null otherwise.
+     */
     public GenericGroupMember get(String memberId) {
         return members.get(memberId);
     }
 
+    /**
+     * @return the total number of members in this group.
+     */
     public int size() {
         return members.size();
     }
 
+    /**
+     * Used to identify whether the given member is the leader of this group.
+     *
+     * @param memberId the member id.
+     * @return true if the member is the leader, false otherwise.
+     */
     public boolean isLeader(String memberId) {
         return leaderId.map(id -> id.equals(memberId)).orElse(false);
     }
 
+    /**
+     * @return the leader id or null if a leader does not exist.
+     */
     public String leaderOrNull() {
         return leaderId.orElse(null);
     }
 
+    /**
+     * @return the current state timestamp.
+     */
     public long currentStateTimestampOrDefault() {
         return currentStateTimestamp.orElse(-1L);
     }
 
+    /**
+     * @return whether the group is using the consumer protocol.
+     */
     public boolean isGenericGroup() {
         return protocolType.map(type ->
             type.equals(ConsumerProtocol.PROTOCOL_TYPE)
@@ -187,7 +279,13 @@ public class GenericGroup {
         add(member, null);
     }
 
-    public void add(GenericGroupMember member, CompletableFuture<JoinGroupResponseData> callback) {
+    /**
+     * Add a member to this group.
+     *
+     * @param member the member to add.
+     * @param future the future to complete once the join group phase completes.
+     */
+    public void add(GenericGroupMember member, CompletableFuture<JoinGroupResponseData> future) {
         member.groupInstanceId().ifPresent(instanceId -> {
             if (staticMembers.containsKey(instanceId)) {
                 throw new IllegalStateException("Static member with groupInstanceId=" +
@@ -211,7 +309,7 @@ public class GenericGroup {
 
         members.put(member.memberId(), member);
         incrementSupportedProtocols(member);
-        member.setAwaitingJoinCallback(callback);
+        member.setAwaitingJoinCallback(future);
 
         if (member.isAwaitingJoin()) {
             numMembersAwaitingJoinResponse++;
@@ -220,6 +318,11 @@ public class GenericGroup {
         pendingMembers.remove(member.memberId());
     }
 
+    /**
+     * Remove a member from the group.
+     *
+     * @param memberId the member id to remove.
+     */
     public void remove(String memberId) {
         GenericGroupMember removedMember = members.remove(memberId);
         if (removedMember != null) {
@@ -246,6 +349,8 @@ public class GenericGroup {
      * new leader. Return false if
      *   1. the group is currently empty (has no designated leader)
      *   2. no member rejoined
+     *
+     * @return whether a new leader was elected.
      */
     public boolean maybeElectNewJoinedLeader() {
         if (leaderId.isPresent()) {
@@ -281,6 +386,11 @@ public class GenericGroup {
     /**
      * [For static members only]: Replace the old member id with the new one,
      * keep everything else unchanged and return the updated member.
+     *
+     * @param groupInstanceId the group instance id.
+     * @param oldMemberId the old member id.
+     * @param newMemberId the new member id that will replace the old member id.
+     * @return the old member.
      */
     public GenericGroupMember replaceStaticMember(
         String groupInstanceId,
@@ -292,7 +402,7 @@ public class GenericGroup {
             throw new IllegalArgumentException("Cannot replace non-existing member id " + oldMemberId);
         }
 
-        // Fence potential duplicate member immediately if someone awaits join/sync callback.
+        // Fence potential duplicate member immediately if someone awaits join/sync future.
         JoinGroupResponseData joinGroupResponse = new JoinGroupResponseData()
             .setMembers(Collections.emptyList())
             .setMemberId(oldMemberId)
@@ -302,14 +412,14 @@ public class GenericGroup {
             .setLeader(NO_LEADER)
             .setSkipAssignment(false)
             .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
-        maybeInvokeJoinCallback(removedMember, joinGroupResponse);
+        maybeCompleteJoinFuture(removedMember, joinGroupResponse);
 
         SyncGroupResponseData syncGroupResponse = new SyncGroupResponseData()
             .setAssignment(new byte[0])
             .setProtocolName(null)
             .setProtocolType(null)
             .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
-        maybeInvokeSyncCallback(removedMember, syncGroupResponse);
+        maybeCompleteSyncFuture(removedMember, syncGroupResponse);
 
         GenericGroupMember newMember = new GenericGroupMember.Builder(newMemberId)
             .setGroupInstanceId(removedMember.groupInstanceId())
@@ -332,10 +442,23 @@ public class GenericGroup {
         return removedMember;
     }
 
+    /**
+     * Check whether a member has joined the group.
+     *
+     * @param memberId the member id.
+     * @return true if the member has yet to join, false otherwise.
+     */
     public boolean isPendingMember(String memberId) {
         return pendingMembers.contains(memberId);
     }
 
+    /**
+     * Add a pending member.
+     *
+     * @param memberId the member id.
+     * @return true if the group did not already have the pending member,
+     *         false otherwise.
+     */
     public boolean addPendingMember(String memberId) {
         if (has(memberId)) {
             throw new IllegalStateException("Attept to add pending member " + memberId +
@@ -344,6 +467,12 @@ public class GenericGroup {
         return pendingMembers.add(memberId);
     }
 
+    /**
+     * Remove a member that has not yet synced.
+     *
+     * @param memberId the member id.
+     * @return true if the group did store this member, false otherwise.
+     */
     public boolean removePendingSyncMember(String memberId) {
         if (has(memberId)) {
             throw new IllegalStateException("Attept to add pending member " + memberId +
@@ -351,31 +480,63 @@ public class GenericGroup {
         }
         return pendingSyncMembers.remove(memberId);
     }
-    
+
+    /**
+     * @return true if all members have sent sync group requests,
+     *         false otherwise.
+     */
     public boolean hasReceivedSyncFromAllMembers() {
         return pendingSyncMembers.isEmpty();
     }
-    
+
+    /**
+     * @return members that have yet to sync.
+     */
     public Set<String> allPendingSyncMembers() {
         return pendingSyncMembers;
     }
-    
+
+    /**
+     * Clear members pending sync.
+     */
     public void clearPendingSyncMembers() {
         pendingSyncMembers.clear();
     }
-    
+
+    /**
+     * Checks whether the given group instance id exists as
+     * a static member.
+     *
+     * @param groupInstanceId the group instance id.
+     * @return true if a static member with the group instance id exists,
+     *         false otherwise.
+     */
     public boolean hasStaticMember(String groupInstanceId) {
         return staticMembers.containsKey(groupInstanceId);
     }
-    
+
+    /**
+     * Get member id of a static member that matches the given group
+     * instance id.
+     *
+     * @param groupInstanceId the group instance id.
+     * @return the static member if it exists.
+     */
     public String currentStaticMemberId(String groupInstanceId) {
         return staticMembers.get(groupInstanceId);
     }
-    
+
+    /**
+     * @return the current group state.
+     */
     public GenericGroupState currentState() {
         return state;
     }
-    
+
+    /**
+     * @return members who have yet to rejoin during the
+     *         join group phase.
+     */
     public Map<String, GenericGroupMember> notYetRejoinedMembers() {
         Map<String, GenericGroupMember> notYetRejoinedMembers = new HashMap<>();
         members.values().forEach(member -> {
@@ -385,15 +546,24 @@ public class GenericGroup {
         });
         return notYetRejoinedMembers;
     }
-    
+
+    /**
+     * @return whether all members have joined.
+     */
     public boolean hasAllMembersJoined() {
         return members.size() == numMembersAwaitingJoinResponse && pendingMembers.isEmpty();
     }
 
+    /**
+     * @return all members in the group.
+     */
     public Set<String> allMembers() {
         return members.keySet();
     }
 
+    /**
+     * @return all static members in the group.
+     */
     public Set<String> allStaticMembers() {
         return staticMembers.keySet();
     }
@@ -405,18 +575,31 @@ public class GenericGroup {
         return dynamicMemberSet;
     }
 
+    /**
+     * @return number of members that are pending join.
+     */
     public int numPending() {
         return pendingMembers.size();
     }
 
+    /**
+     * @return number of members waiting for a join group response.
+     */
     public int numAwaiting() {
         return numMembersAwaitingJoinResponse;
     }
 
+    /**
+     * @return all members.
+     */
     public Collection<GenericGroupMember> allGenericGroupMembers() {
         return members.values();
     }
 
+    /**
+     * @return the group's rebalance timeout in milliseconds.
+     *         It is the max of all member's rebalance timeout.
+     */
     public int rebalanceTimeoutMs() {
         int maxRebalanceTimeoutMs = 0;
         for (GenericGroupMember member : members.values()) {
@@ -425,15 +608,26 @@ public class GenericGroup {
         return maxRebalanceTimeoutMs;
     }
 
+    /**
+     * Generate a member id from the given client and group instance ids.
+     *
+     * @param clientId the client id.
+     * @param groupInstanceId the group instance id.
+     * @return the generated id.
+     */
     public String generateMemberId(String clientId, Optional<String> groupInstanceId) {
         return groupInstanceId.map(s -> s + MEMBER_ID_DELIMITER + UUID.randomUUID())
             .orElseGet(() -> clientId + MEMBER_ID_DELIMITER + UUID.randomUUID());
     }
 
     /**
-     * Verify the member.id is up to date for static members. Return true if both conditions met:
+     * Verify the member id is up to date for static members. Return true if both conditions met:
      *   1. given member is a known static member to group
-     *   2. group stored member.id doesn't match with given member.id
+     *   2. group stored member id doesn't match with given member id
+     *
+     * @param groupInstanceId the group instance id.
+     * @param memberId the member id.
+     * @return whether the static member is fenced based on the condition above.
      */
     public boolean isStaticMemberFenced(
         String groupInstanceId,
@@ -443,16 +637,31 @@ public class GenericGroup {
         return existingMemberId != null && !existingMemberId.equals(memberId);
     }
 
+    /**
+     * @return whether the group can rebalance.
+     */
     public boolean canRebalance() {
         return PreparingRebalance.validPreviousStates().contains(state);
     }
 
+    /**
+     * Transition to a group state.
+     * @param groupState the group state.
+     */
     public void transitionTo(GenericGroupState groupState) {
         assertValidTransition(groupState);
         state = groupState;
         currentStateTimestamp = Optional.of(time.milliseconds());
     }
 
+    /**
+     * Select a protocol that will be used for this group. Each member
+     * will vote for a protocol and the one with the most votes will
+     * be selected. Only a protocol that is supported by all members
+     * can be selected.
+     *
+     * @return the name of the selected protocol.
+     */
     public String selectProtocol() {
         if (members.isEmpty()) {
             throw new IllegalStateException("Cannot select protocol for empty group");
@@ -475,6 +684,12 @@ public class GenericGroup {
             .map(Map.Entry::getKey).orElse(null);
     }
 
+    /**
+     * Increment the protocol count for all of the member's
+     * supported protocols.
+     *
+     * @param member the member.
+     */
     private void incrementSupportedProtocols(GenericGroupMember member) {
         member.supportedProtocols().forEach( protocol -> {
            int count = supportedProtocols.getOrDefault(protocol.name(), 0);
@@ -482,6 +697,12 @@ public class GenericGroup {
         });
     }
 
+    /**
+     * Decrement the protocol count for all of the member's
+     * supported protocols.
+     *
+     * @param member the member.
+     */
     private void decrementSupportedProtocols(GenericGroupMember member) {
         member.supportedProtocols().forEach( protocol -> {
             int count = supportedProtocols.getOrDefault(protocol.name(), 0);
@@ -489,6 +710,12 @@ public class GenericGroup {
         });
     }
 
+    /**
+     * A candidate protocol must be supported by all members.
+     *
+     * @return a set of candidate protocols that can be chosen as the protocol
+     *         for the group.
+     */
     private Set<String> candidateProtocols() {
         // get the set of protocols that are commonly supported by all members
         return supportedProtocols.entrySet().stream()
@@ -496,17 +723,28 @@ public class GenericGroup {
             .map(Map.Entry::getKey).collect(Collectors.toSet());
     }
 
+    /**
+     * Checks whether at least one of the given protocols can be supported. A
+     * protocol can be supported if it is supported by all members.
+     *
+     * @param memberProtocolType the member protocol type.
+     * @param memberProtocols the set of protocol names.
+     * @return a boolean based on the condition mentioned above.
+     */
     public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
         if (is(Empty)) {
             return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
         } else {
-            return protocolType.map(type -> type.equals(memberProtocolType)).orElse(false) &&
-                memberProtocols.stream().anyMatch(
-                    name -> supportedProtocols.getOrDefault(name, 0) == members.size()
-                );
+            return protocolType.map(type -> type.equals(memberProtocolType))
+                .orElse(false) &&
+                memberProtocols.stream()
+                    .anyMatch(name -> supportedProtocols.getOrDefault(name, 0) == members.size());
         }
     }
 
+    /**
+     * @return the topics that the group is subscribed to.
+     */
     public Optional<Set<String>> subscribedTopics() {
         return subscribedTopics;
     }
@@ -515,6 +753,9 @@ public class GenericGroup {
      * Returns true if the consumer group is actively subscribed to the topic. When the consumer
      * group does not know, because the information is not available yet or because the it has
      * failed to parse the Consumer Protocol, it returns true to be safe.
+     *
+     * @param topic the topic name.
+     * @return whether the group is subscribed to the topic.
      */
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopics.map(topics -> topics.contains(topic))
@@ -527,6 +768,8 @@ public class GenericGroup {
      * - the protocol type is not equal to 'consumer';
      * - the protocol is not defined yet; or
      * - the protocol metadata does not comply with the schema.
+     *
+     * @return the subscribed topics or None based on the condition above.
      */
     Optional<Set<String>> computeSubscribedTopics() {
         if (!protocolType.isPresent()) {
@@ -561,12 +804,21 @@ public class GenericGroup {
         return Optional.empty();
     }
 
+    /**
+     * Update a member.
+     *
+     * @param member the member.
+     * @param protocols the list of protocols.
+     * @param rebalanceTimeoutMs the rebalance timeout in milliseconds.
+     * @param sessionTimeoutMs the session timeout in milliseconds.
+     * @param future the future that is invoked once the join phase is complete.
+     */
     public void updateMember(
         GenericGroupMember member,
         List<Protocol> protocols,
         int rebalanceTimeoutMs,
         int sessionTimeoutMs,
-        CompletableFuture<JoinGroupResponseData> callback
+        CompletableFuture<JoinGroupResponseData> future
     ) {
         decrementSupportedProtocols(member);
         member.setSupportedProtocols(protocols);
@@ -574,21 +826,27 @@ public class GenericGroup {
         member.setRebalanceTimeoutMs(rebalanceTimeoutMs);
         member.setSessionTimeoutMs(sessionTimeoutMs);
 
-        if (callback != null && !member.isAwaitingJoin()) {
+        if (future != null && !member.isAwaitingJoin()) {
             numMembersAwaitingJoinResponse++;
-        } else if (callback == null && member.isAwaitingJoin()) {
+        } else if (future == null && member.isAwaitingJoin()) {
             numMembersAwaitingJoinResponse--;
         }
-        member.setAwaitingJoinCallback(callback);
+        member.setAwaitingJoinCallback(future);
     }
 
-    public void maybeInvokeJoinCallback(
+    /**
+     * Complete the join future.
+     * 
+     * @param member the member.
+     * @param response the join response to complete the future with.
+     */
+    public void maybeCompleteJoinFuture(
         GenericGroupMember member,
         JoinGroupResponseData response
     ) {
         if (member.isAwaitingJoin()) {
             if (!member.awaitingJoinCallback().complete(response)) {
-                log.error("Failed to invoke join callback for {}", member);
+                log.error("Failed to invoke join future for {}", member);
                 response.setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
                 member.awaitingJoinCallback().complete(response);
             }
@@ -598,15 +856,19 @@ public class GenericGroup {
     }
 
     /**
-     * @return true if a sync callback actually performs.
+     * Complete a member's sync future.
+     * 
+     * @param member the member.
+     * @param response the sync response.
+     * @return true if a sync future actually completes.
      */
-    public boolean maybeInvokeSyncCallback(
+    public boolean maybeCompleteSyncFuture(
         GenericGroupMember member,
         SyncGroupResponseData response
     ) {
         if (member.isAwaitingSync()) {
             if (!member.awaitingSyncCallback().complete(response)) {
-                log.error("Failed to invoke join callback for {}", member);
+                log.error("Failed to invoke join future for {}", member);
                 response.setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
                 member.awaitingSyncCallback().complete(response);
             }
@@ -617,6 +879,9 @@ public class GenericGroup {
         return false;
     }
 
+    /**
+     * Initiate the next generation for the group.
+     */
     public void initNextGeneration() {
         generationId++;
         if (!members.isEmpty()) {
@@ -628,11 +893,14 @@ public class GenericGroup {
             subscribedTopics = computeSubscribedTopics();
             transitionTo(Empty);
         }
-        receivedConsumerOffsetCommits = false;
-        receivedTransactionOffsetCommits = false;
         clearPendingSyncMembers();
     }
 
+    /**
+     * Get all members formatted as a join response.
+     *
+     * @return the members.
+     */
     public List<JoinGroupResponseMember> currentGenericGroupMembers() {
         if (is(Dead) || is(PreparingRebalance)) {
             throw new IllegalStateException("Cannot obtain generic member metadata for group " +
@@ -647,24 +915,9 @@ public class GenericGroup {
             .collect(Collectors.toList());
     }
 
-    public GroupSummary summary() {
-        if (is(Stable)) {
-            String protocolName = this.protocolName.orElse(null);
-            if (protocolName == null) {
-                throw new IllegalStateException("Invalid null group protocol for stable group");
-            }
-            List<MemberSummary> members = this.members.values().stream().map(member ->
-                member.summary(protocolName)).collect(Collectors.toList());
-
-            return new GroupSummary(state.toString(), protocolName, protocolType.orElse(""), members);
-        }
-
-        List<MemberSummary> members = this.members.values().stream()
-            .map(GenericGroupMember::summaryNoMetadata).collect(Collectors.toList());
-
-        return new GroupSummary(state.toString(), NO_PROTOCOL_NAME, protocolType.orElse(""), members);
-    }
-
+    /**
+     * @return the group formatted as a list group response.
+     */
     public ListGroupsResponseData.ListedGroup asListedGroup() {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
@@ -672,303 +925,11 @@ public class GenericGroup {
             .setGroupState(state.toString());
     }
 
-    public void initializeOffsets(
-        Map<TopicPartition, CommitRecordMetadataAndOffset> offsets,
-        Map<Long, Map<TopicPartition, CommitRecordMetadataAndOffset>> pendingTxnOffsets
-    ) {
-        this.offsets.putAll(offsets);
-        this.pendingTransactionalOffsetCommits.putAll(pendingTxnOffsets);
-    }
-
-    public void onOffsetCommitAppend(TopicIdPartition topicIdPartition,
-                                     CommitRecordMetadataAndOffset offsetWithCommitRecordMetadata) {
-
-        TopicPartition topicPartition = topicIdPartition.topicPartition();
-        if (pendingOffsetCommits.containsKey(topicPartition)) {
-            if (!offsetWithCommitRecordMetadata.appendedBatchOffset().isPresent()) {
-                throw new IllegalStateException("Cannot complete offset commit write without providing " +
-                    "the metadata of the record in the log.");
-            }
-
-            CommitRecordMetadataAndOffset offset = offsets.get(topicPartition);
-            if (offset == null || offset.olderThan(offsetWithCommitRecordMetadata)) {
-                offsets.put(topicPartition, offsetWithCommitRecordMetadata);
-            }
-        }
-
-        OffsetAndMetadata stagedOffset = pendingOffsetCommits.get(topicPartition);
-        if (stagedOffset != null && offsetWithCommitRecordMetadata.offsetAndMetadata().equals(stagedOffset)) {
-            pendingOffsetCommits.remove(topicPartition);
-        } else {
-            // The pendingOffsetCommits for this partition could be empty if the topic was deleted, in which case
-            // its entries would be removed from the cache by the `removeOffsets` method.
-        }
-    }
-
-    public void failPendingOffsetWrite(TopicIdPartition topicIdPartition, OffsetAndMetadata offset) {
-        TopicPartition topicPartition = topicIdPartition.topicPartition();
-        OffsetAndMetadata pendingOffset = pendingOffsetCommits.get(topicPartition);
-        if (offset.equals(pendingOffset)) {
-            pendingOffsetCommits.remove(topicPartition);
-        }
-    }
-
-    public void prepareOffsetCommit(Map<TopicIdPartition, OffsetAndMetadata> offsets) {
-        this.receivedConsumerOffsetCommits = true;
-        offsets.forEach(((topicIdPartition, offsetAndMetadata) ->
-            pendingOffsetCommits.put(topicIdPartition.topicPartition(), offsetAndMetadata)));
-    }
-
-    public void prepareTxnOffsetCommit(long producerId, Map<TopicIdPartition, OffsetAndMetadata> offsets) {
-        log.trace("TxnOffsetCommit for producer {} and group {} with offsets {} is pending.",
-            producerId, groupId, offsets);
-        this.receivedTransactionOffsetCommits = true;
-
-        Map<TopicPartition, CommitRecordMetadataAndOffset> producerOffsets = pendingTransactionalOffsetCommits
-            .computeIfAbsent(producerId, (__) -> new HashMap<>());
-
-        offsets.forEach(((topicIdPartition, offsetAndMetadata) ->
-            producerOffsets.put(
-                topicIdPartition.topicPartition(), new CommitRecordMetadataAndOffset(
-                    Optional.empty(),
-                    offsetAndMetadata)
-            )));
-    }
-
-    public boolean hashReceivedConsistentOffsetCommits() {
-        return !receivedConsumerOffsetCommits || !receivedTransactionOffsetCommits;
-    }
-
-    /* Remove a pending transactional offset commit if the actual offset commit record was not written to the log.
-     * We will return an error and the client will retry the request, potentially to a different coordinator.
+    /**
+     * Checks whether the transition to the target state is valid.
+     *
+     * @param targetState the target state to transition to.
      */
-    public void failPendingTxnOffsetCommit(long producerId, TopicIdPartition topicIdPartition) {
-        TopicPartition topicPartition = topicIdPartition.topicPartition();
-        Map<TopicPartition, CommitRecordMetadataAndOffset> pendingOffsets = pendingTransactionalOffsetCommits.get(producerId);
-        if (pendingOffsets != null) {
-            CommitRecordMetadataAndOffset pendingOffsetCommit = pendingOffsets.remove(topicPartition);
-            log.trace("TxnOffsetCommit for producer {} and group {} with offests {} failed to be appended to the log.",
-                producerId, groupId, pendingOffsetCommit);
-
-            if (pendingOffsets.isEmpty()) {
-                pendingTransactionalOffsetCommits.remove(producerId);
-            }
-        } else {
-            // We may hit this case if the partition in question has emigrated already.
-        }
-    }
-
-    public void onTxnOffsetCommitAppend(
-        long producerId,
-        TopicIdPartition topicIdPartition,
-        CommitRecordMetadataAndOffset commitRecordMetadataAndOffset
-    ) {
-        TopicPartition topicPartition = topicIdPartition.topicPartition();
-        Map<TopicPartition, CommitRecordMetadataAndOffset> pendingOffset =
-            pendingTransactionalOffsetCommits.get(producerId);
-
-        if (pendingOffset != null &&
-            pendingOffset.containsKey(topicPartition) &&
-            pendingOffset.get(topicPartition).offsetAndMetadata()
-                .equals(commitRecordMetadataAndOffset.offsetAndMetadata())) {
-
-            pendingOffset.put(topicPartition, commitRecordMetadataAndOffset);
-        } else {
-            // We may hit this case if the partition in question has emigrated.
-        }
-    }
-
-    public void completePendingTxnOffsetCommit(long producerId, boolean isCommit) {
-        Map<TopicPartition, CommitRecordMetadataAndOffset> pendingOffsets =
-            pendingTransactionalOffsetCommits.remove(producerId);
-
-        if (isCommit) {
-            if (pendingOffsets != null) {
-                pendingOffsets.forEach(((topicPartition, commitRecordMetadataAndOffset) -> {
-                    if (!commitRecordMetadataAndOffset.appendedBatchOffset().isPresent()) {
-                        throw new IllegalStateException("Trying to complete a transactional offset commit " +
-                            "for producerId " + producerId + " and groupId " + groupId + " even though the " +
-                            "offset commit record itself hasn't been appended to the log.");
-                    }
-                    CommitRecordMetadataAndOffset currentOffset = offsets.get(topicPartition);
-                    if (currentOffset == null || currentOffset.olderThan(commitRecordMetadataAndOffset)) {
-                        log.trace("TxnOffsetCommit for producer {} and group {} with offset {} " +
-                            "committed and loaded into the cache.",
-                            producerId, groupId, commitRecordMetadataAndOffset);
-
-                        offsets.put(topicPartition, commitRecordMetadataAndOffset);
-                    } else {
-                        log.trace("TxnOffsetCommit for producer {} and group {} with offset {} was " +
-                            "committed, but not loaded since its offset is older than current " +
-                            "offset {}", producerId, groupId, commitRecordMetadataAndOffset, currentOffset);
-                    }
-                }));
-            }
-        } else {
-            log.trace("TxnOffsetCommit for producer {} and group {} with offsets {} aborted.",
-                producerId, groupId, pendingOffsets);
-        }
-    }
-
-    public Set<Long> activeProducers() {
-        return pendingTransactionalOffsetCommits.keySet();
-    }
-
-    public boolean hasPendingOffsetCommitsFromProducer(long producerId) {
-        return pendingTransactionalOffsetCommits.containsKey(producerId);
-    }
-
-    public boolean hasPendingOffsetCommitsForTopicPartition(TopicPartition topicPartition) {
-        if (pendingOffsetCommits.containsKey(topicPartition)) {
-            return true;
-        }
-        for (Map<TopicPartition, CommitRecordMetadataAndOffset> pendingOffsets :
-            pendingTransactionalOffsetCommits.values()) {
-
-            if (pendingOffsets.containsKey(topicPartition)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> removeAllOffsets() {
-        return removeOffsets(offsets.keySet());
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> removeOffsets(
-        Collection<TopicPartition> topicPartitions
-    ) {
-        Map<TopicPartition, OffsetAndMetadata> removedOffsets = new HashMap<>();
-        for (TopicPartition topicPartition : topicPartitions) {
-            pendingOffsetCommits.remove(topicPartition);
-            pendingTransactionalOffsetCommits.forEach((__, pendingOffsets) ->
-                pendingOffsets.remove(topicPartition));
-
-            CommitRecordMetadataAndOffset removedOffset = offsets.remove(topicPartition);
-            removedOffsets.put(topicPartition, removedOffset.offsetAndMetadata());
-        }
-
-        return removedOffsets;
-    }
-
-    private Map<TopicPartition, OffsetAndMetadata> expiredOffsets(
-        long currentTimestamp,
-        long offsetRetentionMs,
-        Function<CommitRecordMetadataAndOffset, Long> baseTimestamp,
-        Set<String> subscribedTopics
-    ) {
-        Map<TopicPartition, OffsetAndMetadata> expiredOffsets = new HashMap<>();
-
-        offsets.entrySet().stream().filter((entry -> {
-            TopicPartition topicPartition = entry.getKey();
-            CommitRecordMetadataAndOffset commitRecordMetadataAndOffset = entry.getValue();
-
-            boolean hasExpired;
-            Optional<Long> expireTimestamp = commitRecordMetadataAndOffset.offsetAndMetadata().expireTimestamp();
-            if (expireTimestamp.isPresent()) {
-                // older versions with explicit expire_timestamp field => old expiration semantics is used
-                hasExpired = currentTimestamp >= expireTimestamp.get();
-            } else {
-                // current version with no per partition retention
-                hasExpired =
-                    currentTimestamp - baseTimestamp.apply(commitRecordMetadataAndOffset) >= offsetRetentionMs;
-            }
-
-            return !subscribedTopics.contains(topicPartition.topic()) &&
-                !pendingOffsetCommits.containsKey(topicPartition) &&
-                hasExpired;
-
-        })).forEach(entry ->
-            expiredOffsets.put(entry.getKey(), entry.getValue().offsetAndMetadata()));
-
-        return expiredOffsets;
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> removeExpiredOffsets(
-        long currentTimestamp,
-        long offsetRetentionMs
-    ) {
-
-        Map<TopicPartition, OffsetAndMetadata> expiredOffsets;
-        if (protocolType.isPresent()) {
-            if (is(Empty)) {
-                // no consumer exists in the group =>
-                // - if current state timestamp exists and retention period has passed since group became Empty,
-                //   expire all offsets with no pending offset commit;
-                // - if there is no current state timestamp (old group metadata schema) and retention period has passed
-                //   since the last commit timestamp, expire the offset
-                expiredOffsets = expiredOffsets(
-                    currentTimestamp,
-                    offsetRetentionMs,
-                    commitRecordMetadataAndOffset -> currentStateTimestamp
-                        .orElse(commitRecordMetadataAndOffset.offsetAndMetadata().commitTimestamp()),
-                    Collections.emptySet());
-            } else if (ConsumerProtocol.PROTOCOL_TYPE.equals(protocolType.get()) &&
-                subscribedTopics.isPresent() && is(Stable)) {
-                // consumers exist in the group and group is stable =>
-                // - if the group is aware of the subscribed topics and retention period had passed since the
-                //   the last commit timestamp, expire the offset. offset with pending offset commit are not
-                //   expired
-                expiredOffsets = expiredOffsets(
-                    currentTimestamp, offsetRetentionMs,
-                    offset -> offset.offsetAndMetadata().commitTimestamp(),
-                    subscribedTopics.get());
-            } else {
-                expiredOffsets = Collections.emptyMap();
-            }
-        } else {
-            // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
-            // expire offsets with no pending offset commit that retention period has passed since their last commit
-            expiredOffsets = expiredOffsets(
-                currentTimestamp,
-                offsetRetentionMs,
-                offset -> offset.offsetAndMetadata().commitTimestamp(),
-                Collections.emptySet());
-        }
-
-        if (!expiredOffsets.isEmpty()) {
-            log.debug("Expired offsets from group '{}': {}", groupId, expiredOffsets.keySet());
-        }
-        expiredOffsets.keySet().forEach(offsets::remove);
-        return expiredOffsets;
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> allOffsets() {
-        return offsets.entrySet().stream().collect(
-            Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offsetAndMetadata()));
-    }
-
-    // Visible for testing
-    Optional<CommitRecordMetadataAndOffset> offsetWithRecordMetadata(TopicPartition topicPartition) {
-        return Optional.ofNullable(offsets.get(topicPartition));
-    }
-
-    // Used for testing
-    Optional<OffsetAndMetadata> pendingOffsetCommit(TopicIdPartition topicIdPartition) {
-        return Optional.ofNullable(pendingOffsetCommits.get(topicIdPartition.topicPartition()));
-    }
-
-    // Used for testing
-    Optional<CommitRecordMetadataAndOffset> pendingTxnOffsetCommit(
-        long producerId,
-        TopicIdPartition topicIdPartition
-    ) {
-        return Optional.ofNullable(pendingTransactionalOffsetCommits.get(producerId)).flatMap(
-            pendingOffsets -> Optional.ofNullable(pendingOffsets.get(topicIdPartition.topicPartition()))
-        );
-    }
-
-    public int numOffsets() {
-        return offsets.size();
-    }
-
-    public boolean hasOffsets() {
-        return !offsets.isEmpty() ||
-            !pendingOffsetCommits.isEmpty() ||
-            !pendingTransactionalOffsetCommits.isEmpty();
-    }
-
     private void assertValidTransition(GenericGroupState targetState) {
         if (!targetState.validPreviousStates().contains(state)) {
             throw new IllegalStateException("Group " + groupId + " should be in one of " +
