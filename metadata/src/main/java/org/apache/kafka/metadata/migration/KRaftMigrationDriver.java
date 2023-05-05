@@ -16,14 +16,10 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
-import org.apache.kafka.common.quota.ClientQuotaEntity;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.controller.QuorumFeatures;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -32,8 +28,6 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LoaderManifestType;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.metadata.authorizer.StandardAcl;
-import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -44,13 +38,9 @@ import org.apache.kafka.server.util.Deadline;
 import org.apache.kafka.server.util.FutureUtils;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -58,7 +48,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -83,6 +72,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final Logger log;
     private final int nodeId;
     private final MigrationClient zkMigrationClient;
+    private final KRaftMigrationZkWriter zkMetadataWriter;
     private final LegacyPropagator propagator;
     private final ZkRecordConsumer zkRecordConsumer;
     private final KafkaEventQueue eventQueue;
@@ -125,6 +115,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
         this.quorumFeatures = quorumFeatures;
+        this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient, this::applyMigrationOperation);
     }
 
     public KRaftMigrationDriver(
@@ -159,7 +150,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     private void recoverMigrationStateFromZK() {
         log.info("Recovering migration state from ZK");
-        apply("Recovery", zkMigrationClient::getOrCreateMigrationRecoveryState);
+        applyMigrationOperation("Recovery", zkMigrationClient::getOrCreateMigrationRecoveryState);
         String maybeDone = migrationLeadershipState.zkMigrationComplete() ? "done" : "not done";
         log.info("Recovered migration state {}. ZK migration is {}.", migrationLeadershipState, maybeDone);
 
@@ -215,9 +206,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
 
         // Once all of those are found, check the topic assignments. This is much more expensive than listing /brokers
-        Set<Integer> zkBrokersWithAssignments = zkMigrationClient.readBrokerIdsFromTopicAssignments();
+        Set<Integer> zkBrokersWithAssignments = new HashSet<>();
+        zkMigrationClient.topicClient().iterateTopics(
+            EnumSet.of(TopicMigrationClient.TopicVisitorInterest.TOPICS),
+            (topicName, topicId, assignments) -> assignments.values().forEach(zkBrokersWithAssignments::addAll)
+        );
+
         if (imageDoesNotContainAllBrokers(image, zkBrokersWithAssignments)) {
-            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkBrokersWithAssignments);
+            log.info("Still waiting for ZK brokers {} found in metadata to register with KRaft.", zkBrokersWithAssignments);
             return false;
         }
 
@@ -227,13 +223,20 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     /**
      * Apply a function which transforms our internal migration state.
      *
-     * @param name  A descriptive name of the function that is being applied
-     * @param stateMutator  A function which performs some migration operations and possibly transforms our internal state
+     * @param name         A descriptive name of the function that is being applied
+     * @param migrationOp  A function which performs some migration operations and possibly transforms our internal state
      */
-    private void apply(String name, Function<ZkMigrationLeadershipState, ZkMigrationLeadershipState> stateMutator) {
+    private void applyMigrationOperation(String name, KRaftMigrationOperation migrationOp) {
         ZkMigrationLeadershipState beforeState = this.migrationLeadershipState;
-        ZkMigrationLeadershipState afterState = stateMutator.apply(beforeState);
-        log.trace("{} transitioned from {} to {}", name, beforeState, afterState);
+        ZkMigrationLeadershipState afterState = migrationOp.apply(beforeState);
+        if (afterState.loggableChangeSinceState(beforeState)) {
+            log.info("{} transitioned migration state from {} to {}", name, beforeState, afterState);
+        } else if (afterState.equals(beforeState)) {
+            log.trace("{} kept migration state as {}", name, afterState);
+        } else {
+            log.trace("{} transitioned migration state from {} to {}", name, beforeState, afterState);
+
+        }
         this.migrationLeadershipState = afterState;
     }
 
@@ -426,7 +429,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             boolean isActive = leaderAndEpoch.isLeader(KRaftMigrationDriver.this.nodeId);
 
             if (!isActive) {
-                apply("KRaftLeaderEvent is not active", state ->
+                applyMigrationOperation("KRaftLeaderEvent is not active", state ->
                     state.withNewKRaftController(
                         leaderAndEpoch.leaderId().orElse(ZkMigrationLeadershipState.EMPTY.kraftControllerId()),
                         leaderAndEpoch.epoch())
@@ -434,7 +437,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 transitionTo(MigrationDriverState.INACTIVE);
             } else {
                 // Apply the new KRaft state
-                apply("KRaftLeaderEvent is active", state -> state.withNewKRaftController(nodeId, leaderAndEpoch.epoch()));
+                applyMigrationOperation("KRaftLeaderEvent is active", state -> state.withNewKRaftController(nodeId, leaderAndEpoch.epoch()));
 
                 // Before becoming the controller fo ZkBrokers, we need to make sure the
                 // Controller Quorum can handle migration.
@@ -492,7 +495,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
-                apply("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
+                applyMigrationOperation("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                     log.debug("Unable to claim leadership, will retry until we learn of a different KRaft leader");
                 } else {
@@ -563,7 +566,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 ZkMigrationLeadershipState newState = migrationLeadershipState.withKRaftMetadataOffsetAndEpoch(
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch());
-                apply("Finished migrating ZK data", state -> zkMigrationClient.setMigrationRecoveryState(newState));
+                applyMigrationOperation("Finished migrating ZK data", state -> zkMigrationClient.setMigrationRecoveryState(newState));
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();
@@ -630,149 +633,28 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 propagator.setMetadataVersion(image.features().metadataVersion());
             }
 
-            if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
-                if (delta.topicsDelta() != null) {
-                    delta.topicsDelta().changedTopics().forEach((topicId, topicDelta) -> {
-                        if (delta.topicsDelta().createdTopicIds().contains(topicId)) {
-                            apply("Create topic " + topicDelta.name(), migrationState ->
-                                zkMigrationClient.createTopic(
-                                    topicDelta.name(),
-                                    topicId,
-                                    topicDelta.partitionChanges(),
-                                    migrationState));
-                        } else {
-                            apply("Updating topic " + topicDelta.name(), migrationState ->
-                                zkMigrationClient.updateTopicPartitions(
-                                    Collections.singletonMap(topicDelta.name(), topicDelta.partitionChanges()),
-                                    migrationState));
-                        }
-                    });
-                }
-
-                // For configs and client quotas, we need to send all of the data to the ZK
-                // client since we persist everything for a given entity in a single ZK node.
-                if (delta.configsDelta() != null) {
-                    delta.configsDelta().changes().forEach((configResource, configDelta) ->
-                        apply("Updating config resource " + configResource, migrationState ->
-                            zkMigrationClient.writeConfigs(configResource, image.configs().configMapForResource(configResource), migrationState)));
-                }
-
-                if ((delta.clientQuotasDelta() != null) || (delta.scramDelta() != null)) {
-                    // A list of users with scram or quota changes
-                    HashSet<String> users = new HashSet<String>();
-
-                    // Populate list with users with scram changes
-                    if (delta.scramDelta() != null) {
-                        delta.scramDelta().changes().forEach((scramMechanism, changes) -> {
-                            changes.forEach((userName, changeOpt) -> users.add(userName));
-                        });
-                    }
-
-                    // Populate list with users with quota changes 
-                    // and apply quota changes to all non user quota changes
-                    if (delta.clientQuotasDelta() != null) {
-                        Map<String, String> scramMap = new HashMap<String, String>();
-                        delta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
-
-                            if ((clientQuotaEntity.entries().containsKey(ClientQuotaEntity.USER)) &&
-                                (!clientQuotaEntity.entries().containsKey(ClientQuotaEntity.CLIENT_ID))) {
-                                String userName = clientQuotaEntity.entries().get(ClientQuotaEntity.USER);
-                                // Add clientQuotaEntity to list to process at the end
-                                users.add(userName);
-                            } else {
-                                Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                                apply("Updating client quota " + clientQuotaEntity, migrationState -> 
-                                    zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, scramMap, migrationState));
-                            }
-                        });
-                    }
-                    // Update user scram and quota data for each user with changes in either.
-                    users.forEach(userName -> {
-                        Map<String, String> userScramMap = getScramCredentialStringsForUser(userName);
-                        ClientQuotaEntity clientQuotaEntity = new
-                            ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
-                        if (image.clientQuotas() == null) {
-                            Map<String, Double> quotaMap = new HashMap<String, Double>();
-                            apply("Updating client quota " + clientQuotaEntity, migrationState ->
-                                zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
-                        } else {
-                            Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                            apply("Updating client quota " + clientQuotaEntity, migrationState ->
-                                zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
-                        }
-                    });
-                }
-
-                if (delta.producerIdsDelta() != null) {
-                    apply("Updating next producer ID", migrationState ->
-                        zkMigrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
-                }
-
-                if (delta.aclsDelta() != null) {
-                    Map<ResourcePattern, List<AccessControlEntry>> deletedAcls = new HashMap<>();
-                    Map<ResourcePattern, List<AccessControlEntry>> addedAcls = new HashMap<>();
-                    delta.aclsDelta().changes().forEach((uuid, standardAclOpt) -> {
-                        if (!standardAclOpt.isPresent()) {
-                            StandardAcl acl = prevImage.acls().acls().get(uuid);
-                            if (acl != null) {
-                                addStandardAclToMap(deletedAcls, acl);
-                            } else {
-                                throw new RuntimeException("Cannot remove deleted ACL " + uuid + " from ZK since it is " +
-                                    "not present in the previous AclsImage");
-                            }
-                        } else {
-                            StandardAcl acl = standardAclOpt.get();
-                            addStandardAclToMap(addedAcls, acl);
-                        }
-                    });
-                    deletedAcls.forEach((resourcePattern, accessControlEntries) -> {
-                        String name = "Deleting " + accessControlEntries.size() + " for resource " + resourcePattern;
-                        apply(name, migrationState ->
-                            zkMigrationClient.removeDeletedAcls(resourcePattern, accessControlEntries, migrationState));
-                    });
-
-                    addedAcls.forEach((resourcePattern, accessControlEntries) -> {
-                        String name = "Adding " + accessControlEntries.size() + " for resource " + resourcePattern;
-                        apply(name, migrationState ->
-                            zkMigrationClient.writeAddedAcls(resourcePattern, accessControlEntries, migrationState));
-                    });
-                }
-
-                // TODO: Unhappy path: Probably relinquish leadership and let new controller
-                //  retry the write?
-                if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-                    log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
-                    propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
-                        migrationLeadershipState.zkControllerEpoch());
-                } else {
-                    log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
-                }
-            } else {
+            if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
+                completionHandler.accept(null);
             }
+
+            if (isSnapshot) {
+                zkMetadataWriter.handleSnapshot(image);
+            } else {
+                zkMetadataWriter.handleDelta(prevImage, image, delta);
+            }
+
+            // TODO: Unhappy path: Probably relinquish leadership and let new controller
+            //  retry the write?
+            if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
+                log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
+                propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
+                        migrationLeadershipState.zkControllerEpoch());
+            } else {
+                log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
+            }
+
             completionHandler.accept(null);
-        }
-
-        private Map<String, String> getScramCredentialStringsForUser(String userName) {
-            Map<String, String> userScramCredentialStrings = new HashMap<String, String>();
-            if (image.scram() != null) {
-                image.scram().mechanisms().forEach((scramMechanism, scramMechanismMap) -> {
-                    ScramCredentialData scramCredentialData = scramMechanismMap.get(userName);
-                    if (scramCredentialData != null) {
-                        userScramCredentialStrings.put(scramMechanism.mechanismName(),
-                            ScramCredentialUtils.credentialToString(
-                                scramCredentialData.toCredential(scramMechanism)));
-                    }
-                });
-            }
-            return userScramCredentialStrings;
-        }
-
-        private void addStandardAclToMap(Map<ResourcePattern, List<AccessControlEntry>> aclMap, StandardAcl acl) {
-            ResourcePattern resource = new ResourcePattern(acl.resourceType(), acl.resourceName(), acl.patternType());
-            aclMap.computeIfAbsent(resource, __ -> new ArrayList<>()).add(
-                new AccessControlEntry(acl.principal(), acl.host(), acl.operation(), acl.permissionType())
-            );
         }
 
         @Override

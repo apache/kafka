@@ -19,23 +19,30 @@ package org.apache.kafka.metadata.migration;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
+import org.apache.kafka.image.AclsImage;
+import org.apache.kafka.image.ClientQuotasImage;
+import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.ConfigurationsImage;
+import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.ProducerIdsImage;
+import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.loader.LogDeltaManifest;
+import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
-import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -50,17 +57,23 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.apache.kafka.image.TopicsImageTest.DELTA1_RECORDS;
+import static org.apache.kafka.image.TopicsImageTest.IMAGE1;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -109,137 +122,6 @@ public class KRaftMigrationDriverTest {
         @Override
         public void abortMigration() {
 
-        }
-    }
-
-    static class CapturingMigrationClient implements MigrationClient {
-
-        private final Set<Integer> brokerIds;
-        public final Map<ConfigResource, Map<String, String>> capturedConfigs = new HashMap<>();
-        private ZkMigrationLeadershipState state = null;
-
-        public CapturingMigrationClient(Set<Integer> brokerIdsInZk) {
-            this.brokerIds = brokerIdsInZk;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState) {
-            if (state == null) {
-                state = initialState;
-            }
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState setMigrationRecoveryState(ZkMigrationLeadershipState state) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState createTopic(
-            String topicName,
-            Uuid topicId,
-            Map<Integer, PartitionRegistration> topicPartitions,
-            ZkMigrationLeadershipState state
-        ) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState updateTopicPartitions(
-            Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
-            ZkMigrationLeadershipState state
-        ) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState writeConfigs(
-            ConfigResource configResource,
-            Map<String, String> configMap,
-            ZkMigrationLeadershipState state
-        ) {
-            capturedConfigs.computeIfAbsent(configResource, __ -> new HashMap<>()).putAll(configMap);
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState writeClientQuotas(
-            Map<String, String> clientQuotaEntity,
-            Map<String, Double> quotas,
-            Map<String, String> scram,
-            ZkMigrationLeadershipState state
-        ) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState writeProducerId(
-            long nextProducerId,
-            ZkMigrationLeadershipState state
-        ) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState removeDeletedAcls(
-            ResourcePattern resourcePattern,
-            List<AccessControlEntry> deletedAcls,
-            ZkMigrationLeadershipState state
-        ) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public ZkMigrationLeadershipState writeAddedAcls(
-            ResourcePattern resourcePattern,
-            List<AccessControlEntry> addedAcls,
-            ZkMigrationLeadershipState state
-        ) {
-            this.state = state;
-            return state;
-        }
-
-        @Override
-        public void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer) {
-
-        }
-
-        @Override
-        public void readAllMetadata(
-            Consumer<List<ApiMessageAndVersion>> batchConsumer,
-            Consumer<Integer> brokerIdConsumer
-        ) {
-
-        }
-
-        @Override
-        public Set<Integer> readBrokerIds() {
-            return brokerIds;
-        }
-
-        @Override
-        public Set<Integer> readBrokerIdsFromTopicAssignments() {
-            return brokerIds;
         }
     }
 
@@ -326,7 +208,11 @@ public class KRaftMigrationDriverTest {
     @Test
     public void testOnlySendNeededRPCsToBrokers() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
-        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)));
+        CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(1, 2, 3)
+            .setConfigMigrationClient(configClient)
+            .build();
         try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
             3000,
             new NoOpRecordConsumer(),
@@ -357,8 +243,8 @@ public class KRaftMigrationDriverTest {
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                 "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
-            Assertions.assertEquals(1, metadataPropagator.images);
-            Assertions.assertEquals(0, metadataPropagator.deltas);
+            assertEquals(1, metadataPropagator.images);
+            assertEquals(0, metadataPropagator.deltas);
 
             delta = new MetadataDelta(image);
             delta.replay(new ConfigRecord()
@@ -370,9 +256,9 @@ public class KRaftMigrationDriverTest {
             image = delta.apply(provenance);
             enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(1, TimeUnit.MINUTES);
 
-            Assertions.assertEquals(1, migrationClient.capturedConfigs.size());
-            Assertions.assertEquals(1, metadataPropagator.images);
-            Assertions.assertEquals(0, metadataPropagator.deltas);
+            assertEquals(1, configClient.writtenConfigs.size());
+            assertEquals(1, metadataPropagator.images);
+            assertEquals(0, metadataPropagator.deltas);
 
             delta = new MetadataDelta(image);
             delta.replay(new BrokerRegistrationChangeRecord()
@@ -384,8 +270,8 @@ public class KRaftMigrationDriverTest {
             image = delta.apply(provenance);
             enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(1, TimeUnit.MINUTES);
 
-            Assertions.assertEquals(1, metadataPropagator.images);
-            Assertions.assertEquals(1, metadataPropagator.deltas);
+            assertEquals(1, metadataPropagator.images);
+            assertEquals(1, metadataPropagator.deltas);
         }
     }
 
@@ -394,7 +280,7 @@ public class KRaftMigrationDriverTest {
     public void testMigrationWithClientException(boolean authException) throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CountDownLatch claimLeaderAttempts = new CountDownLatch(3);
-        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3))) {
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)), new CapturingTopicMigrationClient(), null, null) {
             @Override
             public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
                 if (claimLeaderAttempts.getCount() == 0) {
@@ -437,12 +323,12 @@ public class KRaftMigrationDriverTest {
             // Publish metadata of all the ZK brokers being ready
             driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance,
                 new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
-            Assertions.assertTrue(claimLeaderAttempts.await(1, TimeUnit.MINUTES));
+            assertTrue(claimLeaderAttempts.await(1, TimeUnit.MINUTES));
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                 "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
             if (authException) {
-                Assertions.assertEquals(MigrationClientAuthException.class, faultHandler.firstException().getCause().getClass());
+                assertEquals(MigrationClientAuthException.class, faultHandler.firstException().getCause().getClass());
             } else {
                 Assertions.assertNull(faultHandler.firstException());
             }
@@ -452,7 +338,7 @@ public class KRaftMigrationDriverTest {
     @Test
     public void testShouldNotMoveToNextStateIfControllerNodesAreNotReadyToMigrate() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
-        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1)));
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder().setBrokersInZk(1).build();
         apiVersions.remove("6");
 
         try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
@@ -496,9 +382,10 @@ public class KRaftMigrationDriverTest {
         }
     }
 
+    @Test
     public void testSkipWaitForBrokersInDualWrite() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
-        CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet());
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(), null, null, null);
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
         try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
                 3000,
@@ -534,5 +421,157 @@ public class KRaftMigrationDriverTest {
                 "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
         }
     }
-}
 
+    @FunctionalInterface
+    interface TopicDualWriteVerifier {
+        void verify(
+            KRaftMigrationDriver driver,
+            CapturingTopicMigrationClient topicClient,
+            CapturingConfigMigrationClient configClient
+        ) throws Exception;
+    }
+
+    public void setupTopicDualWrite(TopicDualWriteVerifier verifier) throws Exception {
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+
+        CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
+            @Override
+            public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
+                IMAGE1.topicsByName().forEach((topicName, topicImage) -> {
+                    Map<Integer, List<Integer>> assignment = new HashMap<>();
+                    topicImage.partitions().forEach((partitionId, partitionRegistration) ->
+                        assignment.put(partitionId, IntStream.of(partitionRegistration.replicas).boxed().collect(Collectors.toList()))
+                    );
+                    visitor.visitTopic(topicName, topicImage.id(), assignment);
+
+                    topicImage.partitions().forEach((partitionId, partitionRegistration) ->
+                        visitor.visitPartition(new TopicIdPartition(topicImage.id(), new TopicPartition(topicName, partitionId)), partitionRegistration)
+                    );
+                });
+            }
+        };
+        CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(0, 1, 2, 3, 4, 5)
+            .setTopicMigrationClient(topicClient)
+            .setConfigMigrationClient(configClient)
+            .build();
+
+        try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
+            3000,
+            new NoOpRecordConsumer(),
+            migrationClient,
+            metadataPropagator,
+            metadataPublisher -> { },
+            new MockFaultHandler("test"),
+            quorumFeatures,
+            mockTime
+        )) {
+            verifier.verify(driver, topicClient, configClient);
+        }
+    }
+
+    @Test
+    public void testTopicDualWriteSnapshot() throws Exception {
+        setupTopicDualWrite((driver, topicClient, configClient) -> {
+            MetadataImage image = new MetadataImage(
+                MetadataProvenance.EMPTY,
+                FeaturesImage.EMPTY,
+                ClusterImage.EMPTY,
+                IMAGE1,
+                ConfigurationsImage.EMPTY,
+                ClientQuotasImage.EMPTY,
+                ProducerIdsImage.EMPTY,
+                AclsImage.EMPTY,
+                ScramImage.EMPTY);
+            MetadataDelta delta = new MetadataDelta(image);
+
+            driver.start();
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(0));
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            delta.replay(zkBrokerRecord(4));
+            delta.replay(zkBrokerRecord(5));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            // Publish a delta with this node (3000) as the leader
+            LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
+            driver.onControllerChange(newLeader);
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+
+            // Wait for migration
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+
+            // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz
+            provenance = new MetadataProvenance(200, 1, 1);
+            delta = new MetadataDelta(image);
+            RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
+            image = delta.apply(provenance);
+            driver.onMetadataUpdate(delta, image, new SnapshotManifest(provenance, 100));
+            driver.migrationState().get(1, TimeUnit.MINUTES);
+
+            assertEquals(1, topicClient.deletedTopics.size());
+            assertEquals("foo", topicClient.deletedTopics.get(0));
+            assertEquals(1, topicClient.createdTopics.size());
+            assertEquals("baz", topicClient.createdTopics.get(0));
+            assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
+            assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+        });
+    }
+
+    @Test
+    public void testTopicDualWriteDelta() throws Exception {
+        setupTopicDualWrite((driver, topicClient, configClient) -> {
+            MetadataImage image = new MetadataImage(
+                MetadataProvenance.EMPTY,
+                FeaturesImage.EMPTY,
+                ClusterImage.EMPTY,
+                IMAGE1,
+                ConfigurationsImage.EMPTY,
+                ClientQuotasImage.EMPTY,
+                ProducerIdsImage.EMPTY,
+                AclsImage.EMPTY,
+                ScramImage.EMPTY);
+            MetadataDelta delta = new MetadataDelta(image);
+
+            driver.start();
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(0));
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            delta.replay(zkBrokerRecord(4));
+            delta.replay(zkBrokerRecord(5));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            // Publish a delta with this node (3000) as the leader
+            LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
+            driver.onControllerChange(newLeader);
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+
+            // Wait for migration
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                    "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+
+            // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz
+            provenance = new MetadataProvenance(200, 1, 1);
+            delta = new MetadataDelta(image);
+            RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
+            image = delta.apply(provenance);
+            driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
+            driver.migrationState().get(1, TimeUnit.MINUTES);
+
+            assertEquals(1, topicClient.deletedTopics.size());
+            assertEquals("foo", topicClient.deletedTopics.get(0));
+            assertEquals(1, topicClient.createdTopics.size());
+            assertEquals("baz", topicClient.createdTopics.get(0));
+            assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
+            assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+        });
+    }
+}
