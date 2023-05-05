@@ -60,6 +60,7 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      *         validTo timestamp is undefined. {@code Long.MIN_VALUE} indicates that the record
      *         was not put, due to grace period having been exceeded.
      * @throws NullPointerException If {@code null} is used for key.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     long put(K key, V value, long timestamp);
 
@@ -96,6 +97,7 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      *         returned {@link VersionedRecord} may be smaller than the provided deletion
      *         timestamp.
      * @throws NullPointerException If {@code null} is used for key.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     VersionedRecord<V> delete(K key, long timestamp);
 

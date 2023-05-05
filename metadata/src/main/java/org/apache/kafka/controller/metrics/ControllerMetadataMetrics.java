@@ -49,6 +49,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "PreferredReplicaImbalanceCount");
     private final static MetricName METADATA_ERROR_COUNT = getMetricName(
         "KafkaController", "MetadataErrorCount");
+    private final static MetricName ZK_MIGRATION_STATE = getMetricName(
+        "KafkaController", "ZkMigrationState");
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
@@ -58,6 +60,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger offlinePartitionCount = new AtomicInteger(0);
     private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
+    private final AtomicInteger zkMigrationState = new AtomicInteger(-1);
 
     /**
      * Create a new ControllerMetadataMetrics object.
@@ -106,6 +109,12 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             @Override
             public Integer value() {
                 return metadataErrorCount();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(ZK_MIGRATION_STATE, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return (int) zkMigrationState();
             }
         }));
     }
@@ -190,6 +199,14 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         return this.metadataErrorCount.get();
     }
 
+    public void setZkMigrationState(byte migrationStateValue) {
+        this.zkMigrationState.set(migrationStateValue);
+    }
+
+    public byte zkMigrationState() {
+        return zkMigrationState.byteValue();
+    }
+
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
@@ -199,7 +216,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,
             PREFERRED_REPLICA_IMBALANCE_COUNT,
-            METADATA_ERROR_COUNT
+            METADATA_ERROR_COUNT,
+            ZK_MIGRATION_STATE
         ).forEach(r::removeMetric));
     }
 

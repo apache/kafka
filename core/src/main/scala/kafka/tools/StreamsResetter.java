@@ -14,25 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.controller;
+package kafka.tools;
 
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
-import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineObject;
 
-public class MigrationControlManager {
-    private final TimelineObject<ZkMigrationState> zkMigrationState;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
-    MigrationControlManager(SnapshotRegistry snapshotRegistry) {
-        zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
-    }
+@Deprecated
+public class StreamsResetter {
 
-    ZkMigrationState zkMigrationState() {
-        return zkMigrationState.get();
-    }
-
-    void replay(ZkMigrationStateRecord record) {
-        zkMigrationState.set(ZkMigrationState.of(record.zkMigrationState()));
+    public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        System.out.println("WARNING: The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.");
+        Class<?> toolClass = Class.forName("org.apache.kafka.tools.StreamsResetter");
+        Method main = toolClass.getDeclaredMethod("main", String[].class);
+        main.invoke(null, (Object) args);
     }
 }

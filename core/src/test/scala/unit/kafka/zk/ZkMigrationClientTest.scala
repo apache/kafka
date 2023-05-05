@@ -32,11 +32,14 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{AccessControlEntryRecord, ConfigRecord, MetadataRecordType, ProducerIdsRecord}
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
@@ -217,11 +220,13 @@ class ZkMigrationClientTest extends QuorumTestHarness {
                                         migrationState: ZkMigrationLeadershipState,
                                         entity: Map[String, String],
                                         quotas: Map[String, java.lang.Double],
+                                        scram: Map[String, String],
                                         zkEntityType: String,
                                         zkEntityName: String): ZkMigrationLeadershipState = {
     val nextMigrationState = migrationClient.writeClientQuotas(
       entity.asJava,
       quotas.asJava,
+      scram.asJava,
       migrationState)
     val newProps = ZkAdminManager.clientQuotaPropsToDoubleMap(
       adminZkClient.fetchEntityConfig(zkEntityType, zkEntityName).asScala)
@@ -241,17 +246,20 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
+      Map.empty,
       ConfigType.User, "user1")
     assertEquals(1, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0),
+      Map.empty,
       ConfigType.User, "user1")
     assertEquals(2, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
+      Map.empty,
       Map.empty,
       ConfigType.User, "user1")
     assertEquals(3, migrationState.migrationZkVersion())
@@ -259,6 +267,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 100.0),
+      Map.empty,
       ConfigType.User, "user1")
     assertEquals(4, migrationState.migrationZkVersion())
   }
@@ -269,6 +278,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user2"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 100.0),
+      Map.empty,
       ConfigType.User, "user2")
 
     assertEquals(1, migrationState.migrationZkVersion())
@@ -276,9 +286,37 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user2", ClientQuotaEntity.CLIENT_ID -> "clientA"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 200.0),
+      Map.empty,
       ConfigType.User, "user2/clients/clientA")
 
     assertEquals(2, migrationState.migrationZkVersion())
+  }
+
+  @Test
+  def testScram(): Unit = {
+    val random = new MockRandom()
+    def randomBuffer(random: MockRandom, length: Int): Array[Byte] = {
+        val buf = new Array[Byte](length)
+        random.nextBytes(buf)
+        buf
+    }
+    val scramCredential = new ScramCredential(
+        randomBuffer(random, 1024),
+        randomBuffer(random, 1024),
+        randomBuffer(random, 1024),
+        4096)
+
+    val props = new Properties()
+    props.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(scramCredential))
+    adminZkClient.changeConfigs(ConfigType.User, "alice", props)
+
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+
+    migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(0, brokers.size())
+    assertEquals(1, batches.size())
+    assertEquals(1, batches.get(0).size)
   }
 
   @Test

@@ -96,6 +96,7 @@ public interface MigrationClient {
     ZkMigrationLeadershipState writeClientQuotas(
         Map<String, String> clientQuotaEntity,
         Map<String, Double> quotas,
+        Map<String, String> scram,
         ZkMigrationLeadershipState state
     );
 

@@ -20,7 +20,7 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels.{SelectionKey, ServerSocketChannel, SocketChannel}
+import java.nio.channels.{SelectionKey, SocketChannel}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, ExecutionException, Executors, TimeUnit}
@@ -77,7 +77,7 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER, true)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER, true, false)
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
   server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
   val sockets = new ArrayBuffer[Socket]
@@ -1893,42 +1893,6 @@ class SocketServerTest {
     }, false)
   }
 
-  @Test
-  def testDataPlaneAcceptingSocketUsesReuseAddress(): Unit = {
-    val acceptor = server.dataPlaneAcceptor(listener)
-    val channel = acceptor.get.serverChannel
-    verifySocketUsesReuseAddress(channel)
-  }
-
-  @Test
-  def testControlAndDataPlaneAcceptingSocketsUseReuseAddress(): Unit = {
-    shutdownServerAndMetrics(server)
-    val testProps = new Properties
-    testProps ++= props
-    // Use port 0 so that the system will assign an available port from the ephemeral range
-    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROL_PLANE://localhost:0")
-    testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROL_PLANE:PLAINTEXT")
-    testProps.put("control.plane.listener.name", "CONTROL_PLANE")
-    val config = KafkaConfig.fromProps(testProps)
-    val testServer = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
-    try {
-      val dataPlaneAcceptor = testServer.dataPlaneAcceptor(listener)
-      val dataPlaneChannel = dataPlaneAcceptor.get.serverChannel
-      verifySocketUsesReuseAddress(dataPlaneChannel)
-
-      val controlPlaneAcceptor = testServer.controlPlaneAcceptorOpt.get
-      val acceptingChannel = controlPlaneAcceptor.serverChannel
-      verifySocketUsesReuseAddress(acceptingChannel)
-    } finally {
-      shutdownServerAndMetrics(testServer)
-    }
-  }
-
-  private def verifySocketUsesReuseAddress(channel: ServerSocketChannel): Unit = {
-    assertTrue(channel.socket().isBound, "Listening channel not bound")
-    assertTrue(channel.socket().getReuseAddress, "Listening socket reuseAddress in unexpected state")
-  }
-
   /**
    * Test to ensure "Selector.poll()" does not block at "select(timeout)" when there is no data in the socket but there
    * is data in the buffer. This only happens when SSL protocol is used.
@@ -2025,6 +1989,7 @@ class SocketServerTest {
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    sslProps.put(KafkaConfig.NumNetworkThreadsProp, "1")
     sslProps
   }
 

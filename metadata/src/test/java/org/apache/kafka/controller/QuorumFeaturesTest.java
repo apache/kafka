@@ -89,7 +89,7 @@ public class QuorumFeaturesTest {
                     setMinVersion(entry.getValue().min()).
                     setMaxVersion(entry.getValue().max()));
         });
-        return new NodeApiVersions(Collections.emptyList(), features);
+        return new NodeApiVersions(Collections.emptyList(), features, false);
     }
 
     @Test
@@ -99,5 +99,34 @@ public class QuorumFeaturesTest {
         assertTrue(quorumFeatures.isControllerId(1));
         assertTrue(quorumFeatures.isControllerId(2));
         assertFalse(quorumFeatures.isControllerId(3));
+    }
+
+    @Test
+    public void testZkMigrationReady() {
+        ApiVersions apiVersions = new ApiVersions();
+        QuorumFeatures quorumFeatures = new QuorumFeatures(0, apiVersions, LOCAL, Arrays.asList(0, 1, 2));
+
+        // create apiVersion with zkMigrationEnabled flag set for node 0, the other 2 nodes have no apiVersions info
+        apiVersions.update("0", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().get().contains("Missing apiVersion from nodes: [1, 2]"));
+
+        // create apiVersion with zkMigrationEnabled flag set for node 1, the other 1 node have no apiVersions info
+        apiVersions.update("1", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().get().contains("Missing apiVersion from nodes: [2]"));
+
+        // create apiVersion with zkMigrationEnabled flag disabled for node 2, should still be not ready
+        apiVersions.update("2", NodeApiVersions.create());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
+        assertTrue(quorumFeatures.reasonAllControllersZkMigrationNotReady().get().contains("Nodes don't enable `zookeeper.metadata.migration.enable`: [2]"));
+
+        // update zkMigrationEnabled flag to enabled for node 2, should be ready now
+        apiVersions.update("2", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));
+        assertFalse(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
+
+        // create apiVersion with zkMigrationEnabled flag disabled for a non-controller, and expect we fill filter it out
+        apiVersions.update("3", NodeApiVersions.create());
+        assertFalse(quorumFeatures.reasonAllControllersZkMigrationNotReady().isPresent());
     }
 }
