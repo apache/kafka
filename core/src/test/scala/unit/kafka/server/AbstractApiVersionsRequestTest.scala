@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 
@@ -107,11 +108,11 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       "API keys in ApiVersionsResponse must match API keys supported by broker.")
 
     val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
-      ApiVersionsResponse.defaultApiVersionsResponse(0, ListenerType.ZK_BROKER, enableUnstableLastVersion)
+      TestUtils.defaultApiVersionsResponse(0, ListenerType.ZK_BROKER, enableUnstableLastVersion)
     } else if(cluster.controllerListenerName().asScala.contains(listenerName)) {
-      ApiVersionsResponse.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
+      TestUtils.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
-      ApiVersionsResponse.createApiVersionsResponse(0, expectedApis)
+      TestUtils.createApiVersionsResponse(0, expectedApis)
     }
 
     for (expectedApiVersion: ApiVersion <- defaultApiVersionsResponse.data.apiKeys.asScala) {
