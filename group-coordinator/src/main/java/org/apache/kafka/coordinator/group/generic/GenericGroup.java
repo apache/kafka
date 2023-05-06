@@ -206,6 +206,27 @@ public class GenericGroup {
     }
 
     /**
+     * @return the generation id.
+     */
+    public int generationId() {
+        return this.generationId;
+    }
+
+    /**
+     * @return the protocol name.
+     */
+    public Optional<String> protocolName() {
+        return this.protocolName;
+    }
+
+    /**
+     * @return the current group state.
+     */
+    public GenericGroupState currentState() {
+        return state;
+    }
+
+    /**
      * Compares the group's current state with the given state.
      *
      * @param groupState the state to match against.
@@ -468,13 +489,29 @@ public class GenericGroup {
     }
 
     /**
+     * Add a pending sync member.
+     *
+     * @param memberId the member id.
+     * @return true if the group did not already have the pending sync member,
+     *         false otherwise.
+     */
+    public boolean addPendingSyncMember(String memberId) {
+        if (!has(memberId)) {
+            throw new IllegalStateException("Attept to add pending sync member " + memberId +
+                " which is already a stable member of the group.");
+        }
+
+        return pendingSyncMembers.add(memberId);
+    }
+
+    /**
      * Remove a member that has not yet synced.
      *
      * @param memberId the member id.
      * @return true if the group did store this member, false otherwise.
      */
     public boolean removePendingSyncMember(String memberId) {
-        if (has(memberId)) {
+        if (!has(memberId)) {
             throw new IllegalStateException("Attept to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -524,13 +561,6 @@ public class GenericGroup {
      */
     public String currentStaticMemberId(String groupInstanceId) {
         return staticMembers.get(groupInstanceId);
-    }
-
-    /**
-     * @return the current group state.
-     */
-    public GenericGroupState currentState() {
-        return state;
     }
 
     /**
@@ -840,18 +870,22 @@ public class GenericGroup {
      * @param member the member.
      * @param response the join response to complete the future with.
      */
-    public void maybeCompleteJoinFuture(
+    public void maybeCompleteJoinFuture( // TODO: jeffkbkim
         GenericGroupMember member,
         JoinGroupResponseData response
     ) {
         if (member.isAwaitingJoin()) {
-            if (!member.awaitingJoinCallback().complete(response)) {
-                log.error("Failed to invoke join future for {}", member);
-                response.setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
+            try {
                 member.awaitingJoinCallback().complete(response);
+            } catch (Throwable t) {
+                log.error("Failed to invoke join future for {} due to {}",
+                    member, t.getMessage());
+
+                member.awaitingJoinCallback().completeExceptionally(t);
+            } finally {
+                member.setAwaitingJoinCallback(null);
+                numMembersAwaitingJoinResponse--;
             }
-            member.setAwaitingJoinCallback(null);
-            numMembersAwaitingJoinResponse--;
         }
     }
 

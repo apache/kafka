@@ -17,6 +17,8 @@
 
 package org.apache.kafka.coordinator.group.generic;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -112,7 +114,7 @@ public enum GenericGroupState {
     }
 
     private void addValidPreviousStates(GenericGroupState... validPreviousStates) {
-        this.validPreviousStates = Set.of(validPreviousStates);
+        this.validPreviousStates = new HashSet<>(Arrays.asList(validPreviousStates));
     }
 
     public Set<GenericGroupState> validPreviousStates() {
