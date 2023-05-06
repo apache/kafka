@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 
@@ -71,8 +72,18 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
   def validateApiVersionsResponse(
     apiVersionsResponse: ApiVersionsResponse,
     listenerName: ListenerName = cluster.clientListener(),
-    enableUnstableLastVersion: Boolean = false
+    enableUnstableLastVersion: Boolean = false,
+    apiVersion: Short = ApiKeys.API_VERSIONS.latestVersion
   ): Unit = {
+    if (cluster.isKRaftTest && apiVersion >= 3) {
+      assertEquals(1, apiVersionsResponse.data().finalizedFeatures().size())
+      assertEquals(MetadataVersion.latest().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).minVersionLevel())
+      assertEquals(MetadataVersion.latest().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersionLevel())
+
+      assertEquals(1, apiVersionsResponse.data().supportedFeatures().size())
+      assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).minVersion())
+      assertEquals(MetadataVersion.latest().featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersion())
+    }
     val expectedApis = if (!cluster.isKRaftTest) {
       ApiVersionsResponse.collectApis(
         ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER),

@@ -44,6 +44,10 @@ public class FinalizedControllerFeatures {
         return featureMap.keySet();
     }
 
+    public Map<String, Short> featureMap() {
+        return featureMap;
+    }
+
     public long epoch() {
         return epoch;
     }
