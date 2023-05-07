@@ -24,6 +24,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.ReplicaManager.createLogReadResult
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Implicits._
@@ -175,6 +176,33 @@ object HostedPartition {
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
+
+  def createLogReadResult(highWatermark: Long,
+                          leaderLogStartOffset: Long,
+                          leaderLogEndOffset: Long,
+                          e: Throwable) = {
+    LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      divergingEpoch = None,
+      highWatermark,
+      leaderLogStartOffset,
+      leaderLogEndOffset,
+      followerLogStartOffset = -1L,
+      fetchTimeMs = -1L,
+      lastStableOffset = None,
+      exception = Some(e))
+  }
+
+  def createLogReadResult(e: Throwable): LogReadResult = {
+    LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      divergingEpoch = None,
+      highWatermark = UnifiedLog.UnknownOffset,
+      leaderLogStartOffset = UnifiedLog.UnknownOffset,
+      leaderLogEndOffset = UnifiedLog.UnknownOffset,
+      followerLogStartOffset = UnifiedLog.UnknownOffset,
+      fetchTimeMs = -1L,
+      lastStableOffset = None,
+      exception = Some(e))
+  }
 }
 
 class ReplicaManager(val config: KafkaConfig,
@@ -1223,7 +1251,7 @@ class ReplicaManager(val config: KafkaConfig,
         delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
-        // to wait for new data.
+        // wait for new data.
         val delayedFetch = new DelayedFetch(
           params = params,
           fetchPartitionStatus = fetchPartitionStatus,
@@ -1274,6 +1302,7 @@ class ReplicaManager(val config: KafkaConfig,
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
       var log: UnifiedLog = null
       var partition : Partition = null
+      val fetchTimeMs = time.milliseconds
       try {
         if (traceEnabled)
           trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
@@ -1281,7 +1310,6 @@ class ReplicaManager(val config: KafkaConfig,
             (if (minOneMessage) s", ignoring response/partition size limits" else ""))
 
         partition = getPartitionOrException(tp.topicPartition)
-        val fetchTimeMs = time.milliseconds
 
         // Check if topic ID from the fetch request/session matches the ID in the log
         val topicId = if (tp.topicId == Uuid.ZERO_UUID) None else Some(tp.topicId)
@@ -1348,12 +1376,12 @@ class ReplicaManager(val config: KafkaConfig,
           createLogReadResult(e)
         case e: OffsetOutOfRangeException =>
           // In case of offset out of range errors, check for remote log manager for non-compacted topics
-          // to fetch from remote storage. `log` instance should not be null here as that would have caught earlier with
-          // NotLeaderForPartitionException or ReplicaNotAvailableException.
+          // to fetch from remote storage. `log` instance should not be null here as that would have been caught earlier
+          // with NotLeaderForPartitionException or ReplicaNotAvailableException.
           // If it is from a follower then send the offset metadata only as the data is already available in remote
           // storage.
           if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
-            // Check that the fetch offset is with in the offset range with in the remote storage layer.
+            // Check that the fetch offset is within the offset range within the remote storage layer.
             log.logStartOffset <= offset && offset < log.localLogStartOffset()) {
             // For follower fetch requests, throw an error saying that this offset is moved to tiered storage.
             val highWatermark = log.highWatermark
@@ -1377,7 +1405,7 @@ class ReplicaManager(val config: KafkaConfig,
                 leaderLogStartOffset,
                 leaderLogEndOffset,
                 followerLogStartOffset,
-                time.milliseconds,
+                fetchTimeMs,
                 Some(log.lastStableOffset),
                 exception = None)
             }
@@ -1418,33 +1446,6 @@ class ReplicaManager(val config: KafkaConfig,
       result += (tp -> readResult)
     }
     result
-  }
-
-  private def createLogReadResult(highWatermark: Long,
-                          leaderLogStartOffset: Long,
-                          leaderLogEndOffset: Long,
-                          e: Throwable) = {
-    LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
-      divergingEpoch = None,
-      highWatermark,
-      leaderLogStartOffset,
-      leaderLogEndOffset,
-      followerLogStartOffset = -1L,
-      fetchTimeMs = -1L,
-      lastStableOffset = None,
-      exception = Some(e))
-  }
-
-  def createLogReadResult(e: Throwable): LogReadResult = {
-    LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
-      divergingEpoch = None,
-      highWatermark = UnifiedLog.UnknownOffset,
-      leaderLogStartOffset = UnifiedLog.UnknownOffset,
-      leaderLogEndOffset = UnifiedLog.UnknownOffset,
-      followerLogStartOffset = UnifiedLog.UnknownOffset,
-      fetchTimeMs = -1L,
-      lastStableOffset = None,
-      exception = Some(e))
   }
 
   /**

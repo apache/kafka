@@ -92,7 +92,7 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
         && result.error == Errors.NONE
         && result.info.delayedRemoteStorageFetch.isPresent) {
         if (remoteFetchResult.get.error.isPresent) {
-          tp -> replicaManager.createLogReadResult(remoteFetchResult.get.error.get).toFetchPartitionData(false)
+          tp -> ReplicaManager.createLogReadResult(remoteFetchResult.get.error.get).toFetchPartitionData(false)
         } else {
           val info = remoteFetchResult.get.fetchDataInfo.get
           tp -> new FetchPartitionData(
