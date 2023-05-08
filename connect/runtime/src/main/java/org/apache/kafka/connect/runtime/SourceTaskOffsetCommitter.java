@@ -68,14 +68,7 @@ class SourceTaskOffsetCommitter {
     }
 
     public void close(long timeoutMs) {
-        commitExecutorService.shutdown();
-        try {
-            if (!commitExecutorService.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)) {
-                log.error("Graceful shutdown of offset commitOffsets thread timed out.");
-            }
-        } catch (InterruptedException e) {
-            // ignore and allow to exit immediately
-        }
+        ThreadUtils.shutdownExecutorServiceQuietly(commitExecutorService, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
