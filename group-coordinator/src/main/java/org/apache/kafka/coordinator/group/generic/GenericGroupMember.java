@@ -80,12 +80,12 @@ public class GenericGroupMember {
     /**
      * The rebalance timeout in milliseconds.
      */
-    private final int rebalanceTimeoutMs;
+    private int rebalanceTimeoutMs;
 
     /**
      * The session timeout in milliseconds.
      */
-    private final int sessionTimeoutMs;
+    private int sessionTimeoutMs;
 
     /**
      * The protocol type.
@@ -95,12 +95,12 @@ public class GenericGroupMember {
     /**
      * The list of supported protocols.
      */
-    private final List<Protocol> supportedProtocols;
+    private List<Protocol> supportedProtocols;
 
     /**
      * The assignment stored by the client assignor.
      */
-    private final byte[] assignment;
+    private byte[] assignment;
 
     /**
      * The future that is invoked once this member joins the group.
@@ -336,24 +336,10 @@ public class GenericGroupMember {
     }
 
     /**
-     * @param value the updated join future.
-     */
-    public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
-        this.awaitingJoinFuture = value;
-    }
-
-    /**
      * @return the awaiting sync future.
      */
     public CompletableFuture<SyncGroupResponseData> awaitingSyncFuture() {
         return awaitingSyncFuture;
-    }
-
-    /**
-     * @param value the updated sync future.
-     */
-    public void setAwaitingSyncFuture(CompletableFuture<SyncGroupResponseData> value) {
-        this.awaitingSyncFuture = value;
     }
 
     /**
@@ -364,17 +350,59 @@ public class GenericGroupMember {
     }
 
     /**
-     * @param value true if the member is new, false otherwise.
-     */
-    public void setIsNew(boolean value) {
-        this.isNew = value;
-    }
-
-    /**
      * @return true if the existing heartbeat was satisfied, false otherwise.
      */
     public boolean heartBeatSatisfied() {
         return heartbeatSatisfied;
+    }
+
+    /**
+     * @param value the new rebalance timeout in milliseconds.
+     */
+    public void setRebalanceTimeoutMs(int value) {
+         this.rebalanceTimeoutMs = value;
+    }
+
+    /**
+     * @param value the new session timeout in milliseconds.
+     */
+    public void setSessionTimeoutMs(int value) {
+        this.sessionTimeoutMs = value;
+    }
+
+    /**
+     * @param value the new list of supported protocols.
+     */
+    public void setSupportedProtocols(List<Protocol> value) {
+        this.supportedProtocols = value;
+    }
+
+    /**
+     * @param value the new assignment.
+     */
+    public void setAssignment(byte[] value) {
+        this.assignment = value;
+    }
+
+    /**
+     * @param value the updated join future.
+     */
+    public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
+        this.awaitingJoinFuture = value;
+    }
+
+    /**
+     * @param value the updated sync future.
+     */
+    public void setAwaitingSyncFuture(CompletableFuture<SyncGroupResponseData> value) {
+        this.awaitingSyncFuture = value;
+    }
+
+    /**
+     * @param value true if the member is new, false otherwise.
+     */
+    public void setIsNew(boolean value) {
+        this.isNew = value;
     }
 
     /**
