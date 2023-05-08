@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
@@ -104,27 +103,10 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         log.debug("TopicBasedRemoteLogMetadataManager configs after adding overridden properties: {}", configs);
 
         topicBasedRemoteLogMetadataManager.configure(configs);
-        try {
-            waitUntilInitialized(60_000);
-        } catch (TimeoutException e) {
-            throw new KafkaException(e);
-        }
-
         topicBasedRemoteLogMetadataManager.onPartitionLeadershipChanges(topicIdPartitions, Collections.emptySet());
     }
 
     // Visible for testing.
-    public void waitUntilInitialized(long waitTimeMs) throws TimeoutException {
-        long startMs = System.currentTimeMillis();
-        while (!topicBasedRemoteLogMetadataManager.isInitialized()) {
-            long currentTimeMs = System.currentTimeMillis();
-            if (currentTimeMs > startMs + waitTimeMs) {
-                throw new TimeoutException("Time out reached before it is initialized successfully");
-            }
-
-            Utils.sleep(100);
-        }
-    }
 
     @Override
     public int brokerCount() {

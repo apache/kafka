@@ -51,8 +51,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -76,6 +78,11 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private final boolean startConsumerThread;
 
     private Thread initializationThread;
+
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 60L;
+
+    private CountDownLatch initializeLatch;
+
     private volatile ProducerManager producerManager;
     private volatile ConsumerManager consumerManager;
 
@@ -340,6 +347,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
             log.info("Started initializing with configs: {}", configs);
 
+            initializeLatch = new CountDownLatch(1);
             rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
             rlmmTopicPartitioner = new RemoteLogMetadataTopicPartitioner(rlmmConfig.metadataTopicPartitionsCount());
             remotePartitionMetadataStore = new RemotePartitionMetadataStore(new File(rlmmConfig.logDir()).toPath());
@@ -423,6 +431,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     return;
                 } finally {
                     lock.writeLock().unlock();
+                    initializeLatch.countDown();
                 }
             }
 
@@ -489,14 +498,28 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return initialized.get();
     }
 
-    private void ensureInitializedAndNotClosed() {
+    private void ensureInitializedAndNotClosed() throws RemoteStorageException {
         if (initializationFailed) {
             // If initialization is failed, shutdown the broker.
             throw new FatalExitError();
         }
-        if (closing.get() || !initialized.get()) {
-            throw new IllegalStateException("This instance is in invalid state, initialized: " + initialized +
-                                                    " close: " + closing);
+
+        if (!initialized.get()) {
+            log.info("Waiting for TopicBasedRemoteLogMetadataManager to initialize");
+            try {
+                if (!initializeLatch.await(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    if (closing.get() || !initialized.get()) {
+                        throw new IllegalStateException("This instance is in invalid state, initialized: " + initialized +
+                                " close: " + closing);
+                    }
+                }
+            } catch (InterruptedException e) {
+                throw new RemoteStorageException(e);
+            }
+        }
+
+        if (closing.get()) {
+            throw new IllegalStateException("This instance is in invalid state, closing: " + closing);
         }
     }
 
@@ -517,6 +540,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         // Close all the resources.
         log.info("Closing the resources.");
         if (closing.compareAndSet(false, true)) {
+            initializeLatch.countDown();
             lock.writeLock().lock();
             try {
                 if (initializationThread != null) {
