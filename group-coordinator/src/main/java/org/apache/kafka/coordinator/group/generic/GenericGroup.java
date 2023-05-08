@@ -433,14 +433,14 @@ public class GenericGroup {
             .setLeader(NO_LEADER)
             .setSkipAssignment(false)
             .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
-        maybeCompleteJoinFuture(removedMember, joinGroupResponse);
+        completeJoinFuture(removedMember, joinGroupResponse);
 
         SyncGroupResponseData syncGroupResponse = new SyncGroupResponseData()
             .setAssignment(new byte[0])
             .setProtocolName(null)
             .setProtocolType(null)
             .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
-        maybeCompleteSyncFuture(removedMember, syncGroupResponse);
+        completeSyncFuture(removedMember, syncGroupResponse);
 
         GenericGroupMember newMember = new GenericGroupMember.Builder(newMemberId)
             .setGroupInstanceId(removedMember.groupInstanceId())
@@ -870,22 +870,14 @@ public class GenericGroup {
      * @param member the member.
      * @param response the join response to complete the future with.
      */
-    public void maybeCompleteJoinFuture( // TODO: jeffkbkim
+    public void completeJoinFuture(
         GenericGroupMember member,
         JoinGroupResponseData response
     ) {
         if (member.isAwaitingJoin()) {
-            try {
-                member.awaitingJoinCallback().complete(response);
-            } catch (Throwable t) {
-                log.error("Failed to invoke join future for {} due to {}",
-                    member, t.getMessage());
-
-                member.awaitingJoinCallback().completeExceptionally(t);
-            } finally {
-                member.setAwaitingJoinCallback(null);
-                numMembersAwaitingJoinResponse--;
-            }
+            member.awaitingJoinCallback().complete(response);
+            member.setAwaitingJoinCallback(null);
+            numMembersAwaitingJoinResponse--;
         }
     }
 
@@ -893,19 +885,15 @@ public class GenericGroup {
      * Complete a member's sync future.
      * 
      * @param member the member.
-     * @param response the sync response.
+     * @param response the sync response to complete the future with.
      * @return true if a sync future actually completes.
      */
-    public boolean maybeCompleteSyncFuture(
+    public boolean completeSyncFuture(
         GenericGroupMember member,
         SyncGroupResponseData response
     ) {
         if (member.isAwaitingSync()) {
-            if (!member.awaitingSyncCallback().complete(response)) {
-                log.error("Failed to invoke join future for {}", member);
-                response.setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
-                member.awaitingSyncCallback().complete(response);
-            }
+            member.awaitingSyncCallback().complete(response);
             member.setAwaitingSyncCallback(null);
             numMembersAwaitingJoinResponse--;
             return true;

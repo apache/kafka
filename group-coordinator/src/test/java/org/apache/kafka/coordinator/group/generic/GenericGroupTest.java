@@ -45,6 +45,7 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Prepa
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Stable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -600,52 +601,11 @@ public class GenericGroupTest {
         group.add(member, joinGroupFuture);
 
         assertTrue(group.hasAllMembersJoined());
-        group.maybeCompleteJoinFuture(member, new JoinGroupResponseData()
+        group.completeJoinFuture(member, new JoinGroupResponseData()
             .setMemberId(member.memberId())
             .setErrorCode(Errors.NONE.code()));
 
         assertTrue(invoked.get());
-        assertFalse(member.isAwaitingJoin());
-    }
-
-    // TODO: jeffkbkim
-    @Disabled
-    @Test
-    public void testCompleteJoinFutureFails() {
-        GenericGroupMember member = new GenericGroupMember(
-            memberId,
-            Optional.empty(),
-            clientId,
-            clientHost,
-            rebalanceTimeoutMs,
-            sessionTimeoutMs,
-            protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
-        );
-
-        AtomicBoolean shouldFail = new AtomicBoolean(true);
-        AtomicReference<JoinGroupResponseData> result = new AtomicReference<>(null);
-        CompletableFuture<JoinGroupResponseData> joinGroupFuture = new CompletableFuture<>();
-        joinGroupFuture.whenComplete((joinGroupResult, ___) -> {
-            if (shouldFail.get()) {
-                shouldFail.set(false);
-            } else {
-                result.set(joinGroupResult);
-            }
-        });
-        group.add(member, joinGroupFuture);
-
-        assertTrue(group.hasAllMembersJoined());
-        group.maybeCompleteJoinFuture(member, new JoinGroupResponseData()
-            .setMemberId(member.memberId())
-            .setErrorCode(Errors.NONE.code()));
-
-        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), result.get().errorCode());
         assertFalse(member.isAwaitingJoin());
     }
 
@@ -670,17 +630,11 @@ public class GenericGroupTest {
         group.add(member);
 
         assertFalse(member.isAwaitingJoin());
-        group.maybeCompleteJoinFuture(member, new JoinGroupResponseData()
+        group.completeJoinFuture(member, new JoinGroupResponseData()
             .setMemberId(member.memberId())
             .setErrorCode(Errors.NONE.code()));
 
         assertFalse(member.isAwaitingJoin());
-    }
-
-    @Disabled // TODO: jeffkbkim
-    @Test
-    public void testCompleteSyncFutureFails() {
-
     }
 
     @Test
@@ -705,7 +659,7 @@ public class GenericGroupTest {
         CompletableFuture<SyncGroupResponseData> syncGroupFuture = new CompletableFuture<>();
         member.setAwaitingSyncCallback(syncGroupFuture);
 
-        assertTrue(group.maybeCompleteSyncFuture(member, new SyncGroupResponseData()
+        assertTrue(group.completeSyncFuture(member, new SyncGroupResponseData()
             .setErrorCode(Errors.NONE.code())));
 
         assertFalse(member.isAwaitingSync());
@@ -731,7 +685,7 @@ public class GenericGroupTest {
 
         group.add(member);
 
-        assertFalse(group.maybeCompleteSyncFuture(member, new SyncGroupResponseData()
+        assertFalse(group.completeSyncFuture(member, new SyncGroupResponseData()
             .setErrorCode(Errors.NONE.code())));
 
         assertFalse(member.isAwaitingSync());
