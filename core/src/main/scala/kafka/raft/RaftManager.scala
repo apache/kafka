@@ -47,7 +47,6 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.server.fault.FaultHandler
 
 import scala.jdk.CollectionConverters._

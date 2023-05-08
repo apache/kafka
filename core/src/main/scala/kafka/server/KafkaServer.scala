@@ -53,7 +53,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.fault.ProcessExitingFaultHandler
+import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -388,7 +388,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             controllerQuorumVotersFuture,
-            fatalFaultHandler = new ProcessExitingFaultHandler()
+            fatalFaultHandler = new ProcessTerminatingFaultHandler.Builder().build()
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
