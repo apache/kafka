@@ -20,9 +20,7 @@ package org.apache.kafka.coordinator.group.generic;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -360,7 +358,7 @@ public class GenericGroupMember {
      * @param value the new rebalance timeout in milliseconds.
      */
     public void setRebalanceTimeoutMs(int value) {
-         this.rebalanceTimeoutMs = value;
+        this.rebalanceTimeoutMs = value;
     }
 
     /**
