@@ -28,12 +28,12 @@ public class AssignmentSpec {
     /**
      * The members keyed by member id.
      */
-    final Map<String, AssignmentMemberSpec> members;
+    private final Map<String, AssignmentMemberSpec> members;
 
     /**
-     * The topics' metadata keyed by topic id
+     * The topics' metadata keyed by topic id.
      */
-    final Map<Uuid, AssignmentTopicMetadata> topics;
+    private final Map<Uuid, AssignmentTopicMetadata> topics;
 
     public AssignmentSpec(
         Map<String, AssignmentMemberSpec> members,
@@ -45,13 +45,25 @@ public class AssignmentSpec {
         this.topics = topics;
     }
 
+    /**
+     * @return Member metadata keyed by member Ids.
+     */
+    public Map<String, AssignmentMemberSpec> members() {
+        return members;
+    }
+
+    /**
+     * @return Topic metadata keyed by topic Ids.
+     */
+    public Map<Uuid, AssignmentTopicMetadata> topics() {
+        return topics;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         AssignmentSpec that = (AssignmentSpec) o;
-
         if (!members.equals(that.members)) return false;
         return topics.equals(that.topics);
     }

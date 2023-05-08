@@ -634,7 +634,8 @@ public class KafkaAdminClientTest {
                 ApiVersionsResponse.filterApis(RecordVersion.current(), ApiMessageType.ListenerType.ZK_BROKER),
                 convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures()),
                 Collections.singletonMap("test_feature_1", (short) 2),
-                defaultFeatureMetadata().finalizedFeaturesEpoch().get()
+                defaultFeatureMetadata().finalizedFeaturesEpoch().get(),
+                false
             );
         }
         return new ApiVersionsResponse(
@@ -4961,6 +4962,93 @@ public class KafkaAdminClientTest {
             assertEquals(345L, tp1Offset.offset());
             assertEquals(543, tp1Offset.leaderEpoch().get().intValue());
             assertEquals(-1L, tp1Offset.timestamp());
+        }
+    }
+
+    @Test
+    public void testListOffsetsHandlesFulfillmentTimeouts() throws Exception {
+        Node node = new Node(0, "localhost", 8120);
+        List<Node> nodes = Collections.singletonList(node);
+        List<PartitionInfo> pInfos = new ArrayList<>();
+        pInfos.add(new PartitionInfo("foo", 0, node, new Node[]{node}, new Node[]{node}));
+        pInfos.add(new PartitionInfo("foo", 1, node, new Node[]{node}, new Node[]{node}));
+        final Cluster cluster = new Cluster(
+            "mockClusterId",
+            nodes,
+            pInfos,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            node);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+        final TopicPartition tp1 = new TopicPartition("foo", 1);
+
+        int numRetries = 2;
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
+            AdminClientConfig.RETRIES_CONFIG, Integer.toString(numRetries))) {
+
+            ListOffsetsTopicResponse tp0ErrorResponse =
+                ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.REQUEST_TIMED_OUT, -1L, -1L, -1);
+            ListOffsetsTopicResponse tp1Response =
+                ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 345L, 543);
+            ListOffsetsResponseData responseDataWithError = new ListOffsetsResponseData()
+                .setThrottleTimeMs(0)
+                .setTopics(Arrays.asList(tp0ErrorResponse, tp1Response));
+
+            ListOffsetsTopicResponse tp0Response =
+                ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -1L, 789L, 987);
+            ListOffsetsResponseData responseData = new ListOffsetsResponseData()
+                .setThrottleTimeMs(0)
+                .setTopics(Arrays.asList(tp0Response, tp1Response));
+
+            // Test that one-too-many timeouts for partition 0 result in partial success overall -
+            // timeout for partition 0 and success for partition 1.
+
+            // It might be desirable to have the AdminApiDriver mechanism also handle all retriable
+            // exceptions like TimeoutException during the lookup stage (it currently doesn't).
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            for (int i = 0; i < numRetries + 1; i++) {
+                env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof ListOffsetsRequest,
+                    new ListOffsetsResponse(responseDataWithError), node);
+            }
+            ListOffsetsResult result = env.adminClient().listOffsets(
+                new HashMap<TopicPartition, OffsetSpec>() {
+                    {
+                        put(tp0, OffsetSpec.latest());
+                        put(tp1, OffsetSpec.latest());
+                    }
+                });
+            TestUtils.assertFutureThrows(result.partitionResult(tp0), TimeoutException.class);
+            ListOffsetsResultInfo tp1Result = result.partitionResult(tp1).get();
+            assertEquals(345L, tp1Result.offset());
+            assertEquals(543, tp1Result.leaderEpoch().get().intValue());
+            assertEquals(-1L, tp1Result.timestamp());
+
+            // Now test that only numRetries timeouts for partition 0 result in success for both
+            // partition 0 and partition 1.
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            for (int i = 0; i < numRetries; i++) {
+                env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof ListOffsetsRequest,
+                    new ListOffsetsResponse(responseDataWithError), node);
+            }
+            env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof ListOffsetsRequest, new ListOffsetsResponse(responseData), node);
+            result = env.adminClient().listOffsets(
+                new HashMap<TopicPartition, OffsetSpec>() {
+                    {
+                        put(tp0, OffsetSpec.latest());
+                        put(tp1, OffsetSpec.latest());
+                    }
+                });
+            ListOffsetsResultInfo tp0Result = result.partitionResult(tp0).get();
+            assertEquals(789L, tp0Result.offset());
+            assertEquals(987, tp0Result.leaderEpoch().get().intValue());
+            assertEquals(-1L, tp0Result.timestamp());
+            tp1Result = result.partitionResult(tp1).get();
+            assertEquals(345L, tp1Result.offset());
+            assertEquals(543, tp1Result.leaderEpoch().get().intValue());
+            assertEquals(-1L, tp1Result.timestamp());
         }
     }
 

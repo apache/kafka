@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -99,7 +100,7 @@ public class SourceTaskOffsetCommitterTest {
         // Normal termination, where termination times out.
         when(executor.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)).thenReturn(false);
 
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class)) {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(ThreadUtils.class)) {
             committer.close(timeoutMs);
             assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("ERROR")));
         }

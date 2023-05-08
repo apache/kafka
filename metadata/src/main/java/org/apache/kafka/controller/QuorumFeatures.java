@@ -128,4 +128,30 @@ public class QuorumFeatures {
     boolean isControllerId(int nodeId) {
         return quorumNodeIds.contains(nodeId);
     }
+
+    // check if all controller nodes are ZK Migration ready
+    public Optional<String> reasonAllControllersZkMigrationNotReady() {
+        List<String> missingApiVers = new ArrayList<>();
+        List<String> zkMigrationNotReady = new ArrayList<>();
+        for (int id : quorumNodeIds) {
+            if (nodeId == id) {
+                continue; // No need to check local node because the KraftMigrationDriver will be created only when migration config set
+            }
+            NodeApiVersions nodeVersions = apiVersions.get(Integer.toString(id));
+            if (nodeVersions == null) {
+                missingApiVers.add(String.valueOf(id));
+            } else if (!nodeVersions.zkMigrationEnabled()) {
+                zkMigrationNotReady.add(String.valueOf(id));
+            }
+        }
+
+        boolean isReady = missingApiVers.isEmpty() && zkMigrationNotReady.isEmpty();
+        if (!isReady) {
+            String zkMigrationNotReadyMsg = zkMigrationNotReady.isEmpty() ? "" : "Nodes don't enable `zookeeper.metadata.migration.enable`: " + zkMigrationNotReady + ".";
+            String missingApiVersionMsg = missingApiVers.isEmpty() ? "" : " Missing apiVersion from nodes: " + missingApiVers;
+            return Optional.of(zkMigrationNotReadyMsg + missingApiVersionMsg);
+        }
+
+        return Optional.empty();
+    }
 }

@@ -105,7 +105,7 @@ class ZkMigrationIntegrationTest {
 
     val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
     val zkClient = underlying.zkClient
-    val migrationClient = new ZkMigrationClient(zkClient, PasswordEncoder.noop())
+    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.noop())
     val verifier = new MetadataDeltaVerifier()
     migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => { })
     verifier.verify { image =>
@@ -120,6 +120,11 @@ class ZkMigrationIntegrationTest {
     }
   }
 
+  /**
+   * Test ZkMigrationClient against a real ZooKeeper-backed Kafka cluster. This test creates a ZK cluster
+   * and modifies data using AdminClient. The ZkMigrationClient is then used to read the metadata from ZK
+   * as would happen during a migration. The generated records are then verified.
+   */
   @ClusterTest(brokers = 3, clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0)
   def testMigrate(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.createAdminClient()
@@ -155,7 +160,7 @@ class ZkMigrationIntegrationTest {
       case None => PasswordEncoder.noop()
     }
 
-    val migrationClient = new ZkMigrationClient(zkClient, zkConfigEncoder)
+    val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
     var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
     migrationState = migrationState.withNewKRaftController(3000, 42)
     migrationState = migrationClient.claimControllerLeadership(migrationState)
@@ -310,10 +315,10 @@ class ZkMigrationIntegrationTest {
 
   def verifyClientQuotas(zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
-      assertEquals("1000.0", zkClient.getEntityConfigs(ConfigType.User, "user1").getProperty("consumer_byte_rate"))
-      assertEquals("800.0", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("consumer_byte_rate"))
-      assertEquals("100.0", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("producer_byte_rate"))
-      assertEquals("10.0", zkClient.getEntityConfigs(ConfigType.Ip, "8.8.8.8").getProperty("connection_creation_rate"))
+      assertEquals("1000", zkClient.getEntityConfigs(ConfigType.User, "user1").getProperty("consumer_byte_rate"))
+      assertEquals("800", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("consumer_byte_rate"))
+      assertEquals("100", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("producer_byte_rate"))
+      assertEquals("10", zkClient.getEntityConfigs(ConfigType.Ip, "8.8.8.8").getProperty("connection_creation_rate"))
     }
   }
 

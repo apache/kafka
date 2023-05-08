@@ -48,7 +48,7 @@ public class SnapshotGeneratorTest {
     static class MockEmitter implements SnapshotGenerator.Emitter {
         private final CountDownLatch latch = new CountDownLatch(1);
         private final List<MetadataImage> images = new CopyOnWriteArrayList<>();
-        private RuntimeException problem = null;
+        private volatile RuntimeException problem = null;
 
         MockEmitter setReady() {
             latch.countDown();

@@ -47,15 +47,14 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
-
 import org.slf4j.Logger;
 
-import java.util.Set;
-import java.util.Optional;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
@@ -213,9 +212,40 @@ public class RecordCollectorImpl implements RecordCollector {
                     keyClass,
                     valueClass),
                 exception);
-        } catch (final RuntimeException exception) {
-            final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
-            throw new StreamsException(errorMessage, exception);
+        } catch (final Exception exception) {
+            final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
+            final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
+
+            log.debug(String.format("Error serializing record to topic %s", topic), exception);
+
+            try {
+                response = productionExceptionHandler.handleSerializationException(record, exception);
+            } catch (final Exception e) {
+                log.error("Fatal when handling serialization exception", e);
+                recordSendError(topic, e, null);
+                return;
+            }
+
+            if (response == ProductionExceptionHandlerResponse.FAIL) {
+                throw new StreamsException(
+                    String.format(
+                        "Unable to serialize record. ProducerRecord(topic=[%s], partition=[%d], timestamp=[%d]",
+                        topic,
+                        partition,
+                        timestamp),
+                    exception
+                );
+            }
+
+            log.warn("Unable to serialize record, continue processing. " +
+                            "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
+                    topic,
+                    partition,
+                    timestamp);
+
+            droppedRecordsSensor.record();
+
+            return;
         }
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);

@@ -362,7 +362,7 @@ public class KStreamKStreamJoinTest {
         /**
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
-        final KStreamImplJoin.TimeTracker tracker = new KStreamImplJoin.TimeTracker();
+        final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
         final KStreamKStreamJoin<String, String, String, String> join = new KStreamKStreamJoin<>(
                 false,
                 "other",

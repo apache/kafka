@@ -715,8 +715,10 @@ public interface KTable<K, V> {
 
     /**
      * Suppress some updates from this changelog stream, determined by the supplied {@link Suppressed} configuration.
-     *
      * This controls what updates downstream table and stream operations will receive.
+     * <p>
+     * Note that {@code suppress()} cannot be applied to
+     * {@link org.apache.kafka.streams.state.VersionedBytesStoreSupplier versioned KTables}.
      *
      * @param suppressed Configuration object determining what, if any, updates to suppress
      * @return A new KTable with the desired suppression characteristics.
