@@ -132,6 +132,9 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
                 0).get());
     final Change<byte[]> serialChange = valueSerde.serializeParts(topic, record.value());
     final BufferValue buffered = new BufferValue(serialChange.oldValue, serialChange.oldValue, serialChange.newValue, recordContext);
+    if(wrapped().observedStreamTime - gracePeriod.toMillis() > record.timestamp()) {
+      return;
+    }
     wrapped().put(serializedKey, buffered.serialize(0).array());
     bufferSize += computeRecordSize(serializedKey, buffered);
     numRec++;
