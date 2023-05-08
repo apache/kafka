@@ -115,7 +115,7 @@ public class GenericGroupMemberTest {
             "generic",
             protocols,
             EMPTY_ASSIGNMENT
-        );;
+        );
 
         assertArrayEquals(new byte[]{0}, member.metadata("range"));
         assertArrayEquals(new byte[]{1}, member.metadata("roundrobin"));
