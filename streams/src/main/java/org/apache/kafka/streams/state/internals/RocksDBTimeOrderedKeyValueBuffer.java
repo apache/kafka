@@ -82,7 +82,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V>  extends WrappedStateStore<R
           topic,
           new Change<>(bufferValue.newValue(), bufferValue.oldValue())
       );
-      while (keyValue != null && predicate.get() && wrapped().observedStreamTime - gracePeriod.toMillis() > minTimestamp()) {
+      while (keyValue != null && predicate.get() && wrapped().observedStreamTime - gracePeriod.toMillis() >= minTimestamp()) {
 
         if (bufferValue.context().timestamp() != minTimestamp) {
           throw new IllegalStateException(
