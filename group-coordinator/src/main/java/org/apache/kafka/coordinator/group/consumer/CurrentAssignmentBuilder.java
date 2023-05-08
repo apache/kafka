@@ -56,14 +56,7 @@ import java.util.function.BiFunction;
  *   The set of partitions that the member will eventually receive. The partitions in this set are
  *   still owned by other members in the group.
  *
- * The state machine has four states:
- * - NEW_TARGET_ASSIGNMENT:
- *   This is the initial state of the state machine. The state machine starts here when the next epoch
- *   does not match the target epoch. It means that a new target assignment has been installed so the
- *   reconciliation process must restart. In this state, the Assigned, Revoking and Assigning sets are
- *   computed. If Revoking is not empty, the state machine transitions to REVOKING; if Assigning is not
- *   empty, it transitions to ASSIGNING; otherwise it transitions to STABLE.
- *
+ * The state machine has three states:
  * - REVOKING:
  *   This state means that the member must revoke partitions before it can transition to the next epoch
  *   and thus start receiving new partitions. This is to guarantee that offsets of revoked partitions
@@ -76,6 +69,13 @@ import java.util.function.BiFunction;
  *
  * - STABLE:
  *   This state means that the member has received all its assigned partitions.
+ *
+ * The reconciliation process is started or re-started whenever a new target assignment is installed;
+ * the epoch of the next assignment is different from the next epoch of the member. In this transient
+ * state, the assigned partitions, the partitions pending revocation and the partitions pending assignment
+ * are updates. If the partitions pending revocation is not empty, the state machine transitions to
+ * REVOKING; if partitions pending assignment is not empty, it transitions to ASSIGNING; otherwise it
+ * transitions to STABLE.
  */
 public class CurrentAssignmentBuilder {
     /**
