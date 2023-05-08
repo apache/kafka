@@ -242,13 +242,21 @@ class KStreamImplJoin {
 
     private void assertWindowSettings(final WindowBytesStoreSupplier supplier, final JoinWindows joinWindows) {
         if (!supplier.retainDuplicates()) {
-            throw new StreamsException("The StoreSupplier must set retainDuplicates=true, found retainDuplicates=false");
+            throw new StreamsException(String.format(
+              "The StoreSupplier for join store %s must set retainDuplicates = true, found retainDuplicates = false",
+              supplier.name()));
         }
-        final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinWindows.gracePeriodMs()) &&
-            supplier.windowSize() == joinWindows.size();
-        if (!allMatch) {
-            throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s" +
-                                                         " for the window size and retention period", supplier, joinWindows));
+        if (supplier.retentionPeriod() != joinWindows.size() + joinWindows.gracePeriodMs()) {
+            throw new StreamsException(String.format(
+              "The StoreSupplier for join store %s must set retentionPeriod = windowSize + gracePeriod,"
+                + " found retentionPeriod = %d, joinWindows.size = %d, joinWindows.gracePeriod = %d",
+              supplier.name(), supplier.retentionPeriod(), joinWindows.size(), joinWindows.gracePeriodMs()));
+        }
+        if (supplier.windowSize() != joinWindows.size()) {
+            throw new StreamsException(String.format(
+              "The StoreSupplier for join store %s must set supplier.windowSize = joinWindows.windowSize,"
+                + " found supplier.windowSize = %d, joinWindows.size = %d",
+              supplier.name(), supplier.windowSize(), joinWindows.size()));
         }
     }
 
