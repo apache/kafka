@@ -66,7 +66,9 @@ public class ExactlyOnceMessageProcessor extends Thread {
         // It is recommended to have a relatively short txn timeout in order to clear pending offsets faster.
         final int transactionTimeoutMs = 10000;
         // A unique transactional.id must be provided in order to properly use EOS.
-        producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
+        producer = new Producer(
+            "processor-producer", KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT, outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null)
+                .createKafkaProducer();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
         this.groupInstanceId = "Txn-consumer-" + instanceIdx;
