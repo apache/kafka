@@ -71,9 +71,9 @@ import java.util.function.BiFunction;
  *   This state means that the member has received all its assigned partitions.
  *
  * The reconciliation process is started or re-started whenever a new target assignment is installed;
- * the epoch of the next assignment is different from the next epoch of the member. In this transient
+ * the epoch of the new target assignment is different from the next epoch of the member. In this transient
  * state, the assigned partitions, the partitions pending revocation and the partitions pending assignment
- * are updates. If the partitions pending revocation is not empty, the state machine transitions to
+ * are updated. If the partitions pending revocation is not empty, the state machine transitions to
  * REVOKING; if partitions pending assignment is not empty, it transitions to ASSIGNING; otherwise it
  * transitions to STABLE.
  */
