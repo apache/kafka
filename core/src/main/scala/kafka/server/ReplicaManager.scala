@@ -1193,13 +1193,13 @@ class ReplicaManager(val config: KafkaConfig,
       logReadResultMap.put(topicIdPartition, logReadResult)
     }
 
-    // Respond immediately if 1) no remote fetches are required
+    // Respond immediately if no remote fetches are required and any of the below conditions is true
+    //                        1) fetch request does not want to wait
     //                        2) fetch request does not require any data
-    //                        3) fetch request does not require any data
-    //                        4) has enough data to respond
-    //                        5) some error happens while reading data
-    //                        6) we found a diverging epoch
-    //                        7) has a preferred read replica
+    //                        3) has enough data to respond
+    //                        4) some error happens while reading data
+    //                        5) we found a diverging epoch
+    //                        6) has a preferred read replica
     if (!remoteFetchInfo.isPresent && (params.maxWaitMs <= 0 || fetchInfos.isEmpty || bytesReadable >= params.minBytes || errorReadingData ||
       hasDivergingEpoch || hasPreferredReadReplica)) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
