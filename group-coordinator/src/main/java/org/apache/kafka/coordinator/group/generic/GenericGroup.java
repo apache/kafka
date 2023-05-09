@@ -18,8 +18,6 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -46,15 +44,12 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.coordinator.group.generic.GenericGroupMember.MemberSummary;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.CompletingRebalance;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Dead;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Empty;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PreparingRebalance;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Stable;
 
 /**
  * Java rewrite of {@link kafka.coordinator.group.GroupMetadata} that is used
@@ -330,7 +325,7 @@ public class GenericGroup {
 
         members.put(member.memberId(), member);
         incrementSupportedProtocols(member);
-        member.setAwaitingJoinCallback(future);
+        member.setAwaitingJoinFuture(future);
 
         if (member.isAwaitingJoin()) {
             numMembersAwaitingJoinResponse++;
@@ -442,16 +437,16 @@ public class GenericGroup {
             .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
         completeSyncFuture(removedMember, syncGroupResponse);
 
-        GenericGroupMember newMember = new GenericGroupMember.Builder(newMemberId)
-            .setGroupInstanceId(removedMember.groupInstanceId())
-            .setClientId(removedMember.clientId())
-            .setClientHost(removedMember.clientHost())
-            .setRebalanceTimeoutMs(removedMember.rebalanceTimeoutMs())
-            .setSessionTimeoutMs(removedMember.sessionTimeoutMs())
-            .setProtocolType(removedMember.protocolType())
-            .setSupportedProtocols(removedMember.supportedProtocols())
-            .setAssignment(removedMember.assignment())
-            .build();
+        GenericGroupMember newMember = new GenericGroupMember(newMemberId,
+            removedMember.groupInstanceId(),
+            removedMember.clientId(),
+            removedMember.clientHost(),
+            removedMember.rebalanceTimeoutMs(),
+            removedMember.sessionTimeoutMs(),
+            removedMember.protocolType(),
+            removedMember.supportedProtocols(),
+            removedMember.assignment()
+        );
 
         members.put(newMemberId, newMember);
 
@@ -861,7 +856,7 @@ public class GenericGroup {
         } else if (future == null && member.isAwaitingJoin()) {
             numMembersAwaitingJoinResponse--;
         }
-        member.setAwaitingJoinCallback(future);
+        member.setAwaitingJoinFuture(future);
     }
 
     /**
@@ -875,8 +870,8 @@ public class GenericGroup {
         JoinGroupResponseData response
     ) {
         if (member.isAwaitingJoin()) {
-            member.awaitingJoinCallback().complete(response);
-            member.setAwaitingJoinCallback(null);
+            member.awaitingJoinFuture().complete(response);
+            member.setAwaitingJoinFuture(null);
             numMembersAwaitingJoinResponse--;
         }
     }
@@ -893,8 +888,8 @@ public class GenericGroup {
         SyncGroupResponseData response
     ) {
         if (member.isAwaitingSync()) {
-            member.awaitingSyncCallback().complete(response);
-            member.setAwaitingSyncCallback(null);
+            member.awaitingSyncFuture().complete(response);
+            member.setAwaitingSyncFuture(null);
             numMembersAwaitingJoinResponse--;
             return true;
         }
