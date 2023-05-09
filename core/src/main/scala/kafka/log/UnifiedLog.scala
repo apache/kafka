@@ -590,14 +590,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                                      producerEpoch: Short,
                                      baseSequence: Int,
                                      expectedVerificationState: ProducerStateEntry.VerificationState,
-                                     newVerificationState: ProducerStateEntry.VerificationState): Unit = { lock synchronized {
+                                     newVerificationState: ProducerStateEntry.VerificationState): Unit = lock synchronized {
       val entry = producerStateManager.entryForVerification(producerId, producerEpoch, baseSequence)
       if (!entry.compareAndSetVerificationState(producerEpoch, expectedVerificationState, newVerificationState))
         warn(s"The expected state: $expectedVerificationState did not match the current verification state, so the verification state was not updated.")
     }
-  }
   
-  def verificationState(producerId: Long, producerEpoch: Short): ProducerStateEntry.VerificationState = { lock synchronized {
+  def verificationState(producerId: Long, producerEpoch: Short): ProducerStateEntry.VerificationState = lock synchronized {
       val entry = producerStateManager.activeProducers.get(producerId)
       if (entry != null && entry.producerEpoch() == producerEpoch) {
         entry.verificationState()
@@ -609,7 +608,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         ProducerStateEntry.VerificationState.EMPTY
       }
     }
-  }
 
   /**
    * The number of segments in the log.

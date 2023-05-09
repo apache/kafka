@@ -186,15 +186,14 @@ public class ProducerStateManager {
     }
     
     public ProducerStateEntry entryForVerification(long producerId, short producerEpoch, int firstSequence) {
-        ProducerStateEntry entry;
-        if (producers.containsKey(producerId)) {
-            entry = producers.get(producerId);
-            entry.maybeUpdateProducerEpoch(producerEpoch);
+        ProducerStateEntry entry = producers.get(producerId);
+        if (entry != null) {
+            entry.maybeUpdateProducerHigherEpoch(producerEpoch);
         } else {
             entry = ProducerStateEntry.forVerification(producerId, producerEpoch, time.milliseconds());
             addProducerId(producerId, entry);
         }
-        entry.maybeUpdateTentaitiveSequence(firstSequence);
+        entry.maybeUpdateTentativeSequence(firstSequence);
         return entry;
     }
 

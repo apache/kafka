@@ -58,8 +58,8 @@ public class ProducerStateEntry {
         return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY, OptionalInt.empty());
     }
 
-    public static ProducerStateEntry forVerification(long producerId, short producerEpoch, long milliseconds) {
-        return new ProducerStateEntry(producerId, producerEpoch, -1, milliseconds, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY, OptionalInt.empty());
+    public static ProducerStateEntry forVerification(long producerId, short producerEpoch, long lastTimestamp) {
+        return new ProducerStateEntry(producerId, producerEpoch, -1, lastTimestamp, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY, OptionalInt.empty());
     }
 
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata, VerificationState verificationState, OptionalInt tentativeSequence) {
@@ -121,8 +121,18 @@ public class ProducerStateEntry {
             return false;
         }
     }
+
+    public boolean maybeUpdateProducerHigherEpoch(short producerEpoch) {
+        if (this.producerEpoch < producerEpoch) {
+            batchMetadata.clear();
+            this.producerEpoch = producerEpoch;
+            return true;
+        } else {
+            return false;
+        }
+    }
     
-    public void maybeUpdateTentaitiveSequence(int sequence) {
+    public void maybeUpdateTentativeSequence(int sequence) {
         if (batchMetadata.isEmpty() && (!this.tentativeSequence.isPresent() || this.tentativeSequence.getAsInt() > sequence))
             this.tentativeSequence = OptionalInt.of(sequence);
     }
@@ -150,8 +160,12 @@ public class ProducerStateEntry {
         update(producerEpoch, coordinatorEpoch, lastTimestamp, new ArrayDeque<>(0), OptionalLong.empty(), VerificationState.EMPTY);
     }
 
-    private void update(short producerEpoch, int coordinatorEpoch, long lastTimestamp, Deque<BatchMetadata> batchMetadata,
-                        OptionalLong currentTxnFirstOffset, VerificationState verificationState) {
+    private void update(short producerEpoch,
+                        int coordinatorEpoch,
+                        long lastTimestamp,
+                        Deque<BatchMetadata> batchMetadata,
+                        OptionalLong currentTxnFirstOffset,
+                        VerificationState verificationState) {
         maybeUpdateProducerEpoch(producerEpoch);
         while (!batchMetadata.isEmpty())
             addBatchMetadata(batchMetadata.removeFirst());
