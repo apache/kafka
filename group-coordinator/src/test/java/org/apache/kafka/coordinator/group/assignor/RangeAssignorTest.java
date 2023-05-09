@@ -108,12 +108,16 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0, 1)));
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 2)));
-        // Topic 3 Partitions Assignment
-        expectedAssignment.get(consumerA).putAll(mkAssignment(mkTopicAssignment(topic3Uuid, 0)));
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic3Uuid, 1)));
+
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic3Uuid, 0)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic3Uuid, 1)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
@@ -152,14 +156,20 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0, 1, 2)));
-        // Topic 2 Partitions Assignment
-        expectedAssignment.get(consumerA).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 0, 1)));
-        expectedAssignment.put(consumerC, mkAssignment(mkTopicAssignment(topic2Uuid, 2)));
-        // Topic 3 Partitions Assignment
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic3Uuid, 0)));
-        expectedAssignment.get(consumerC).putAll(mkAssignment(mkTopicAssignment(topic3Uuid, 1)));
+
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1, 2),
+            mkTopicAssignment(topic2Uuid, 0, 1)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic3Uuid, 0)
+        ));
+
+        expectedAssignment.put(consumerC, mkAssignment(
+            mkTopicAssignment(topic2Uuid, 2),
+            mkTopicAssignment(topic3Uuid, 1)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
@@ -198,13 +208,19 @@ public class RangeAssignorTest {
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         // Topic 3 has 2 partitions but three consumers subscribed to it - one of them will not get a partition.
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0)));
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 1)));
-        expectedAssignment.put(consumerC, mkAssignment(mkTopicAssignment(topic1Uuid, 2)));
-        // Topic 3 Partitions Assignment
-        expectedAssignment.get(consumerA).putAll(mkAssignment(mkTopicAssignment(topic3Uuid, 0)));
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic3Uuid, 1)));
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0),
+            mkTopicAssignment(topic3Uuid, 0)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1),
+            mkTopicAssignment(topic3Uuid, 1)
+        ));
+
+        expectedAssignment.put(consumerC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
@@ -217,9 +233,11 @@ public class RangeAssignorTest {
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
-        currentAssignmentForA.put(topic1Uuid, Collections.singleton(0));
-        currentAssignmentForA.put(topic2Uuid, Collections.singleton(0));
+        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0),
+            mkTopicAssignment(topic2Uuid, 0)
+        );
+
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -227,9 +245,11 @@ public class RangeAssignorTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
-        currentAssignmentForB.put(topic1Uuid, Collections.singleton(1));
-        currentAssignmentForB.put(topic2Uuid, Collections.singleton(1));
+        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1),
+            mkTopicAssignment(topic2Uuid, 1)
+        );
+
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -249,17 +269,20 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0)));
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 1)));
-        // Topic 2 Partitions Assignment
-        expectedAssignment.get(consumerA).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 0)));
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 1)));
+
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0),
+            mkTopicAssignment(topic2Uuid, 0)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1),
+            mkTopicAssignment(topic2Uuid, 1)
+        ));
 
         // Consumer C shouldn't get any assignment, due to stickiness A, B retain their assignments
         assertNull(computedAssignment.members().get(consumerC));
         assertAssignment(expectedAssignment, computedAssignment);
-        assertCoPartitionJoinProperty(computedAssignment);
     }
 
     @Test
@@ -295,15 +318,18 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0, 1)));
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 2, 3)));
-        // Topic 2 Partitions Assignment
-        expectedAssignment.get(consumerA).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 0, 1)));
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 2, 3)));
+
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic2Uuid, 0, 1)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2, 3),
+            mkTopicAssignment(topic2Uuid, 2, 3)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
-        assertCoPartitionJoinProperty(computedAssignment);
     }
 
     @Test
@@ -346,17 +372,23 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0)));
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 2)));
-        expectedAssignment.put(consumerC, mkAssignment(mkTopicAssignment(topic1Uuid, 1)));
-        // Topic 2 Partitions Assignment
-        expectedAssignment.get(consumerA).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 0)));
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 2)));
-        expectedAssignment.get(consumerC).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 1)));
+
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0),
+            mkTopicAssignment(topic2Uuid, 0)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 2)
+        ));
+
+        expectedAssignment.put(consumerC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1),
+            mkTopicAssignment(topic2Uuid, 1)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
-        assertCoPartitionJoinProperty(computedAssignment);
     }
 
     @Test
@@ -400,14 +432,20 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0, 1)));
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 2)));
-        expectedAssignment.put(consumerC, mkAssignment(mkTopicAssignment(topic1Uuid, 3)));
-        // Topic 2 Partitions Assignment
-        // Since the new consumer isn't subscribed to topic 2 the assignment shouldn't change
-        expectedAssignment.get(consumerA).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 0, 1)));
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 2)));
+
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic2Uuid, 0, 1)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 2)
+        ));
+
+        expectedAssignment.put(consumerC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 3)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
@@ -435,13 +473,13 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 0, 1, 2)));
-        // Topic 2 Partitions Assignment
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 0, 1, 2)));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1, 2),
+            mkTopicAssignment(topic2Uuid, 0, 1, 2)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
-        assertCoPartitionJoinProperty(computedAssignment);
     }
 
     @Test
@@ -489,14 +527,20 @@ public class RangeAssignorTest {
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        // Topic 1 Partitions Assignment
-        expectedAssignment.put(consumerA, mkAssignment(mkTopicAssignment(topic1Uuid, 0, 1)));
-        expectedAssignment.put(consumerB, mkAssignment(mkTopicAssignment(topic1Uuid, 2)));
-        // Topic 2 Partitions Assignment
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic2Uuid, 0, 1)));
-        expectedAssignment.put(consumerC, mkAssignment(mkTopicAssignment(topic2Uuid, 2)));
-        // Topic 3 Partitions Assignment
-        expectedAssignment.get(consumerB).putAll(mkAssignment(mkTopicAssignment(topic3Uuid, 0, 1)));
+
+        expectedAssignment.put(consumerA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1)
+        ));
+
+        expectedAssignment.put(consumerB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 0, 1),
+            mkTopicAssignment(topic3Uuid, 0, 1)
+        ));
+
+        expectedAssignment.put(consumerC, mkAssignment(
+            mkTopicAssignment(topic2Uuid, 2)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
@@ -505,19 +549,6 @@ public class RangeAssignorTest {
         for (String memberId : computedGroupAssignment.members().keySet()) {
             Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).targetPartitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
-        }
-    }
-
-    private void assertCoPartitionJoinProperty(GroupAssignment groupAssignment) {
-        for (MemberAssignment member : groupAssignment.members().values()) {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = member.targetPartitions();
-            Set<Integer> compareSet = new HashSet<>();
-            for (Set<Integer> partitionsForTopicSet : computedAssignmentForMember.values()) {
-                if (compareSet.isEmpty()) {
-                    compareSet = partitionsForTopicSet;
-                }
-                assertEquals(compareSet, partitionsForTopicSet);
-            }
         }
     }
 }
