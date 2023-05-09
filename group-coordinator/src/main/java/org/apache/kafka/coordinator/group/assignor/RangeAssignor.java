@@ -104,13 +104,13 @@ public class RangeAssignor implements PartitionAssignor {
     /**
      * <p> The algorithm includes the following steps:
      * <ol>
-     * <li> Generate a map of <code>membersPerTopic</code> using the given member subscriptions.</li>
-     * <li> Generate a list of members (<code>potentiallyUnfilledMembers</code>) that have not met the minimum required quota of partitions for the assignment AND
-     * get a list (<code>assignedStickyPartitionsPerTopic</code>) of partitions that will be retained in the new assignment.</li>
-     * <li> Add members from the <code>potentiallyUnfilledMembers</code> list to the <code>unfilledMembersPerTopic</code> map if they haven't met the total required quota
+     * <li> Generate a map of members per topic using the given member subscriptions.</li>
+     * <li> Generate a list of members called potentially unfilled members, which consists of members that have not met the minimum required quota of partitions for the assignment AND
+     * get a list called assigned sticky partitions per topic, which has the partitions that will be retained in the new assignment.</li>
+     * <li> Add members from the potentially unfilled members list to the unfilled members per topic map if they haven't met the total required quota
      * i.e. minRequiredQuota + 1, if the member is designated to receive one of the excess partitions OR minRequiredQuota otherwise. </li>
      * <li> Generate a list of unassigned partitions by calculating the difference between the total partitions for the topic and the assigned (sticky) partitions. </li>
-     * <li> Check if unfilled members exist for the current topicId and assign partitions to them in ranges from the <code>unassignedPartitionsPerTopic</code> map
+     * <li> Check if unfilled members exist for the current topicId and assign partitions to them in ranges from the unassigned partitions per topic</code> map
      *      based on the remaining partitions value stored. </li>
      * </ol>
      * </p>
