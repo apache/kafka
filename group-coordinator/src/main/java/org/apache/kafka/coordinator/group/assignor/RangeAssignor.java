@@ -198,7 +198,6 @@ public class RangeAssignor implements PartitionAssignor {
                 }
             }
 
-            List<MemberWithRemainingAssignments> unfilledMembersForTopic = new ArrayList<>();
             // Step 4
             // If remaining > 0 after increasing the required quota due to the extra partition, add potentially unfilled member to the unfilled members list.
             int unassignedPartitionsListStartPointer = 0;
@@ -218,7 +217,8 @@ public class RangeAssignor implements PartitionAssignor {
                     newAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
                             .targetPartitions()
                             .computeIfAbsent(topicId, k -> new HashSet<>())
-                            .addAll(partitionsToAssign);
+                            .addAll(partitionsToAssign
+                    );
                 }
             }
         });
