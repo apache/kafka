@@ -460,8 +460,16 @@ abstract class AbstractFetcherThread(name: String,
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
-        val newState = PartitionFetchState(state.topicId, math.min(truncationOffset, state.fetchOffset),
-          state.lag, state.currentLeaderEpoch, state.delay, state = Truncating,
+        var lag = state.lag
+        var fetchOffset = state.fetchOffset
+        if (truncationOffset < fetchOffset) {
+          if (lag.nonEmpty) {
+            lag = Some(math.max(0, lag.get + (fetchOffset - truncationOffset)))
+          }
+          fetchOffset = truncationOffset
+        }
+        val newState = PartitionFetchState(state.topicId, fetchOffset,
+          lag, state.currentLeaderEpoch, state.delay, state = Truncating,
           lastFetchedEpoch = None)
         partitionStates.updateAndMoveToEnd(topicPartition, newState)
         partitionMapCond.signalAll()
