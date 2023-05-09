@@ -670,8 +670,8 @@ public class RemoteLogManager implements Closeable {
             int firstBatchSize = firstBatch.sizeInBytes();
             // An empty record is sent instead of an incomplete batch when
             //  - there is no minimum-one-message constraint and
-            //  - the first batch size is more than maximum bytes that can be sent.
-            //  - for FetchRequest version 3 or above and
+            //  - the first batch size is more than maximum bytes that can be sent and
+            //  - for FetchRequest version 3 or above.
             if (!remoteStorageFetchInfo.minOneMessage &&
                     !remoteStorageFetchInfo.hardMaxBytesLimit &&
                     firstBatchSize > maxBytes) {

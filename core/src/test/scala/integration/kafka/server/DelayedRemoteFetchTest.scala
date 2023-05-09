@@ -110,7 +110,6 @@ class DelayedRemoteFetchTest {
     assertTrue(delayedRemoteFetch.isCompleted)
     assertEquals(topicIdPartition, actualTopicPartition.get)
     assertTrue(fetchResultOpt.isDefined)
-    assertTrue(fetchResultOpt.isDefined)
   }
 
   @Test
@@ -140,7 +139,6 @@ class DelayedRemoteFetchTest {
     assertTrue(delayedRemoteFetch.tryComplete())
     assertTrue(delayedRemoteFetch.isCompleted)
     assertEquals(topicIdPartition, actualTopicPartition.get)
-    assertTrue(fetchResultOpt.isDefined)
     assertTrue(fetchResultOpt.isDefined)
     assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResultOpt.get.error)
   }

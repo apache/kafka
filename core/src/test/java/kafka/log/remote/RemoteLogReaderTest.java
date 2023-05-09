@@ -44,7 +44,6 @@ public class RemoteLogReaderTest {
     LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
     Records records = mock(Records.class);
 
-
     @Test
     public void testRemoteLogReaderWithoutError() throws RemoteStorageException, IOException {
         FetchDataInfo fetchDataInfo = new FetchDataInfo(logOffsetMetadata, records);
