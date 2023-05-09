@@ -107,11 +107,11 @@ public class RangeAssignor implements PartitionAssignor {
      * <li> Generate a map of members per topic using the given member subscriptions.</li>
      * <li> Generate a list of members called potentially unfilled members, which consists of members that have not met the minimum required quota of partitions for the assignment AND
      * get a list called assigned sticky partitions per topic, which has the partitions that will be retained in the new assignment.</li>
-     * <li> Add members from the potentially unfilled members list to the unfilled members per topic map if they haven't met the total required quota
-     * i.e. minRequiredQuota + 1, if the member is designated to receive one of the excess partitions OR minRequiredQuota otherwise. </li>
      * <li> Generate a list of unassigned partitions by calculating the difference between the total partitions for the topic and the assigned (sticky) partitions. </li>
-     * <li> Check if unfilled members exist for the current topicId and assign partitions to them in ranges from the unassigned partitions per topic</code> map
-     *      based on the remaining partitions value stored. </li>
+     * <li> Find members from the potentially unfilled members list that haven't met the total required quota
+     * i.e. minRequiredQuota + 1, if the member is designated to receive one of the excess partitions OR minRequiredQuota otherwise. </li>
+     * <li> Assign partitions to them in ranges from the unassigned partitions per topic
+     *      based on the remaining partitions value. </li>
      * </ol>
      * </p>
      */
@@ -188,25 +188,7 @@ public class RangeAssignor implements PartitionAssignor {
                 }
             }
 
-            List<MemberWithRemainingAssignments> unfilledMembersForTopic = new ArrayList<>();
-
             // Step 3
-            // If remaining > 0 after increasing the required quota due to the extra partition, add potentially unfilled member to the unfilled members list.
-            for (MemberWithRemainingAssignments pair : potentiallyUnfilledMembers) {
-                String memberId = pair.memberId;
-                Integer remaining = pair.remaining;
-                if (numMembersWithExtraPartition > 0) {
-                    remaining++;
-                    numMembersWithExtraPartition--;
-                }
-                if (remaining > 0) {
-                    MemberWithRemainingAssignments newPair = new MemberWithRemainingAssignments(memberId, remaining);
-                    unfilledMembersForTopic
-                        .add(newPair);
-                }
-            }
-
-            // Step 4
             // Find the difference between the total partitions per topic and the already assigned sticky partitions for the topic to get unassigned partitions.
             // List of unassigned partitions per topic contains the partitions in ascending order.
             List<Integer> unassignedPartitionsForTopic = new ArrayList<>();
@@ -216,19 +198,28 @@ public class RangeAssignor implements PartitionAssignor {
                 }
             }
 
-            // Step 5
-            // Assign the remaining number of partitions from the unassigned partitions list.
+            List<MemberWithRemainingAssignments> unfilledMembersForTopic = new ArrayList<>();
+            // Step 4
+            // If remaining > 0 after increasing the required quota due to the extra partition, add potentially unfilled member to the unfilled members list.
             int unassignedPartitionsListStartPointer = 0;
-            for (MemberWithRemainingAssignments memberWithRemainingAssignments : unfilledMembersForTopic) {
-                String memberId = memberWithRemainingAssignments.memberId;
-                int remaining = memberWithRemainingAssignments.remaining;
-                List<Integer> partitionsToAssign = unassignedPartitionsForTopic
-                        .subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
-                unassignedPartitionsListStartPointer += remaining;
-                newAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
-                        .targetPartitions()
-                        .computeIfAbsent(topicId, k -> new HashSet<>())
-                        .addAll(partitionsToAssign);
+            for (MemberWithRemainingAssignments pair : potentiallyUnfilledMembers) {
+                String memberId = pair.memberId;
+                Integer remaining = pair.remaining;
+                if (numMembersWithExtraPartition > 0) {
+                    remaining++;
+                    numMembersWithExtraPartition--;
+                }
+                if (remaining > 0) {
+                    // Step 5
+                    // Assign the remaining number of partitions from the unassigned partitions list.
+                    List<Integer> partitionsToAssign = unassignedPartitionsForTopic
+                            .subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
+                    unassignedPartitionsListStartPointer += remaining;
+                    newAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
+                            .targetPartitions()
+                            .computeIfAbsent(topicId, k -> new HashSet<>())
+                            .addAll(partitionsToAssign);
+                }
             }
         });
 
