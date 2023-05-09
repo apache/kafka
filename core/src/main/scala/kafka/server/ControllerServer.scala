@@ -175,7 +175,8 @@ class ControllerServer(
 
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
-        config.unstableApiVersionsEnabled
+        config.unstableApiVersionsEnabled,
+        config.migrationEnabled
       )
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -258,7 +259,7 @@ class ControllerServer(
             config.passwordEncoderIterations)
           case None => PasswordEncoder.noop()
         }
-        val migrationClient = new ZkMigrationClient(zkClient, zkConfigEncoder)
+        val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
         val migrationDriver = new KRaftMigrationDriver(
           config.nodeId,
@@ -270,7 +271,8 @@ class ControllerServer(
             "zk migration",
             fatal = false,
             () => {}
-          )
+          ),
+          quorumFeatures
         )
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))

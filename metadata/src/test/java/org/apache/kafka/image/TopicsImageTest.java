@@ -56,9 +56,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class TopicsImageTest {
-    static final TopicsImage IMAGE1;
+    public static final TopicsImage IMAGE1;
 
-    static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
     static final TopicsDelta DELTA1;
 
