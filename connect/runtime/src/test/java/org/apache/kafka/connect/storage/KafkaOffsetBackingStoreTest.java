@@ -193,9 +193,11 @@ public class KafkaOffsetBackingStoreTest {
 
         // Set offsets
         Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        EasyMock.expect(storeLog.sendWithReceipt(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0))).andReturn(null);
+        storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
+        PowerMock.expectLastCall();
         Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        EasyMock.expect(storeLog.sendWithReceipt(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1))).andReturn(null);
+        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1));
+        PowerMock.expectLastCall();
 
         // Second get() should get the produced data and return the new values
         final Capture<Callback<Void>> secondGetReadToEndCallback = EasyMock.newCapture();
@@ -274,9 +276,10 @@ public class KafkaOffsetBackingStoreTest {
 
         // Set offsets
         Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        EasyMock.expect(storeLog.sendWithReceipt(EasyMock.isNull(byte[].class), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0))).andReturn(null);
+        storeLog.send(EasyMock.isNull(byte[].class), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
+        PowerMock.expectLastCall();
         Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        EasyMock.expect(storeLog.sendWithReceipt(EasyMock.aryEq(TP1_KEY.array()), EasyMock.isNull(byte[].class), EasyMock.capture(callback1))).andReturn(null);
+        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.isNull(byte[].class), EasyMock.capture(callback1));
         PowerMock.expectLastCall();
 
         // Second get() should get the produced data and return the new values
@@ -334,11 +337,14 @@ public class KafkaOffsetBackingStoreTest {
 
         // Set offsets
         Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        EasyMock.expect(storeLog.sendWithReceipt(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0))).andReturn(null);
+        storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
+        PowerMock.expectLastCall();
         Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        EasyMock.expect(storeLog.sendWithReceipt(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1))).andReturn(null);
+        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1));
+        PowerMock.expectLastCall();
         Capture<org.apache.kafka.clients.producer.Callback> callback2 = EasyMock.newCapture();
-        EasyMock.expect(storeLog.sendWithReceipt(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()), EasyMock.capture(callback2))).andReturn(null);
+        storeLog.send(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()), EasyMock.capture(callback2));
+        PowerMock.expectLastCall();
 
         expectClusterId();
 
