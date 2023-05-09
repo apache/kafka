@@ -217,8 +217,7 @@ public class RangeAssignor implements PartitionAssignor {
                     newAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
                             .targetPartitions()
                             .computeIfAbsent(topicId, k -> new HashSet<>())
-                            .addAll(partitionsToAssign
-                    );
+                            .addAll(partitionsToAssign);
                 }
             }
         });
