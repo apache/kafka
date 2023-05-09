@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -294,9 +293,11 @@ public class RangeAssignorTest {
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
-        currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
-        currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
+        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic2Uuid, 0, 1)
+        );
+
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -304,9 +305,11 @@ public class RangeAssignorTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
-        currentAssignmentForB.put(topic1Uuid, Collections.singleton(2));
-        currentAssignmentForB.put(topic2Uuid, Collections.singleton(2));
+        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 2)
+        );
+
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -340,9 +343,11 @@ public class RangeAssignorTest {
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
-        currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
-        currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
+        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic2Uuid, 0, 1)
+        );
+
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -350,9 +355,11 @@ public class RangeAssignorTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
-        currentAssignmentForB.put(topic1Uuid, Collections.singleton(2));
-        currentAssignmentForB.put(topic2Uuid, Collections.singleton(2));
+        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 2)
+        );
+
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -400,9 +407,11 @@ public class RangeAssignorTest {
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
-        currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1)));
-        currentAssignmentForA.put(topic2Uuid, new HashSet<>(Arrays.asList(0, 1)));
+        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic2Uuid, 0, 1)
+        );
+
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -410,9 +419,11 @@ public class RangeAssignorTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
-        currentAssignmentForB.put(topic1Uuid, Collections.singleton(2));
-        currentAssignmentForB.put(topic2Uuid, Collections.singleton(2));
+        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 2)
+        );
+
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -459,9 +470,11 @@ public class RangeAssignorTest {
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
         // Consumer A was removed
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
-        currentAssignmentForB.put(topic1Uuid, new HashSet<>(Collections.singletonList(2)));
-        currentAssignmentForB.put(topic2Uuid, new HashSet<>(Collections.singletonList(2)));
+        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 2)
+        );
+
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -494,9 +507,11 @@ public class RangeAssignorTest {
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new HashMap<>();
-        currentAssignmentForA.put(topic1Uuid, new HashSet<>(Arrays.asList(0, 1, 2)));
-        currentAssignmentForA.put(topic2Uuid, Collections.singleton(0));
+        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1, 2),
+            mkTopicAssignment(topic2Uuid, 0)
+        );
+
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -504,8 +519,10 @@ public class RangeAssignorTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new HashMap<>();
-        currentAssignmentForB.put(topic2Uuid, Collections.singleton(1));
+        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
+            mkTopicAssignment(topic2Uuid, 1)
+        );
+
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -513,9 +530,11 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForC = new HashMap<>();
-        currentAssignmentForC.put(topic2Uuid, Collections.singleton(2));
-        currentAssignmentForC.put(topic3Uuid, new HashSet<>(Arrays.asList(0, 1)));
+        Map<Uuid, Set<Integer>> currentAssignmentForC = mkAssignment(
+            mkTopicAssignment(topic2Uuid, 2),
+            mkTopicAssignment(topic3Uuid, 0, 1)
+        );
+
         members.put(consumerC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
