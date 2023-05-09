@@ -1,10 +1,10 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -315,9 +315,9 @@ public class GenericGroup {
             this.protocolType = Optional.of(member.protocolType());
         }
 
-        assert(Objects.equals(this.protocolType.orElse(null), member.protocolType()));
-        assert(supportsProtocols(member.protocolType(),
-            GenericGroupMember.plainProtocolSet(member.supportedProtocols())));
+        assert Objects.equals(this.protocolType.orElse(null), member.protocolType());
+        assert supportsProtocols(member.protocolType(),
+            GenericGroupMember.plainProtocolSet(member.supportedProtocols()));
 
         if (!leaderId.isPresent()) {
             leaderId = Optional.of(member.memberId());
@@ -716,9 +716,9 @@ public class GenericGroup {
      * @param member the member.
      */
     private void incrementSupportedProtocols(GenericGroupMember member) {
-        member.supportedProtocols().forEach( protocol -> {
-           int count = supportedProtocols.getOrDefault(protocol.name(), 0);
-           supportedProtocols.put(protocol.name(), count + 1);
+        member.supportedProtocols().forEach(protocol -> {
+            int count = supportedProtocols.getOrDefault(protocol.name(), 0);
+            supportedProtocols.put(protocol.name(), count + 1);
         });
     }
 
@@ -729,7 +729,7 @@ public class GenericGroup {
      * @param member the member.
      */
     private void decrementSupportedProtocols(GenericGroupMember member) {
-        member.supportedProtocols().forEach( protocol -> {
+        member.supportedProtocols().forEach(protocol -> {
             int count = supportedProtocols.getOrDefault(protocol.name(), 0);
             supportedProtocols.put(protocol.name(), count - 1);
         });
@@ -811,7 +811,7 @@ public class GenericGroup {
         if (protocolName.isPresent()) {
             try {
                 Set<String> allSubscribedTopics = new HashSet<>();
-                members.values().forEach( member -> {
+                members.values().forEach(member -> {
                     ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
                     ConsumerProtocol.deserializeVersion(buffer);
                     allSubscribedTopics.addAll(new HashSet<>(

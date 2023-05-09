@@ -1,10 +1,10 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -36,7 +35,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.CompletingRebalance;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Dead;
@@ -45,7 +43,6 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Prepa
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Stable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -230,7 +227,7 @@ public class GenericGroupTest {
 
         List<Protocol> member2Protocols = Arrays.asList(
             new Protocol("roundrobin", new byte[0]),
-        new Protocol("range", new byte[0])
+            new Protocol("range", new byte[0])
         );
 
         GenericGroupMember member2 = new GenericGroupMember(
@@ -561,7 +558,7 @@ public class GenericGroupTest {
         CompletableFuture<SyncGroupResponseData> syncGroupFuture = new CompletableFuture<>();
         syncGroupFuture.whenComplete((syncGroupResult, __) ->
             syncAwaitingMemberFenced.set(syncGroupResult.errorCode() == Errors.FENCED_INSTANCE_ID.code()));
-        member.setAwaitingSyncCallback(syncGroupFuture);
+        member.setAwaitingSyncFuture(syncGroupFuture);
 
         assertTrue(group.isLeader(memberId));
         assertEquals(memberId, group.currentStaticMemberId(groupInstanceId));
@@ -657,7 +654,7 @@ public class GenericGroupTest {
 
         group.add(member);
         CompletableFuture<SyncGroupResponseData> syncGroupFuture = new CompletableFuture<>();
-        member.setAwaitingSyncCallback(syncGroupFuture);
+        member.setAwaitingSyncFuture(syncGroupFuture);
 
         assertTrue(group.completeSyncFuture(member, new SyncGroupResponseData()
             .setErrorCode(Errors.NONE.code())));
