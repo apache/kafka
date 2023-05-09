@@ -98,7 +98,7 @@ public class OffsetFetcher {
         this.apiVersions = apiVersions;
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptions,
-                time, apiVersions);
+            time, apiVersions);
     }
 
     private OffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
@@ -122,7 +122,8 @@ public class OffsetFetcher {
         if (exception != null)
             throw exception;
 
-        Map<TopicPartition, Long> offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
+        Map<TopicPartition, Long> offsetResetTimestamps =
+            offsetFetcherUtils.getOffsetResetTimestamp();
 
         if (offsetResetTimestamps.isEmpty())
             return;
@@ -135,8 +136,7 @@ public class OffsetFetcher {
      */
     public void validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
-                offsetFetcherUtils.getPartitionsToValidate();
-
+            offsetFetcherUtils.getPartitionsToValidate();
         validatePositionsAsync(partitionsToValidate);
     }
 
@@ -517,7 +517,6 @@ public class OffsetFetcher {
             future.raise(e);
         }
     }
-
 
     /**
      * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then

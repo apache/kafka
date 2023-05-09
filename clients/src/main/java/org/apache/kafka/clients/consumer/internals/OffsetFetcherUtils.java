@@ -69,7 +69,6 @@ class OffsetFetcherUtils {
 
     /**
      * Callback for the response of the list offset call.
-     *
      * @param listOffsetsResponse The response from the server.
      * @return {@link OffsetFetcherUtils.ListOffsetResult} extracted from the response, containing the fetched offsets
      * and partitions to retry.
