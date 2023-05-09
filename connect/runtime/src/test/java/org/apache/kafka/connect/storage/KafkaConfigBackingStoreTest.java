@@ -334,7 +334,7 @@ public class KafkaConfigBackingStoreTest {
 
         expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
 
-        storeLog.send(EasyMock.anyObject(), EasyMock.anyObject());
+        storeLog.sendWithReceipt(EasyMock.anyObject(), EasyMock.anyObject());
         EasyMock.expectLastCall().andReturn(producerFuture);
 
         producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
@@ -369,13 +369,13 @@ public class KafkaConfigBackingStoreTest {
         @SuppressWarnings("unchecked")
         Future<RecordMetadata> connectorConfigProducerFuture = PowerMock.createMock(Future.class);
         // tombstone for the connector config
-        storeLog.send(EasyMock.anyObject(), EasyMock.isNull());
+        storeLog.sendWithReceipt(EasyMock.anyObject(), EasyMock.isNull());
         EasyMock.expectLastCall().andReturn(connectorConfigProducerFuture);
 
         @SuppressWarnings("unchecked")
         Future<RecordMetadata> targetStateProducerFuture = PowerMock.createMock(Future.class);
         // tombstone for the connector target state
-        storeLog.send(EasyMock.anyObject(), EasyMock.isNull());
+        storeLog.sendWithReceipt(EasyMock.anyObject(), EasyMock.isNull());
         EasyMock.expectLastCall().andReturn(targetStateProducerFuture);
 
         connectorConfigProducerFuture.get(EasyMock.eq(READ_WRITE_TOTAL_TIMEOUT_MS), EasyMock.anyObject());
@@ -452,7 +452,7 @@ public class KafkaConfigBackingStoreTest {
 
         // In the meantime, write a target state (which doesn't require write privileges)
         expectConvert(KafkaConfigBackingStore.TARGET_STATE_V0, TARGET_STATE_PAUSED, CONFIGS_SERIALIZED.get(1));
-        storeLog.send("target-state-" + CONNECTOR_IDS.get(1), CONFIGS_SERIALIZED.get(1));
+        storeLog.sendWithReceipt("target-state-" + CONNECTOR_IDS.get(1), CONFIGS_SERIALIZED.get(1));
         EasyMock.expectLastCall().andReturn(producerFuture);
         producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
         EasyMock.expectLastCall().andReturn(null);
@@ -1583,7 +1583,7 @@ public class KafkaConfigBackingStoreTest {
             EasyMock.expect(converter.fromConnectData(EasyMock.eq(TOPIC), EasyMock.eq(valueSchema), EasyMock.capture(capturedRecord)))
                     .andReturn(serialized);
 
-        storeLog.send(EasyMock.eq(configKey), EasyMock.aryEq(serialized));
+        storeLog.sendWithReceipt(EasyMock.eq(configKey), EasyMock.aryEq(serialized));
         EasyMock.expectLastCall().andReturn(producerFuture);
 
         producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
