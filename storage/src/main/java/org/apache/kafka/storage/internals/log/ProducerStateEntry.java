@@ -132,8 +132,14 @@ public class ProducerStateEntry {
         }
     }
     
-    public void maybeUpdateTentativeSequence(int sequence) {
-        if (batchMetadata.isEmpty() && (!this.tentativeSequence.isPresent() || this.tentativeSequence.getAsInt() > sequence))
+    // We only set tentative sequence if no batches have been written to the log. It is used to avoid OutOfOrderSequenceExceptions
+    // when we saw a lower sequence during transaction verification. We will update the sequence when there is no batch metadata if:
+    //  a) There is no tentative sequence yet
+    //  b) A lower sequence for the same epoch is seen and should thereby block records after that
+    //  c) A higher producer epoch is found that will reset the lowest seen sequence
+    public void maybeUpdateTentativeSequence(int sequence, short producerEpoch) {
+        if (batchMetadata.isEmpty() && 
+                (!this.tentativeSequence.isPresent() || (this.producerEpoch == producerEpoch && this.tentativeSequence.getAsInt() > sequence) || this.producerEpoch < producerEpoch))
             this.tentativeSequence = OptionalInt.of(sequence);
     }
 

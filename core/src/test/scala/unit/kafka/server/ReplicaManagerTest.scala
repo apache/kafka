@@ -2305,9 +2305,9 @@ class ReplicaManagerTest {
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd1), any())
       checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(9))
 
-      // Append a record with a higher epoch and a lower sequence number.
+      // Append a record with a higher epoch and a higher sequence number.
       val newProducerEpoch = 1.toShort
-      val transactionalRecords2 = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, newProducerEpoch, 0,
+      val transactionalRecords2 = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, newProducerEpoch, 11,
         new SimpleRecord("message".getBytes))
 
       val transactionToAdd2 = new AddPartitionsToTxnTransaction()
@@ -2321,12 +2321,12 @@ class ReplicaManagerTest {
 
       appendRecords(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd2), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(0))
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(11))
       
       // Trying to append with a lower epoch will not modify verification state and tentative sequence.
       appendRecords(replicaManager, tp0, transactionalRecords1, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(2)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd1), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(0))
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(11))
     } finally {
       replicaManager.shutdown()
     }

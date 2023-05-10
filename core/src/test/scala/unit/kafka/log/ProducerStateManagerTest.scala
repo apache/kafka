@@ -21,7 +21,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
-import java.util.{Collections, Optional, OptionalLong}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -1085,6 +1085,38 @@ class ProducerStateManagerTest {
     Files.delete(file.toPath)
     assertTrue(!manager.removeAndMarkSnapshotForDeletion(5).isPresent)
     assertTrue(!manager.latestSnapshotOffset.isPresent)
+  }
+
+  @Test
+  def testEntryForVerification(): Unit = {
+    val producerEpoch = 2.toShort
+    val earliestSequence = 10
+    val originalEntry = stateManager.entryForVerification(producerId, producerEpoch, earliestSequence)
+    
+    def verifyEntry(producerId: Long, sequence: OptionalInt, producerEpoch: Short, entry: ProducerStateEntry): Unit = {
+      assertTrue(stateManager.activeProducers().containsKey(producerId))
+      assertTrue(stateManager.activeProducers().containsValue(entry))
+      assertEquals(producerId, entry.producerId())
+      assertEquals(ProducerStateEntry.VerificationState.EMPTY, entry.verificationState())
+      assertEquals(sequence, entry.tentativeSequence())
+      assertEquals(producerEpoch, entry.producerEpoch())
+    }
+      
+    verifyEntry(producerId, OptionalInt.of(earliestSequence), producerEpoch, originalEntry)
+    
+    // If we already have an entry and we see a lower sequence, replace it.
+    val newSequence = 7
+    val updatedSeqEntry = stateManager.entryForVerification(producerId, producerEpoch, newSequence)
+    verifyEntry(producerId, OptionalInt.of(newSequence), producerEpoch, updatedSeqEntry)
+    
+    // When updating epoch, sequence should also be reflected
+    val newEpochSequence = 12
+    val newEpoch = 3.toShort
+    val updatedEpochEntry = stateManager.entryForVerification(producerId, newEpoch, newEpochSequence)
+    verifyEntry(producerId, OptionalInt.of(newEpochSequence), newEpoch, updatedEpochEntry)
+    
+    updatedEpochEntry.addBatch(newEpoch, newEpochSequence, 0L, 0, 0L)
+    verifyEntry(producerId, OptionalInt.empty(), newEpoch, updatedEpochEntry)
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {

@@ -65,11 +65,11 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
           val oldCallback = existingNodeAndTransactionData.callbacks(transactionData.transactionalId())
           existingNodeAndTransactionData.transactionData.remove(transactionData)
           oldCallback(topicPartitionsToError(existingTransactionData, error))
+        } else {
+          // If the incoming transactionData's epoch is lower, we can return with INVALID_PRODUCER_EPOCH immediately.
+          callback(topicPartitionsToError(transactionData, Errors.INVALID_PRODUCER_EPOCH))
+          return
         }
-      } else {
-        // If the incoming transactionData's epoch is lower, we can return with INVALID_PRODUCER_EPOCH immediately.
-        callback(topicPartitionsToError(transactionData, Errors.INVALID_PRODUCER_EPOCH))
-        return
       }
 
       existingNodeAndTransactionData.transactionData.add(transactionData)

@@ -188,12 +188,13 @@ public class ProducerStateManager {
     public ProducerStateEntry entryForVerification(long producerId, short producerEpoch, int firstSequence) {
         ProducerStateEntry entry = producers.get(producerId);
         if (entry != null) {
+            entry.maybeUpdateTentativeSequence(firstSequence, producerEpoch);
             entry.maybeUpdateProducerHigherEpoch(producerEpoch);
         } else {
             entry = ProducerStateEntry.forVerification(producerId, producerEpoch, time.milliseconds());
             addProducerId(producerId, entry);
+            entry.maybeUpdateTentativeSequence(firstSequence, producerEpoch);
         }
-        entry.maybeUpdateTentativeSequence(firstSequence);
         return entry;
     }
 
