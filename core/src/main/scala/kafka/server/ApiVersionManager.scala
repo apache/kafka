@@ -124,10 +124,10 @@ class SimpleApiVersionManager(
  *
  * @param listenerType the listener type
  * @param forwardingManager the forwarding manager,
- * @param features
- * @param metadataCache
- * @param enableUnstableLastVersion
- * @param zkMigrationEnabled
+ * @param features the broker features
+ * @param metadataCache the metadata cache, used to get the finalized features and the metadata version
+ * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
+ * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
  */
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
