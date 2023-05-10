@@ -572,6 +572,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   def shutdown(): Unit = {
+    metrics.removeSensor(delayQueueSensor.name())
     initiateShutdown()
     throttledChannelReaper.awaitShutdown()
   }

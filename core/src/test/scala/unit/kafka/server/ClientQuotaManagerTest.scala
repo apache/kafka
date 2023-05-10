@@ -418,6 +418,17 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
   }
 
+  @Test
+  def testDelayedQueueSensorShouldShouldExistAfterInstantiationAndBeRemovedAfterShutdown(): Unit = {
+    val sensorName = Produce.toString + "-delayQueue"
+    val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
+    var delayedQueueSensor = metrics.getSensor(sensorName)
+    assertNotNull(delayedQueueSensor, "delayed queue sensor should exist")
+    clientQuotaManager.shutdown()
+    delayedQueueSensor = metrics.getSensor(sensorName)
+    assertNull(delayedQueueSensor, "delayed queue sensor should not exist after shutdown")
+  }
+
   private case class UserClient(user: String, clientId: String, configUser: Option[String] = None, configClientId: Option[String] = None) {
     // The class under test expects only sanitized client configs. We pass both the default value (which should not be
     // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
