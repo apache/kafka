@@ -57,7 +57,7 @@ class DumpLogSegmentsTest {
   val snapshotPath = s"$logDir/00000000000000000000-0000000000.checkpoint"
   val indexFilePath = s"$logDir/$segmentName.index"
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
-  val time = new MockTime(0, 0)
+  val time = new MockTime()
 
   val batches = new ArrayBuffer[BatchInfo]
   var log: UnifiedLog = _

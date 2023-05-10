@@ -26,7 +26,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{PrimitiveRef, Time}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult
+import org.apache.kafka.storage.internals.log.LogValidator.{TIME_DRIFT_TOLERANCE, ValidationResult}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogValidator, RecordValidationException}
 import org.apache.kafka.test.TestUtils
@@ -1352,6 +1352,61 @@ class LogValidatorTest {
     assertEquals(e.recordErrors.size, 3)
   }
 
+  @Test
+  def testFutureLogTimestampShouldThrowException(): Unit = {
+    val now = System.currentTimeMillis()
+    val fiveMinutesAfterDriftTolerance = now + TIME_DRIFT_TOLERANCE + (5 * 60 * 1000L)
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = fiveMinutesAfterDriftTolerance,
+      codec = CompressionType.GZIP)
+    val e = assertThrows(classOf[RecordValidationException],
+      () => new LogValidator(
+        records,
+        topicPartition,
+        time,
+        CompressionType.GZIP,
+        CompressionType.GZIP,
+        false,
+        RecordBatch.MAGIC_VALUE_V1,
+        TimestampType.CREATE_TIME,
+        Long.MaxValue,
+        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        AppendOrigin.CLIENT,
+        MetadataVersion.latest
+      ).validateMessagesAndAssignOffsets(
+        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      )
+    )
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+    assertFalse(e.recordErrors.isEmpty)
+    assertEquals(e.recordErrors.size, 3)
+  }
+
+  @Test
+  def testFutureLogTimestampWithinToleranceShouldNotThrowException(): Unit = {
+    val now = System.currentTimeMillis()
+    val fiveMinutesBeforeDriftTolerance = now + TIME_DRIFT_TOLERANCE - (5 * 60 * 1000L)
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = fiveMinutesBeforeDriftTolerance,
+      codec = CompressionType.GZIP)
+    assertDoesNotThrow(() => new LogValidator(
+        records,
+        topicPartition,
+        time,
+        CompressionType.GZIP,
+        CompressionType.GZIP,
+        false,
+        RecordBatch.MAGIC_VALUE_V1,
+        TimestampType.CREATE_TIME,
+        Long.MaxValue,
+        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        AppendOrigin.CLIENT,
+        MetadataVersion.latest
+      ).validateMessagesAndAssignOffsets(
+        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      )
+    )
+
+  }
   @Test
   def testInvalidRecordExceptionHasBatchIndex(): Unit = {
     val e = assertThrows(classOf[RecordValidationException],

@@ -1839,16 +1839,18 @@ class LogCleanerTest {
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
 
+    //use slightly older timestamp to avoid validation issues with future timestamps
+    val beforeFortyEightHours = time.milliseconds() - 48 * 60 * 60 * 1000L
     // Append a message with a large timestamp.
     log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
                                           key = "0".getBytes,
-                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
+                                          timestamp = beforeFortyEightHours + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     // Append a tombstone with a small timestamp and roll out a new log segment.
     log.appendAsLeader(TestUtils.singletonRecords(value = null,
                                           key = "0".getBytes,
-                                          timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
+                                          timestamp = beforeFortyEightHours - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))

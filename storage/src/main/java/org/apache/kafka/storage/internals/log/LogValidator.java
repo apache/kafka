@@ -52,6 +52,9 @@ import java.util.Iterator;
 
 public class LogValidator {
 
+    //Time synchronization services like NTP, PTP are capable of fixing drift in the 10th of milliseconds.
+    // A tolerance of one hour is enough to handle all cases.
+    public static final long TIME_DRIFT_TOLERANCE = 60 * 60 * 1000L;
     public interface MetricsRecorder {
         void recordInvalidMagic();
 
@@ -590,18 +593,25 @@ public class LogValidator {
                                                               TimestampType timestampType,
                                                               long timestampDiffMaxMs) {
         if (timestampType == TimestampType.CREATE_TIME
-                && record.timestamp() != RecordBatch.NO_TIMESTAMP
-                && Math.abs(record.timestamp() - now) > timestampDiffMaxMs)
-            return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
-                "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
-                + " is out of range. The timestamp should be within [" + (now - timestampDiffMaxMs)
-                + ", " + (now + timestampDiffMaxMs) + "]")));
+                && record.timestamp() != RecordBatch.NO_TIMESTAMP){
+            final long timestampDiff = record.timestamp() - now;
+            if(timestampDiff > TIME_DRIFT_TOLERANCE){
+                return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
+                        "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
+                                + " is ahead of the server's time. " + now)));
+            }
+            if(Math.abs(timestampDiff) > timestampDiffMaxMs){
+                return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
+                        "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
+                                + " is out of range. The timestamp should be within [" + (now - timestampDiffMaxMs)
+                                + ", " + (now + timestampDiffMaxMs) + "]")));
+            }
+        }
         else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
             return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
                 "Invalid timestamp type in message " + record + ". Producer should not set timestamp "
                 + "type to LogAppendTime.")));
-        else
-            return Optional.empty();
+        return Optional.empty();
     }
 
     private static Optional<ApiRecordError> validateRecordCompression(CompressionType sourceCompression,
