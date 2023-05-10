@@ -42,7 +42,7 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
 import java.nio.ByteBuffer
-import java.util.{Optional, OptionalLong}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
@@ -998,7 +998,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
     partition.transactionNeedsVerifying(1L, 0, 0)
-    partition.compareAndSetVerificationState(1L, 0, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+    partition.compareAndSetVerificationState(1L, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
     partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
@@ -3267,6 +3267,13 @@ class PartitionTest extends AbstractPartitionTest {
       .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
 
+    def verifyProducerStateEntry(expectedVerificationState: ProducerStateEntry.VerificationState, expectedSequence: OptionalInt): Unit = {
+      val entry = partition.log.get.producerStateManager.activeProducers().get(producerId)
+      assertNotNull(entry)
+      assertEquals(expectedVerificationState, entry.verificationState())
+      assertEquals(expectedSequence, entry.tentativeSequence())
+    }
+
     val idempotentRecords = createIdempotentRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
@@ -3275,11 +3282,11 @@ class PartitionTest extends AbstractPartitionTest {
       producerId = producerId)
     partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
     assertEquals(OptionalLong.empty(), txnFirstOffset(producerId))
-    assertEquals(ProducerStateEntry.VerificationState.EMPTY, verificationState(producerId))
+    verifyProducerStateEntry(ProducerStateEntry.VerificationState.EMPTY, OptionalInt.empty())
 
     assertEquals(OptionalLong.empty(), txnFirstOffset(producerId))
     // For idempotent records, verification state should remain empty
-    assertEquals(ProducerStateEntry.VerificationState.EMPTY, verificationState(producerId))
+    verifyProducerStateEntry(ProducerStateEntry.VerificationState.EMPTY, OptionalInt.empty())
 
     def transactionRecords() = createTransactionalRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -3292,24 +3299,20 @@ class PartitionTest extends AbstractPartitionTest {
     // When verification state is empty, we should not be able to append.
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
 
-    // Before appendRecordsToLeader is called, ReplicaManager will call transactionNeedsVerifying.
+    // Before appendRecordsToLeader is called, ReplicaManager will call transactionNeedsVerifying. We have no tentative sequence, since this entry already has a batch.
     partition.transactionNeedsVerifying(producerId, 0, 3)
-    assertEquals(ProducerStateEntry.VerificationState.VERIFYING, verificationState(producerId))
+    verifyProducerStateEntry(ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.empty())
     
     // Before we verify, the append should fail.
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
     
     // Upon receiving a non-error verification callback, we set to verified.
-    partition.compareAndSetVerificationState(producerId, 0, 3, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
-    assertEquals(ProducerStateEntry.VerificationState.VERIFIED, verificationState(producerId))
+    partition.compareAndSetVerificationState(producerId, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+    verifyProducerStateEntry(ProducerStateEntry.VerificationState.VERIFIED, OptionalInt.empty())
     
     // Append should proceed.
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
     assertEquals(OptionalLong.of(3), txnFirstOffset(producerId))
-  }
-  
-  private def verificationState(producerId: Long): ProducerStateEntry.VerificationState = {
-    partition.log.get.producerStateManager.activeProducers().get(producerId).verificationState()
   }
 
   private def txnFirstOffset(producerId: Long): OptionalLong = {

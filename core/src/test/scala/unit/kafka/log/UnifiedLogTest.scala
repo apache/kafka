@@ -36,6 +36,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.ProducerStateEntry.VerificationState
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -47,7 +48,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Callable, ConcurrentHashMap, Executors}
-import java.util.{Optional, OptionalLong, Properties}
+import java.util.{Optional, OptionalInt, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.compat.java8.OptionConverters._
@@ -484,7 +485,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
 
     // create a log
-    val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60, true))
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60, false))
     assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
     // Test the segment rolling behavior when messages do not have a timestamp.
     mockTime.sleep(log.config.segmentMs + 1)
@@ -1174,7 +1175,7 @@ class UnifiedLogTest {
 
   @Test
   def testPeriodicProducerIdExpiration(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(200, true)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(200, false)
     val producerIdExpirationCheckIntervalMs = 100
 
     val pid = 23L
@@ -3665,6 +3666,58 @@ class UnifiedLogTest {
     log.appendAsLeader(records(0), 0)
     log.maybeIncrementHighWatermark(new LogOffsetMetadata(4))
     listener.verify(expectedHighWatermark = 4)
+  }
+  
+  @Test
+  def testValidateVerificationState(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val sequence = 3
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    
+    val transactionalRecords1 = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+    
+    def validateProducerStateEntry(producerId: Long, producerEpoch: Short, verificationState: VerificationState, sequence: OptionalInt): Unit = {
+      val entry = log.producerStateManager.activeProducers().get(producerId)
+      assertNotNull(entry)
+      assertEquals(producerEpoch, entry.producerEpoch())
+      assertEquals(verificationState, entry.verificationState())
+      assertEquals(sequence, entry.tentativeSequence())
+    }
+
+    assertThrows(classOf[InvalidRecordException], () => log.appendAsLeader(transactionalRecords1, leaderEpoch = 0))
+    
+    log.transactionNeedsVerifying(producerId, producerEpoch, sequence)
+    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFYING, OptionalInt.of(sequence))
+    assertThrows(classOf[InvalidRecordException], () => log.appendAsLeader(transactionalRecords1, leaderEpoch = 0))
+
+    log.compareAndSetVerificationState(producerId, producerEpoch, VerificationState.VERIFYING, VerificationState.VERIFIED)
+    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFIED, OptionalInt.of(sequence))
+    
+    val transactionalRecords2 = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence + 1,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+    
+    assertThrows(classOf[OutOfOrderSequenceException], () => log.appendAsLeader(transactionalRecords2, leaderEpoch = 0))
+    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFIED, OptionalInt.of(sequence))
+
+    log.appendAsLeader(transactionalRecords1, leaderEpoch = 0)
+    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFIED, OptionalInt.empty())
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

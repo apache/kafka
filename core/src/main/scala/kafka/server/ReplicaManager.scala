@@ -771,7 +771,7 @@ class ReplicaManager(val config: KafkaConfig,
           val verifiedPartitions = notYetVerifiedEntriesPerPartition.keySet.map(_.asInstanceOf[TopicPartition]).diff(unverifiedEntries.keySet)
           verifiedPartitions.foreach { tp => 
             getPartitionOrException(tp).compareAndSetVerificationState(
-              batchInfo.producerId, batchInfo.producerEpoch, batchInfo.baseSequence, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
+              batchInfo.producerId, batchInfo.producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
           }
           appendEntries(allEntries)(unverifiedEntries)
         }

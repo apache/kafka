@@ -581,10 +581,9 @@ class Partition(val topicPartition: TopicPartition,
   
   def compareAndSetVerificationState(producerId: Long,
                                      producerEpoch: Short,
-                                     baseSequence: Int,
                                      expectedVerificationState: ProducerStateEntry.VerificationState,
                                      newVerficationState: ProducerStateEntry.VerificationState): Unit = {
-    leaderLogIfLocal.foreach(leaderLog => leaderLog.compareAndSetVerificationState(producerId, producerEpoch, baseSequence, expectedVerificationState, newVerficationState))
+    leaderLogIfLocal.foreach(leaderLog => leaderLog.compareAndSetVerificationState(producerId, producerEpoch, expectedVerificationState, newVerficationState))
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition
