@@ -752,7 +752,7 @@ public class RemoteLogManager implements Closeable {
             accumulator.accept(searchResult.abortedTransactions);
             if (!searchResult.isComplete) {
                 if (!searchInLocalLog) {
-                    nextSegmentMetadataOpt = findNextSegmentMetadata(nextSegmentMetadataOpt.get(), log);
+                    nextSegmentMetadataOpt = findNextSegmentMetadata(nextSegmentMetadataOpt.get(), log.leaderEpochCache());
 
                     txnIndexOpt = nextSegmentMetadataOpt.map(x -> indexCache.getIndexEntry(x).txnIndex());
                     if (!txnIndexOpt.isPresent()) {
@@ -769,23 +769,17 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata, UnifiedLog log) throws RemoteStorageException {
-        Option<LeaderEpochFileCache> leaderEpochFileCacheOption = log.leaderEpochCache();
+    private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
+                                                                       Option<LeaderEpochFileCache> leaderEpochFileCacheOption) throws RemoteStorageException {
         if (leaderEpochFileCacheOption.isEmpty()) {
             return Optional.empty();
         }
 
-        TopicPartition topicPartition = segmentMetadata.topicIdPartition().topicPartition();
         long nextSegmentBaseOffset = segmentMetadata.endOffset() + 1;
-        OptionalInt epoch = OptionalInt.of(segmentMetadata.segmentLeaderEpochs().lastEntry().getKey());
-        Optional<RemoteLogSegmentMetadata> result = Optional.empty();
-        LeaderEpochFileCache leaderEpochFileCache = leaderEpochFileCacheOption.get();
-        while (!result.isPresent() && epoch.isPresent()) {
-            result = fetchRemoteLogSegmentMetadata(topicPartition, epoch.getAsInt(), nextSegmentBaseOffset);
-            epoch = leaderEpochFileCache.nextEpoch(epoch.getAsInt());
-        }
-
-        return result;
+        OptionalInt epoch = leaderEpochFileCacheOption.get().epochForOffset(nextSegmentBaseOffset);
+        return epoch.isPresent()
+                ? fetchRemoteLogSegmentMetadata(segmentMetadata.topicIdPartition().topicPartition(), epoch.getAsInt(), nextSegmentBaseOffset)
+                : Optional.empty();
     }
 
     private RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
