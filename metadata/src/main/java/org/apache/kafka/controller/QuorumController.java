@@ -378,6 +378,7 @@ public final class QuorumController implements Controller {
         public void accept(ConfigResource configResource) {
             switch (configResource.type()) {
                 case BROKER_LOGGER:
+                    // BROKER_LOGGER are always allowed.
                     break;
                 case BROKER:
                     // Cluster configs are always allowed.
@@ -430,15 +431,6 @@ public final class QuorumController implements Controller {
             return new NotControllerException("The controller is in pre-migration mode.");
         } else {
             return new NotControllerException("No controller appears to be active.");
-        }
-    }
-
-    public static int exceptionToApparentController(NotControllerException e) {
-        if (e.getMessage().startsWith(ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX)) {
-            return Integer.parseInt(e.getMessage().substring(
-                ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX.length()));
-        } else {
-            return -1;
         }
     }
 
@@ -1587,11 +1579,6 @@ public final class QuorumController implements Controller {
     private final FaultHandler fatalFaultHandler;
 
     /**
-     * The slf4j log context, used to create new loggers.
-     */
-    private final LogContext logContext;
-
-    /**
      * The slf4j logger.
      */
     private final Logger log;
@@ -1823,7 +1810,6 @@ public final class QuorumController implements Controller {
         boolean zkMigrationEnabled
     ) {
         this.fatalFaultHandler = fatalFaultHandler;
-        this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.clusterId = clusterId;
