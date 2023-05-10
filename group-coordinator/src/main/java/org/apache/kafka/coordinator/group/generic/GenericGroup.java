@@ -185,6 +185,13 @@ public class GenericGroup {
     }
 
     /**
+     * @return the group id.
+     */
+    public String groupId() {
+        return this.groupId;
+    }
+
+    /**
      * @return the generation id.
      */
     public int generationId() {
