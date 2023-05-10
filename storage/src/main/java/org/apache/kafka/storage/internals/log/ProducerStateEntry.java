@@ -237,6 +237,8 @@ public class ProducerStateEntry {
                 ", coordinatorEpoch=" + coordinatorEpoch +
                 ", lastTimestamp=" + lastTimestamp +
                 ", batchMetadata=" + batchMetadata +
+                ", transactionVerificationState=" + verificationState +
+                ", tentativeSequence=" + tentativeSequence +
                 ')';
     }
 }

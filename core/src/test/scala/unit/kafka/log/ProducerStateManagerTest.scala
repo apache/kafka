@@ -1118,6 +1118,39 @@ class ProducerStateManagerTest {
     updatedEpochEntry.addBatch(newEpoch, newEpochSequence, 0L, 0, 0L)
     verifyEntry(producerId, OptionalInt.empty(), newEpoch, updatedEpochEntry)
   }
+  
+  @Test 
+  def testVerificationFieldsClearedOnReload(): Unit = {
+    val producerId1 = 1L
+    val producerEpoch1 = 0.toShort
+    val producerId2 = 2L
+    val producerEpoch2 = 2.toShort
+    val entry1 = stateManager.entryForVerification(producerId1, producerEpoch1, 2)
+    val entry2 = stateManager.entryForVerification(producerId2, producerEpoch2, 3)
+    
+    entry1.compareAndSetVerificationState(producerEpoch1, ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFYING)
+    entry2.compareAndSetVerificationState(producerEpoch2, ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFIED)
+    append(stateManager, producerId2, producerEpoch2, 0, offset = 2, isTransactional = true)
+    stateManager.takeSnapshot()
+
+    val recoveredMapping = new ProducerStateManager(partition, logDir,
+      maxTransactionTimeoutMs, producerStateManagerConfig, time)
+    recoveredMapping.truncateAndReload(0L, 3L, 0)
+    val recoveredEntry1 = recoveredMapping.activeProducers().get(producerId1)
+    val recoveredEntry2 = recoveredMapping.activeProducers().get(producerId2)
+    
+    // Entry 1 should be empty and have no tentative sequence.
+    assertEquals(entry1.producerId(), recoveredEntry1.producerId())
+    assertEquals(entry1.producerEpoch(), recoveredEntry1.producerEpoch())
+    assertEquals(ProducerStateEntry.VerificationState.EMPTY, recoveredEntry1.verificationState())
+    assertEquals(OptionalInt.empty(), recoveredEntry1.tentativeSequence())
+    
+    // Entry 2 should be the same.
+    assertEquals(entry2.producerId(), recoveredEntry2.producerId())
+    assertEquals(entry2.producerEpoch(), recoveredEntry2.producerEpoch())
+    assertEquals(entry2.verificationState(), recoveredEntry2.verificationState())
+    assertEquals(entry2.tentativeSequence(), recoveredEntry2.tentativeSequence())
+  }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
     val epoch = 0.toShort
