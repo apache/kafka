@@ -14,25 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
-import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineObject;
+package org.apache.kafka.metadata.migration;
 
-public class MigrationControlManager {
-    private final TimelineObject<ZkMigrationState> zkMigrationState;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.resource.ResourcePattern;
 
-    MigrationControlManager(SnapshotRegistry snapshotRegistry) {
-        zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
-    }
+import java.util.Collection;
+import java.util.Set;
+import java.util.function.BiConsumer;
 
-    ZkMigrationState zkMigrationState() {
-        return zkMigrationState.get();
-    }
+public interface AclMigrationClient {
+    ZkMigrationLeadershipState deleteResource(
+        ResourcePattern resourcePattern,
+        ZkMigrationLeadershipState state
+    );
 
-    void replay(ZkMigrationStateRecord record) {
-        zkMigrationState.set(ZkMigrationState.of(record.zkMigrationState()));
-    }
+    ZkMigrationLeadershipState writeResourceAcls(
+        ResourcePattern resourcePattern,
+        Collection<AccessControlEntry> aclsToWrite,
+        ZkMigrationLeadershipState state
+    );
+
+    void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer);
 }

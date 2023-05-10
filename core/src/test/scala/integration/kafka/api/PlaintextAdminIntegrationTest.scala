@@ -1466,7 +1466,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // meaningful election
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
     assertEquals(Set(partition1).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
+    electResult.partitions.get.get(partition1)
+      .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
     TestUtils.assertLeader(client, partition1, 1)
 
     // topic 2 unchanged
@@ -1476,7 +1477,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // meaningful election with null partitions
     electResult = client.electLeaders(ElectionType.PREFERRED, null)
     assertEquals(Set(partition2), electResult.partitions.get.keySet.asScala)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+    electResult.partitions.get.get(partition2)
+      .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition2"))
     TestUtils.assertLeader(client, partition2, 1)
 
     def assertUnknownTopicOrPartition(
@@ -1578,9 +1580,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     killBroker(broker1)
     TestUtils.assertNoLeader(client, partition1)
     brokers(broker2).startup()
+    TestUtils.waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
+    electResult.partitions.get.get(partition1)
+      .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
     TestUtils.assertLeader(client, partition1, broker2)
   }
 
@@ -1613,10 +1617,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertNoLeader(client, partition2)
     brokers(broker2).startup()
+    TestUtils.waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1, partition2).asJava)
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+    electResult.partitions.get.get(partition1)
+      .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
+    electResult.partitions.get.get(partition2)
+      .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition2"))
     TestUtils.assertLeader(client, partition1, broker2)
     TestUtils.assertLeader(client, partition2, broker2)
   }
@@ -1651,9 +1658,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertLeader(client, partition2, broker3)
     brokers(broker2).startup()
+    TestUtils.waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, null)
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
+    electResult.partitions.get.get(partition1)
+      .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
     assertFalse(electResult.partitions.get.containsKey(partition2))
     TestUtils.assertLeader(client, partition1, broker2)
     TestUtils.assertLeader(client, partition2, broker3)
@@ -1772,9 +1781,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertNoLeader(client, partition1)
     TestUtils.assertLeader(client, partition2, broker3)
     brokers(broker2).startup()
+    TestUtils.waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1, partition2).asJava)
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
+    electResult.partitions.get.get(partition1)
+      .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
     assertTrue(electResult.partitions.get.get(partition2).get.isInstanceOf[ElectionNotNeededException])
     TestUtils.assertLeader(client, partition1, broker2)
     TestUtils.assertLeader(client, partition2, broker3)
