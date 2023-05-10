@@ -32,7 +32,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RangeAssignorTest {
     private final RangeAssignor assignor = new RangeAssignor();
@@ -76,9 +76,9 @@ public class RangeAssignorTest {
         );
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, topics);
-        GroupAssignment groupAssignment = assignor.assign(assignmentSpec);
 
-        assertTrue(groupAssignment.members().isEmpty());
+        assertThrows(PartitionAssignorException.class,
+            () -> assignor.assign(assignmentSpec));
     }
 
     @Test

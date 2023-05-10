@@ -17,8 +17,6 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,21 +34,20 @@ import static java.lang.Math.min;
  * The properties are as follows:
  * <ol>
  *      <li> Each member must get at least one partition from every topic that it is subscribed to. The only exception is when
- *           the number of subscribed members is greater than the number of partitions for that topic. (Range)</li>
+ *           the number of subscribed members is greater than the number of partitions for that topic. (Range) </li>
  *      <li> Partitions should be assigned to members in a way that facilitates the join operation when required. (Range)
  *           This can only be done if every member is subscribed to the same topics and the topics are co-partitioned.
  *           Two streams are co-partitioned if the following conditions are met:
  *           <ul>
- *              <li>The keys must have the same schemas.</li>
- *              <li>The topics involved must have the same number of partitions.</li>
+ *              <li> The keys must have the same schemas. </li>
+ *              <li> The topics involved must have the same number of partitions. </li>
  *           </ul>
  *      </li>
- *      <li> Members should retain as much of their previous assignment as possible to reduce the number of partition movements during reassignment. (Sticky) </li>
+ *      <li> Members should retain as much of their previous assignment as possible to reduce the number of partition
+ *           movements during reassignment. (Sticky) </li>
  * </ol>
  */
 public class RangeAssignor implements PartitionAssignor {
-    private static final Logger log = LoggerFactory.getLogger(RangeAssignor.class);
-
     public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override
@@ -66,12 +63,13 @@ public class RangeAssignor implements PartitionAssignor {
          * Member Id.
          */
         private final String memberId;
+
         /**
          * Number of partitions required to meet the assignment quota.
          */
-        private final Integer remaining;
+        private final int remaining;
 
-        public MemberWithRemainingAssignments(String memberId, Integer remaining) {
+        public MemberWithRemainingAssignments(String memberId, int remaining) {
             this.memberId = memberId;
             this.remaining = remaining;
         }
@@ -87,13 +85,15 @@ public class RangeAssignor implements PartitionAssignor {
         membersData.forEach((memberId, memberMetadata) -> {
             Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
             for (Uuid topicId : topics) {
-                // Only topics that are present in both the subscribed topics list and the topic metadata should be considered for assignment.
+                // Only topics that are present in both the subscribed topics list and the topic metadata should be
+                // considered for assignment.
                 if (assignmentSpec.topics().containsKey(topicId)) {
                     membersPerTopic
                         .computeIfAbsent(topicId, k -> new ArrayList<>())
                         .add(memberId);
                 } else {
-                    log.warn("Member " + memberId + " subscribed to topic " + topicId + " which doesn't exist in the topic metadata");
+                    throw new PartitionAssignorException("Member " + memberId + " subscribed to topic " +
+                        topicId + " which doesn't exist in the topic metadata");
                 }
             }
         });
@@ -102,18 +102,20 @@ public class RangeAssignor implements PartitionAssignor {
     }
 
     /**
-     * <p> The algorithm includes the following steps:
+     * The algorithm includes the following steps:
      * <ol>
-     *      <li> Generate a map of members per topic using the given member subscriptions.</li>
-     *      <li> Generate a list of members called potentially unfilled members, which consists of members that have not met the minimum required quota of partitions for the assignment AND
-     *           get a list called assigned sticky partitions for topic, which has the partitions that will be retained in the new assignment.</li>
-     *      <li> Generate a list of unassigned partitions by calculating the difference between the total partitions for the topic and the assigned (sticky) partitions. </li>
+     *      <li> Generate a map of members per topic using the given member subscriptions. </li>
+     *      <li> Generate a list of members called potentially unfilled members, which consists of members that have not
+     *           met the minimum required quota of partitions for the assignment AND get a list called assigned sticky
+     *           partitions for topic, which has the partitions that will be retained in the new assignment. </li>
+     *      <li> Generate a list of unassigned partitions by calculating the difference between the total partitions
+     *           for the topic and the assigned (sticky) partitions. </li>
      *      <li> Find members from the potentially unfilled members list that haven't met the total required quota
-     *           i.e. minRequiredQuota + 1, if the member is designated to receive one of the excess partitions OR minRequiredQuota otherwise. </li>
+     *           i.e. minRequiredQuota + 1, if the member is designated to receive one of the excess partitions OR
+     *           minRequiredQuota otherwise. </li>
      *      <li> Assign partitions to them in ranges from the unassigned partitions per topic
      *           based on the remaining partitions value. </li>
      * </ol>
-     * </p>
      */
     @Override
     public GroupAssignment assign(final AssignmentSpec assignmentSpec) throws PartitionAssignorException {
@@ -195,7 +197,7 @@ public class RangeAssignor implements PartitionAssignor {
             int unassignedPartitionsListStartPointer = 0;
             for (MemberWithRemainingAssignments pair : potentiallyUnfilledMembers) {
                 String memberId = pair.memberId;
-                Integer remaining = pair.remaining;
+                int remaining = pair.remaining;
                 if (numMembersWithExtraPartition > 0) {
                     remaining++;
                     numMembersWithExtraPartition--;
@@ -211,6 +213,7 @@ public class RangeAssignor implements PartitionAssignor {
                 }
             }
         });
+
         return new GroupAssignment(newAssignment);
     }
 }
