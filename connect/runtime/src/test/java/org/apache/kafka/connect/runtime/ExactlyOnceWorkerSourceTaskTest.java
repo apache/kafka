@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -86,6 +87,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.Collections.emptySet;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -243,6 +245,23 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, clusterConfigState, metrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore,
                 sourceConfig, Runnable::run, preProducerCheck, postProducerCheck);
+    }
+
+    @Test
+    public void testRemoveMetrics() {
+        createWorkerTask();
+
+        workerTask.removeMetrics();
+
+        assertEquals(emptySet(), filterToTaskMetrics(metrics.metrics().metrics().keySet()));
+    }
+
+    private Set<MetricName> filterToTaskMetrics(Set<MetricName> metricNames) {
+        return metricNames
+                .stream()
+                .filter(m -> metrics.registry().taskGroupName().equals(m.group())
+                        || metrics.registry().sourceTaskGroupName().equals(m.group()))
+                .collect(Collectors.toSet());
     }
 
     @Test
