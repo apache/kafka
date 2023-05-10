@@ -741,30 +741,38 @@ public class RemoteLogManager implements Closeable {
                                             RemoteLogSegmentMetadata segmentMetadata,
                                             Consumer<List<AbortedTxn>> accumulator,
                                             UnifiedLog log) throws RemoteStorageException {
-        Iterator<LogSegment> localLogSegments = JavaConverters.asJavaIterator(log.logSegments().iterator());
-
-        boolean searchInLocalLog = false;
+        // Search in remote segments first.
         Optional<RemoteLogSegmentMetadata> nextSegmentMetadataOpt = Optional.of(segmentMetadata);
-        Optional<TransactionIndex> txnIndexOpt = nextSegmentMetadataOpt.map(metadata -> indexCache.getIndexEntry(metadata).txnIndex());
-
-        while (txnIndexOpt.isPresent()) {
-            TxnIndexSearchResult searchResult = txnIndexOpt.get().collectAbortedTxns(startOffset, upperBoundOffset);
-            accumulator.accept(searchResult.abortedTransactions);
-            if (!searchResult.isComplete) {
-                if (!searchInLocalLog) {
-                    nextSegmentMetadataOpt = findNextSegmentMetadata(nextSegmentMetadataOpt.get(), log.leaderEpochCache());
-
-                    txnIndexOpt = nextSegmentMetadataOpt.map(x -> indexCache.getIndexEntry(x).txnIndex());
-                    if (!txnIndexOpt.isPresent()) {
-                        searchInLocalLog = true;
-                    }
+        while (nextSegmentMetadataOpt.isPresent()) {
+            Optional<TransactionIndex> txnIndexOpt = nextSegmentMetadataOpt.map(metadata -> indexCache.getIndexEntry(metadata).txnIndex());
+            if (txnIndexOpt.isPresent()) {
+                TxnIndexSearchResult searchResult = txnIndexOpt.get().collectAbortedTxns(startOffset, upperBoundOffset);
+                accumulator.accept(searchResult.abortedTransactions);
+                if (searchResult.isComplete) {
+                    // Return immediately when the search result is complete, it does not need to go through local log segments.
+                    return;
                 }
+            }
 
-                if (searchInLocalLog) {
-                    txnIndexOpt = (localLogSegments.hasNext()) ? Optional.of(localLogSegments.next().txnIndex()) : Optional.empty();
+            nextSegmentMetadataOpt = findNextSegmentMetadata(nextSegmentMetadataOpt.get(), log.leaderEpochCache());
+        }
+
+        // Search in local segments
+        collectAbortedTransactionInLocalSegments(startOffset, upperBoundOffset, accumulator, JavaConverters.asJavaIterator(log.logSegments().iterator()));
+    }
+
+    private void collectAbortedTransactionInLocalSegments(long startOffset,
+                                                          long upperBoundOffset,
+                                                          Consumer<List<AbortedTxn>> accumulator,
+                                                          Iterator<LogSegment> localLogSegments) {
+        while (localLogSegments.hasNext()) {
+            TransactionIndex txnIndexOpt = localLogSegments.next().txnIndex();
+            if (txnIndexOpt != null) {
+                TxnIndexSearchResult searchResult = txnIndexOpt.collectAbortedTxns(startOffset, upperBoundOffset);
+                accumulator.accept(searchResult.abortedTransactions);
+                if (searchResult.isComplete) {
+                    return;
                 }
-            } else {
-                return;
             }
         }
     }
