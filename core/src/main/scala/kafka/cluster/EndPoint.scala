@@ -75,8 +75,20 @@ object EndPoint {
 
 /**
  * Part of the broker definition - matching host/port pair to a protocol
+ * 每个 EndPoint 对象定义了 4 个属性，我们分别来看下。
+ * host：Broker 主机名。
+ * port：Broker 端口号。
+ * listenerName：监听器名字。目前预定义的名称包括 PLAINTEXT、SSL、SASL_PLAINTEXT 和 SASL_SSL。Kafka 允许你自定义其他监听器名称，比如 CONTROLLER、INTERNAL 等。
+ * securityProtocol：监听器使用的安全协议。Kafka 支持 4 种安全协议，分别是 PLAINTEXT、SSL、SASL_PLAINTEXT 和 SASL_SSL。
+ * Broker 端参数 listener.security.protocol.map 用于指定不同名字的监听器都使用哪种安全协议。
+ * 例如：listener.security.protocol.map=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SSL
+ *      listeners=CONTROLLER://192.1.1.8:9091,INTERNAL://192.1.1.8:9092,EXTERNAL://10.1.1.5:9093
+ *      这就表示，Kafka 配置了 3 套监听器，名字分别是 CONTROLLER、INTERNAL 和 EXTERNAL，使用的安全协议分别是 PLAINTEXT、PLAINTEXT 和 SSL。
  */
 case class EndPoint(host: String, port: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
+  // 构造完整的监听器连接字符串
+  // 格式为：监听器名称://主机名：端口
+  // 比如：PLAINTEXT://kafka-host:9092
   def connectionString: String = {
     val hostport =
       if (host == null)
@@ -86,6 +98,8 @@ case class EndPoint(host: String, port: Int, listenerName: ListenerName, securit
     listenerName.value + "://" + hostport
   }
 
+  // clients工程下有一个Java版本的Endpoint类供clients端代码使用
+  // 此方法是构造Java版本的Endpoint类实例
   def toJava: JEndpoint = {
     new JEndpoint(listenerName.value, securityProtocol, host, port)
   }

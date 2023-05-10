@@ -89,6 +89,9 @@ class SocketServer(val config: KafkaConfig,
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
+  // SocketServer实现BrokerReconfigurable trait表明SocketServer的一些参数配置是允许动态修改的
+  // 即在Broker不停机的情况下修改它们
+  // SocketServer的请求队列长度，由Broker端参数queued.max.requests值而定，默认值是500
   private val maxQueuedRequests = config.queuedMaxRequests
 
   protected val nodeId = config.brokerId
@@ -102,11 +105,28 @@ class SocketServer(val config: KafkaConfig,
   private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", MetricsGroup)
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
+
+  // Processor 线程池：网络线程池，负责将请求高速地放入到请求队列中。
+  // Acceptor 线程池：保存了 SocketServer 为每个监听器定义的 Acceptor 线程，此线程负责分发该监听器上的入站连接建立请求。
+  // RequestChannel：承载请求队列的请求处理通道。
   // data-plane
-  private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, DataPlaneAcceptor]()
+  // 对于 Data plane 来说，线程池的说法是没有问题的，因为 Processor 线程确实有很多个，而 Acceptor 也可能有多个，因为 SocketServer 会为每个 EndPoint（即每套监听器）创建一个对应的 Acceptor 线程。
+  // 处理数据类请求的Acceptor线程池，每套监听器对应一个Acceptor线程
+  private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, DataPlaneAcceptor]()// 处理数据类请求的Processor线程池
+
+  // 处理数据类请求专属的RequestChannel对象
   val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics)
+
   // control-plane
+  // 用于处理控制类请求的Processor线程
+  // 注意：目前定义了专属的Processor线程而非线程池处理控制类请求
+  // Control plane 那组属性变量都是以 Opt 结尾的，即它们都是 Option 类型。
+  // 这说明了一个重要的事实：你完全可以不使用 Control plane 套装，即你可以让 Kafka 不区分请求类型，就像 2.2.0 之前设计的那样。
+  // 但是，一旦你开启了 Control plane 设置，其 Processor 线程就只有 1 个，Acceptor 线程也是 1 个。
+  // 另外，你要注意，它对应的 RequestChannel 里面的请求队列长度被硬编码成了 20，而不是一个可配置的值。
+  // 这揭示了社区在这里所做的一个假设：即控制类请求的数量应该远远小于数据类请求，因而不需要为它创建线程池和较深的请求队列。
   private[network] var controlPlaneAcceptorOpt: Option[ControlPlaneAcceptor] = None
+  // 处理控制类请求专属的RequestChannel对象
   val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
     new RequestChannel(20, ControlPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics))
 
@@ -245,6 +265,15 @@ class SocketServer(val config: KafkaConfig,
     enableFuture
   }
 
+  /**
+   * 方法会遍历你配置的所有监听器，然后为每个监听器执行下面的逻辑。
+   * 1、初始化该监听器对应的最大连接数计数器。后续这些计数器将被用来确保没有配额超限的情形发生。
+   * 2、为该监听器创建 Acceptor 线程，也就是调用 Acceptor 类的构造函数，生成对应的 Acceptor 线程实例。
+   * 3、创建 Processor 线程池。对于 Data plane 而言，线程池的数量由 Broker 端参数 num.network.threads 决定。
+   * 4、将 < 监听器，Acceptor 线程 > 对加入到 Acceptor 线程池统一管理。
+   * 切记，源码会为每套用于 Data plane 的监听器执行以上这 4 步。
+   * @param endpoint
+   */
   def createDataPlaneAcceptorAndProcessors(endpoint: EndPoint): Unit = synchronized {
     if (stopped) {
       throw new RuntimeException("Can't create new data plane acceptor and processors: SocketServer is stopped.")
@@ -260,12 +289,22 @@ class SocketServer(val config: KafkaConfig,
     info(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
   }
 
+  /**
+   * 基于控制类请求的负载远远小于数据类请求负载的假设，
+   * Control plane 的配套资源只有 1 个 Acceptor 线程 + 1 个 Processor 线程 + 1 个深度是 20 的请求队列而已。
+   * @param endpoint
+   */
   private def createControlPlaneAcceptorAndProcessor(endpoint: EndPoint): Unit = synchronized {
     if (stopped) {
       throw new RuntimeException("Can't create new control plane acceptor and processor: SocketServer is stopped.")
     }
+    // 如果为Control plane配置了监听器，将监听器纳入到连接配额管理之下
     connectionQuotas.addListener(config, endpoint.listenerName)
+    // 为监听器创建对应的Acceptor线程
     val controlPlaneAcceptor = createControlPlaneAcceptor(endpoint, controlPlaneRequestChannelOpt.get)
+    // 将Processor线程添加到控制类请求专属RequestChannel中
+    // 即添加到RequestChannel实例保存的Processor线程池中
+    // 把Processor对象也添加到Acceptor线程管理的Processor线程池中
     controlPlaneAcceptor.addProcessors(1)
     controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
     info(s"Created control-plane acceptor and processor for endpoint : ${endpoint.listenerName}")
@@ -410,6 +449,7 @@ class SocketServer(val config: KafkaConfig,
 object SocketServer {
   val MetricsGroup = "socket-server-metrics"
 
+  //Broker 端参数 max.connections.per.ip、max.connections.per.ip.overrides 和 max.connections 是可以动态修改的。
   val ReconfigurableConfigs = Set(
     KafkaConfig.MaxConnectionsPerIpProp,
     KafkaConfig.MaxConnectionsPerIpOverridesProp,
@@ -531,6 +571,8 @@ class DataPlaneAcceptor(socketServer: SocketServer,
   }
 }
 
+//Controller 与 Broker 交互的请求类型有 3 种：LeaderAndIsrRequest、StopReplicaRequest 和 UpdateMetadataRequest。
+// 这 3 类请求属于控制类请求，通常应该被赋予高优先级。
 object ControlPlaneAcceptor {
   val ThreadPrefix = "control-plane"
   val MetricPrefix = "ControlPlane"

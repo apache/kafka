@@ -201,6 +201,9 @@ class KafkaServer(
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
+   *
+   *  Processor 和 Acceptor 线程是在启动 SocketServer 组件之后启动的
+   *
    */
   override def startup(): Unit = {
     try {
@@ -337,6 +340,7 @@ class KafkaServer(
         //
         // Note that we allow the use of KRaft mode controller APIs when forwarding is enabled
         // so that the Envelope request is exposed. This is only used in testing currently.
+        // 创建SocketServer组件
         socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
         // Start alter partition manager based on the IBP version
