@@ -123,9 +123,7 @@ public class RangeAssignor implements PartitionAssignor {
         Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentSpec);
 
         membersPerTopic.forEach((topicId, membersForTopic) -> {
-
-            AssignmentTopicMetadata topicData = assignmentSpec.topics().get(topicId);
-            int numPartitionsForTopic = topicData.numPartitions();
+            int numPartitionsForTopic = assignmentSpec.topics().get(topicId).numPartitions();
             int minRequiredQuota = numPartitionsForTopic / membersForTopic.size();
             // Each member can get only ONE extra partition per topic after receiving the minimum quota.
             int numMembersWithExtraPartition = numPartitionsForTopic % membersForTopic.size();

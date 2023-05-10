@@ -565,6 +565,7 @@ public class RangeAssignorTest {
     }
 
     private void assertAssignment(Map<String, Map<Uuid, Set<Integer>>> expectedAssignment, GroupAssignment computedGroupAssignment) {
+        assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         for (String memberId : computedGroupAssignment.members().keySet()) {
             Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).targetPartitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
