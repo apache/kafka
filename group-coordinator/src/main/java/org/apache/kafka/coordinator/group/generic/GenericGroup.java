@@ -42,21 +42,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.CompletingRebalance;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Dead;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Empty;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PreparingRebalance;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 
 /**
- * Java rewrite of {@link kafka.coordinator.group.GroupMetadata} that is used
- * by the new group coordinator (KIP-848). Offset management will be handled
- * by a different component.
  *
- * This class holds group metadata for a generic group.
+ * This class holds metadata for a generic group.
  */
 public class GenericGroup {
 
@@ -97,19 +92,9 @@ public class GenericGroup {
     private final String groupId;
 
     /**
-     * The initial group state.
-     */
-    private final GenericGroupState initialState;
-
-    /**
      * The time.
      */
     private final Time time;
-
-    /**
-     * The lock used to synchronize the group.
-     */
-    private final Lock lock = new ReentrantLock();
 
     /**
      * The current group state.
@@ -156,7 +141,7 @@ public class GenericGroup {
      * Members who have yet to (re)join the group
      * during the join group phase.
      */
-    private final Set<String> pendingMembers = new HashSet<>();
+    private final Set<String> pendingJoinMembers = new HashSet<>();
 
     /**
      * The number of members waiting to hear back a join response.
@@ -194,8 +179,7 @@ public class GenericGroup {
         this.logContext = Objects.requireNonNull(logContext);
         this.log = logContext.logger(GenericGroup.class);
         this.groupId = Objects.requireNonNull(groupId);
-        this.initialState = Objects.requireNonNull(initialState);
-        this.state = initialState;
+        this.state = Objects.requireNonNull(initialState);
         this.time = Objects.requireNonNull(time);
         this.currentStateTimestamp = Optional.of(time.milliseconds());
     }
@@ -227,17 +211,17 @@ public class GenericGroup {
      * @param groupState the state to match against.
      * @return true if matches, false otherwise.
      */
-    public boolean is(GenericGroupState groupState) {
+    public boolean isState(GenericGroupState groupState) {
         return this.state == groupState;
     }
 
     /**
-     * To identify whether the given member is part of this group.
+     * To identify whether the given member id is part of this group.
      *
      * @param memberId the given member id.
      * @return true if the member is part of this group, false otherwise.
      */
-    public boolean has(String memberId) {
+    public boolean hasMemberId(String memberId) {
         return members.containsKey(memberId);
     }
 
@@ -247,7 +231,7 @@ public class GenericGroup {
      * @param memberId the member id.
      * @return the member metadata if it exists, null otherwise.
      */
-    public GenericGroupMember get(String memberId) {
+    public GenericGroupMember member(String memberId) {
         return members.get(memberId);
     }
 
@@ -315,9 +299,16 @@ public class GenericGroup {
             this.protocolType = Optional.of(member.protocolType());
         }
 
-        assert Objects.equals(this.protocolType.orElse(null), member.protocolType());
-        assert supportsProtocols(member.protocolType(),
-            GenericGroupMember.plainProtocolSet(member.supportedProtocols()));
+        if (!Objects.equals(this.protocolType.orElse(null), member.protocolType())) {
+            throw new IllegalStateException("The group and member's protocol type must be the same.");
+        }
+
+        if (!supportsProtocols(
+            member.protocolType(),
+            GenericGroupMember.plainProtocolSet(member.supportedProtocols()))) {
+
+            throw new IllegalStateException("None of the member's protocols can be supported.");
+        }
 
         if (!leaderId.isPresent()) {
             leaderId = Optional.of(member.memberId());
@@ -331,7 +322,7 @@ public class GenericGroup {
             numMembersAwaitingJoinResponse++;
         }
 
-        pendingMembers.remove(member.memberId());
+        pendingJoinMembers.remove(member.memberId());
     }
 
     /**
@@ -356,7 +347,7 @@ public class GenericGroup {
             leaderId = Optional.ofNullable(newLeader);
         }
 
-        pendingMembers.remove(memberId);
+        pendingJoinMembers.remove(memberId);
         pendingSyncMembers.remove(memberId);
     }
 
@@ -370,7 +361,7 @@ public class GenericGroup {
      */
     public boolean maybeElectNewJoinedLeader() {
         if (leaderId.isPresent()) {
-            GenericGroupMember currentLeader = get(leaderId.get());
+            GenericGroupMember currentLeader = member(leaderId.get());
             if (!currentLeader.isAwaitingJoin()) {
                 for (GenericGroupMember member : members.values()) {
                     if (member.isAwaitingJoin()) {
@@ -384,15 +375,15 @@ public class GenericGroup {
                         );
                         return true;
                     }
-                    log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
+                }
+                log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
                         "failed to join before the rebalance timeout and the " +
                         "group couldn't proceed to the next generation because " +
                         "no member joined.",
-                        currentLeader.memberId(),
-                        currentLeader.groupInstanceId().orElse("None")
-                    );
-                    return false;
-                }
+                    currentLeader.memberId(),
+                    currentLeader.groupInstanceId().orElse("None")
+                );
+                return false;
             }
             return false;
         }
@@ -437,7 +428,8 @@ public class GenericGroup {
             .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
         completeSyncFuture(removedMember, syncGroupResponse);
 
-        GenericGroupMember newMember = new GenericGroupMember(newMemberId,
+        GenericGroupMember newMember = new GenericGroupMember(
+            newMemberId,
             removedMember.groupInstanceId(),
             removedMember.clientId(),
             removedMember.clientHost(),
@@ -465,7 +457,7 @@ public class GenericGroup {
      * @return true if the member has yet to join, false otherwise.
      */
     public boolean isPendingMember(String memberId) {
-        return pendingMembers.contains(memberId);
+        return pendingJoinMembers.contains(memberId);
     }
 
     /**
@@ -476,11 +468,18 @@ public class GenericGroup {
      *         false otherwise.
      */
     public boolean addPendingMember(String memberId) {
-        if (has(memberId)) {
+        if (hasMemberId(memberId)) {
             throw new IllegalStateException("Attept to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
-        return pendingMembers.add(memberId);
+        return pendingJoinMembers.add(memberId);
+    }
+
+    /**
+     * @return number of members that are pending join.
+     */
+    public int numPending() {
+        return pendingJoinMembers.size();
     }
 
     /**
@@ -491,7 +490,7 @@ public class GenericGroup {
      *         false otherwise.
      */
     public boolean addPendingSyncMember(String memberId) {
-        if (!has(memberId)) {
+        if (!hasMemberId(memberId)) {
             throw new IllegalStateException("Attept to add pending sync member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -506,7 +505,7 @@ public class GenericGroup {
      * @return true if the group did store this member, false otherwise.
      */
     public boolean removePendingSyncMember(String memberId) {
-        if (!has(memberId)) {
+        if (!hasMemberId(memberId)) {
             throw new IllegalStateException("Attept to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -554,7 +553,7 @@ public class GenericGroup {
      * @param groupInstanceId the group instance id.
      * @return the static member if it exists.
      */
-    public String currentStaticMemberId(String groupInstanceId) {
+    public String staticMemberId(String groupInstanceId) {
         return staticMembers.get(groupInstanceId);
     }
 
@@ -576,35 +575,28 @@ public class GenericGroup {
      * @return whether all members have joined.
      */
     public boolean hasAllMembersJoined() {
-        return members.size() == numMembersAwaitingJoinResponse && pendingMembers.isEmpty();
+        return members.size() == numMembersAwaitingJoinResponse && pendingJoinMembers.isEmpty();
     }
 
     /**
-     * @return all members in the group.
+     * @return the ids of all members in the group.
      */
-    public Set<String> allMembers() {
+    public Set<String> allMemberIds() {
         return members.keySet();
     }
 
     /**
      * @return all static members in the group.
      */
-    public Set<String> allStaticMembers() {
+    public Set<String> allStaticMemberIds() {
         return staticMembers.keySet();
     }
 
     // For testing only.
-    Set<String> allDynamicMembers() {
-        Set<String> dynamicMemberSet = new HashSet<>(allMembers());
+    Set<String> allDynamicMemberIds() {
+        Set<String> dynamicMemberSet = new HashSet<>(allMemberIds());
         staticMembers.values().forEach(dynamicMemberSet::remove);
         return dynamicMemberSet;
-    }
-
-    /**
-     * @return number of members that are pending join.
-     */
-    public int numPending() {
-        return pendingMembers.size();
     }
 
     /**
@@ -617,7 +609,7 @@ public class GenericGroup {
     /**
      * @return all members.
      */
-    public Collection<GenericGroupMember> allGenericGroupMembers() {
+    public Collection<GenericGroupMember> allMembers() {
         return members.values();
     }
 
@@ -658,7 +650,7 @@ public class GenericGroup {
         String groupInstanceId,
         String memberId
     ) {
-        String existingMemberId = currentStaticMemberId(groupInstanceId);
+        String existingMemberId = staticMemberId(groupInstanceId);
         return existingMemberId != null && !existingMemberId.equals(memberId);
     }
 
@@ -666,7 +658,7 @@ public class GenericGroup {
      * @return whether the group can rebalance.
      */
     public boolean canRebalance() {
-        return PreparingRebalance.validPreviousStates().contains(state);
+        return PREPARING_REBALANCE.validPreviousStates().contains(state);
     }
 
     /**
@@ -697,7 +689,7 @@ public class GenericGroup {
 
         // let each member vote for one of the protocols
         Map<String, Integer> votesByProtocol = new HashMap<>();
-        allGenericGroupMembers().stream().map(member -> member.vote(candidates))
+        allMembers().stream().map(member -> member.vote(candidates))
             .forEach(protocolName -> {
                 int count = votesByProtocol.getOrDefault(protocolName, 0);
                 votesByProtocol.put(protocolName, count + 1);
@@ -757,11 +749,10 @@ public class GenericGroup {
      * @return a boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
-        if (is(Empty)) {
+        if (isState(EMPTY)) {
             return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
         } else {
-            return protocolType.map(type -> type.equals(memberProtocolType))
-                .orElse(false) &&
+            return protocolType.map(type -> type.equals(memberProtocolType)).orElse(false) &&
                 memberProtocols.stream()
                     .anyMatch(name -> supportedProtocols.getOrDefault(name, 0) == members.size());
         }
@@ -904,11 +895,11 @@ public class GenericGroup {
         if (!members.isEmpty()) {
             protocolName = Optional.of(selectProtocol());
             subscribedTopics = computeSubscribedTopics();
-            transitionTo(CompletingRebalance);
+            transitionTo(COMPLETING_REBALANCE);
         } else {
             protocolName = Optional.empty();
             subscribedTopics = computeSubscribedTopics();
-            transitionTo(Empty);
+            transitionTo(EMPTY);
         }
         clearPendingSyncMembers();
     }
@@ -919,7 +910,7 @@ public class GenericGroup {
      * @return the members.
      */
     public List<JoinGroupResponseMember> currentGenericGroupMembers() {
-        if (is(Dead) || is(PreparingRebalance)) {
+        if (isState(DEAD) || isState(PREPARING_REBALANCE)) {
             throw new IllegalStateException("Cannot obtain generic member metadata for group " +
                 groupId + " in state " + state);
         }

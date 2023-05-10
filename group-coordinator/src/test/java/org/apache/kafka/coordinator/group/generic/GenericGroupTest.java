@@ -36,11 +36,11 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.CompletingRebalance;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Dead;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Empty;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PreparingRebalance;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.Stable;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -61,7 +61,7 @@ public class GenericGroupTest {
     
     @BeforeEach
     public void initialize() {
-        group = new GenericGroup(new LogContext(), "groupId", Empty, Time.SYSTEM);
+        group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
     }
     
     @Test
@@ -71,139 +71,139 @@ public class GenericGroupTest {
     
     @Test
     public void testCanRebalanceWhenCompletingRebalance() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(CompletingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
         assertTrue(group.canRebalance()); 
     }
     
     @Test
     public void testCannotRebalanceWhenPreparingRebalance() {
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         assertFalse(group.canRebalance());
     }
 
     @Test
     public void testCannotRebalanceWhenDead() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Empty);
-        group.transitionTo(Dead);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        group.transitionTo(DEAD);
         assertFalse(group.canRebalance());
     }
 
     @Test
     public void testStableToPreparingRebalanceTransition() {
-        group.transitionTo(PreparingRebalance);
-        assertState(group, PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
+        assertState(group, PREPARING_REBALANCE);
     }
 
     @Test
     public void testStableToDeadTransition() {
-        group.transitionTo(Dead);
-        assertState(group, Dead);
+        group.transitionTo(DEAD);
+        assertState(group, DEAD);
     }
 
     @Test
     public void testAwaitingRebalanceToPreparingRebalanceTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(CompletingRebalance);
-        group.transitionTo(PreparingRebalance);
-        assertState(group, PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
+        group.transitionTo(PREPARING_REBALANCE);
+        assertState(group, PREPARING_REBALANCE);
     }
 
     @Test
     public void testPreparingRebalanceToDeadTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Dead);
-        assertState(group, Dead);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(DEAD);
+        assertState(group, DEAD);
     }
 
     @Test
     public void testPreparingRebalanceToEmptyTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Empty);
-        assertState(group, Empty);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        assertState(group, EMPTY);
     }
 
     @Test
     public void testEmptyToDeadTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Empty);
-        group.transitionTo(Dead);
-        assertState(group, Dead);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        group.transitionTo(DEAD);
+        assertState(group, DEAD);
     }
 
     @Test
     public void testAwaitingRebalanceToStableTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(CompletingRebalance);
-        group.transitionTo(Stable);
-        assertState(group, Stable);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
+        group.transitionTo(STABLE);
+        assertState(group, STABLE);
     }
 
     @Test
     public void testEmptyToStableIllegalTransition() {
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(Stable));
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(STABLE));
     }
 
     @Test
     public void testStableToStableIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(CompletingRebalance);
-        group.transitionTo(Stable);
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(Stable));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
+        group.transitionTo(STABLE);
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(STABLE));
     }
 
     @Test
     public void testEmptyToAwaitingRebalanceIllegalTransition() {
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(CompletingRebalance));
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(COMPLETING_REBALANCE));
     }
 
     @Test
     public void testPreparingRebalanceToPreparingRebalanceIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(PreparingRebalance));
+        group.transitionTo(PREPARING_REBALANCE);
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(PREPARING_REBALANCE));
     }
 
     @Test
     public void testPreparingRebalanceToStableIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(Stable));
+        group.transitionTo(PREPARING_REBALANCE);
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(STABLE));
     }
 
     @Test
     public void testAwaitingRebalanceToAwaitingRebalanceIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(CompletingRebalance);
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(CompletingRebalance));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(COMPLETING_REBALANCE));
     }
 
     @Test
     public void testDeadToDeadIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Dead);
-        group.transitionTo(Dead);
-        assertState(group, Dead);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(DEAD);
+        group.transitionTo(DEAD);
+        assertState(group, DEAD);
     }
 
     @Test
     public void testDeadToStableIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Dead);
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(Stable));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(DEAD);
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(STABLE));
     }
 
     @Test
     public void testDeadToPreparingRebalanceIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Dead);
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(PreparingRebalance));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(DEAD);
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(PREPARING_REBALANCE));
     }
 
     @Test
     public void testDeadToAwaitingRebalanceIllegalTransition() {
-        group.transitionTo(PreparingRebalance);
-        group.transitionTo(Dead);
-        assertThrows(IllegalStateException.class, () -> group.transitionTo(CompletingRebalance));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(DEAD);
+        assertThrows(IllegalStateException.class, () -> group.transitionTo(COMPLETING_REBALANCE));
     }
 
     @Test
@@ -324,13 +324,13 @@ public class GenericGroupTest {
             member1Protocols
         );
 
-        // by public voidault, the group supports everything
+        // by default, the group supports everything
         Set<String> expectedProtocols = new HashSet<>();
         member1Protocols.forEach(protocol -> expectedProtocols.add(protocol.name()));
         assertTrue(group.supportsProtocols(protocolType, expectedProtocols));
 
         group.add(member1);
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
 
         expectedProtocols.clear();
         expectedProtocols.add("roundrobin");
@@ -373,7 +373,7 @@ public class GenericGroupTest {
             )
         );
 
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         group.add(member);
 
         group.initNextGeneration();
@@ -381,7 +381,7 @@ public class GenericGroupTest {
         Set<String> expectedTopics = new HashSet<>(Collections.singleton("foo"));
         assertEquals(expectedTopics, group.subscribedTopics().get());
 
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         group.remove(memberId);
 
         group.initNextGeneration();
@@ -404,7 +404,7 @@ public class GenericGroupTest {
             )
         );
 
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         group.add(memberWithFaultyProtocol);
 
         group.initNextGeneration();
@@ -433,7 +433,7 @@ public class GenericGroupTest {
             )
         );
 
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         group.add(memberWithNonConsumerProtocol);
 
         group.initNextGeneration();
@@ -459,7 +459,7 @@ public class GenericGroupTest {
             )
         );
 
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         group.add(member, new CompletableFuture<>());
 
         assertEquals(0, group.generationId());
@@ -473,11 +473,11 @@ public class GenericGroupTest {
 
     @Test
     public void testInitNextGenerationEmptyGroup() {
-        assertEquals(Empty, group.currentState());
+        assertEquals(EMPTY, group.currentState());
         assertEquals(0, group.generationId());
         assertNull(group.protocolName().orElse(null));
 
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         group.initNextGeneration();
 
         assertEquals(1, group.generationId());
@@ -561,12 +561,12 @@ public class GenericGroupTest {
         member.setAwaitingSyncFuture(syncGroupFuture);
 
         assertTrue(group.isLeader(memberId));
-        assertEquals(memberId, group.currentStaticMemberId(groupInstanceId));
+        assertEquals(memberId, group.staticMemberId(groupInstanceId));
 
         String newMemberId = "newMemberId";
         group.replaceStaticMember(groupInstanceId, memberId, newMemberId);
         assertTrue(group.isLeader(newMemberId));
-        assertEquals(newMemberId, group.currentStaticMemberId(groupInstanceId));
+        assertEquals(newMemberId, group.staticMemberId(groupInstanceId));
         assertTrue(joinAwaitingMemberFenced.get());
         assertTrue(syncAwaitingMemberFenced.get());
         assertFalse(member.isAwaitingJoin());
@@ -713,7 +713,7 @@ public class GenericGroupTest {
     @Test
     public void testRemovalFromPendingAfterMemberIsStable() {
         group.addPendingMember(memberId);
-        assertFalse(group.has(memberId));
+        assertFalse(group.hasMemberId(memberId));
         assertTrue(group.isPendingMember(memberId));
 
         GenericGroupMember member = new GenericGroupMember(
@@ -733,18 +733,18 @@ public class GenericGroupTest {
         );
 
         group.add(member);
-        assertTrue(group.has(memberId));
+        assertTrue(group.hasMemberId(memberId));
         assertFalse(group.isPendingMember(memberId));
     }
 
     @Test
     public void testRemovalFromPendingWhenMemberIsRemoved() {
         group.addPendingMember(memberId);
-        assertFalse(group.has(memberId));
+        assertFalse(group.hasMemberId(memberId));
         assertTrue(group.isPendingMember(memberId));
 
         group.remove(memberId);
-        assertFalse(group.has(memberId));
+        assertFalse(group.hasMemberId(memberId));
         assertFalse(group.isPendingMember(memberId));
     }
 
@@ -767,7 +767,7 @@ public class GenericGroupTest {
         );
         
         group.add(member);
-        assertTrue(group.has(memberId));
+        assertTrue(group.hasMemberId(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
 
         // We aren ot permitted to add the member again if it is already present
@@ -855,22 +855,82 @@ public class GenericGroupTest {
         );
 
         group.add(member);
-        group.transitionTo(PreparingRebalance);
+        group.transitionTo(PREPARING_REBALANCE);
         assertTrue(group.addPendingSyncMember(memberId));
         assertEquals(Collections.singleton(memberId), group.allPendingSyncMembers());
         group.initNextGeneration();
         assertEquals(Collections.emptySet(), group.allPendingSyncMembers());
     }
 
+    @Test
+    public void testElectNewJoinedLeader() {
+        GenericGroupMember leader = new GenericGroupMember(
+            memberId,
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            Collections.singletonList(
+                new Protocol(
+                    "roundrobin",
+                    new byte[0]
+                )
+            )
+        );
+
+        group.add(leader);
+        assertTrue(group.isLeader(memberId));
+        assertFalse(leader.isAwaitingJoin());
+
+        GenericGroupMember newLeader = new GenericGroupMember(
+            "new-leader",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            Collections.singletonList(
+                new Protocol(
+                    "roundrobin",
+                    new byte[0]
+                )
+            )
+        );
+        group.add(newLeader, new CompletableFuture<>());
+
+        GenericGroupMember newMember = new GenericGroupMember(
+            "new-member",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            Collections.singletonList(
+                new Protocol(
+                    "roundrobin",
+                    new byte[0]
+                )
+            )
+        );
+        group.add(newMember);
+
+        assertTrue(group.maybeElectNewJoinedLeader());
+        assertTrue(group.isLeader("new-leader"));
+    }
+
     private void assertState(GenericGroup group, GenericGroupState targetState) {
         Set<GenericGroupState> otherStates = new HashSet<>();
-        otherStates.add(Stable);
-        otherStates.add(PreparingRebalance);
-        otherStates.add(CompletingRebalance);
-        otherStates.add(Dead);
+        otherStates.add(STABLE);
+        otherStates.add(PREPARING_REBALANCE);
+        otherStates.add(COMPLETING_REBALANCE);
+        otherStates.add(DEAD);
         otherStates.remove(targetState);
 
-        otherStates.forEach(otherState -> assertFalse(group.is(otherState)));
-        assertTrue(group.is(targetState));
+        otherStates.forEach(otherState -> assertFalse(group.isState(otherState)));
+        assertTrue(group.isState(targetState));
     }
 }

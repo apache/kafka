@@ -22,8 +22,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Java rewrite of {@link kafka.coordinator.group.GroupState} that is used
- * by the new group coordinator (KIP-848).
+ * Represents all states that a generic group can be in, as well as the states that a group must
+ * be in to transition to a particular state.
  */
 public enum GenericGroupState {
 
@@ -37,12 +37,12 @@ public enum GenericGroupState {
      *         respond to leave group with UNKNOWN_MEMBER_ID
      *         respond to offset commit with UNKNOWN_MEMBER_ID
      *         allow offset fetch requests
-     * transition: last offsets removed in periodic expiration task => Dead
-     *             join group from a new member => PreparingRebalance
-     *             group is removed by partition emigration => Dead
-     *             group is removed by expiration => Dead
+     * transition: last offsets removed in periodic expiration task => DEAD
+     *             join group from a new member => PREPARING_REBALANCE
+     *             group is removed by partition emigration => DEAD
+     *             group is removed by expiration => DEAD
      */
-    Empty(),
+    EMPTY(),
 
     /**
      * Group is preparing to rebalance
@@ -53,26 +53,26 @@ public enum GenericGroupState {
      *         park join group requests from new or existing members until all expected members have joined
      *         allow offset commits from previous generation
      *         allow offset fetch requests
-     * transition: some members have joined by the timeout => CompletingRebalance
-     *             all members have left the group => Empty
-     *             group is removed by partition emigration => Dead
+     * transition: some members have joined by the timeout => COMPLETING_REBALANCE
+     *             all members have left the group => EMPTY
+     *             group is removed by partition emigration => DEAD
      */
-    PreparingRebalance(),
+    PREPARING_REBALANCE(),
 
     /**
      * Group is awaiting state assignment from the leader
      *
      * action: respond to heartbeats with REBALANCE_IN_PROGRESS
      *         respond to offset commits with REBALANCE_IN_PROGRESS
-     *         park sync group requests from followers until transition to Stable
+     *         park sync group requests from followers until transition to STABLE
      *         allow offset fetch requests
-     * transition: sync group with state assignment received from leader => Stable
-     *             join group from new member or existing member with updated metadata => PreparingRebalance
-     *             leave group from existing member => PreparingRebalance
-     *             member failure detected => PreparingRebalance
-     *             group is removed by partition emigration => Dead
+     * transition: sync group with state assignment received from leader => STABLE
+     *             join group from new member or existing member with updated metadata => PREPARING_REBALANCE
+     *             leave group from existing member => PREPARING_REBALANCE
+     *             member failure detected => PREPARING_REBALANCE
+     *             group is removed by partition emigration => DEAD
      */
-    CompletingRebalance(),
+    COMPLETING_REBALANCE(),
 
     /**
      * Group is stable
@@ -82,13 +82,13 @@ public enum GenericGroupState {
      *         respond to join group from followers with matching metadata with current group metadata
      *         allow offset commits from member of current generation
      *         allow offset fetch requests
-     * transition: member failure detected via heartbeat => PreparingRebalance
-     *             leave group from existing member => PreparingRebalance
-     *             leader join-group received => PreparingRebalance
-     *             follower join-group with new metadata => PreparingRebalance
-     *             group is removed by partition emigration => Dead
+     * transition: member failure detected via heartbeat => PREPARING_REBALANCE
+     *             leave group from existing member => PREPARING_REBALANCE
+     *             leader join-group received => PREPARING_REBALANCE
+     *             follower join-group with new metadata => PREPARING_REBALANCE
+     *             group is removed by partition emigration => DEAD
      */
-    Stable(),
+    STABLE(),
 
     /**
      * Group has no more members and its metadata is being removed
@@ -99,24 +99,27 @@ public enum GenericGroupState {
      *         respond to leave group with UNKNOWN_MEMBER_ID
      *         respond to offset commit with UNKNOWN_MEMBER_ID
      *         allow offset fetch requests
-     * transition: Dead is a final state before group metadata is cleaned up, so there are no transitions
+     * transition: DEAD is a final state before group metadata is cleaned up, so there are no transitions
      */
-    Dead();
+    DEAD();
 
     private Set<GenericGroupState> validPreviousStates;
 
     static {
-        Empty.addValidPreviousStates(PreparingRebalance);
-        PreparingRebalance.addValidPreviousStates(Stable, CompletingRebalance, Empty);
-        CompletingRebalance.addValidPreviousStates(PreparingRebalance);
-        Stable.addValidPreviousStates(CompletingRebalance);
-        Dead.addValidPreviousStates(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead);
+        EMPTY.addValidPreviousStates(PREPARING_REBALANCE);
+        PREPARING_REBALANCE.addValidPreviousStates(STABLE, COMPLETING_REBALANCE, EMPTY);
+        COMPLETING_REBALANCE.addValidPreviousStates(PREPARING_REBALANCE);
+        STABLE.addValidPreviousStates(COMPLETING_REBALANCE);
+        DEAD.addValidPreviousStates(STABLE, PREPARING_REBALANCE, COMPLETING_REBALANCE, EMPTY, DEAD);
     }
 
     private void addValidPreviousStates(GenericGroupState... validPreviousStates) {
         this.validPreviousStates = new HashSet<>(Arrays.asList(validPreviousStates));
     }
 
+    /**
+     * @return valid previous states a group must be in to transition to this state.
+     */
     public Set<GenericGroupState> validPreviousStates() {
         return this.validPreviousStates;
     }
