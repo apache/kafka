@@ -35,11 +35,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.lang.String.format;
+import static java.lang.String.valueOf;
 import static java.util.Arrays.asList;
 
 /**
@@ -79,6 +82,10 @@ public class MetadataQuorumCommand {
             .addArgument("--command-config")
             .type(Arguments.fileType())
             .help("Property file containing configs to be passed to Admin Client.");
+        parser
+            .addArgument("-hr", "--human-readable")
+            .action(Arguments.storeTrue())
+            .help("Print human-readable timestamps");
         Subparsers subparsers = parser.addSubparsers().dest("command");
         addDescribeParser(subparsers);
 
@@ -92,11 +99,12 @@ public class MetadataQuorumCommand {
             props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"));
             admin = Admin.create(props);
 
+            boolean readable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
             if (command.equals("describe")) {
                 if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
                     throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
                 } else if (namespace.getBoolean("replication")) {
-                    handleDescribeReplication(admin);
+                    handleDescribeReplication(admin, readable);
                 } else if (namespace.getBoolean("status")) {
                     handleDescribeStatus(admin);
                 } else {
@@ -138,15 +146,15 @@ public class MetadataQuorumCommand {
             .action(Arguments.storeTrue());
     }
 
-    private static void handleDescribeReplication(Admin admin) throws ExecutionException, InterruptedException {
+    private static void handleDescribeReplication(Admin admin, boolean readable) throws ExecutionException, InterruptedException {
         QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
         int leaderId = quorumInfo.leaderId();
         QuorumInfo.ReplicaState leader = quorumInfo.voters().stream().filter(voter -> voter.replicaId() == leaderId).findFirst().get();
 
         List<List<String>> rows = new ArrayList<>();
-        rows.addAll(quorumInfoToRows(leader, Stream.of(leader), "Leader"));
-        rows.addAll(quorumInfoToRows(leader, quorumInfo.voters().stream().filter(v -> v.replicaId() != leaderId), "Follower"));
-        rows.addAll(quorumInfoToRows(leader, quorumInfo.observers().stream(), "Observer"));
+        rows.addAll(quorumInfoToRows(leader, Stream.of(leader), "Leader", readable));
+        rows.addAll(quorumInfoToRows(leader, quorumInfo.voters().stream().filter(v -> v.replicaId() != leaderId), "Follower", readable));
+        rows.addAll(quorumInfoToRows(leader, quorumInfo.observers().stream(), "Observer", readable));
 
         ToolsUtils.prettyPrintTable(
             asList("NodeId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
@@ -155,17 +163,28 @@ public class MetadataQuorumCommand {
         );
     }
 
-    private static List<List<String>> quorumInfoToRows(QuorumInfo.ReplicaState leader, Stream<QuorumInfo.ReplicaState> infos, String status) {
-        return infos.map(info ->
-            Stream.of(
+    private static List<List<String>> quorumInfoToRows(QuorumInfo.ReplicaState leader,
+                                                       Stream<QuorumInfo.ReplicaState> infos,
+                                                       String status,
+                                                       boolean readable) {
+        return infos.map(info -> {
+            final double nowMs = System.currentTimeMillis();
+            String lastFetchTimestamp = !info.lastFetchTimestamp().isPresent() ? "-1" :
+                valueOf(readable ? format("%.0f ms ago", nowMs - info.lastFetchTimestamp().getAsLong())
+                    : info.lastFetchTimestamp().getAsLong());
+            String lastCaughtUpTimestamp = !info.lastCaughtUpTimestamp().isPresent() ? "-1" :
+                valueOf(readable ? format("%.0f ms ago", nowMs - info.lastCaughtUpTimestamp().getAsLong())
+                    : info.lastCaughtUpTimestamp().getAsLong());
+
+            return Stream.of(
                 info.replicaId(),
                 info.logEndOffset(),
                 leader.logEndOffset() - info.logEndOffset(),
-                info.lastFetchTimestamp().orElse(-1),
-                info.lastCaughtUpTimestamp().orElse(-1),
+                lastFetchTimestamp,
+                lastCaughtUpTimestamp,
                 status
-            ).map(r -> r.toString()).collect(Collectors.toList())
-        ).collect(Collectors.toList());
+            ).map(r -> r.toString()).collect(Collectors.toList());
+        }).collect(Collectors.toList());
     }
 
     private static void handleDescribeStatus(Admin admin) throws ExecutionException, InterruptedException {
