@@ -206,6 +206,13 @@ public class GenericGroup {
     }
 
     /**
+     * @return the protocol type.
+     */
+    public Optional<String> protocolType() {
+        return this.protocolType;
+    }
+
+    /**
      * @return the current group state.
      */
     public GenericGroupState currentState() {
