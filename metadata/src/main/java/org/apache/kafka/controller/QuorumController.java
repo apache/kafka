@@ -2021,8 +2021,8 @@ public final class QuorumController implements Controller {
     public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures(
         ControllerRequestContext context
     ) {
-        // It's possible that we call ApiVersionRequest before consuming the log, since ApiVersionRequest is very important,
-        // we should not return an error since it would stop the NetworkClient from working correctly.
+        // It's possible that we call ApiVersionRequest before consuming the log since ApiVersionRequest is sent when
+        // initialize NetworkClient, we should not return an error since it would stop the NetworkClient from working correctly.
         if (lastCommittedOffset == -1) {
             return CompletableFuture.completedFuture(new FinalizedControllerFeatures(Collections.emptyMap(), -1));
         }
