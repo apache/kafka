@@ -37,16 +37,11 @@ import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_3_IV0;
 
 /**
  * This class contains helper methods to create records stored in
@@ -379,17 +374,6 @@ public class RecordHelpers {
         Map<String, byte[]> memberAssignments,
         MetadataVersion metadataVersion
     ) {
-        short version;
-        if (metadataVersion.isLessThan(IBP_0_10_1_IV0)) {
-            version = (short) 0;
-        } else if (metadataVersion.isLessThan(IBP_2_1_IV0)) {
-            version = (short) 1;
-        } else if (metadataVersion.isLessThan(IBP_2_3_IV0)) {
-            version = (short) 2;
-        } else {
-            version = (short) 3;
-        }
-
         List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>();
         group.allMembers().forEach(member -> {
             byte[] subscription = group.protocolName().map(member::metadata).orElse(null);
@@ -430,7 +414,7 @@ public class RecordHelpers {
                     .setLeader(group.leaderOrNull())
                     .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
                     .setMembers(members),
-                version
+                metadataVersion.groupMetadataValueVersion()
             )
         );
     }

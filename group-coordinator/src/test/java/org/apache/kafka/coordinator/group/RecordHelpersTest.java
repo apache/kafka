@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -46,6 +45,9 @@ import org.apache.kafka.coordinator.group.generic.Protocol;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -58,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedTopicAssignment;
@@ -75,6 +78,7 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignme
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RecordHelpersTest {
 
@@ -399,8 +403,12 @@ public class RecordHelpersTest {
         ));
     }
 
-    @Test
-    public void testNewGroupMetadataRecord() {
+    @ParameterizedTest
+    @MethodSource("metadataToExpectedGroupMetadataValue")
+    public void testNewGroupMetadataRecord(
+        MetadataVersion metadataVersion,
+        short expectedGroupMetadataValueVersion
+    ) {
         Time time = new MockTime();
 
         List<GroupMetadataValue.MemberMetadata> expectedMembers = new ArrayList<>();
@@ -441,7 +449,7 @@ public class RecordHelpersTest {
                     .setGeneration(1)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-            (short) 3));
+            expectedGroupMetadataValueVersion));
 
         GenericGroup group = new GenericGroup(
             new LogContext(),
@@ -473,9 +481,131 @@ public class RecordHelpersTest {
         Record groupMetadataRecord = RecordHelpers.newGroupMetadataRecord(
             group,
             memberAssignments,
-            MetadataVersion.IBP_3_5_IV2
+            metadataVersion
         );
 
         assertEquals(expectedRecord, groupMetadataRecord);
+    }
+
+    @Test
+    public void testNewGroupMetadataTombstoneRecord() {
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup("group-id"),
+                (short) 2),
+            null);
+
+        Record groupMetadataRecord = RecordHelpers.newGroupMetadataTombstoneRecord("group-id");
+        assertEquals(expectedRecord, groupMetadataRecord);
+    }
+
+    @Test
+    public void testNewGroupMetadataRecordThrowsWhenNullSubscription() {
+        Time time = new MockTime();
+
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = new ArrayList<>();
+        expectedMembers.add(
+            new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member-1")
+                .setClientId("client-1")
+                .setClientHost("host-1")
+                .setRebalanceTimeout(1000)
+                .setSessionTimeout(1500)
+                .setGroupInstanceId("group-instance-1")
+                .setSubscription(new byte[]{0, 1})
+                .setAssignment(new byte[]{1, 2})
+        );
+
+        GenericGroup group = new GenericGroup(
+            new LogContext(),
+            "group-id",
+            GenericGroupState.PREPARING_REBALANCE,
+            time
+        );
+
+        Map<String, byte[]> memberAssignments = new HashMap<>();
+        expectedMembers.forEach(member -> {
+            memberAssignments.put(member.memberId(), member.assignment());
+            group.add(new GenericGroupMember(
+                member.memberId(),
+                Optional.of(member.groupInstanceId()),
+                member.clientId(),
+                member.clientHost(),
+                member.rebalanceTimeout(),
+                member.sessionTimeout(),
+                "consumer",
+                Collections.singletonList(new Protocol(
+                    "range",
+                    null
+                )),
+                member.assignment()
+            ));
+        });
+
+        assertThrows(IllegalStateException.class, () ->
+            RecordHelpers.newGroupMetadataRecord(
+                group,
+                memberAssignments,
+                MetadataVersion.IBP_3_5_IV2
+            ));
+    }
+
+    @Test
+    public void testNewGroupMetadataRecordThrowsWhenEmptyAssignment() {
+        Time time = new MockTime();
+
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = new ArrayList<>();
+        expectedMembers.add(
+            new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member-1")
+                .setClientId("client-1")
+                .setClientHost("host-1")
+                .setRebalanceTimeout(1000)
+                .setSessionTimeout(1500)
+                .setGroupInstanceId("group-instance-1")
+                .setSubscription(new byte[]{0, 1})
+                .setAssignment(new byte[]{1, 2})
+        );
+
+        GenericGroup group = new GenericGroup(
+            new LogContext(),
+            "group-id",
+            GenericGroupState.PREPARING_REBALANCE,
+            time
+        );
+
+        expectedMembers.forEach(member ->
+            group.add(new GenericGroupMember(
+                member.memberId(),
+                Optional.of(member.groupInstanceId()),
+                member.clientId(),
+                member.clientHost(),
+                member.rebalanceTimeout(),
+                member.sessionTimeout(),
+                "consumer",
+                Collections.singletonList(new Protocol(
+                    "range",
+                    member.subscription()
+                )),
+                member.assignment()
+            ))
+        );
+
+        assertThrows(IllegalStateException.class, () ->
+            RecordHelpers.newGroupMetadataRecord(
+                group,
+                new HashMap<>(),
+                MetadataVersion.IBP_3_5_IV2
+            ));
+    }
+
+    private static Stream<Arguments> metadataToExpectedGroupMetadataValue() {
+        return Stream.of(
+            Arguments.arguments(MetadataVersion.IBP_0_10_0_IV0, (short) 0),
+            Arguments.arguments(MetadataVersion.IBP_1_1_IV0, (short) 1),
+            Arguments.arguments(MetadataVersion.IBP_2_2_IV0, (short) 2),
+            Arguments.arguments(MetadataVersion.IBP_3_5_IV0, (short) 3)
+        );
     }
 }
