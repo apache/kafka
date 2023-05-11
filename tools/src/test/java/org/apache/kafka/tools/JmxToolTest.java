@@ -175,6 +175,140 @@ public class JmxToolTest {
     }
 
     @Test
+    public void testDomainNamePattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.serve?:*",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testDomainNamePatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.serve?:*",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyListPattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,*",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyListPatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,*",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyValuePattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,name=*InPerSec",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    public void testPropertyValuePatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=BrokerTopicMetrics,name=*InPerSec",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    // Combination of property-list and property-value patterns
+    public void testPropertyPattern() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=*,*",
+            "--attributes", "FifteenMinuteRate,FiveMinuteRate",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
+    // Combination of property-list and property-value patterns
+    public void testPropertyPatternWithNoAttributes() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=*,*",
+            "--report-format", "csv",
+            "--one-time"
+        };
+        String out = executeAndGetOut(args);
+        assertNormalExit();
+
+        Map<String, String> csv = parseCsv(out);
+        assertEquals("1.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate"));
+        assertEquals("3.0", csv.get("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate"));
+    }
+
+    @Test
     public void dateFormat() {
         String dateFormat = "yyyyMMdd-hh:mm:ss";
         String[] args = new String[]{
