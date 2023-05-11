@@ -315,7 +315,7 @@ class MetadataVersionTest {
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
-    public void testGroupMetadataValueVersion (MetadataVersion metadataVersion) {
+    public void testGroupMetadataValueVersion(MetadataVersion metadataVersion) {
         final short expectedVersion;
         if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_3_IV0)) {
             expectedVersion = 3;
