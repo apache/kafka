@@ -766,9 +766,9 @@ public class RemoteLogManager implements Closeable {
                                                           Consumer<List<AbortedTxn>> accumulator,
                                                           Iterator<LogSegment> localLogSegments) {
         while (localLogSegments.hasNext()) {
-            TransactionIndex txnIndexOpt = localLogSegments.next().txnIndex();
-            if (txnIndexOpt != null) {
-                TxnIndexSearchResult searchResult = txnIndexOpt.collectAbortedTxns(startOffset, upperBoundOffset);
+            TransactionIndex txnIndex = localLogSegments.next().txnIndex();
+            if (txnIndex != null) {
+                TxnIndexSearchResult searchResult = txnIndex.collectAbortedTxns(startOffset, upperBoundOffset);
                 accumulator.accept(searchResult.abortedTransactions);
                 if (searchResult.isComplete) {
                     return;
