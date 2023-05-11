@@ -42,10 +42,10 @@ public enum GenericGroupState {
      *             group is removed by partition emigration => DEAD
      *             group is removed by expiration => DEAD
      */
-    EMPTY(),
+    EMPTY("Empty"),
 
     /**
-     * Group is preparing to rebalance
+     * Group is preparing to rebalance.
      *
      * action: respond to heartbeats with REBALANCE_IN_PROGRESS
      *         respond to sync group with REBALANCE_IN_PROGRESS
@@ -57,10 +57,10 @@ public enum GenericGroupState {
      *             all members have left the group => EMPTY
      *             group is removed by partition emigration => DEAD
      */
-    PREPARING_REBALANCE(),
+    PREPARING_REBALANCE("PreparingRebalance"),
 
     /**
-     * Group is awaiting state assignment from the leader
+     * Group is awaiting state assignment from the leader.
      *
      * action: respond to heartbeats with REBALANCE_IN_PROGRESS
      *         respond to offset commits with REBALANCE_IN_PROGRESS
@@ -72,10 +72,10 @@ public enum GenericGroupState {
      *             member failure detected => PREPARING_REBALANCE
      *             group is removed by partition emigration => DEAD
      */
-    COMPLETING_REBALANCE(),
+    COMPLETING_REBALANCE("CompletingRebalance"),
 
     /**
-     * Group is stable
+     * Group is stable.
      *
      * action: respond to member heartbeats normally
      *         respond to sync group from any member with current assignment
@@ -88,10 +88,10 @@ public enum GenericGroupState {
      *             follower join-group with new metadata => PREPARING_REBALANCE
      *             group is removed by partition emigration => DEAD
      */
-    STABLE(),
+    STABLE("Stable"),
 
     /**
-     * Group has no more members and its metadata is being removed
+     * Group has no more members and its metadata is being removed.
      *
      * action: respond to join group with UNKNOWN_MEMBER_ID
      *         respond to sync group with UNKNOWN_MEMBER_ID
@@ -101,8 +101,9 @@ public enum GenericGroupState {
      *         allow offset fetch requests
      * transition: DEAD is a final state before group metadata is cleaned up, so there are no transitions
      */
-    DEAD();
+    DEAD("Dead");
 
+    private final String name;
     private Set<GenericGroupState> validPreviousStates;
 
     static {
@@ -111,6 +112,15 @@ public enum GenericGroupState {
         COMPLETING_REBALANCE.addValidPreviousStates(PREPARING_REBALANCE);
         STABLE.addValidPreviousStates(COMPLETING_REBALANCE);
         DEAD.addValidPreviousStates(STABLE, PREPARING_REBALANCE, COMPLETING_REBALANCE, EMPTY, DEAD);
+    }
+
+    GenericGroupState(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
     }
 
     private void addValidPreviousStates(GenericGroupState... validPreviousStates) {

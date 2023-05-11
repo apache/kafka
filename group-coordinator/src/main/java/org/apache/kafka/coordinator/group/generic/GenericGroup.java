@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -26,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.Group;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -51,9 +51,13 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPA
 
 /**
  *
- * This class holds metadata for a generic group.
+ * This class holds metadata for a generic group where the
+ * member assignment is driven solely from the client side.
+ *
+ * The APIs members use to make changes to the group membership
+ * consist of JoinGroup, SyncGroup, and LeaveGroup.
  */
-public class GenericGroup {
+public class GenericGroup implements Group {
 
     /**
      * Empty generation.
@@ -72,7 +76,7 @@ public class GenericGroup {
 
     /**
      * Delimiter used to join a randomly generated UUID
-     * with client id or group instance id.
+     * with a client id or a group instance id.
      */
     private static final String MEMBER_ID_DELIMITER = "-";
 
@@ -144,12 +148,12 @@ public class GenericGroup {
     private final Set<String> pendingJoinMembers = new HashSet<>();
 
     /**
-     * The number of members waiting to hear back a join response.
+     * The number of members awaiting a join response.
      */
     private int numMembersAwaitingJoinResponse = 0;
 
     /**
-     * Map of protocol names to how many members support them.
+     * Map of protocol names to the number of members that support them.
      */
     private final Map<String, Integer> supportedProtocols = new HashMap<>();
 
@@ -160,7 +164,7 @@ public class GenericGroup {
     private final Set<String> pendingSyncMembers = new HashSet<>();
 
     /**
-     * The list of topics the group members are subscribed to.
+     * The list of topics to which the group members are subscribed.
      */
     private Optional<Set<String>> subscribedTopics = Optional.empty();
 
@@ -182,6 +186,26 @@ public class GenericGroup {
         this.state = Objects.requireNonNull(initialState);
         this.time = Objects.requireNonNull(time);
         this.currentStateTimestamp = Optional.of(time.milliseconds());
+    }
+
+    /**
+     * The type of this group.
+     *
+     * @return The group type (Generic).
+     */
+    @Override
+    public GroupType type() {
+        return GroupType.GENERIC;
+    }
+
+    /**
+     * The state of this group.
+     *
+     * @return The current state as a String.
+     */
+    @Override
+    public String stateAsString() {
+        return this.state.toString();
     }
 
     /**
@@ -223,7 +247,7 @@ public class GenericGroup {
      * Compares the group's current state with the given state.
      *
      * @param groupState the state to match against.
-     * @return true if matches, false otherwise.
+     * @return true if the state matches, false otherwise.
      */
     public boolean isState(GenericGroupState groupState) {
         return this.state == groupState;
@@ -240,7 +264,7 @@ public class GenericGroup {
     }
 
     /**
-     * Get the member metadata with the provided member id.
+     * Get the member metadata associated with the provided member id.
      *
      * @param memberId the member id.
      * @return the member metadata if it exists, null otherwise.
@@ -296,8 +320,8 @@ public class GenericGroup {
     /**
      * Add a member to this group.
      *
-     * @param member the member to add.
-     * @param future the future to complete once the join group phase completes.
+     * @param member  the member to add.
+     * @param future  the future to complete once the join group phase completes.
      */
     public void add(GenericGroupMember member, CompletableFuture<JoinGroupResponseData> future) {
         member.groupInstanceId().ifPresent(instanceId -> {
@@ -366,8 +390,10 @@ public class GenericGroup {
     }
 
     /**
-     * Check whether current leader has rejoined. If not, try to find another joined member to be
-     * new leader. Return false if
+     * Check whether current leader has rejoined. If not, choose a
+     * new leader from one of the joined members.
+     *
+     * Return false if
      *   1. the group is currently empty (has no designated leader)
      *   2. no member rejoined
      *
@@ -408,9 +434,9 @@ public class GenericGroup {
      * [For static members only]: Replace the old member id with the new one,
      * keep everything else unchanged and return the updated member.
      *
-     * @param groupInstanceId the group instance id.
-     * @param oldMemberId the old member id.
-     * @param newMemberId the new member id that will replace the old member id.
+     * @param groupInstanceId  the group instance id.
+     * @param oldMemberId      the old member id.
+     * @param newMemberId      the new member id that will replace the old member id.
      * @return the old member.
      */
     public GenericGroupMember replaceStaticMember(
@@ -629,7 +655,7 @@ public class GenericGroup {
 
     /**
      * @return the group's rebalance timeout in milliseconds.
-     *         It is the max of all member's rebalance timeout.
+     *         It is the max of all members' rebalance timeout.
      */
     public int rebalanceTimeoutMs() {
         int maxRebalanceTimeoutMs = 0;
@@ -642,8 +668,8 @@ public class GenericGroup {
     /**
      * Generate a member id from the given client and group instance ids.
      *
-     * @param clientId the client id.
-     * @param groupInstanceId the group instance id.
+     * @param clientId         the client id.
+     * @param groupInstanceId  the group instance id.
      * @return the generated id.
      */
     public String generateMemberId(String clientId, Optional<String> groupInstanceId) {
@@ -656,8 +682,8 @@ public class GenericGroup {
      *   1. given member is a known static member to group
      *   2. group stored member id doesn't match with given member id
      *
-     * @param groupInstanceId the group instance id.
-     * @param memberId the member id.
+     * @param groupInstanceId  the group instance id.
+     * @param memberId         the member id.
      * @return whether the static member is fenced based on the condition above.
      */
     public boolean isStaticMemberFenced(
@@ -758,8 +784,8 @@ public class GenericGroup {
      * Checks whether at least one of the given protocols can be supported. A
      * protocol can be supported if it is supported by all members.
      *
-     * @param memberProtocolType the member protocol type.
-     * @param memberProtocols the set of protocol names.
+     * @param memberProtocolType  the member protocol type.
+     * @param memberProtocols     the set of protocol names.
      * @return a boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
@@ -837,11 +863,11 @@ public class GenericGroup {
     /**
      * Update a member.
      *
-     * @param member the member.
-     * @param protocols the list of protocols.
-     * @param rebalanceTimeoutMs the rebalance timeout in milliseconds.
-     * @param sessionTimeoutMs the session timeout in milliseconds.
-     * @param future the future that is invoked once the join phase is complete.
+     * @param member              the member.
+     * @param protocols           the list of protocols.
+     * @param rebalanceTimeoutMs  the rebalance timeout in milliseconds.
+     * @param sessionTimeoutMs    the session timeout in milliseconds.
+     * @param future              the future that is invoked once the join phase is complete.
      */
     public void updateMember(
         GenericGroupMember member,
@@ -867,8 +893,8 @@ public class GenericGroup {
     /**
      * Complete the join future.
      * 
-     * @param member the member.
-     * @param response the join response to complete the future with.
+     * @param member    the member.
+     * @param response  the join response to complete the future with.
      */
     public void completeJoinFuture(
         GenericGroupMember member,
@@ -884,8 +910,8 @@ public class GenericGroup {
     /**
      * Complete a member's sync future.
      * 
-     * @param member the member.
-     * @param response the sync response to complete the future with.
+     * @param member    the member.
+     * @param response  the sync response to complete the future with.
      * @return true if a sync future actually completes.
      */
     public boolean completeSyncFuture(
