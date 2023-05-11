@@ -17,6 +17,10 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
@@ -33,15 +37,26 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generic.GenericGroup;
+import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
+import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.generic.Protocol;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedAssignment;
@@ -382,5 +397,85 @@ public class RecordHelpersTest {
             "group-id",
             "member-id"
         ));
+    }
+
+    @Test
+    public void testNewGroupMetadataRecord() {
+        Time time = new MockTime();
+
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = new ArrayList<>();
+        expectedMembers.add(
+            new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member-1")
+                .setClientId("client-1")
+                .setClientHost("host-1")
+                .setRebalanceTimeout(1000)
+                .setSessionTimeout(1500)
+                .setGroupInstanceId("group-instance-1")
+                .setSubscription(new byte[]{0, 1})
+                .setAssignment(new byte[]{1, 2})
+        );
+
+        expectedMembers.add(
+            new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member-2")
+                .setClientId("client-2")
+                .setClientHost("host-2")
+                .setRebalanceTimeout(1000)
+                .setSessionTimeout(1500)
+                .setGroupInstanceId("group-instance-2")
+                .setSubscription(new byte[]{1, 2})
+                .setAssignment(new byte[]{2, 3})
+        );
+
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup("group-id"),
+                (short) 2),
+            new ApiMessageAndVersion(
+                new GroupMetadataValue()
+                    .setProtocol("range")
+                    .setProtocolType("consumer")
+                    .setLeader("member-1")
+                    .setGeneration(1)
+                    .setCurrentStateTimestamp(time.milliseconds())
+                    .setMembers(expectedMembers),
+            (short) 3));
+
+        GenericGroup group = new GenericGroup(
+            new LogContext(),
+            "group-id",
+            GenericGroupState.PREPARING_REBALANCE,
+            time
+        );
+
+        Map<String, byte[]> memberAssignments = new HashMap<>();
+        expectedMembers.forEach(member -> {
+            memberAssignments.put(member.memberId(), member.assignment());
+            group.add(new GenericGroupMember(
+                member.memberId(),
+                Optional.of(member.groupInstanceId()),
+                member.clientId(),
+                member.clientHost(),
+                member.rebalanceTimeout(),
+                member.sessionTimeout(),
+                "consumer",
+                Collections.singletonList(new Protocol(
+                    "range",
+                    member.subscription()
+                )),
+                member.assignment()
+            ));
+        });
+
+        group.initNextGeneration();
+        Record groupMetadataRecord = RecordHelpers.newGroupMetadataRecord(
+            group,
+            memberAssignments,
+            MetadataVersion.IBP_3_5_IV2
+        );
+
+        assertEquals(expectedRecord, groupMetadataRecord);
     }
 }
