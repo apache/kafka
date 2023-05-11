@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
-
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
@@ -34,7 +33,7 @@ import org.slf4j.event.Level
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
 
 class CoreUtilsTest extends Logging {
 
@@ -202,7 +201,7 @@ class CoreUtilsTest extends Logging {
     val nThreads = 5
     val createdCount = new AtomicInteger
     val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
-    implicit val executionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
+    implicit val executionContext: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
     try {
       Await.result(Future.traverse(1 to count) { _ =>
         Future {
