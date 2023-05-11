@@ -33,8 +33,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
@@ -586,6 +584,7 @@ public class GenericGroupTest {
         assertEquals(Errors.NONE.code(), joinGroupFuture.get().errorCode());
         assertEquals(memberId, joinGroupFuture.get().memberId());
         assertFalse(member.isAwaitingJoin());
+        assertEquals(0, group.numAwaitingJoinResponse());
     }
 
     @Test
@@ -642,6 +641,8 @@ public class GenericGroupTest {
 
         assertTrue(group.completeSyncFuture(member, new SyncGroupResponseData()
             .setErrorCode(Errors.NONE.code())));
+
+        assertEquals(0, group.numAwaitingJoinResponse());
 
         assertFalse(member.isAwaitingSync());
         assertEquals(Errors.NONE.code(), syncGroupFuture.get().errorCode());

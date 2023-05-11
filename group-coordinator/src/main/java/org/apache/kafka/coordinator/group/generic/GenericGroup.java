@@ -935,7 +935,6 @@ public class GenericGroup implements Group {
         if (member.isAwaitingSync()) {
             member.awaitingSyncFuture().complete(response);
             member.setAwaitingSyncFuture(null);
-            numMembersAwaitingJoinResponse--;
             return true;
         }
         return false;
