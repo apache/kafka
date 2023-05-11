@@ -70,9 +70,8 @@ class LogSegmentTest {
 
   /**
    * LogSegmentOffsetOverflowException should be thrown while appending the logs if:
-   * 1. largestOffset < 0
-   * 2. largestOffset - baseOffset < 0
-   * 3. largestOffset - baseOffset > Integer.MAX_VALUE
+   * 1. largestOffset - baseOffset < 0
+   * 2. largestOffset - baseOffset > Integer.MAX_VALUE
    */
   @ParameterizedTest
   @CsvSource(Array(
