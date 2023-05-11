@@ -224,6 +224,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
 
+    info(s"Initializing dynamic configs for ${kafkaConfig.brokerId}")
     zkClientOpt.foreach { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
       updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default), false)
@@ -337,6 +338,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private[server] def updateDefaultConfig(persistentProps: Properties, doLog: Boolean = true): Unit = CoreUtils.inWriteLock(lock) {
     try {
+      info("Updating default config")
       val props = fromPersistentProps(persistentProps, perBrokerConfig = false)
       dynamicDefaultConfigs.clear()
       dynamicDefaultConfigs ++= props.asScala
@@ -556,6 +558,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false, doLog)
     if (newConfig ne currentConfig) {
+      info("Updating reconfigurables")
       currentConfig = newConfig
       kafkaConfig.updateCurrentConfig(newConfig)
 
@@ -567,6 +570,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean, doLog: Boolean = false): (KafkaConfig, List[BrokerReconfigurable]) = {
     val newConfig = new KafkaConfig(newProps.asJava, doLog, None)
     val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
+    info(s"Dynamic config updated created $changeMap")
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
@@ -1079,8 +1083,8 @@ class DynamicProducerStateManagerConfig(val producerStateManagerConfig: Producer
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (producerStateManagerConfig.producerIdExpirationMs() != newConfig.producerIdExpirationMs) {
       info(s"Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from ${producerStateManagerConfig.producerIdExpirationMs()} to ${newConfig.producerIdExpirationMs}")
-      producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
     }
+    producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
   }
 
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
