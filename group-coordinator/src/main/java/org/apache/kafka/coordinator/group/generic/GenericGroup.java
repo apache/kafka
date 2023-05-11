@@ -50,7 +50,6 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 
 /**
- *
  * This class holds metadata for a generic group where the
  * member assignment is driven solely from the client side.
  *
@@ -79,11 +78,6 @@ public class GenericGroup implements Group {
      * with a client id or a group instance id.
      */
     private static final String MEMBER_ID_DELIMITER = "-";
-
-    /**
-     * The slf4j log context, used to create new loggers.
-     */
-    private final LogContext logContext;
 
     /**
      * The slf4j logger.
@@ -180,7 +174,7 @@ public class GenericGroup implements Group {
         GenericGroupState initialState,
         Time time
     ) {
-        this.logContext = Objects.requireNonNull(logContext);
+        Objects.requireNonNull(logContext);
         this.log = logContext.logger(GenericGroup.class);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = Objects.requireNonNull(initialState);
@@ -249,7 +243,7 @@ public class GenericGroup implements Group {
      * @param groupState the state to match against.
      * @return true if the state matches, false otherwise.
      */
-    public boolean isState(GenericGroupState groupState) {
+    public boolean isInState(GenericGroupState groupState) {
         return this.state == groupState;
     }
 
@@ -307,12 +301,17 @@ public class GenericGroup implements Group {
     /**
      * @return whether the group is using the consumer protocol.
      */
-    public boolean isGenericGroup() {
+    public boolean usesConsumerGroupProtocol() {
         return protocolType.map(type ->
             type.equals(ConsumerProtocol.PROTOCOL_TYPE)
         ).orElse(false);
     }
 
+    /**
+     * Add a member to this group.
+     *
+     * @param member  the member to add.
+     */
     public void add(GenericGroupMember member) {
         add(member, null);
     }
@@ -341,10 +340,7 @@ public class GenericGroup implements Group {
             throw new IllegalStateException("The group and member's protocol type must be the same.");
         }
 
-        if (!supportsProtocols(
-            member.protocolType(),
-            GenericGroupMember.plainProtocolSet(member.supportedProtocols()))) {
-
+        if (!supportsProtocols(member)) {
             throw new IllegalStateException("None of the member's protocols can be supported.");
         }
 
@@ -397,7 +393,8 @@ public class GenericGroup implements Group {
      *   1. the group is currently empty (has no designated leader)
      *   2. no member rejoined
      *
-     * @return whether a new leader was elected.
+     * @return true if a new leader was elected or the existing
+     *         leader rejoined, false otherwise.
      */
     public boolean maybeElectNewJoinedLeader() {
         if (leaderId.isPresent()) {
@@ -407,8 +404,8 @@ public class GenericGroup implements Group {
                     if (member.isAwaitingJoin()) {
                         leaderId = Optional.of(member.memberId());
                         log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
-                            "failed to join before the rebalance timeout. Member {} " +
-                            "was elected as the new leader.",
+                                "failed to join before the rebalance timeout. Member {} " +
+                                "was elected as the new leader.",
                             currentLeader.memberId(),
                             currentLeader.groupInstanceId().orElse("None"),
                             member
@@ -425,7 +422,7 @@ public class GenericGroup implements Group {
                 );
                 return false;
             }
-            return false;
+            return true;
         }
         return false;
     }
@@ -642,7 +639,7 @@ public class GenericGroup implements Group {
     /**
      * @return number of members waiting for a join group response.
      */
-    public int numAwaiting() {
+    public int numAwaitingJoinResponse() {
         return numMembersAwaitingJoinResponse;
     }
 
@@ -784,12 +781,26 @@ public class GenericGroup implements Group {
      * Checks whether at least one of the given protocols can be supported. A
      * protocol can be supported if it is supported by all members.
      *
+     * @param member               the member to check.
+     * @return a boolean based on the condition mentioned above.
+     */
+    public boolean supportsProtocols(GenericGroupMember member) {
+        return supportsProtocols(
+            member.protocolType(),
+            GenericGroupMember.plainProtocolSet(member.supportedProtocols())
+        );
+    }
+
+    /**
+     * Checks whether at least one of the given protocols can be supported. A
+     * protocol can be supported if it is supported by all members.
+     *
      * @param memberProtocolType  the member protocol type.
      * @param memberProtocols     the set of protocol names.
      * @return a boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
-        if (isState(EMPTY)) {
+        if (isInState(EMPTY)) {
             return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
         } else {
             return protocolType.map(type -> type.equals(memberProtocolType)).orElse(false) &&
@@ -895,8 +906,9 @@ public class GenericGroup implements Group {
      * 
      * @param member    the member.
      * @param response  the join response to complete the future with.
+     * @return true if a join future actually completes.
      */
-    public void completeJoinFuture(
+    public boolean completeJoinFuture(
         GenericGroupMember member,
         JoinGroupResponseData response
     ) {
@@ -904,7 +916,9 @@ public class GenericGroup implements Group {
             member.awaitingJoinFuture().complete(response);
             member.setAwaitingJoinFuture(null);
             numMembersAwaitingJoinResponse--;
+            return true;
         }
+        return false;
     }
 
     /**
@@ -950,7 +964,7 @@ public class GenericGroup implements Group {
      * @return the members.
      */
     public List<JoinGroupResponseMember> currentGenericGroupMembers() {
-        if (isState(DEAD) || isState(PREPARING_REBALANCE)) {
+        if (isInState(DEAD) || isInState(PREPARING_REBALANCE)) {
             throw new IllegalStateException("Cannot obtain generic member metadata for group " +
                 groupId + " in state " + state);
         }

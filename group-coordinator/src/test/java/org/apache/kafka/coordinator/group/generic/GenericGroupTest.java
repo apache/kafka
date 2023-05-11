@@ -33,8 +33,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
@@ -55,7 +57,6 @@ public class GenericGroupTest {
     private final int rebalanceTimeoutMs = 60000;
     private final int sessionTimeoutMs = 10000;
 
-    
     private GenericGroup group = null;
     
     @BeforeEach
@@ -324,27 +325,14 @@ public class GenericGroupTest {
         );
 
         // by default, the group supports everything
-        Set<String> expectedProtocols = new HashSet<>();
-        member1Protocols.forEach(protocol -> expectedProtocols.add(protocol.name()));
-        assertTrue(group.supportsProtocols(protocolType, expectedProtocols));
+        assertTrue(group.supportsProtocols(protocolType, mkSet("range", "roundrobin")));
 
         group.add(member1);
         group.transitionTo(PREPARING_REBALANCE);
 
-        expectedProtocols.clear();
-        expectedProtocols.add("roundrobin");
-        expectedProtocols.add("foo");
-        assertTrue(group.supportsProtocols(protocolType, expectedProtocols));
-
-        expectedProtocols.clear();
-        expectedProtocols.add("range");
-        expectedProtocols.add("bar");
-        assertTrue(group.supportsProtocols(protocolType, expectedProtocols));
-
-        expectedProtocols.clear();
-        expectedProtocols.add("foo");
-        expectedProtocols.add("bar");
-        assertFalse(group.supportsProtocols(protocolType, expectedProtocols));
+        assertTrue(group.supportsProtocols(protocolType, mkSet("roundrobin", "foo")));
+        assertTrue(group.supportsProtocols(protocolType, mkSet("range", "bar")));
+        assertFalse(group.supportsProtocols(protocolType, mkSet("foo", "bar")));
     }
 
     @Test
@@ -530,7 +518,7 @@ public class GenericGroupTest {
     }
 
     @Test
-    public void testReplaceGroupInstance() {
+    public void testReplaceGroupInstance() throws Exception {
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.of(groupInstanceId),
@@ -547,16 +535,10 @@ public class GenericGroupTest {
             )
         );
 
-        AtomicBoolean joinAwaitingMemberFenced = new AtomicBoolean(false);
         CompletableFuture<JoinGroupResponseData> joinGroupFuture = new CompletableFuture<>();
-        joinGroupFuture.whenComplete((joinGroupResult, __) ->
-            joinAwaitingMemberFenced.set(joinGroupResult.errorCode() == Errors.FENCED_INSTANCE_ID.code()));
         group.add(member, joinGroupFuture);
 
-        AtomicBoolean syncAwaitingMemberFenced = new AtomicBoolean(false);
         CompletableFuture<SyncGroupResponseData> syncGroupFuture = new CompletableFuture<>();
-        syncGroupFuture.whenComplete((syncGroupResult, __) ->
-            syncAwaitingMemberFenced.set(syncGroupResult.errorCode() == Errors.FENCED_INSTANCE_ID.code()));
         member.setAwaitingSyncFuture(syncGroupFuture);
 
         assertTrue(group.isLeader(memberId));
@@ -564,16 +546,17 @@ public class GenericGroupTest {
 
         String newMemberId = "newMemberId";
         group.replaceStaticMember(groupInstanceId, memberId, newMemberId);
+
         assertTrue(group.isLeader(newMemberId));
         assertEquals(newMemberId, group.staticMemberId(groupInstanceId));
-        assertTrue(joinAwaitingMemberFenced.get());
-        assertTrue(syncAwaitingMemberFenced.get());
+        assertEquals(Errors.FENCED_INSTANCE_ID.code(), joinGroupFuture.get().errorCode());
+        assertEquals(Errors.FENCED_INSTANCE_ID.code(), syncGroupFuture.get().errorCode());
         assertFalse(member.isAwaitingJoin());
         assertFalse(member.isAwaitingSync());
     }
 
     @Test
-    public void testCompleteJoinFuture() {
+    public void testCompleteJoinFuture() throws Exception {
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -590,18 +573,18 @@ public class GenericGroupTest {
             )
         );
 
-        AtomicBoolean invoked = new AtomicBoolean(false);
         CompletableFuture<JoinGroupResponseData> joinGroupFuture = new CompletableFuture<>();
-        joinGroupFuture.whenComplete((__, ___) ->
-            invoked.set(true));
         group.add(member, joinGroupFuture);
 
         assertTrue(group.hasAllMembersJoined());
-        group.completeJoinFuture(member, new JoinGroupResponseData()
-            .setMemberId(member.memberId())
-            .setErrorCode(Errors.NONE.code()));
+        assertTrue(
+            group.completeJoinFuture(member, new JoinGroupResponseData()
+                .setMemberId(member.memberId())
+                .setErrorCode(Errors.NONE.code()))
+        );
 
-        assertTrue(invoked.get());
+        assertEquals(Errors.NONE.code(), joinGroupFuture.get().errorCode());
+        assertEquals(memberId, joinGroupFuture.get().memberId());
         assertFalse(member.isAwaitingJoin());
     }
 
@@ -626,15 +609,17 @@ public class GenericGroupTest {
         group.add(member);
 
         assertFalse(member.isAwaitingJoin());
-        group.completeJoinFuture(member, new JoinGroupResponseData()
-            .setMemberId(member.memberId())
-            .setErrorCode(Errors.NONE.code()));
+        assertFalse(
+            group.completeJoinFuture(member, new JoinGroupResponseData()
+                .setMemberId(member.memberId())
+                .setErrorCode(Errors.NONE.code()))
+        );
 
         assertFalse(member.isAwaitingJoin());
     }
 
     @Test
-    public void testCompleteSyncFuture() {
+    public void testCompleteSyncFuture() throws Exception {
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -659,6 +644,7 @@ public class GenericGroupTest {
             .setErrorCode(Errors.NONE.code())));
 
         assertFalse(member.isAwaitingSync());
+        assertEquals(Errors.NONE.code(), syncGroupFuture.get().errorCode());
     }
 
     @Test
@@ -680,6 +666,7 @@ public class GenericGroupTest {
         );
 
         group.add(member);
+        assertFalse(member.isAwaitingSync());
 
         assertFalse(group.completeSyncFuture(member, new SyncGroupResponseData()
             .setErrorCode(Errors.NONE.code())));
@@ -921,6 +908,49 @@ public class GenericGroupTest {
         assertTrue(group.isLeader("new-leader"));
     }
 
+    @Test
+    public void testMaybeElectNewJoinedLeaderChooseExisting() {
+        GenericGroupMember leader = new GenericGroupMember(
+            memberId,
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            Collections.singletonList(
+                new Protocol(
+                    "roundrobin",
+                    new byte[0]
+                )
+            )
+        );
+
+        group.add(leader, new CompletableFuture<>());
+        assertTrue(group.isLeader(memberId));
+        assertTrue(leader.isAwaitingJoin());
+
+        GenericGroupMember newMember = new GenericGroupMember(
+            "new-member",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            Collections.singletonList(
+                new Protocol(
+                    "roundrobin",
+                    new byte[0]
+                )
+            )
+        );
+        group.add(newMember);
+
+        assertTrue(group.maybeElectNewJoinedLeader());
+        assertTrue(group.isLeader(memberId));
+    }
+
     private void assertState(GenericGroup group, GenericGroupState targetState) {
         Set<GenericGroupState> otherStates = new HashSet<>();
         otherStates.add(STABLE);
@@ -929,7 +959,7 @@ public class GenericGroupTest {
         otherStates.add(DEAD);
         otherStates.remove(targetState);
 
-        otherStates.forEach(otherState -> assertFalse(group.isState(otherState)));
-        assertTrue(group.isState(targetState));
+        otherStates.forEach(otherState -> assertFalse(group.isInState(otherState)));
+        assertTrue(group.isInState(targetState));
     }
 }
