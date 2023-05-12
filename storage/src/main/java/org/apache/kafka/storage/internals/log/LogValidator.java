@@ -593,21 +593,20 @@ public class LogValidator {
                                                               TimestampType timestampType,
                                                               long timestampDiffMaxMs) {
         if (timestampType == TimestampType.CREATE_TIME
-                && record.timestamp() != RecordBatch.NO_TIMESTAMP){
+                && record.timestamp() != RecordBatch.NO_TIMESTAMP) {
             final long timestampDiff = record.timestamp() - now;
-            if(timestampDiff > TIME_DRIFT_TOLERANCE){
+            if (timestampDiff > TIME_DRIFT_TOLERANCE) {
                 return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
                         "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
                                 + " is ahead of the server's time (" + now + ").")));
             }
-            if(Math.abs(timestampDiff) > timestampDiffMaxMs){
+            if (Math.abs(timestampDiff) > timestampDiffMaxMs) {
                 return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
                         "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
                                 + " is out of range. The timestamp should be within [" + (now - timestampDiffMaxMs)
                                 + ", " + (now + timestampDiffMaxMs) + "]")));
             }
-        }
-        else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
+        } else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
             return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
                 "Invalid timestamp type in message " + record + ". Producer should not set timestamp "
                 + "type to LogAppendTime.")));
