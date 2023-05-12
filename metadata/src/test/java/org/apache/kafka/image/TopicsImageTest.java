@@ -29,6 +29,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -55,9 +56,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class TopicsImageTest {
-    static final TopicsImage IMAGE1;
+    public static final TopicsImage IMAGE1;
 
-    static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
     static final TopicsDelta DELTA1;
 
@@ -74,18 +75,18 @@ public class TopicsImageTest {
         return new TopicImage(name, id, partitionMap);
     }
 
-    private static Map<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
-        Map<Uuid, TopicImage> map = new HashMap<>();
+    private static ImmutableMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
+        ImmutableMap<Uuid, TopicImage> map = TopicsImage.EMPTY.topicsById();
         for (TopicImage topic : topics) {
-            map.put(topic.id(), topic);
+            map = map.updated(topic.id(), topic);
         }
         return map;
     }
 
-    private static Map<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        Map<String, TopicImage> map = new HashMap<>();
+    private static ImmutableMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
+        ImmutableMap<String, TopicImage> map = TopicsImage.EMPTY.topicsByName();
         for (TopicImage topic : topics) {
-            map.put(topic.name(), topic);
+            map = map.updated(topic.name(), topic);
         }
         return map;
     }

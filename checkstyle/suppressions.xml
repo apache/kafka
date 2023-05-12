@@ -300,15 +300,15 @@
 
     <!-- metadata -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest|ClusterControlManagerTest).java"/>
+              files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest|ClusterControlManagerTest|KRaftMigrationDriverTest).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="(ParameterNumber|ClassDataAbstractionCoupling)"
               files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"
-              files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager).java"/>
+              files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager|KRaftMigrationDriver|ClusterControlManager).java"/>
     <suppress checks="NPathComplexity"
-              files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager|FeatureControlManager|KRaftMigrationDriver).java"/>
+              files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager|FeatureControlManager|KRaftMigrationDriver|ScramControlManager|ClusterControlManager).java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
     <suppress checks="BooleanExpressionComplexity"
@@ -318,11 +318,11 @@
     <suppress checks="AvoidStarImport"
               files="MetadataVersionTest.java"/>
 
-    <!-- group coordinator  -->
+    <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
-              files="ServerSideStickyRangeAssignor.java"/>
-    <suppress checks="NPathComplexity"
-              files="ServerSideStickyRangeAssignor.java"/>
+              files="(ConsumerGroupMember).java"/>
+    <suppress checks="ParameterNumber"
+              files="(ConsumerGroupMember).java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"

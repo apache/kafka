@@ -29,6 +29,6 @@
     { "name": "AuthBytes", "type": "bytes", "versions": "0+",
       "about": "The SASL authentication bytes from the server, as defined by the SASL mechanism." },
     { "name": "SessionLifetimeMs", "type": "int64", "versions": "1+", "default": "0", "ignorable": true,
-      "about": "The SASL authentication bytes from the server, as defined by the SASL mechanism." }
+      "about": "Number of milliseconds after which only re-authentication over the existing connection to create a new session can occur." }
   ]
 }

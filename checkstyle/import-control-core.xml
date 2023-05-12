@@ -71,7 +71,6 @@
 
   <subpackage name="examples">
     <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="org.apache.kafka.server.util" />
   </subpackage>
 
   <subpackage name="log.remote">

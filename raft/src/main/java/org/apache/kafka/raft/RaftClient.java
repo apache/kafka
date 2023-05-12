@@ -105,7 +105,7 @@ public interface RaftClient<T> extends AutoCloseable {
     /**
      * Unregisters a listener.
      *
-     * To distinguish from events that happend before the call to {@code unregister} and a future
+     * To distinguish from events that happened before the call to {@code unregister} and a future
      * call to {@code register}, different {@code Listener} instances must be used.
      *
      * If the {@code Listener} provided was never registered then the unregistration is ignored. 
@@ -115,7 +115,7 @@ public interface RaftClient<T> extends AutoCloseable {
     void unregister(Listener<T> listener);
 
     /**
-     * Returns the current high water mark, or OptionalLong.empty if it is not known.
+     * Returns the current high watermark, or OptionalLong.empty if it is not known.
      */
     OptionalLong highWatermark();
 
@@ -226,7 +226,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param snapshotId The ID of the new snapshot, which includes the (exclusive) last committed offset
      *                   and the last committed epoch.
      * @param lastContainedLogTime The append time of the highest record contained in this snapshot
-     * @return a writable snapshot if it doesn't already exists
+     * @return a writable snapshot if it doesn't already exist
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */

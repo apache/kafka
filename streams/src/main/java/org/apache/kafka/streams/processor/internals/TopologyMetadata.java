@@ -584,7 +584,7 @@ public class TopologyMetadata {
         applyToEachBuilder(b -> b.addSubscribedTopicsFromMetadata(topics, logPrefix));
     }
 
-    void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
+    void addSubscribedTopicsFromAssignment(final Set<TopicPartition> partitions, final String logPrefix) {
         applyToEachBuilder(b -> b.addSubscribedTopicsFromAssignment(partitions, logPrefix));
     }
 
