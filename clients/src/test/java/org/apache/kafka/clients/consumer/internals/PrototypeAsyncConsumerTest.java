@@ -189,7 +189,7 @@ public class PrototypeAsyncConsumerTest {
     public void testClosed() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         consumer.close();
-        assertThrows(IllegalStateException.class, () -> consumer.committed(new HashSet<>()));
+        assertDoesNotThrow(() -> consumer.committed(new HashSet<>()));
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

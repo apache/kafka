@@ -67,7 +67,6 @@ import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -98,8 +97,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    private final ConcurrentHashMap.KeySetView<CompletableFuture<?>, Boolean> activeFutures =
-        ConcurrentHashMap.newKeySet();
+    private final AtomicReference<CompletableFuture> activeFutures = new AtomicReference<>();
     private AtomicBoolean shouldWakeup = new AtomicBoolean(false);
     private volatile boolean closed = false;
 
@@ -358,7 +356,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
 
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
-        activeFutures.add(event.future());
+        activeFutures.set(event.future());
         eventHandler.add(event);
         try {
             return event.complete(timeout);
@@ -369,9 +367,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } catch (TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } catch (WakeupException e) {
-            this.activeFutures.remove(event.future());
             this.shouldWakeup.set(false);
             throw e;
+        } finally {
+            activeFutures.set(null);
         }
     }
 
@@ -509,7 +508,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         this.shouldWakeup.set(true);
-        this.activeFutures.forEach(v -> v.completeExceptionally(new WakeupException()));
+        if (this.activeFutures.get() != null) {
+            this.activeFutures.getAndSet(null).completeExceptionally(new WakeupException());
+        }
     }
 
     /**
@@ -552,7 +553,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
         maybeWakeup();
         final CompletableFuture<Void> commitFuture = commit(offsets);
-        activeFutures.add(commitFuture);
+        activeFutures.set(commitFuture);
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
@@ -563,7 +564,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             throw new org.apache.kafka.common.errors.TimeoutException(e);
         } catch (WakeupException e) {
             this.shouldWakeup.set(false);
-            this.activeFutures.remove(commitFuture);
+            this.activeFutures.set(null);
             throw e;
         }
     }
@@ -620,19 +621,15 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void maybeWakeup() {
-        if (this.closed)
-            throw new IllegalStateException("This consumer has already been closed.");
-
-        log.debug("Raising WakeupException in response to user wakeup");
         if (this.shouldWakeup.getAndSet(false)) {
+            log.debug("Raising WakeupException in response to user wakeup");
             throw new WakeupException();
         }
     }
 
     // Visible for testing
     boolean wakeupStateResetted() {
-        this.activeFutures.isEmpty();
-        return !this.shouldWakeup.get();
+        return this.activeFutures.get() == null && !this.shouldWakeup.get();
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
