@@ -496,6 +496,14 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(1)
                 .setRackId("rack-id")));
         assertEquals("RackId should only be provided in first request.", ex.getMessage());
+
+        ex = assertThrows(UnsupportedAssignorException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(Uuid.randomUuid().toString())
+                .setMemberEpoch(1)
+                .setServerAssignor("bar")));
+        assertEquals("ServerAssignor bar is not supported. Supported assignors: range.", ex.getMessage());
     }
 
     @Test
@@ -554,7 +562,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(100) // Epoch must be > 0.
-                    .setServerAssignor("range")
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setTopicPartitions(Collections.emptyList())));
@@ -592,7 +599,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(Uuid.randomUuid().toString())
                     .setMemberEpoch(1)
-                    .setServerAssignor("range")
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setTopicPartitions(Collections.emptyList())));
@@ -641,7 +647,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(200)
-                    .setServerAssignor("range")
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
 
@@ -652,7 +657,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(50)
-                    .setServerAssignor("range")
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
 
@@ -663,7 +667,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(99)
-                    .setServerAssignor("range")
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
 
@@ -675,7 +678,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(99)
-                    .setServerAssignor("range")
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setTopicPartitions(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
@@ -927,7 +929,8 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            new HashMap<String, org.apache.kafka.coordinator.group.assignor.MemberAssignment>() {{
+            new HashMap<String, org.apache.kafka.coordinator.group.assignor.MemberAssignment>() {
+                {
                     put(memberId1, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
@@ -940,7 +943,8 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
-                }}
+                }
+            }
         ));
 
         // Member 3 joins the consumer group.
@@ -1963,7 +1967,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testPartitionAssignorExceptionOnLeaveHeatbeat() {
+    public void testPartitionAssignorExceptionOnLeaveHeartbeat() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
         String memberId1 = Uuid.randomUuid().toString();

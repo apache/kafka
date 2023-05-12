@@ -153,7 +153,7 @@ public class GroupMetadataManager {
     private final SnapshotRegistry snapshotRegistry;
 
     /**
-     * The list of supported assignors.
+     * The supported partition assignors keyed by their name.
      */
     private final Map<String, PartitionAssignor> assignors;
 
@@ -283,13 +283,14 @@ public class GroupMetadataManager {
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
             }
-            if (request.serverAssignor() != null && !assignors.containsKey(request.serverAssignor())) {
-                throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
-                    + " is not supported. Supported assignors: " + String.join(", ", assignors.keySet())
-                    + ".");
-            }
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
+        }
+
+        if (request.serverAssignor() != null && !assignors.containsKey(request.serverAssignor())) {
+            throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
+                + " is not supported. Supported assignors: " + String.join(", ", assignors.keySet())
+                + ".");
         }
 
         if (request.subscribedTopicRegex() != null) {
@@ -303,11 +304,12 @@ public class GroupMetadataManager {
 
     /**
      * Verifies that the partitions currently owned by the member (the ones set in the
-     * request) matches the ones that the member should own. It matches if the client
-     * has at least of subset of them.
+     * request) matches the ones that the member should own. It matches if the consumer
+     * only owns partitions which are in the assigned partitions. If does not match if
+     * it owns any other partitions.
      *
      * @param ownedTopicPartitions  The partitions provided by the consumer in the request.
-     * @param target                The partitions that they member should have.
+     * @param target                The partitions that the member should have.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
@@ -370,7 +372,7 @@ public class GroupMetadataManager {
         if (memberEpoch > member.memberEpoch()) {
             // The member has likely got a bump from another coordinator and this coordinator
             // is stale. Return NOT_COORDINATOR to force the member to refresh its coordinator.
-            throw new NotCoordinatorException("The consumer group member has got a larger member "
+            throw new NotCoordinatorException("The consumer group member has a larger member "
                 + "epoch (" + memberEpoch + ") than the one known by this group coordinator ("
                 + member.memberEpoch() + ").");
         } else if (memberEpoch < member.memberEpoch()) {
@@ -536,7 +538,8 @@ public class GroupMetadataManager {
         }
 
         // If the member is stable and its next epoch matches the current target epoch
-        // of the assignment, we can skip this reconciliation.
+        // of the assignment, we don't have to update its current assignment. Otherwise,
+        // we reconcile its current state based on the target assignment.
         boolean assignmentUpdated = false;
         if (member.state() != ConsumerGroupMember.MemberState.STABLE
             || member.nextMemberEpoch() != targetAssignmentEpoch) {
