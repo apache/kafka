@@ -403,6 +403,15 @@ public class RecordHelpersTest {
         ));
     }
 
+    private static Stream<Arguments> metadataToExpectedGroupMetadataValue() {
+        return Stream.of(
+            Arguments.arguments(MetadataVersion.IBP_0_10_0_IV0, (short) 0),
+            Arguments.arguments(MetadataVersion.IBP_1_1_IV0, (short) 1),
+            Arguments.arguments(MetadataVersion.IBP_2_2_IV0, (short) 2),
+            Arguments.arguments(MetadataVersion.IBP_3_5_IV0, (short) 3)
+        );
+    }
+
     @ParameterizedTest
     @MethodSource("metadataToExpectedGroupMetadataValue")
     public void testNewGroupMetadataRecord(
@@ -598,14 +607,5 @@ public class RecordHelpersTest {
                 new HashMap<>(),
                 MetadataVersion.IBP_3_5_IV2
             ));
-    }
-
-    private static Stream<Arguments> metadataToExpectedGroupMetadataValue() {
-        return Stream.of(
-            Arguments.arguments(MetadataVersion.IBP_0_10_0_IV0, (short) 0),
-            Arguments.arguments(MetadataVersion.IBP_1_1_IV0, (short) 1),
-            Arguments.arguments(MetadataVersion.IBP_2_2_IV0, (short) 2),
-            Arguments.arguments(MetadataVersion.IBP_3_5_IV0, (short) 3)
-        );
     }
 }
