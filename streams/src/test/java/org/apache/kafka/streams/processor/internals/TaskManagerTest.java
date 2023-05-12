@@ -543,7 +543,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         final Set<Task> createdTasks = mkSet(activeTaskToBeCreated);
         final Map<TaskId, Set<TopicPartition>> tasksToBeCreated = mkMap(
-                mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions()));
+            mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions()));
         when(activeTaskCreator.createTasks(consumer, tasksToBeCreated)).thenReturn(createdTasks);
         expect(standbyTaskCreator.createTasks(Collections.emptyMap())).andReturn(emptySet());
         replay(standbyTaskCreator);
@@ -780,8 +780,8 @@ public class TaskManagerTest {
 
         verify(standbyTaskCreator);
         Mockito.verify(activeTaskCreator).createTasks(
-                consumer,
-                mkMap(mkEntry(activeTaskToCreate.id(), activeTaskToCreate.inputPartitions()))
+            consumer,
+            mkMap(mkEntry(activeTaskToCreate.id(), activeTaskToCreate.inputPartitions()))
         );
         Mockito.verify(activeTaskToClose).closeClean();
     }
@@ -847,8 +847,8 @@ public class TaskManagerTest {
         when(tasks.removePendingTaskToRecycle(task00.id())).thenReturn(taskId00Partitions);
         when(tasks.removePendingTaskToRecycle(task01.id())).thenReturn(taskId01Partitions);
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(activeTaskCreator.createActiveTaskFromStandby(Mockito.eq(task01), Mockito.eq(taskId01Partitions),
-                Mockito.eq(consumer))).thenReturn(task01Converted);
+        when(activeTaskCreator.createActiveTaskFromStandby(task01, taskId01Partitions,
+            consumer)).thenReturn(task01Converted);
         expect(standbyTaskCreator.createStandbyTaskFromActive(eq(task00), eq(taskId00Partitions)))
             .andStubReturn(task00Converted);
         replay(standbyTaskCreator);
@@ -856,7 +856,7 @@ public class TaskManagerTest {
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         verify(standbyTaskCreator);
-        Mockito.verify(activeTaskCreator, times(1)).closeAndRemoveTaskProducerIfNeeded(any());
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(any());
         Mockito.verify(task00).suspend();
         Mockito.verify(task01).suspend();
         Mockito.verify(task00Converted).initializeIfNeeded();
@@ -883,7 +883,7 @@ public class TaskManagerTest {
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
-        Mockito.verify(activeTaskCreator, times(1)).closeAndRemoveTaskProducerIfNeeded(any());
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(any());
         Mockito.verify(task00).suspend();
         Mockito.verify(task00).closeClean();
         Mockito.verify(task01).suspend();
@@ -958,8 +958,8 @@ public class TaskManagerTest {
         when(stateUpdater.drainRemovedTasks())
             .thenReturn(mkSet(taskToRecycle0, taskToRecycle1, taskToClose, taskToUpdateInputPartitions));
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
-        when(activeTaskCreator.createActiveTaskFromStandby(Mockito.eq(taskToRecycle1), Mockito.eq(taskId01Partitions),
-                Mockito.eq(consumer))).thenReturn(convertedTask1);
+        when(activeTaskCreator.createActiveTaskFromStandby(taskToRecycle1, taskId01Partitions, consumer))
+            .thenReturn(convertedTask1);
         expect(standbyTaskCreator.createStandbyTaskFromActive(eq(taskToRecycle0), eq(taskId00Partitions)))
             .andStubReturn(convertedTask0);
         expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
@@ -1261,7 +1261,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpCloseCleanRestoredTask(statefulTask, tasks);
         final TaskId taskId = statefulTask.id();
         doThrow(new RuntimeException("Something happened"))
-                .when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId);
+            .when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId);
 
         assertThrows(
             RuntimeException.class,
