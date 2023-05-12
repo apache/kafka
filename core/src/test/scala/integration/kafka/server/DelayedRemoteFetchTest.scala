@@ -47,7 +47,7 @@ class DelayedRemoteFetchTest {
   private val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
 
   @Test
-  def testFetchWithFencedEpoch(): Unit = {
+  def testFetch(): Unit = {
     var actualTopicPartition: Option[TopicIdPartition] = None
     var fetchResultOpt: Option[FetchPartitionData] = None
 
@@ -143,10 +143,8 @@ class DelayedRemoteFetchTest {
     assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResultOpt.get.error)
   }
 
-  private def buildFollowerFetchParams(
-                                        replicaId: Int,
-                                        maxWaitMs: Int
-                                      ): FetchParams = {
+  private def buildFollowerFetchParams(replicaId: Int,
+                                       maxWaitMs: Int): FetchParams = {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
       replicaId,
