@@ -598,7 +598,7 @@ public class LogValidator {
             if(timestampDiff > TIME_DRIFT_TOLERANCE){
                 return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
                         "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
-                                + " is ahead of the server's time. " + now)));
+                                + " is ahead of the server's time (" + now + ").")));
             }
             if(Math.abs(timestampDiff) > timestampDiffMaxMs){
                 return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
