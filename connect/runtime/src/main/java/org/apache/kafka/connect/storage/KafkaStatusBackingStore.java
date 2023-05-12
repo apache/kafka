@@ -315,7 +315,6 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             this.generation = status.generation();
             if (safeWrite && !entry.canWriteSafely(status))
                 return;
-
             sequence = entry.increment();
         }
 
@@ -596,6 +595,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             // couldn't read the newer RUNNING status. This can lead to an inaccurate status
             // representation even though the task might be actually running.
             if (status.state() == ConnectorStatus.State.UNASSIGNED
+                    && entry.get() != null
                     && entry.get().state() == ConnectorStatus.State.RUNNING
                     && entry.get().generation() > status.generation()) {
                 log.trace("Ignoring stale status {} in favour of more upto date status {}", status, entry.get());

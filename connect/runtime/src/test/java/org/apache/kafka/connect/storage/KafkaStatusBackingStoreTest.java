@@ -355,10 +355,10 @@ public class KafkaStatusBackingStoreTest {
         assertEquals(status, store.get(TASK));
 
         // This  status is from the another worker not necessarily belonging to the above group.
-        // In this case, the status should get update irrespective of whatever status info was present before.
-        TaskStatus staleStatus = new TaskStatus(TASK, ConnectorStatus.State.RUNNING, yetAnotherWorkerId, 1);
-        store.put(staleStatus);
-        assertEquals(staleStatus, store.get(TASK));
+        // In this case, the status should get updated irrespective of whatever status info was present before.
+        TaskStatus latestStatus = new TaskStatus(TASK, ConnectorStatus.State.RUNNING, yetAnotherWorkerId, 1);
+        store.put(latestStatus);
+        assertEquals(latestStatus, store.get(TASK));
     }
 
     @Test
