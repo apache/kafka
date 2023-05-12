@@ -1288,7 +1288,7 @@ class KafkaApisTest {
               .setPartitionIndex(0)
               .setCommittedOffset(10)).asJava)).asJava)
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, true).build(version))
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, version >= 9).build(version))
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1373,8 +1373,9 @@ class KafkaApisTest {
     assertEquals(expectedOffsetCommitResponse, response.data)
   }
 
-  @Test
-  def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+  def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(version: Short): Unit = {
     val (fooId, barId, bazId, zarId, quxId) =
       (Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid())
 
@@ -1382,99 +1383,106 @@ class KafkaApisTest {
     addTopicToMetadataCache("bar", numPartitions = 2, topicId = barId)
     addTopicToMetadataCache("baz", numPartitions = 2, topicId = bazId)
 
-    val offsetCommitRequest = new OffsetCommitRequestData()
-      .setGroupId("group")
-      .setMemberId("member")
-      .setTopics(List(
-        // foo exists but only has 2 partitions.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(fooId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(10),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(20),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(2)
-              .setCommittedOffset(30)).asJava),
-        // bar exists.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(barId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(40),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(50)).asJava),
-        // zar does not exist.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(zarId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(60),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(70)).asJava),
-        // baz exists.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(bazId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(60),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(80)).asJava),
-        // qux does not exist.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(quxId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(10)).asJava)).asJava)
+    val offsetCommitRequest =
+      new OffsetCommitRequestData()
+        .setGroupId("group")
+        .setMemberId("member")
+        .setTopics(List(
+          // foo exists but only has 2 partitions.
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(if (version < 9) "foo" else "")
+            .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(10),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(20),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(2)
+                .setCommittedOffset(30)).asJava),
+          // bar exists.
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(if (version < 9) "bar" else "")
+            .setTopicId(if (version >= 9) barId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(40),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(50)).asJava),
+          // zar does not exist.
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(if (version < 9) "zar" else "")
+            .setTopicId(if (version >= 9) zarId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(60),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(70)).asJava),
+          // baz exists.
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(if (version < 9) "baz" else "")
+            .setTopicId(if (version >= 9) bazId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(60),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(80)).asJava),
+          // qux does not exist.
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(if (version < 9) "qux" else "")
+            .setTopicId(if (version >= 9) quxId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(10)).asJava)).asJava)
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, true).build())
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, version >= 9).build())
 
     // This is the request expected by the group coordinator.
-    val expectedOffsetCommitRequest = new OffsetCommitRequestData()
-      .setGroupId("group")
-      .setMemberId("member")
-      .setTopics(List(
-        // foo exists but only has 2 partitions.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("foo")
-          .setTopicId(fooId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(10),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(20)).asJava),
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("bar")
-          .setTopicId(barId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(40),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(50)).asJava),
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("baz")
-          .setTopicId(bazId)
-          .setPartitions(List(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(60),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(80)).asJava)).asJava)
+    val expectedOffsetCommitRequest =
+      new OffsetCommitRequestData()
+        .setGroupId("group")
+        .setMemberId("member")
+        .setTopics(List(
+          // foo exists but only has 2 partitions.
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName("foo")
+            .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(10),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(20)).asJava),
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName("bar")
+            .setTopicId(if (version >= 9) barId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(40),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(50)).asJava),
+          new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName("baz")
+            .setTopicId(if (version >= 9) bazId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(60),
+              new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(80)).asJava)).asJava)
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1489,92 +1497,149 @@ class KafkaApisTest {
     )
 
     // This is the response returned by the group coordinator.
-    val offsetCommitResponse = new OffsetCommitResponseData()
-      .setTopics(List(
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("foo")
-          .setTopicId(fooId)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava),
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("bar")
-          .setTopicId(barId)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava),
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("baz")
-          .setTopicId(bazId)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+    val offsetCommitResponse =
+      new OffsetCommitResponseData()
+        .setTopics(List(
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName(if (version < 9) "foo" else "")
+            .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava),
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName(if (version < 9) "bar" else "")
+            .setTopicId(if (version >= 9) barId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava),
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName(if (version < 9) "baz" else "")
+            .setTopicId(if (version >= 9) bazId else Uuid.ZERO_UUID)
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava)).asJava)
 
-    val expectedOffsetCommitResponse = new OffsetCommitResponseData()
-      .setTopics(List(
-        // zar is before bar because topics failing the validation are
-        // put in the response first.
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(zarId)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)).asJava),
-        // qux is before bar because topics failing the validation are
-        // put in the response first.
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(quxId)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)).asJava),
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(fooId)
-          .setPartitions(List(
-            // foo-2 is first because partitions failing the validation
-            // are put in the response first.
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(2)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava),
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(barId)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava),
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(bazId)
-          .setPartitions(List(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+    val expectedOffsetCommitResponse = if (version >= 9) {
+      new OffsetCommitResponseData()
+        .setTopics(List(
+          // zar is before bar because topics failing the validation are
+          // put in the response first.
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setTopicId(zarId)
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)).asJava),
+          // qux is before bar because topics failing the validation are
+          // put in the response first.
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setTopicId(quxId)
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)).asJava),
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setTopicId(fooId)
+            .setPartitions(List(
+              // foo-2 is first because partitions failing the validation
+              // are put in the response first.
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(2)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava),
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setTopicId(barId)
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava),
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setTopicId(bazId)
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+    } else {
+      new OffsetCommitResponseData()
+        .setTopics(List(
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName("foo")
+            .setPartitions(List(
+              // foo-2 is first because partitions failing the validation
+              // are put in the response first.
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(2)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava),
+          // zar is before bar because topics failing the validation are
+          // put in the response first.
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName("zar")
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)).asJava),
+          // qux is before bar because topics failing the validation are
+          // put in the response first.
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName("qux")
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)).asJava),
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName("bar")
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava),
+          new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName("baz")
+            .setPartitions(List(
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code),
+              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setPartitionIndex(1)
+                .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+    }
 
     future.complete(offsetCommitResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
@@ -1596,7 +1661,7 @@ class KafkaApisTest {
       (if (version < 9) NameAndId("baz") else NameAndId(id = bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, true).build(version))
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest, version >= 9).build(version))
 
     val expectedOffsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
       (if (version < 9) NameAndId("foo") else NameAndId("foo", fooId), ListMap(0 -> 10, 1 -> 20)),
