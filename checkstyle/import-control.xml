@@ -221,6 +221,7 @@
 
   <subpackage name="coordinator">
     <subpackage name="group">
+      <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.protocol" />
