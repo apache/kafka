@@ -44,9 +44,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkSortedAssignment;
-import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkSortedTopicAssignment;
-import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupEpochRecord;

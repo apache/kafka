@@ -431,24 +431,33 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    // Note that broker returns its full list of supported ApiKeys and versions regardless of current
+    // Note that controller returns its full list of supported ApiKeys and versions regardless of current
     // authentication state (e.g., before SASL authentication on an SASL listener, do note that no
     // Kafka protocol requests may take place on an SSL listener before the SSL handshake is finished).
-    // If this is considered to leak information about the broker version a workaround is to use SSL
+    // If this is considered to leak information about the controller version a workaround is to use SSL
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
-    def createResponseCallback(requestThrottleMs: Int): ApiVersionsResponse = {
-      val apiVersionRequest = request.body[ApiVersionsRequest]
-      if (apiVersionRequest.hasUnsupportedRequestVersion) {
-        apiVersionRequest.getErrorResponse(requestThrottleMs, UNSUPPORTED_VERSION.exception)
-      } else if (!apiVersionRequest.isValid) {
-        apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception)
-      } else {
-        apiVersionManager.apiVersionResponse(requestThrottleMs)
+    val apiVersionRequest = request.body[ApiVersionsRequest]
+    if (apiVersionRequest.hasUnsupportedRequestVersion) {
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!apiVersionRequest.isValid) {
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      val context = new ControllerRequestContext(request.context.header.data, request.context.principal, OptionalLong.empty())
+      controller.finalizedFeatures(context).handle { (result, exception) =>
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+          if (exception != null) {
+            apiVersionRequest.getErrorResponse(requestThrottleMs, exception)
+          } else {
+            apiVersionManager.apiVersionResponse(requestThrottleMs, result.featureMap().asScala.toMap, result.epoch())
+          }
+        })
       }
     }
-    requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
-    CompletableFuture.completedFuture[Unit](())
   }
 
   def authorizeAlterResource(requestContext: RequestContext,
