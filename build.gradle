@@ -269,7 +269,7 @@ subprojects {
     if (JavaVersion.current().isJava9Compatible())
       options.release = minJavaVersion
   }
-  
+
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
   sourceCompatibility = minJavaVersion
@@ -560,6 +560,7 @@ subprojects {
     options.charSet = 'UTF-8'
     options.docEncoding = 'UTF-8'
     options.encoding = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
     options.addStringOption('Xdoclint:none', '-quiet')
 
