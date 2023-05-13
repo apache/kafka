@@ -86,9 +86,9 @@ public class RecordAccumulatorTest {
     private PartitionInfo part2 = new PartitionInfo(topic, partition2, node1, null, null);
     private PartitionInfo part3 = new PartitionInfo(topic, partition3, node2, null, null);
     private MockTime time = new MockTime();
-    private byte[] key = "key".getBytes();
-    private byte[] value = "value".getBytes();
-    private int msgSize = DefaultRecord.sizeInBytes(0, 0, key.length, value.length, Record.EMPTY_HEADERS);
+    private ByteBuffer key = ByteBuffer.wrap("key".getBytes());
+    private ByteBuffer value = ByteBuffer.wrap("value".getBytes());
+    private int msgSize = DefaultRecord.sizeInBytes(0, 0, key.remaining(), value.remaining(), Record.EMPTY_HEADERS);
     private Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3),
         Collections.emptySet(), Collections.emptySet());
     private Metrics metrics = new Metrics(time);
@@ -108,7 +108,7 @@ public class RecordAccumulatorTest {
         TopicPartition tp4 = new TopicPartition(topic, partition4);
         PartitionInfo part4 = new PartitionInfo(topic, partition4, node2, null, null);
 
-        long batchSize = value.length + DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
+        long batchSize = value.remaining() + DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
         RecordAccumulator accum = createTestRecordAccumulator((int) batchSize, Integer.MAX_VALUE, CompressionType.NONE, 10);
         Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3, part4),
                 Collections.emptySet(), Collections.emptySet());
@@ -207,8 +207,8 @@ public class RecordAccumulatorTest {
         Iterator<Record> iter = batch.records().records().iterator();
         for (int i = 0; i < appends; i++) {
             Record record = iter.next();
-            assertEquals(ByteBuffer.wrap(key), record.key(), "Keys should match");
-            assertEquals(ByteBuffer.wrap(value), record.value(), "Values should match");
+            assertEquals(key, record.key(), "Keys should match");
+            assertEquals(value, record.value(), "Values should match");
         }
         assertFalse(iter.hasNext(), "No more records");
     }
@@ -225,7 +225,7 @@ public class RecordAccumulatorTest {
 
     private void testAppendLarge(CompressionType compressionType) throws Exception {
         int batchSize = 512;
-        byte[] value = new byte[2 * batchSize];
+        ByteBuffer value = ByteBuffer.allocate(batchSize * 2);
         RecordAccumulator accum = createTestRecordAccumulator(
                 batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, compressionType, 0);
         accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
@@ -242,8 +242,8 @@ public class RecordAccumulatorTest {
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());
-        assertEquals(ByteBuffer.wrap(key), record.key());
-        assertEquals(ByteBuffer.wrap(value), record.value());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
         assertEquals(0L, record.timestamp());
     }
 
@@ -259,7 +259,7 @@ public class RecordAccumulatorTest {
 
     private void testAppendLargeOldMessageFormat(CompressionType compressionType) throws Exception {
         int batchSize = 512;
-        byte[] value = new byte[2 * batchSize];
+        ByteBuffer value = ByteBuffer.allocate(batchSize * 2);
 
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(node1.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
@@ -280,8 +280,8 @@ public class RecordAccumulatorTest {
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());
-        assertEquals(ByteBuffer.wrap(key), record.key());
-        assertEquals(ByteBuffer.wrap(value), record.value());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
         assertEquals(0L, record.timestamp());
     }
 
@@ -300,8 +300,8 @@ public class RecordAccumulatorTest {
 
         Iterator<Record> iter = batch.records().records().iterator();
         Record record = iter.next();
-        assertEquals(ByteBuffer.wrap(key), record.key(), "Keys should match");
-        assertEquals(ByteBuffer.wrap(value), record.value(), "Values should match");
+        assertEquals(key, record.key(), "Keys should match");
+        assertEquals(value, record.value(), "Values should match");
         assertFalse(iter.hasNext(), "No more records");
     }
 
@@ -1359,7 +1359,7 @@ public class RecordAccumulatorTest {
         int size = 0;
         int offsetDelta = 0;
         while (true) {
-            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, key.length, value.length,
+            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, key.remaining(), value.remaining(),
                 Record.EMPTY_HEADERS);
             if (size + recordSize > batchSize)
                 return offsetDelta;
@@ -1375,7 +1375,7 @@ public class RecordAccumulatorTest {
         int size = 0;
         int offsetDelta = 0;
         while (true) {
-            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, 0, value.length,
+            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, 0, value.remaining(),
                 Record.EMPTY_HEADERS);
             if (size + recordSize > batchSize)
                 return offsetDelta;

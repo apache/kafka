@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -61,10 +62,10 @@ public class WindowedStreamPartitionerTest {
 
         for (int k = 0; k < 10; k++) {
             final Integer key = rand.nextInt();
-            final byte[] keyBytes = intSerializer.serialize(topicName, key);
+            final ByteBuffer keyBytes = intSerializer.serializeToByteBuffer(topicName, key);
 
             final String value = key.toString();
-            final byte[] valueBytes = stringSerializer.serialize(topicName, value);
+            final ByteBuffer valueBytes = stringSerializer.serializeToByteBuffer(topicName, value);
 
             final Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
 
