@@ -1386,10 +1386,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * can be used (the partition is then calculated by built-in
      * partitioning logic).
      */
-    private int partition(ProducerRecord<K, V> record,
-                          ByteBuffer serializedKey,
-                          ByteBuffer serializedValue,
-                          Cluster cluster) {
+    private int partition(ProducerRecord<K, V> record, ByteBuffer serializedKey, ByteBuffer serializedValue, Cluster cluster) {
         if (record.partition() != null) {
             return record.partition();
         }

@@ -34,7 +34,7 @@ public interface Partitioner extends Configurable, Closeable {
      *
      * @param topic The topic name
      * @param key The key to partition on (or null if no key)
-     * @param keyBytes The serialized key to partition on(or null if no key)
+     * @param keyBytes The serialized key to partition on (or null if no key)
      * @param value The value to partition on or null
      * @param valueBytes The serialized value to partition on or null
      * @param cluster The current cluster metadata
@@ -46,7 +46,7 @@ public interface Partitioner extends Configurable, Closeable {
      *
      * @param topic The topic name
      * @param key The key to partition on (or null if no key)
-     * @param keyBytes The serialized key to partition on(or null if no key)
+     * @param keyBytes The serialized key to partition on (or null if no key)
      * @param value The value to partition on or null
      * @param valueBytes The serialized value to partition on or null
      * @param cluster The current cluster metadata
