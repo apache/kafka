@@ -708,7 +708,7 @@ class WorkerSinkTask extends WorkerTask {
             Set<String> deletedTopics = new HashSet<>();
             for (TopicPartition tp : partitions) {
                 if (deletedTopics.contains(tp.topic())) {
-                    log.debug("Not Committing offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
+                    log.debug("Not assigning offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
                     continue;
                 }
                 long pos;
@@ -719,7 +719,7 @@ class WorkerSinkTask extends WorkerTask {
                             "Checking if the topic {} exists", tp, tp.topic());
                     Map<String, TopicDescription> topic = topicAdmin.describeTopics(tp.topic());
                     if (topic.isEmpty()) {
-                        log.debug("Not Committing offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
+                        log.debug("Not assigning offsets for topic-partition {} since the topic {} has been deleted", tp, tp.topic());
                         deletedTopics.add(tp.topic());
                         continue;
                     } else {
