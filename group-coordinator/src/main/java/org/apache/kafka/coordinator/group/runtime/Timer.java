@@ -19,22 +19,25 @@ package org.apache.kafka.coordinator.group.runtime;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * An interface to complete and expire operations from the purgatory.
+ * An interface to schedule and cancel operations.
  */
 @InterfaceStability.Unstable
-public interface RebalancePurgatory extends PurgatoryScheduler {
+public interface Timer {
 
     /**
-     * Complete the operation corresponding to the given key.
+     * Add an operation to the timer. If an operation with the same key
+     * already exists, replace it with the new operation.
+     *
+     * @param key         The key to identify this operation.
+     * @param deadlineMs  The deadline to expire the operation in milliseconds.
+     * @param operation   The operation to perform.
+     */
+    void schedule(String key, long deadlineMs, Runnable operation);
+
+    /**
+     * Remove an operation corresponding to a given key.
      *
      * @param key The key.
      */
-    void complete(String key);
-
-    /**
-     * Expire the operation corresponding to the given key.
-     *
-     * @param key The key.
-     */
-    void expire(String key);
+    void cancel(String key);
 }
