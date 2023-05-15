@@ -3905,7 +3905,7 @@ public class TaskManagerTest {
         // check that we should be processing at most max num records
         assertThat(taskManager.process(3, time), is(6));
 
-        // check that if there's no records proccssible, we would stop early
+        // check that if there's no records processable, we would stop early
         assertThat(taskManager.process(3, time), is(5));
         assertThat(taskManager.process(3, time), is(0));
     }
