@@ -23,6 +23,46 @@ notifications:
 
 jenkins:
   github_whitelist:
-    - ConcurrencyPractitioner
-    - ableegoldman
-    - cadonna
+    - vcrfxia
+    - gharris1727
+    - divijvaidya
+    - lucasbru
+    - yashmayya
+    - philipnee
+    - vamossagar12
+    - clolov
+    - fvaleri
+    - andymg3
+    - RivenSun2
+    - kirktrue
+    - mdedetrich
+    - akhileshchg
+    - ahuang98
+    - artemlivshits
+    - tinaselenge
+    - lihaosky
+    - niket-goel
+    - hudeqi
+
+github:
+  collaborators:
+    - vcrfxia
+    - gharris1727
+    - divijvaidya
+    - lucasbru
+    - yashmayya
+    - philipnee
+    - vamossagar12
+    - clolov
+    - fvaleri
+    - andymg3
+    - RivenSun2
+    - kirktrue
+    - mdedetrich
+    - akhileshchg
+    - ahuang98
+    - artemlivshits
+    - tinaselenge
+    - lihaosky
+    - niket-goel
+    - hudeqi
