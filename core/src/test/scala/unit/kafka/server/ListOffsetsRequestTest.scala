@@ -158,15 +158,20 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   private[this] def fetchOffsetAndEpoch(serverId: Int,
                                         timestamp: Long,
                                         version: Short): (Long, Int) = {
+    val (offset, leaderEpoch, _) = fetchOffsetAndEpochWithError(serverId, timestamp, version)
+    (offset, leaderEpoch)
+  }
+
+  private[this] def fetchOffsetAndEpochWithError(serverId: Int, timestamp: Long, version: Short): (Long, Int, Short) = {
     val partitionData = sendRequest(serverId, timestamp, version)
 
     if (version == 0) {
       if (partitionData.oldStyleOffsets().isEmpty)
-        (-1, partitionData.leaderEpoch)
+        (-1, partitionData.leaderEpoch, partitionData.errorCode())
       else
-        (partitionData.oldStyleOffsets().asScala.head, partitionData.leaderEpoch)
+        (partitionData.oldStyleOffsets().asScala.head, partitionData.leaderEpoch, partitionData.errorCode())
     } else
-      (partitionData.offset, partitionData.leaderEpoch)
+      (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
   }
 
   @Test
@@ -202,8 +207,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
 
     // The latest offset reflects the updated epoch
-    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
-    assertEquals((9L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
+    assertEquals((10L, secondLeaderEpoch, Errors.NONE.code()), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+    assertEquals((9L, secondLeaderEpoch, Errors.NONE.code()), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
   }
 
   @Test
