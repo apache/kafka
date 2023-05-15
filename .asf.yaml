@@ -21,6 +21,8 @@ notifications:
   pullrequests: jira@kafka.apache.org
   jira_options: link label
 
+# This list allows you to trigger builds on pull requests. It can have a maximum of 10 people.
+# https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-JenkinsPRwhitelisting
 jenkins:
   github_whitelist:
     - vcrfxia
@@ -33,17 +35,9 @@ jenkins:
     - clolov
     - fvaleri
     - andymg3
-    - RivenSun2
-    - kirktrue
-    - mdedetrich
-    - akhileshchg
-    - ahuang98
-    - artemlivshits
-    - tinaselenge
-    - lihaosky
-    - niket-goel
-    - hudeqi
 
+# This list allows you to triage pull requests. It can have a maximum of 10 people.
+# https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-AssigningexternalcollaboratorswiththetriageroleonGitHub
 github:
   collaborators:
     - vcrfxia
@@ -56,13 +50,3 @@ github:
     - clolov
     - fvaleri
     - andymg3
-    - RivenSun2
-    - kirktrue
-    - mdedetrich
-    - akhileshchg
-    - ahuang98
-    - artemlivshits
-    - tinaselenge
-    - lihaosky
-    - niket-goel
-    - hudeqi
