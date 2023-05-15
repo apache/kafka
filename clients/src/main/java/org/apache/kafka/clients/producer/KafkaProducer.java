@@ -555,19 +555,21 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         int deliveryTimeoutMs = config.getInt(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG);
         int lingerMs = lingerMs(config);
         int requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        int lingerAndRequestTimeoutMs = (int) Math.min((long) lingerMs + requestTimeoutMs, Integer.MAX_VALUE);
+        long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+        int lingerAndRequestTimeoutMsAndRetryBackoffMs = (int) Math.min((long) lingerMs + requestTimeoutMs + retryBackoffMs, Integer.MAX_VALUE);
 
-        if (deliveryTimeoutMs < lingerAndRequestTimeoutMs) {
+        if (deliveryTimeoutMs < lingerAndRequestTimeoutMsAndRetryBackoffMs) {
             if (config.originals().containsKey(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
                 // throw an exception if the user explicitly set an inconsistent value
                 throw new ConfigException(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG
                     + " should be equal to or larger than " + ProducerConfig.LINGER_MS_CONFIG
-                    + " + " + ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+                    + " + " + ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG
+                    + " + " + ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             } else {
                 // override deliveryTimeoutMs default value to lingerMs + requestTimeoutMs for backward compatibility
-                deliveryTimeoutMs = lingerAndRequestTimeoutMs;
-                log.warn("{} should be equal to or larger than {} + {}. Setting it to {}.",
-                    ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, ProducerConfig.LINGER_MS_CONFIG,
+                deliveryTimeoutMs = lingerAndRequestTimeoutMsAndRetryBackoffMs;
+                log.warn("{} should be equal to or larger than {} + {} + {}. Setting it to {}.",
+                    ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, ProducerConfig.LINGER_MS_CONFIG, ProducerConfig.RETRY_BACKOFF_MS_CONFIG,
                     ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
             }
         }

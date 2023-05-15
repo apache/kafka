@@ -2100,6 +2100,21 @@ public class KafkaProducerTest {
         }
     }
 
+    @Test
+    public void throwIfExplicitlySetInvalidDeliveryTimeoutMs() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 5000);
+        props.put(ProducerConfig.LINGER_MS_CONFIG, 2000);
+        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 2000);
+        props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 2000);
+        assertThrows(KafkaException.class,
+                () -> new KafkaProducer<>(props, new StringSerializer(), new StringSerializer()),
+                ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG + " should be equal to or larger than "
+                        + ProducerConfig.LINGER_MS_CONFIG + " + "
+                        + ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG + " + "
+                        + ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+    }
+
     private <T> FutureRecordMetadata expectAppend(
         KafkaProducerTestContext<T> ctx,
         ProducerRecord<T, T> record,
