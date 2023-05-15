@@ -40,20 +40,22 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxToolTest {
-    private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+    private static final String JMX_URL_TEMPLATE = "service:jmx:rmi:///jndi/rmi://:%d/jmxrmi";
 
+    private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
     private static JMXConnectorServer jmxAgent;
     private static String jmxUrl;
 
     @BeforeAll
     public static void beforeAll() throws Exception {
         int port = findRandomOpenPortOnAllLocalInterfaces();
+        jmxUrl = format(JMX_URL_TEMPLATE, port);
         jmxAgent = startJmxAgent(port);
-        jmxUrl = String.format("service:jmx:rmi:///jndi/rmi://:%d/jmxrmi", port);
     }
 
     @AfterAll
@@ -325,11 +327,15 @@ public class JmxToolTest {
     }
 
     private static JMXConnectorServer startJmxAgent(int port) throws Exception {
+        // explicitly set the hostname returned to the the clients in the remote stub object
+        // when connecting to a multi-homed machine using RMI, the wrong address may be returned
+        // by the RMI registry to the client, causing the connection to the RMI server to timeout
+        System.setProperty("java.rmi.server.hostname", "localhost");
         LocateRegistry.createRegistry(port);
         Map<String, Object> env = new HashMap<>();
         env.put("com.sun.management.jmxremote.authenticate", "false");
         env.put("com.sun.management.jmxremote.ssl", "false");
-        JMXServiceURL url = new JMXServiceURL(String.format("service:jmx:rmi:///jndi/rmi://:%d/jmxrmi", port));
+        JMXServiceURL url = new JMXServiceURL(format(JMX_URL_TEMPLATE, port));
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         server.registerMBean(new Metrics(),
             new ObjectName("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"));
