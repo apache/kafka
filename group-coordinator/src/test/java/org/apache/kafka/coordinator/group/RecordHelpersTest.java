@@ -467,9 +467,7 @@ public class RecordHelpersTest {
             time
         );
 
-        Map<String, byte[]> memberAssignments = new HashMap<>();
         expectedMembers.forEach(member -> {
-            memberAssignments.put(member.memberId(), member.assignment());
             group.add(new GenericGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
@@ -489,7 +487,6 @@ public class RecordHelpersTest {
         group.initNextGeneration();
         Record groupMetadataRecord = RecordHelpers.newGroupMetadataRecord(
             group,
-            memberAssignments,
             metadataVersion
         );
 
@@ -533,9 +530,7 @@ public class RecordHelpersTest {
             time
         );
 
-        Map<String, byte[]> memberAssignments = new HashMap<>();
         expectedMembers.forEach(member -> {
-            memberAssignments.put(member.memberId(), member.assignment());
             group.add(new GenericGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
@@ -555,7 +550,6 @@ public class RecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
-                memberAssignments,
                 MetadataVersion.IBP_3_5_IV2
             ));
     }
@@ -574,7 +568,7 @@ public class RecordHelpersTest {
                 .setSessionTimeout(1500)
                 .setGroupInstanceId("group-instance-1")
                 .setSubscription(new byte[]{0, 1})
-                .setAssignment(new byte[]{1, 2})
+                .setAssignment(null)
         );
 
         GenericGroup group = new GenericGroup(
@@ -604,7 +598,6 @@ public class RecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
-                new HashMap<>(),
                 MetadataVersion.IBP_3_5_IV2
             ));
     }

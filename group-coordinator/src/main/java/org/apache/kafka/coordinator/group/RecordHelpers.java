@@ -365,13 +365,11 @@ public class RecordHelpers {
      * Creates a GroupMetadata record.
      *
      * @param group              The generic group.
-     * @param memberAssignments  The assignment by member id.
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static Record newGroupMetadataRecord(
         GenericGroup group,
-        Map<String, byte[]> memberAssignments,
         MetadataVersion metadataVersion
     ) {
         List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>();
@@ -381,7 +379,7 @@ public class RecordHelpers {
                 throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol.");
             }
 
-            byte[] assignment = memberAssignments.get(member.memberId());
+            byte[] assignment = member.assignment();
             if (assignment == null) {
                 throw new IllegalStateException("Attempted to write member " + member.memberId() +
                     " of group + " + group.groupId() + " with no assignment.");
