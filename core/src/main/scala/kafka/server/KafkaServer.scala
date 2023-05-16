@@ -536,6 +536,7 @@ class KafkaServer(
 
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 
+        //Data plane 所属的 KafkaRequestHandlerPool 线程池的初始数量，就是 Broker 端的参数 nums.io.threads，即KafkaRequestHandlerPool的 config.numIoThreads 值；
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
           config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent", DataPlaneAcceptor.ThreadPrefix)
 

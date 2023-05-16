@@ -463,6 +463,10 @@ class RequestChannel(val queueSize: Int,
     sendResponse(new EndThrottlingResponse(request))
   }
 
+  // 请求处理流程第5步（KafkaRequestHandler 线程将 Response 放入 Processor 线程的 Response 队列）
+  // （这一步的工作由 KafkaApis 类完成。当然，这依然是由 KafkaRequestHandler 线程来完成的。
+  // KafkaApis.scala 中有个 sendResponse 方法，将 Request 的处理结果 Response 发送出去。
+  // 本质上，它就是调用了 RequestChannel 的 sendResponse 方法）
   /** Send a response back to the socket server to be sent over the network */
   private[network] def sendResponse(response: RequestChannel.Response): Unit = {
     if (isTraceEnabled) {// 构造Trace日志输出字符串
@@ -499,8 +503,10 @@ class RequestChannel(val queueSize: Int,
     // 当 Processor 处理完某个 Request 后，会把自己的序号封装进对应的 Response 对象。
     // 一旦找出了之前是由哪个 Processor 线程处理的，代码直接调用该 Processor 的 enqueueResponse 方法，将 Response 放入 Response 队列中，等待后续发送。
     val processor = processors.get(response.processor)
+
     // The processor may be null if it was shutdown. In this case, the connections
     // are closed, so the response is dropped.
+
     // 将response对象放置到对应Processor线程的Response队列中
     if (processor != null) {
       processor.enqueueResponse(response)

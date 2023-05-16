@@ -812,21 +812,33 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   }
 
   /**
+   * 请求处理流程第1步：（Clients 或其他 Broker 发送请求给 Acceptor 线程）
    * Listen for new connections and assign accepted connections to processors using round-robin.
+   * assignNewConnection 方法的主要作用是，将这个新建的 SocketChannel 对象存入 Processors 线程的 newConnections 队列中。
+   * 之后，Processor 线程会不断轮询这个队列中的待处理 Channel（可以参考 configureNewConnections 方法），
+   * 并向这些 Channel 注册基于 Java NIO 的 Selector，用于真正的请求获取和响应发送 I/O 操作。
+   *
+   * 严格来说，Acceptor 线程处理的这一步并非真正意义上的获取请求，仅仅是 Acceptor 线程为后续 Processor 线程获取请求铺路而已，
+   * 也就是把需要用到的 Socket 通道创建出来，传给下面的 Processor 线程使用。
    */
   private def acceptNewConnections(): Unit = {
-    // 每500毫秒获取一次就绪I/O事件
+    // 每500毫秒获取一次就绪I/O事件(读取底层通道上准备就绪I/O操作的数量)
     val ready = nioSelector.select(500)
     if (ready > 0) {// 如果有I/O事件准备就绪
+      // 获取对应的SelectionKey集合
       val keys = nioSelector.selectedKeys()
       val iter = keys.iterator()
+      // 遍历这些SelectionKey
       while (iter.hasNext && shouldRun.get()) {
         try {
           val key = iter.next
           iter.remove()
-
+          // 测试SelectionKey的底层通道是否能够接受新Socket连接
           if (key.isAcceptable) {
-            // 调用accept方法创建Socket连接
+            // 接受此连接并分配对应的Processor线程
+            // Acceptor 线程通过调用 accept 方法，创建对应的 SocketChannel，然后将该 Channel 实例传给 assignNewConnection 方法，
+            // 等待 Processor 线程将该 Socket 连接请求，放入到它维护的待处理连接队列中。
+            // 后续 Processor 线程的 run 方法会不断地从该队列中取出这些 Socket 连接请求，然后创建对应的 Socket 连接。
             accept(key).foreach { socketChannel =>
               // Assign the channel to the next processor (using round-robin) to which the
               // channel can be added without blocking. If newConnections queue is full on
@@ -844,6 +856,8 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                 }
                 // 更新Processor线程序号
                 currentProcessorIndex += 1
+                // 将新Socket连接加入到Processor线程待处理连接队列
+                // 等待Processor线程后续处理
               } while (!assignNewConnection(socketChannel, processor, retriesLeft == 0))
             }
           } else
@@ -1143,6 +1157,8 @@ private[kafka] class Processor(
     processException(errorMessage, throwable)
   }
 
+  // 请求处理流程第6步，即最后一步（Processor 线程取出 Response 队列中的 Response，返还给 Request 发送方。）
+  // 具体代码位于 Processor 线程的 processNewResponses
   // 它负责发送 Response 给 Request 发送方，并且将 Response 放入临时 Response 队列。
   private def processNewResponses(): Unit = {
     var currentResponse: RequestChannel.Response = null
@@ -1162,7 +1178,7 @@ private[kafka] class Processor(
             tryUnmuteChannel(channelId)
 
           case response: SendResponse => // 发送Response并将Response放入inflightResponses
-            //这里的关键是 SendResponse 分支上的 sendResponse 方法
+            // ***这里的关键是 SendResponse 分支上的 sendResponse 方法
             sendResponse(response, response.responseSend)
           case response: CloseConnectionResponse => // 关闭对应的连接
             updateRequestMetrics(response)
@@ -1186,6 +1202,7 @@ private[kafka] class Processor(
   }
 
   // `protected` for test usage
+  // 最核心的部分是 sendResponse 方法来执行 Response 发送。该方法底层使用 Selector 实现真正的发送逻辑。
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
     val connectionId = response.request.context.connectionId
     trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
@@ -1223,9 +1240,18 @@ private[kafka] class Processor(
     }
   }
 
+  /**
+   * 请求处理流程 第 2 & 3 步：（Processor 线程处理请求，并放入请求队列）
+   * 一旦 Processor 线程成功地向 SocketChannel 注册了 Selector，
+   * Clients 端或其他 Broker 端发送的请求就能通过该 SocketChannel 被获取到，
+   * 具体的方法是 Processor 的 processCompleteReceives.
+   * 所谓的 Processor 线程处理请求，就是指它从底层 I/O 获取到发送数据，将其转换成 Request 对象实例，并最终添加到请求队列的过程。
+   */
   private def processCompletedReceives(): Unit = {
+    // 从Selector中提取已接收到的所有请求数据
     selector.completedReceives.forEach { receive =>
       try {
+        // 打开与发送方对应的Socket Channel，如果不存在可用的Channel，抛出异常
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = parseRequestHeader(receive.payload)
@@ -1245,6 +1271,7 @@ private[kafka] class Processor(
                   channel.principal, listenerName, securityProtocol,
                   channel.channelMetadataRegistry.clientInformation, isPrivilegedListener, channel.principalSerde)
 
+                // 根据Channel中获取的Receive对象，构建Request对象
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
 
@@ -1258,6 +1285,7 @@ private[kafka] class Processor(
                       apiVersionsRequest.data.clientSoftwareVersion))
                   }
                 }
+                // 将该请求放入请求队列
                 requestChannel.sendRequest(req)
                 selector.mute(connectionId)
                 handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)

@@ -158,6 +158,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
+   * 请求处理流程第5步
+   * KafkaRequestHandler 线程将 Response 放入 Processor 线程的 Response 队列这一步的工作由 KafkaApis 类完成
+   * 当然，这依然是由 KafkaRequestHandler 线程来完成的。KafkaApis.scala 中有个 sendResponse 方法，将 Request 的处理结果 Response 发送出去。
+   * 本质上，它就是调用了 RequestChannel 的 sendResponse 方法
    */
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     def handleError(e: Throwable): Unit = {
