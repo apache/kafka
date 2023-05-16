@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
@@ -225,6 +226,12 @@ public class TopicsImageTest {
             ),
             changes.followers().keySet()
         );
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(IMAGE1);
+        imageRecords.addAll(topicRecords);
+        testToImageAndBack(finalImage, Optional.of(imageRecords));
+        testThroughAllIntermediateImagesLeadingToFinalImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
@@ -265,6 +272,12 @@ public class TopicsImageTest {
         assertEquals(new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))), changes.deletes());
         assertEquals(Collections.emptyMap(), changes.leaders());
         assertEquals(Collections.emptyMap(), changes.followers());
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
+        imageRecords.addAll(topicRecords);
+        testToImageAndBack(finalImage, Optional.of(imageRecords));
+        testThroughAllIntermediateImagesLeadingToFinalImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
@@ -365,35 +378,99 @@ public class TopicsImageTest {
             new HashSet<>(Arrays.asList(new TopicPartition("zoo", 1), new TopicPartition("zoo", 5))),
             changes.followers().keySet()
         );
+
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
+        imageRecords.addAll(topicRecords);
+        testToImageAndBack(finalImage, Optional.of(imageRecords));
+        testThroughAllIntermediateImagesLeadingToFinalImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
+    public void testEmptyImageRoundTrip() {
         testToImageAndBack(TopicsImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
+    public void testImage1RoundTrip() {
         testToImageAndBack(IMAGE1);
+        testThroughAllIntermediateImagesLeadingToFinalImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
+    public void testImage2RoundTrip() {
         testToImageAndBack(IMAGE2);
+        testThroughAllIntermediateImagesLeadingToFinalImage(IMAGE2);
     }
 
-    private void testToImageAndBack(TopicsImage image) throws Throwable {
-        RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+    private void testToImageAndBack(TopicsImage image) {
+        testToImageAndBack(image, Optional.empty());
+    }
+
+    private void testToImageAndBack(TopicsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImageAndBack(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private void testToImageAndBack(TopicsImage image, List<ApiMessageAndVersion> fromRecords) {
         TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
+        RecordTestUtils.replayAll(delta, fromRecords);
         TopicsImage nextImage = delta.apply();
         assertEquals(image, nextImage);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(TopicsImage image) {
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().build());
+        return writer.records();
+    }
+
+    private void testThroughAllIntermediateImagesLeadingToFinalImage(TopicsImage finalImage) {
+        testThroughAllIntermediateImagesLeadingToFinalImage(finalImage, Optional.empty());
+    }
+
+    private void testThroughAllIntermediateImagesLeadingToFinalImage(TopicsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private void testThroughAllIntermediateImagesLeadingToFinalImage(TopicsImage finalImage, List<ApiMessageAndVersion> fromRecords) {
+        for (int numRecordsForIntermediateImage = 1; numRecordsForIntermediateImage < fromRecords.size(); ++numRecordsForIntermediateImage) {
+            TopicsImage intermediateImage;
+            // create intermediate image from first numRecordsForIntermediateImage records
+            TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
+            replayInitialRecords(fromRecords, numRecordsForIntermediateImage, delta);
+            intermediateImage = delta.apply();
+            // apply rest of records on top of intermediate image to obtain what should be the same final image
+            delta = new TopicsDelta(intermediateImage);
+            replayAllButInitialRecords(fromRecords, numRecordsForIntermediateImage, delta);
+            TopicsImage receivedFinalImage = delta.apply();
+            assertEquals(finalImage, receivedFinalImage);
+        }
+    }
+
+    private static void replayInitialRecords(List<ApiMessageAndVersion> imageRecords, int numRecordsForIntermediateImage, TopicsDelta delta) {
+        int recordNumber = 0;
+        for (ApiMessageAndVersion record : imageRecords) {
+            if (recordNumber++ < numRecordsForIntermediateImage) {
+                RecordTestUtils.replayOne(delta, record);
+            } else {
+                break;
+            }
+        }
+    }
+
+    private static void replayAllButInitialRecords(List<ApiMessageAndVersion> imageRecords, int numRecordsForIntermediateImage, TopicsDelta delta) {
+        int recordNumber = 0;
+        for (ApiMessageAndVersion record : imageRecords) {
+            if (recordNumber++ >= numRecordsForIntermediateImage) {
+                RecordTestUtils.replayOne(delta, record);
+            }
+        }
     }
 
     @Test
