@@ -77,6 +77,7 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
 
         validSubscriptionList = new ArrayList<>();
         Collection<Uuid> givenSubscriptionList = assignmentSpec.members().values().iterator().next().subscribedTopicIds();
+        System.out.println("subscription list is" + givenSubscriptionList);
         // Only add topicIds from the subscription list that are still present in the topicMetadata.
         for (Uuid topicId : givenSubscriptionList) {
             if (assignmentSpec.topics().containsKey(topicId)) {
@@ -130,13 +131,18 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
     // Convert the assignment format to a list of a new data structure which contains the topic id and partition as a unit along with rackIds if necessary.
     private List<RackAwareTopicIdPartition> getValidCurrentAssignment(AssignmentMemberSpec assignmentMemberSpec) {
         List<RackAwareTopicIdPartition> validCurrentAssignmentList = new ArrayList<>();
+        System.out.println("assignment member spec" + assignmentMemberSpec);
         for (Map.Entry<Uuid, Set<Integer>> currentAssignment : assignmentMemberSpec.assignedPartitions().entrySet()) {
             Uuid topicId = currentAssignment.getKey();
             List<Integer> currentAssignmentList = new ArrayList<>(currentAssignment.getValue());
+
             if (metadataPerTopic.containsKey(topicId) && validSubscriptionList.contains(topicId)) {
                 for (Integer partition : currentAssignmentList) {
                     validCurrentAssignmentList.add(new RackAwareTopicIdPartition(topicId, partition, null));
                 }
+            } else if (!metadataPerTopic.containsKey(topicId)) {
+                throw new PartitionAssignorException("Members are subscribed to topic " +
+                        topicId + " which doesn't exist in the topic metadata");
             }
         }
         return validCurrentAssignmentList;
@@ -147,12 +153,13 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
     private List<RackAwareTopicIdPartition> getAssignedStickyPartitions() {
         List<RackAwareTopicIdPartition> allAssignedStickyPartitions = new ArrayList<>();
 
-        for (String memberId : metadataPerMember.keySet()) {
+        for (Map.Entry<String, AssignmentMemberSpec> assignmentMemberSpecEntry : metadataPerMember.entrySet()) {
+            String memberId = assignmentMemberSpecEntry.getKey();
             List<RackAwareTopicIdPartition> assignedStickyListForMember = new ArrayList<>();
 
             // Remove all the topics that aren't in the subscriptions or the topic metadata anymore.
             List<RackAwareTopicIdPartition> validCurrentAssignment = getValidCurrentAssignment(metadataPerMember.get(memberId));
-
+            System.out.print("valid current assignment" + validCurrentAssignment);
             int currentAssignmentSize = validCurrentAssignment.size();
             int remaining = minQuota - currentAssignmentSize;
 
@@ -175,6 +182,7 @@ public class OptimizedAssignmentBuilder extends UniformAssignor.AbstractAssignme
             }
 
         }
+        System.out.print("all assigned sticky partitions " + allAssignedStickyPartitions);
         return allAssignedStickyPartitions;
     }
 
