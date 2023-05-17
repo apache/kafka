@@ -324,7 +324,7 @@ public class KRaftMigrationZkWriter {
                 Map<String, String> userScramMap = getScramCredentialStringsForUser(metadataImage.scram(), userName);
                 ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
                 if ((metadataImage.clientQuotas() == null) ||
-                  (metadataImage.clientQuotas().entities().get(clientQuotaEntity) == null)) {
+                    (metadataImage.clientQuotas().entities().get(clientQuotaEntity) == null)) {
                     operationConsumer.accept("Updating client quota " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), Collections.emptyMap(), userScramMap, migrationState));
                 } else {
