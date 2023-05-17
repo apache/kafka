@@ -994,8 +994,8 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            appendRaftEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
+        public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            appendRaftEvent(String.format("handleLoadSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
                     if (isActiveController()) {
