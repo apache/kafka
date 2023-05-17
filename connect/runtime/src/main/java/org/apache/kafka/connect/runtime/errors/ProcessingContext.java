@@ -54,7 +54,7 @@ class ProcessingContext implements AutoCloseable {
     /**
      * Reset the internal fields before executing operations on a new record.
      */
-    private void reset() {
+    void reset() {
         attempt = 0;
         position = null;
         klass = null;

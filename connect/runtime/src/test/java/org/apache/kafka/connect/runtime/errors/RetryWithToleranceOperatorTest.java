@@ -187,6 +187,18 @@ public class RetryWithToleranceOperatorTest {
         assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KAFKA_PRODUCE, new Exception()));
     }
 
+    @Test
+    public void testResetShouldResetState() {
+        RetryWithToleranceOperator retryWithToleranceOperator = setupExecutor();
+        Operation<?> exceptionThrower = () -> {
+            throw new org.apache.kafka.connect.errors.RetriableException("Test");
+        };
+        retryWithToleranceOperator.execute(exceptionThrower, Stage.TASK_POLL, RetryWithToleranceOperator.class);
+        assertTrue(retryWithToleranceOperator.failed());
+        retryWithToleranceOperator.reset();
+        assertFalse(retryWithToleranceOperator.failed());
+    }
+
     private void testHandleExceptionInStage(Stage type, Exception ex) {
         RetryWithToleranceOperator retryWithToleranceOperator = setupExecutor();
         Operation<?> exceptionThrower = () -> {

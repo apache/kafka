@@ -51,6 +51,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.test.util.ConcurrencyUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
@@ -73,10 +74,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -89,6 +93,8 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.ALL_OPERATOR;
+import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -98,13 +104,8 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.atMost;
 
 @SuppressWarnings("unchecked")
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -521,6 +522,26 @@ public class AbstractWorkerSourceTaskTest {
             .stream()
             .map(NewTopic::name)
             .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void testRetriableExceptionInPoll() throws Exception {
+
+        final ErrorHandlingMetrics errorHandlingMetrics = mock(ErrorHandlingMetrics.class);
+        final List<ErrorReporter> errorReporters = Collections.singletonList(mock(ErrorReporter.class));
+        createWorkerTask(keyConverter, valueConverter, headerConverter, ALL_OPERATOR, () -> errorReporters);
+
+        when(sourceTask.poll())
+                .thenThrow(RetriableException.class)
+                .thenThrow(RetriableException.class)
+                .thenReturn(Collections.emptyList());
+
+        workerTask.poll();
+        final int numPollInvocations = 3;
+        verify(sourceTask, times(1)).poll();
+        // recordRetry and recordFailure shouldn't exceed the number of poll invocations
+        verify(errorHandlingMetrics, times(2)).recordRetry();
+        verify(errorHandlingMetrics, atMost(numPollInvocations)).recordFailure();
     }
 
     @Test

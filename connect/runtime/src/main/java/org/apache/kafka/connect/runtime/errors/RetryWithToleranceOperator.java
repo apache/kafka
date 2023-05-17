@@ -260,6 +260,10 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         return errorToleranceType;
     }
 
+    public synchronized void reset() {
+        this.context.reset();
+    }
+
     /**
      * Do an exponential backoff bounded by {@link #RETRIES_DELAY_MIN_MS} and {@link #errorMaxDelayInMillis}
      * which can be exited prematurely if {@link #triggerStop()} is called or if the thread is interrupted.
