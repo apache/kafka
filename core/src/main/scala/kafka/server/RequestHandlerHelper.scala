@@ -121,6 +121,11 @@ class RequestHandlerHelper(
     requestChannel.sendResponse(request, response, None)
   }
 
+  /**
+   * 发送普通 Response 但接受限流的约束。
+   * @param request
+   * @param createResponse
+   */
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                 createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
@@ -130,6 +135,11 @@ class RequestHandlerHelper(
     requestChannel.sendResponse(request, createResponse(throttleTimeMs), None)
   }
 
+  /**
+   * 发送携带错误信息的 Response 但接受限流的约束。
+   * @param request
+   * @param error
+   */
   def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests or cluster authorization failures
@@ -168,6 +178,12 @@ class RequestHandlerHelper(
     requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), None)
   }
 
+  /**
+   * 发送普通 Response 而不受限流限制。
+   * @param request
+   * @param response
+   * @param onComplete
+   */
   def sendResponseExemptThrottle(request: RequestChannel.Request,
                                  response: AbstractResponse,
                                  onComplete: Option[Send => Unit] = None): Unit = {
@@ -175,11 +191,21 @@ class RequestHandlerHelper(
     requestChannel.sendResponse(request, response, onComplete)
   }
 
+  /**
+   * 发送携带错误信息的 Response 而不受限流限制。
+   * @param request
+   * @param error
+   */
   def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
     sendErrorOrCloseConnection(request, error, 0)
   }
 
+  /**
+   * 发送 NoOpResponse 类型的 Response 而不受请求通道上限流（throttling）的限制。
+   * 所谓的 NoOpResponse，是指 Processor 线程取出该类型的 Response 后，不执行真正的 I/O 发送操作。
+   * @param request
+   */
   def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
     quotas.request.maybeRecordExempt(request)
     requestChannel.sendNoOpResponse(request)

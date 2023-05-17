@@ -87,20 +87,27 @@ import scala.util.{Failure, Success, Try}
 
 /**
  * Logic to handle the various Kafka requests
+ * KafkaApis 是 Kafka 最重要的源码入口。因为每次要查找 Kafka 某个功能的实现代码时，
+ * 几乎总要从这个 KafkaApis.scala 文件开始找起，然后一层一层向下钻取，直到定位到实现功能的代码处为止。
+ * 它利用 Scala 语言中的模式匹配语法，完整地列出了对所有请求类型的处理逻辑。通过该方法，你能串联出 Kafka 处理任何请求的源码路径。
+ *
+ * KafkaApis 实际上是把处理完成的 Response 放回到前端 Processor 线程的 Response 队列中，
+ * 而真正将 Response 返还给 Clients 或其他 Broker 的，其实是 Processor 线程，
+ * 而不是执行 KafkaApis 逻辑的 KafkaRequestHandler 线程。[收发线程和处理线程分离]
  */
-class KafkaApis(val requestChannel: RequestChannel,
+class KafkaApis(val requestChannel: RequestChannel,// 请求通道,SocketServer组件中的请求通道对象对象，请求队列提供者
                 val metadataSupport: MetadataSupport,
-                val replicaManager: ReplicaManager,
-                val groupCoordinator: GroupCoordinator,
-                val txnCoordinator: TransactionCoordinator,
+                val replicaManager: ReplicaManager,// 副本管理器，管理集群所有副本状态转换
+                val groupCoordinator: GroupCoordinator,// 消费者组协调器组件，用于维护消费者组的管理
+                val txnCoordinator: TransactionCoordinator,// 事务管理器组件，实现kafka事务功能
                 val autoTopicCreationManager: AutoTopicCreationManager,
-                val brokerId: Int,
-                val config: KafkaConfig,
+                val brokerId: Int,// broker.id参数值
+                val config: KafkaConfig,// Kafka配置类，提供broker端参数的定义与保存
                 val configRepository: ConfigRepository,
-                val metadataCache: MetadataCache,
+                val metadataCache: MetadataCache,// 元数据缓存类，保存和更新集群broker间元数据缓存
                 val metrics: Metrics,
                 val authorizer: Option[Authorizer],
-                val quotas: QuotaManagers,
+                val quotas: QuotaManagers,// 配额管理器组件，负责客户端、副本等对象的配额管理
                 val fetchManager: FetchManager,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
@@ -158,10 +165,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
-   * 请求处理流程第5步
-   * KafkaRequestHandler 线程将 Response 放入 Processor 线程的 Response 队列这一步的工作由 KafkaApis 类完成
-   * 当然，这依然是由 KafkaRequestHandler 线程来完成的。KafkaApis.scala 中有个 sendResponse 方法，将 Request 的处理结果 Response 发送出去。
+   * 请求处理流程第5步（KafkaRequestHandler 线程将 Response 放入 Processor 线程的 Response 队列）
+   * 这一步的工作由 KafkaApis 类完成。当然，这依然是由 KafkaRequestHandler 线程来完成的。
+   * KafkaApis.scala 中有个 sendResponse 方法，将 Request 的处理结果 Response 发送出去。
    * 本质上，它就是调用了 RequestChannel 的 sendResponse 方法
+   *
+   * 从这个 handle 方法中，我们也能得到这样的结论：每当社区添加新的 RPC 协议时，Broker 端大致需要做三件事情。
+   * 更新 ApiKeys 枚举，加入新的 RPC ApiKey；
+   * 在 KafkaApis 中添加对应的 handle×××Request 方法，实现对该 RPC 请求的处理逻辑；
+   * 更新 KafkaApis 的 handle 方法，添加针对 RPC 协议的 case 分支。
    */
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     def handleError(e: Throwable): Unit = {
@@ -179,7 +191,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         // before handing them to the request handler, so this path should not be exercised in practice
         throw new IllegalStateException(s"API ${request.header.apiKey} with version ${request.header.apiVersion} is not enabled")
       }
-
+      // 根据请求头部信息中的apiKey字段判断属于哪类请求
+      // 然后调用响应的handle***方法
+      // 如果新增RPC协议类型，则：
+      // 1. 添加新的apiKey标识新请求类型
+      // 2. 添加新的case分支
+      // 3. 添加对应的handle***方法
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request, requestLocal)
         case ApiKeys.FETCH => handleFetchRequest(request)
@@ -247,7 +264,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
+      // 如果是严重错误，则抛出异常
       case e: FatalExitError => throw e
+      // 普通异常的话，记录下错误日志
       case e: Throwable => handleError(e)
     } finally {
       // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
@@ -256,6 +275,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Delayed fetches are also completed by ReplicaFetcherThread.
       replicaManager.tryCompleteActions()
       // The local completion time may be set while processing the request. Only record it if it's unset.
+      // 记录一下请求本地完成时间，即Broker处理完该请求的时间
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
@@ -1902,6 +1922,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       createTopicsRequest.data.topics.forEach { topic =>
         results.add(new CreatableTopicResult().setName(topic.name))
       }
+      // 是否具有CLUSTER资源的CREATE权限
+      // 这段代码调用 authorize 方法，来判断 Clients 方法是否具有创建主题的权限，
+      // 如果没有，则显式标记 TOPIC_AUTHORIZATION_FAILED，告知 Clients 端。
+      // 目前，Kafka 所有的权限控制均发生在 KafkaApis 中，即所有请求在处理前，都需要调用 authorize 方法做权限校验，以保证请求能够被继续执行。
       val hasClusterAuthorization = authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
         logIfDenied = false)
 
@@ -1921,12 +1945,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
           topicNames.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
       }
-
+      // 如果具有CLUSTER CREATE权限，则允许主题创建，否则，还要查看是否具有TOPIC资源的CREATE权限
       val authorizedTopics = if (hasClusterAuthorization) {
         allowedTopicNames.toSet
       } else {
         authHelper.filterByAuthorized(request.context, CREATE, TOPIC, allowedTopicNames)(identity)
       }
+      // 是否具有TOPIC资源的DESCRIBE_CONFIGS权限
       val authorizedForDescribeConfigs = authHelper.filterByAuthorized(
         request.context,
         DESCRIBE_CONFIGS,
@@ -1939,11 +1964,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (results.findAll(topic.name).size > 1) {
           topic.setErrorCode(Errors.INVALID_REQUEST.code)
           topic.setErrorMessage("Found multiple entries for this topic.")
-        } else if (!authorizedTopics.contains(topic.name)) {
+        } else if (!authorizedTopics.contains(topic.name)) {// 如果不具备CLUSTER资源的CREATE权限或TOPIC资源的CREATE权限，认证失败！
           topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
           topic.setErrorMessage("Authorization failed.")
         }
-        if (!authorizedForDescribeConfigs.contains(topic.name)) {
+        if (!authorizedForDescribeConfigs.contains(topic.name)) {// 如果不具备TOPIC资源的DESCRIBE_CONFIGS权限，设置主题配置错误码
           topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         }
       }

@@ -41,6 +41,7 @@ import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
 /**
  * Identifiers for all the Kafka APIs
+ * 它实际上是一个枚举类型，里面封装了目前 Kafka 定义所有的 RPC 协议。
  */
 public enum ApiKeys {
     PRODUCE(ApiMessageType.PRODUCE),
