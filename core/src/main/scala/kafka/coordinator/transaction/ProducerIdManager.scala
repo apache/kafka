@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.coordinator.transaction.ProducerIdManager.RetryBackoffMs
+import kafka.coordinator.transaction.ProducerIdManager.{NoRetry, RetryBackoffMs}
 import kafka.server.{BrokerToControllerChannelManager, ControllerRequestCompletionHandler}
 import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
@@ -28,7 +28,7 @@ import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocatePro
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.ProducerIdsBlock
 
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.util.{Failure, Success, Try}
 
@@ -44,6 +44,7 @@ object ProducerIdManager {
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
   val PidPrefetchThreshold = 0.90
   val RetryBackoffMs = 50
+  val NoRetry = -1L
 
   // Creates a ProducerIdGenerate that directly interfaces with ZooKeeper, IBP < 3.0-IV0
   def zk(brokerId: Int, zkClient: KafkaZkClient): ZkProducerIdManager = {
@@ -169,7 +170,7 @@ class RPCProducerIdManager(brokerId: Int,
   private[transaction] var nextProducerIdBlock = new AtomicReference[ProducerIdsBlock](null)
   private val currentProducerIdBlock: AtomicReference[ProducerIdsBlock] = new AtomicReference(ProducerIdsBlock.EMPTY)
   private val requestInFlight = new AtomicBoolean(false)
-  private val shouldBackoff = new AtomicBoolean(false)
+  private val backoffDeadlineMs = new AtomicLong(NoRetry)
 
   override def hasValidBlock: Boolean = {
     nextProducerIdBlock.get != null
@@ -215,10 +216,17 @@ class RPCProducerIdManager(brokerId: Int,
     if (nextProducerIdBlock.get == null &&
       requestInFlight.compareAndSet(false, true) ) {
 
-      if (shouldBackoff.compareAndSet(true, false)) {
-        time.sleep(RetryBackoffMs)
+      val retryTimestamp = backoffDeadlineMs.get()
+      if (retryTimestamp == NoRetry || time.milliseconds() >= retryTimestamp) {
+        if (backoffDeadlineMs.compareAndSet(retryTimestamp, NoRetry)) {
+          // Allow only one thread to send a request after
+          // the backoff deadline.
+          sendRequest()
+        }
+      } else {
+        // Reset flag if we didn't actually send the request.
+        requestInFlight.set(false)
       }
-      sendRequest()
     }
   }
 
@@ -263,17 +271,17 @@ class RPCProducerIdManager(brokerId: Int,
       case e: Errors =>
         error(s"Received an unexpected error code from the controller: $e")
     }
-    shouldBackoff.set(!successfulResponse)
 
     if (!successfulResponse) {
+      // There is no need to compare and set because only one thread
+      // handles the AllocateProducerIds response.
+      backoffDeadlineMs.set(time.milliseconds() + RetryBackoffMs)
       requestInFlight.set(false)
-      maybeRequestNextBlock()
     }
   }
 
   private def handleTimeout(): Unit = {
     warn("Timed out when requesting AllocateProducerIds from the controller.")
     requestInFlight.set(false)
-    maybeRequestNextBlock()
   }
 }

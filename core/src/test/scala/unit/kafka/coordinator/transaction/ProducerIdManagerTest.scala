@@ -189,7 +189,8 @@ class ProducerIdManagerTest {
   @ParameterizedTest
   @EnumSource(value = classOf[Errors], names = Array("UNKNOWN_SERVER_ERROR", "INVALID_REQUEST"))
   def testUnrecoverableErrors(error: Errors): Unit = {
-    val manager = new MockProducerIdManager(0, 0, 1)
+    val time = new MockTime()
+    val manager = new MockProducerIdManager(0, 0, 1, time = time)
 
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
 
@@ -197,7 +198,7 @@ class ProducerIdManagerTest {
     verifyFailure(manager)
 
     manager.error = Errors.NONE
-    assertEquals(classOf[CoordinatorLoadInProgressException], manager.generateProducerId().failed.get.getClass)
+    time.sleep(RetryBackoffMs)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1)
   }
 
@@ -219,9 +220,13 @@ class ProducerIdManagerTest {
     val manager = new MockProducerIdManager(0, 0, 1,
       error = Errors.UNKNOWN_SERVER_ERROR, time = time, remainingRetries = 2)
 
-    val nowMs = time.milliseconds
     verifyFailure(manager)
-    assertEquals(RetryBackoffMs, time.milliseconds - nowMs)
+    manager.error = Errors.NONE
+
+    // We should only get a new block once retry backoff ms has passed.
+    assertEquals(classOf[CoordinatorLoadInProgressException], manager.generateProducerId().failed.get.getClass)
+    time.sleep(RetryBackoffMs)
+    verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
   }
 
   private def verifyFailure(manager: MockProducerIdManager): Unit = {
