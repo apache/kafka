@@ -425,7 +425,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            listener.handleSnapshot(reader);
+            listener.handleLoadSnapshot(reader);
             offset = reader.lastContainedLogOffset();
         }
 

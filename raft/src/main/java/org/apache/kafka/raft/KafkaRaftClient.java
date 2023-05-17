@@ -318,7 +318,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                             highWatermark
                         )
                     ));
-                    listenerContext.fireHandleSnapshot(snapshot);
+                    listenerContext.fireHandleLoadSnapshot(snapshot);
                 }
             });
 
@@ -2524,14 +2524,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * This API is used when the Listener needs to be notified of a new snapshot. This happens
          * when the context's next offset is less than the log start offset.
          */
-        private void fireHandleSnapshot(SnapshotReader<T> reader) {
+        private void fireHandleLoadSnapshot(SnapshotReader<T> reader) {
             synchronized (this) {
                 nextOffset = reader.snapshotId().offset();
                 lastSent = null;
             }
 
-            logger.debug("Notifying listener {} of snapshot {}", listenerName(), reader.snapshotId());
-            listener.handleSnapshot(reader);
+            logger.debug("Notifying listener {} to load snapshot {}", listenerName(), reader.snapshotId());
+            listener.handleLoadSnapshot(reader);
         }
 
         /**

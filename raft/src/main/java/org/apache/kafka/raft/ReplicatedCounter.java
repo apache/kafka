@@ -135,7 +135,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleSnapshot(SnapshotReader<Integer> reader) {
+    public synchronized void handleLoadSnapshot(SnapshotReader<Integer> reader) {
         try {
             log.debug("Loading snapshot {}", reader.snapshotId());
             while (reader.hasNext()) {
