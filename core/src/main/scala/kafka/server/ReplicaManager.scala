@@ -1155,16 +1155,60 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
+   * Returns [[LogReadResult]] with error if a task for RemoteStorageFetchInfo could not be scheduled successfully
+   * else returns [[None]].
+   */
+  private def processRemoteFetch(remoteFetchInfo: RemoteStorageFetchInfo,
+                                 params: FetchParams,
+                                 responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
+                                 logReadResults: Seq[(TopicIdPartition, LogReadResult)],
+                                 fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Option[LogReadResult] = {
+    val key = new TopicPartitionOperationKey(remoteFetchInfo.topicPartition.topic(), remoteFetchInfo.topicPartition.partition())
+    val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
+    var remoteFetchTask: Future[Void] = null
+    try {
+      remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo, (result: RemoteLogReadResult) => {
+        remoteFetchResult.complete(result)
+        delayedRemoteFetchPurgatory.checkAndComplete(key)
+      })
+    } catch {
+      case e: RejectedExecutionException =>
+        // Return the error if any in scheduling the remote fetch task
+        return Some(createLogReadResult(e))
+    }
+
+    val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo,
+      fetchPartitionStatus, params, logReadResults, this, responseCallback)
+
+    delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))
+    None
+  }
+
+  private def buildPartitionToFetchPartitionData(logReadResults: Seq[(TopicIdPartition, LogReadResult)],
+                                                 remoteFetchTopicPartition: TopicPartition,
+                                                 error: LogReadResult): Seq[(TopicIdPartition, FetchPartitionData)] = {
+    logReadResults.map { case (tp, result) =>
+      val fetchPartitionData = {
+        if (tp.topicPartition().equals(remoteFetchTopicPartition))
+          error
+        else
+          result
+      }.toFetchPartitionData(false)
+
+      tp -> fetchPartitionData
+    }
+  }
+
+  /**
    * Fetch messages from a replica, and wait until enough data can be fetched and return;
    * the callback function will be triggered either when timeout or required fetch info is satisfied.
    * Consumers may fetch from any replica, but followers can only fetch from the leader.
    */
-  def fetchMessages(
-    params: FetchParams,
-    fetchInfos: Seq[(TopicIdPartition, PartitionData)],
-    quota: ReplicaQuota,
-    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit
-  ): Unit = {
+  def fetchMessages(params: FetchParams,
+                    fetchInfos: Seq[(TopicIdPartition, PartitionData)],
+                    quota: ReplicaQuota,
+                    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit): Unit = {
+
     // check if this fetch request can be satisfied right away
     val logReadResults = readFromLog(params, fetchInfos, quota, readFromPurgatory = false)
     var bytesReadable: Long = 0
@@ -1218,38 +1262,15 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       if (remoteFetchInfo.isPresent) {
-        val key = new TopicPartitionOperationKey(remoteFetchInfo.get.topicPartition.topic(), remoteFetchInfo.get.topicPartition.partition())
-        val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
-        var remoteFetchTask: Future[Void] = null
-        try {
-          remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo.get, (result: RemoteLogReadResult) => {
-            remoteFetchResult.complete(result)
-            delayedRemoteFetchPurgatory.checkAndComplete(key)
-          })
-        } catch {
-          // if the task queue of remote storage reader thread pool is full, return what we currently have
-          // (the data read from local log segment for the other topic-partitions) and an error for the topic-partition that
-          // we couldn't read from remote storage
-          case e: RejectedExecutionException =>
-            val fetchPartitionData = logReadResults.map { case (tp, result) =>
-              val r = {
-                if (tp.topicPartition().equals(remoteFetchInfo.get.topicPartition))
-                  createLogReadResult(e)
-                else
-                  result
-              }
-
-              tp -> r.toFetchPartitionData(false)
-            }
-            responseCallback(fetchPartitionData)
-            return
+        val maybeLogReadResultWithError = processRemoteFetch(remoteFetchInfo.get(), params, responseCallback, logReadResults, fetchPartitionStatus)
+        if(maybeLogReadResultWithError.isDefined) {
+          // If there is an error in scheduling the remote fetch task, return what we currently have
+          // (the data read from local log segment for the other topic-partitions) and an error for the topic-partition
+          // that we couldn't read from remote storage
+          val partitionToFetchPartitionData = buildPartitionToFetchPartitionData(logReadResults, remoteFetchInfo.get().topicPartition, maybeLogReadResultWithError.get)
+          responseCallback(partitionToFetchPartitionData)
+          return
         }
-
-        // If there is remote data, we will read remote data, instead of waiting for new data.
-        val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo.get,
-          fetchPartitionStatus, params, logReadResults, this, responseCallback)
-
-        delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
         // wait for new data.
@@ -1376,43 +1397,7 @@ class ReplicaManager(val config: KafkaConfig,
                  _: InconsistentTopicIdException) =>
           createLogReadResult(e)
         case e: OffsetOutOfRangeException =>
-          // In case of offset out of range errors, check for remote log manager for non-compacted topics
-          // to fetch from remote storage. `log` instance should not be null here as that would have been caught earlier
-          // with NotLeaderForPartitionException or ReplicaNotAvailableException.
-          // If it is from a follower then send the offset metadata only as the data is already available in remote
-          // storage.
-          if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
-            // Check that the fetch offset is within the offset range within the remote storage layer.
-            log.logStartOffset <= offset && offset < log.localLogStartOffset()) {
-            // For follower fetch requests, throw an error saying that this offset is moved to tiered storage.
-            val highWatermark = log.highWatermark
-            val leaderLogStartOffset = log.logStartOffset
-            val leaderLogEndOffset = log.logEndOffset
-            if (params.isFromFollower) {
-              createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
-                new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
-            } else {
-              // Create a dummy FetchDataInfo with the remote storage fetch information.
-              // For the first topic-partition that needs remote data, we will use this information to read the data in another thread.
-              // For the following topic-partitions, we return an empty record set
-              val fetchDataInfo =
-                new FetchDataInfo(new LogOffsetMetadata(fetchInfo.fetchOffset), MemoryRecords.EMPTY, false, Optional.empty(),
-                  Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
-                    fetchInfo, params.isolation, params.hardMaxBytesLimit())))
-
-              LogReadResult(checkFetchDataInfo(partition, fetchDataInfo),
-                divergingEpoch = None,
-                highWatermark,
-                leaderLogStartOffset,
-                leaderLogEndOffset,
-                followerLogStartOffset,
-                fetchTimeMs,
-                Some(log.lastStableOffset),
-                exception = None)
-            }
-          } else {
-            createLogReadResult(e)
-          }
+          handleOffsetOutOfRangeError(tp, params, fetchInfo, adjustedMaxBytes, minOneMessage, log, fetchTimeMs, e)
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
@@ -1447,6 +1432,50 @@ class ReplicaManager(val config: KafkaConfig,
       result += (tp -> readResult)
     }
     result
+  }
+
+  private def handleOffsetOutOfRangeError(tp: TopicIdPartition, params: FetchParams, fetchInfo: PartitionData,
+                                          adjustedMaxBytes: Int, minOneMessage:
+                                          Boolean, log: UnifiedLog, fetchTimeMs: Long,
+                                          exception: OffsetOutOfRangeException): LogReadResult = {
+    val offset = fetchInfo.fetchOffset
+    // In case of offset out of range errors, handle it for tiered storage only if all the below conditions are true.
+    //   1) remote log manager is enabled and it is available
+    //   2) `log` instance should not be null here as that would have been caught earlier with NotLeaderForPartitionException or ReplicaNotAvailableException.
+    //   3) fetch offset is within the offset range of the remote storage layer
+    if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
+      log.logStartOffset <= offset && offset < log.localLogStartOffset())
+    {
+      val highWatermark = log.highWatermark
+      val leaderLogStartOffset = log.logStartOffset
+      val leaderLogEndOffset = log.logEndOffset
+
+      if (params.isFromFollower) {
+        // If it is from a follower then send the offset metadata only as the data is already available in remote
+        // storage and throw an error saying that this offset is moved to tiered storage.
+        createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
+          new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
+      } else {
+        // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
+        // For the first topic-partition that needs remote data, we will use this information to read the data in another thread.
+        val fetchDataInfo =
+        new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
+          Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
+            fetchInfo, params.isolation, params.hardMaxBytesLimit())))
+
+        LogReadResult(fetchDataInfo,
+          divergingEpoch = None,
+          highWatermark,
+          leaderLogStartOffset,
+          leaderLogEndOffset,
+          fetchInfo.logStartOffset,
+          fetchTimeMs,
+          Some(log.lastStableOffset),
+          exception = None)
+      }
+    } else {
+      createLogReadResult(exception)
+    }
   }
 
   /**
