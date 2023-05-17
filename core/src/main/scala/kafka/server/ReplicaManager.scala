@@ -1263,13 +1263,12 @@ class ReplicaManager(val config: KafkaConfig,
 
       if (remoteFetchInfo.isPresent) {
         val maybeLogReadResultWithError = processRemoteFetch(remoteFetchInfo.get(), params, responseCallback, logReadResults, fetchPartitionStatus)
-        if(maybeLogReadResultWithError.isDefined) {
+        if (maybeLogReadResultWithError.isDefined) {
           // If there is an error in scheduling the remote fetch task, return what we currently have
           // (the data read from local log segment for the other topic-partitions) and an error for the topic-partition
           // that we couldn't read from remote storage
           val partitionToFetchPartitionData = buildPartitionToFetchPartitionData(logReadResults, remoteFetchInfo.get().topicPartition, maybeLogReadResultWithError.get)
           responseCallback(partitionToFetchPartitionData)
-          return
         }
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
