@@ -235,4 +235,10 @@ public class PartitionRegistration {
         builder.append(")");
         return builder.toString();
     }
+
+    public boolean hasSameAssignment(PartitionRegistration registration) {
+        return this.replicas == registration.replicas &&
+            this.addingReplicas == registration.addingReplicas &&
+            this.removingReplicas == registration.removingReplicas;
+    }
 }

@@ -30,12 +30,15 @@ import java.util.Set;
 public class CapturingTopicMigrationClient implements TopicMigrationClient {
     public List<String> deletedTopics = new ArrayList<>();
     public List<String> createdTopics = new ArrayList<>();
+    public List<String> updatedTopics = new ArrayList<>();
+    public LinkedHashMap<String, Set<Integer>> newTopicPartitions = new LinkedHashMap<>();
     public LinkedHashMap<String, Set<Integer>> updatedTopicPartitions = new LinkedHashMap<>();
 
     public void reset() {
         createdTopics.clear();
         updatedTopicPartitions.clear();
         deletedTopics.clear();
+        updatedTopics.clear();
     }
 
 
@@ -53,6 +56,25 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
     @Override
     public ZkMigrationLeadershipState createTopic(String topicName, Uuid topicId, Map<Integer, PartitionRegistration> topicPartitions, ZkMigrationLeadershipState state) {
         createdTopics.add(topicName);
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState updateTopic(
+        String topicName,
+        Uuid topicId,
+        Map<Integer, PartitionRegistration> topicPartitions,
+        ZkMigrationLeadershipState state
+    ) {
+        updatedTopics.add(topicName);
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState createTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state) {
+        topicPartitions.forEach((topicName, partitionMap) ->
+            newTopicPartitions.put(topicName, partitionMap.keySet())
+        );
         return state;
     }
 
