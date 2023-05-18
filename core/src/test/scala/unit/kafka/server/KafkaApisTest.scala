@@ -1281,8 +1281,8 @@ class KafkaApisTest {
       .setMemberId("member")
       .setTopics(List(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName(if (version < 9) "foo" else "")
-          .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
+          .setName("foo")
+          .setTopicId(fooId)
           .setPartitions(List(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1402,8 +1402,8 @@ class KafkaApisTest {
         .setTopics(List(
           // foo exists but only has 2 partitions.
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName(if (version < 9) "foo" else "")
-            .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
+            .setName("foo")
+            .setTopicId(fooId)
             .setPartitions(List(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(0)
@@ -1416,8 +1416,8 @@ class KafkaApisTest {
                 .setCommittedOffset(30)).asJava),
           // bar exists.
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName(if (version < 9) "bar" else "")
-            .setTopicId(if (version >= 9) barId else Uuid.ZERO_UUID)
+            .setName("bar")
+            .setTopicId(barId)
             .setPartitions(List(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(0)
@@ -1427,8 +1427,8 @@ class KafkaApisTest {
                 .setCommittedOffset(50)).asJava),
           // zar does not exist.
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName(if (version < 9) "zar" else "")
-            .setTopicId(if (version >= 9) zarId else Uuid.ZERO_UUID)
+            .setName("zar")
+            .setTopicId(zarId)
             .setPartitions(List(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(0)
@@ -1438,8 +1438,8 @@ class KafkaApisTest {
                 .setCommittedOffset(70)).asJava),
           // baz exists.
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName(if (version < 9) "baz" else "")
-            .setTopicId(if (version >= 9) bazId else Uuid.ZERO_UUID)
+            .setName("baz")
+            .setTopicId(bazId)
             .setPartitions(List(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(0)
@@ -1449,8 +1449,8 @@ class KafkaApisTest {
                 .setCommittedOffset(80)).asJava),
           // qux does not exist.
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setName(if (version < 9) "qux" else "")
-            .setTopicId(if (version >= 9) quxId else Uuid.ZERO_UUID)
+            .setName("qux")
+            .setTopicId(quxId)
             .setPartitions(List(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(0)
