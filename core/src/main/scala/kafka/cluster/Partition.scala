@@ -526,7 +526,7 @@ class Partition(val topicPartition: TopicPartition,
     leaderReplicaIdOpt.filter(_ == localBrokerId)
   }
 
-  private def localLogWithEpochOrThrow(
+  def localLogWithEpochOrThrow(
     currentLeaderEpoch: Optional[Integer],
     requireLeader: Boolean
   ): UnifiedLog = {
