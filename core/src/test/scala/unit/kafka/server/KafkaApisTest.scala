@@ -1499,37 +1499,40 @@ class KafkaApisTest {
     // This is the response returned by the group coordinator.
     val offsetCommitResponse =
       new OffsetCommitResponseData()
-        .setTopics(List(
+        .setTopics(mutable.ArraySeq(
           new OffsetCommitResponseData.OffsetCommitResponseTopic()
-            .setName(if (version < 9) "foo" else "")
+            .setName("foo")
             .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
-            .setPartitions(List(
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+            .setPartitions(new util.ArrayList[OffsetCommitResponsePartition] {{
+              add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
                 .setPartitionIndex(0)
-                .setErrorCode(Errors.NONE.code),
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setErrorCode(Errors.NONE.code))
+              add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
                 .setPartitionIndex(1)
-                .setErrorCode(Errors.NONE.code)).asJava),
+                .setErrorCode(Errors.NONE.code))
+            }}),
           new OffsetCommitResponseData.OffsetCommitResponseTopic()
-            .setName(if (version < 9) "bar" else "")
+            .setName("bar")
             .setTopicId(if (version >= 9) barId else Uuid.ZERO_UUID)
-            .setPartitions(List(
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+            .setPartitions(new util.ArrayList[OffsetCommitResponsePartition] {{
+              add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
                 .setPartitionIndex(0)
-                .setErrorCode(Errors.NONE.code),
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setErrorCode(Errors.NONE.code))
+              add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
                 .setPartitionIndex(1)
-                .setErrorCode(Errors.NONE.code)).asJava),
+                .setErrorCode(Errors.NONE.code))
+            }}),
           new OffsetCommitResponseData.OffsetCommitResponseTopic()
-            .setName(if (version < 9) "baz" else "")
+            .setName("baz")
             .setTopicId(if (version >= 9) bazId else Uuid.ZERO_UUID)
-            .setPartitions(List(
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+            .setPartitions(new util.ArrayList[OffsetCommitResponsePartition] {{
+              add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
                 .setPartitionIndex(0)
-                .setErrorCode(Errors.NONE.code),
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                .setErrorCode(Errors.NONE.code))
+              add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
                 .setPartitionIndex(1)
-                .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+                .setErrorCode(Errors.NONE.code))
+            }})).asJava)
 
     val expectedOffsetCommitResponse = if (version >= 9) {
       new OffsetCommitResponseData()
