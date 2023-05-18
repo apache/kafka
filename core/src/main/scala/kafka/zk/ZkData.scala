@@ -54,7 +54,12 @@ import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
-
+/**
+ * 如何在避免重启集群的情况下，干掉已有 Controller 并执行新的 Controller 选举呢？
+ * 在 ControllerZNode.path 上，也就是 ZooKeeper 的 /controller 节点。
+ * 手动删除了 /controller 节点，Kafka 集群就会触发 Controller 选举。
+ * 注意：不可以随意干掉 /controller 节点——这个操作其实是有一点危险的。
+ */
 object ControllerZNode {
   def path = "/controller"
   def encode(brokerId: Int, timestamp: Long, kraftControllerEpoch: Int = -1): Array[Byte] = {

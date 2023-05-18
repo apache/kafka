@@ -73,27 +73,33 @@ case class ReplicaAssignment private (replicas: Seq[Int],
     s"removingReplicas=${removingReplicas.mkString(",")})"
 }
 
+/**
+ * 这个类是 Controller 组件的数据容器类
+ * 它定义了所有元数据信息，以及许多实用的工具方法。
+ */
 class ControllerContext extends ControllerChannelContext {
-  val stats = new ControllerStats
-  var offlinePartitionCount = 0
+  val stats = new ControllerStats // Controller统计信息类
+  var offlinePartitionCount = 0 // 离线分区计数器，该字段统计集群中所有离线或处于不可用状态的主题分区数量。所谓的不可用状态，就是“Leader=-1”的情况。
   var preferredReplicaImbalanceCount = 0
-  val shuttingDownBrokerIds = mutable.Set.empty[Int]
-  private val liveBrokers = mutable.Set.empty[Broker]
-  private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
-  var epoch: Int = KafkaController.InitialControllerEpoch
-  var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
+  // 当 Controller 在管理集群 Broker 时，它要依靠shuttingDownBrokerIds这个字段来甄别 Broker 当前是否已关闭，
+  // 因为处于关闭状态的 Broker 是不适合执行某些操作的，如分区重分配（Reassignment）以及主题删除等。
+  val shuttingDownBrokerIds = mutable.Set.empty[Int] // 该字段保存所有正在关闭中的 Broker ID 列表
+  private val liveBrokers = mutable.Set.empty[Broker] // 当前运行中Broker对象列表
+  private val liveBrokerEpochs = mutable.Map.empty[Int, Long] // 运行中Broker Epoch列表
+  var epoch: Int = KafkaController.InitialControllerEpoch // Controller当前Epoch值
+  var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion // Controller对应ZooKeeper节点的Epoch值
 
-  val allTopics = mutable.Set.empty[String]
+  val allTopics = mutable.Set.empty[String] // 集群主题列表
   var topicIds = mutable.Map.empty[String, Uuid]
   var topicNames = mutable.Map.empty[Uuid, String]
-  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
-  private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
-  val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
-  val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
-  val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
-  val replicasOnOfflineDirs = mutable.Map.empty[Int, Set[TopicPartition]]
+  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]] // 主题分区的副本列表
+  private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch] // 主题分区的Leader/ISR副本信息
+  val partitionsBeingReassigned = mutable.Set.empty[TopicPartition] // 正处于副本重分配过程的主题分区列表
+  val partitionStates = mutable.Map.empty[TopicPartition, PartitionState] // 主题分区状态列表
+  val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState] // 主题分区的副本状态列表
+  val replicasOnOfflineDirs = mutable.Map.empty[Int, Set[TopicPartition]] // 不可用磁盘路径上的副本列表
 
-  val topicsToBeDeleted = mutable.Set.empty[String]
+  val topicsToBeDeleted = mutable.Set.empty[String] // 待删除主题列表
 
   /** The following topicsWithDeletionStarted variable is used to properly update the offlinePartitionCount metric.
    * When a topic is going through deletion, we don't want to keep track of its partition state
@@ -114,8 +120,8 @@ class ControllerContext extends ControllerChannelContext {
    * NonExistentPartition state. Once a topic is in the topicsWithDeletionStarted set, we will stop monitoring
    * its partition state changes in the offlinePartitionCount metric
    */
-  val topicsWithDeletionStarted = mutable.Set.empty[String]
-  val topicsIneligibleForDeletion = mutable.Set.empty[String]
+  val topicsWithDeletionStarted = mutable.Set.empty[String] // 已开启删除的主题列表
+  val topicsIneligibleForDeletion = mutable.Set.empty[String] // 暂时无法执行删除的主题列表
 
   private def clearTopicsState(): Unit = {
     allTopics.clear()
@@ -401,13 +407,32 @@ class ControllerContext extends ControllerChannelContext {
     updatePartitionStateMetrics(partition, currentState, targetState)
   }
 
+  /**
+   * 更新offlinePartitionCount元数据
+   * 根据给定主题分区的当前状态和目标状态，来判断该分区是否是离线状态的分区。
+   * 如果是，则累加 offlinePartitionCount 字段的值，否则递减该值。
+   *
+   * 该方法首先要判断，此分区所属的主题当前是否处于删除操作的过程中。
+   * 如果是的话，Kafka 就不能修改这个分区的状态，那么代码什么都不做，直接返回。否则，代码会判断该分区是否要转换到离线状态。
+   * 如果 targetState 是 OfflinePartition，那么就将 offlinePartitionCount 值加 1，毕竟多了一个离线状态的分区。
+   * 相反地，如果 currentState 是 offlinePartition，而 targetState 反而不是，那么就将 offlinePartitionCount 值减 1。
+   * @param partition
+   * @param currentState
+   * @param targetState
+   */
   private def updatePartitionStateMetrics(partition: TopicPartition,
                                           currentState: PartitionState,
                                           targetState: PartitionState): Unit = {
+    // 如果该主题当前并未处于删除中状态
     if (!isTopicDeletionInProgress(partition.topic)) {
+      // targetState表示该分区要变更到的状态
+      // 如果当前状态不是OfflinePartition，即离线状态并且目标状态是离线状态
+      // 这个if语句判断是否要将该主题分区状态转换到离线状态
       if (currentState != OfflinePartition && targetState == OfflinePartition) {
         offlinePartitionCount = offlinePartitionCount + 1
       } else if (currentState == OfflinePartition && targetState != OfflinePartition) {
+        // 如果当前状态已经是离线状态，但targetState不是
+        // 这个else if语句判断是否要将该主题分区状态转换到非离线状态
         offlinePartitionCount = offlinePartitionCount - 1
       }
     }

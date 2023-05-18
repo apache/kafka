@@ -71,6 +71,21 @@ object KafkaController extends Logging {
   type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
 }
 
+/**
+ * Controller 的很多代码仅仅是做数据的管理操作而已
+ * Controller 承载了 ZooKeeper 上的所有元数据
+ * 集群 Broker 是不会与 ZooKeeper 直接交互去获取元数据的，相反地，它们总是与 Controller 进行通信，获取和更新最新的集群数据。
+ * @param config
+ * @param zkClient
+ * @param time
+ * @param metrics
+ * @param initialBrokerInfo
+ * @param initialBrokerEpoch
+ * @param tokenManager
+ * @param brokerFeatures
+ * @param featureCache
+ * @param threadNamePrefix
+ */
 class KafkaController(val config: KafkaConfig,
                       zkClient: KafkaZkClient,
                       time: Time,
@@ -588,20 +603,35 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  /*
+  /**
    * This callback is invoked by the replica state machine's broker change listener with the list of failed brokers
    * as input. It will call onReplicaBecomeOffline(...) with the list of replicas on those failed brokers as input.
-   */
+   *
+   * 该方法接收一组已终止运行的 Broker ID 列表，首先是更新 Controller 元数据信息，
+   * 将给定 Broker 从元数据的 replicasOnOfflineDirs 和 shuttingDownBrokerIds 中移除，
+   * 然后为这组 Broker 执行必要的副本清扫工作，也就是 onReplicasBecomeOffline 方法做的事情。
+   * 该方法主要依赖于分区状态机和副本状态机来完成对应的工作。这个方法的主要目的是把给定的副本标记成 Offline 状态，即不可用状态。
+   * 具体分为以下这几个步骤：
+   * 1、利用分区状态机将给定副本所在的分区标记为 Offline 状态；
+   * 2、将集群上所有新分区和 Offline 分区状态变更为 Online 状态；
+   * 3、将相应的副本对象状态变更为 Offline。
+   *
+   * */
   private def onBrokerFailure(deadBrokers: Seq[Int]): Unit = {
     info(s"Broker failure callback for ${deadBrokers.mkString(",")}")
+    // deadBrokers：给定的一组已终止运行的Broker Id列表
+    // 更新Controller元数据信息，将给定Broker从元数据的replicasOnOfflineDirs中移除
     deadBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)
+    // 找出这些Broker上的所有副本对象
     val deadBrokersThatWereShuttingDown =
       deadBrokers.filter(id => controllerContext.shuttingDownBrokerIds.remove(id))
     if (deadBrokersThatWereShuttingDown.nonEmpty)
       info(s"Removed ${deadBrokersThatWereShuttingDown.mkString(",")} from list of shutting down brokers.")
+    // 执行副本清扫工作
     val allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokers.toSet)
     onReplicasBecomeOffline(allReplicasOnDeadBrokers)
 
+    // 取消这些Broker上注册的ZooKeeper监听器
     unregisterBrokerModificationsHandler(deadBrokers)
   }
 
@@ -2734,11 +2764,21 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
   }
 }
 
+/**
+ * 目前定义了两大类统计指标：UncleanLeaderElectionsPerSec 和所有 Controller 事件状态的执行速率与时间。
+ */
 private[controller] class ControllerStats {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
-
+  // 统计每秒发生的Unclean Leader选举次数
+  // 计算 Controller 每秒执行的 Unclean Leader 选举数量，
+  // 通常情况下，执行 Unclean Leader 选举可能造成数据丢失，一般不建议开启它。
+  // 一旦开启，你就需要时刻关注这个监控指标的值，确保 Unclean Leader 选举的速率维持在一个很低的水平，否则会出现很多数据丢失的情况。
   val uncleanLeaderElectionRate = metricsGroup.newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
 
+  // Controller事件通用的统计速率指标的方法
+  // 统计所有 Controller 状态的速率和时间信息，单位是毫秒。
+  // 当前，Controller 定义了很多事件，比如，TopicDeletion 是执行主题删除的 Controller 事件、ControllerChange 是执行 Controller 重选举的事件。
+  // ControllerStats 的这个指标通过在每个事件名后拼接字符串 RateAndTimeMs 的方式，为每类 Controller 事件都创建了对应的速率监控指标。
   val rateAndTimeMetrics: Map[ControllerState, Timer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>
       state -> metricsGroup.newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
