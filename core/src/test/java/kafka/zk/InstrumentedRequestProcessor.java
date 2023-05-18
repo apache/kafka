@@ -71,7 +71,6 @@ public class InstrumentedRequestProcessor extends FinalRequestProcessor {
         request = expectedReceiptEvent.maybeDecorate(request);
 
         log.info("Processing request: " + request);
-        expectedReceiptEvent.serverReceived();
 
         try {
             super.processRequest(request);

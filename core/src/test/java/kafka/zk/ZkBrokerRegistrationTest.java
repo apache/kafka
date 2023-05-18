@@ -23,20 +23,20 @@ import kafka.server.KafkaConfig;
 import kafka.zookeeper.ZooKeeperClient;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.client.ZKClientConfig;
-import org.apache.zookeeper.server.PrepRequestProcessor;
-import org.apache.zookeeper.server.RequestProcessor;
 import org.apache.zookeeper.server.ServerCnxnFactory;
-import org.apache.zookeeper.server.SyncRequestProcessor;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.lang.reflect.Field;
 import java.net.ServerSocket;
 import java.nio.file.Files;
@@ -59,6 +59,7 @@ import static org.apache.zookeeper.client.ZKClientConfig.ZOOKEEPER_CLIENT_CNXN_S
  * not known by the broker. See KAFKA-14845 for an example of timeline of events requires to reproduce
  * the use case.
  */
+@Tag("integration")
 public class ZkBrokerRegistrationTest {
     private static final Logger log = LoggerFactory.getLogger(ZkBrokerRegistrationTest.class);
 
@@ -66,14 +67,13 @@ public class ZkBrokerRegistrationTest {
     private BrokerInfo brokerInfo;
     private int zkPort;
 
-    private class SandboxedZookeeper extends Thread {
-        private final CountDownLatch zookeeperStopLatch;
+    private volatile boolean isActive = true;
+
+    private class SandboxedZookeeper extends Thread implements Closeable {
         private final CountDownLatch zookeeperStartLatch = new CountDownLatch(1);
         private final ZkTestContext spec;
-        private InstrumentedRequestProcessor processor;
 
-        SandboxedZookeeper(CountDownLatch zookeeperStopLatch, ZkTestContext spec) {
-            this.zookeeperStopLatch = zookeeperStopLatch;
+        SandboxedZookeeper(ZkTestContext spec) {
             this.spec = spec;
         }
 
@@ -101,17 +101,7 @@ public class ZkBrokerRegistrationTest {
                     config.getClientPortListenBacklog(),
                     null,
                     config.getInitialConfig(),
-                    spec) {
-
-                    @Override
-                    protected void setupRequestProcessors() {
-                        processor = new InstrumentedRequestProcessor(this, spec);
-                        RequestProcessor syncProcessor = new SyncRequestProcessor(this, processor);
-                        ((SyncRequestProcessor) syncProcessor).start();
-                        firstProcessor = new PrepRequestProcessor(this, syncProcessor);
-                        ((PrepRequestProcessor) firstProcessor).start();
-                    }
-                };
+                    spec);
 
                 cnxnFactory = ServerCnxnFactory.createFactory();
                 cnxnFactory.configure(
@@ -122,7 +112,21 @@ public class ZkBrokerRegistrationTest {
                 cnxnFactory.startup(zookeeper);
 
                 zookeeperStartLatch.countDown();
-                zookeeperStopLatch.await();
+
+                while (isActive) {
+                    try {
+                        synchronized (this) {
+                            wait();
+                        }
+                    } catch (InterruptedException e) {
+                        if (isActive) {
+                            log.debug("Sandboxed Zookeeper thread interrupted but still active," +
+                                "not shutting down Zookeeper.");
+                        }
+                    }
+                }
+
+                log.info("Shutting down sandboxed Zookeeper.");
 
             } catch (Exception e) {
                 log.error("Error while starting the Zookeeper server", e);
@@ -149,6 +153,12 @@ public class ZkBrokerRegistrationTest {
                 }
             }
         }
+
+        @Override
+        public void close() {
+            isActive = false;
+            interrupt();
+        }
     }
 
     @BeforeEach
@@ -167,7 +177,7 @@ public class ZkBrokerRegistrationTest {
     }
 
     @Test
-    public void simulateRegistrationFailure() throws Exception {
+    public void simulateRegistrationFailure() throws Throwable {
         // The second session is created on the server, but the response not sent to the client.
         ReceiptEvent secondZookeeperSession = new ReceiptEvent(ZooDefs.OpCode.createSession, false);
 
@@ -239,32 +249,34 @@ public class ZkBrokerRegistrationTest {
             connectionTimeline,
             sessionExpirationTimeline);
 
-        // Instantiates a standalone single-node Zookeeper server.
-        CountDownLatch zookeeperStopLatch = new CountDownLatch(1);
-        SandboxedZookeeper zookeeper = new SandboxedZookeeper(zookeeperStopLatch, testContext);
-        zookeeper.start();
-        zookeeper.zookeeperStartLatch.await();
-
-        System.setProperty(ZOOKEEPER_CLIENT_CNXN_SOCKET, "ClientCnxnSocketNetty");
-
-        // Instantiates the Zookeeper client running in Kafka.
-        ZooKeeperClient zookeeperClient = new ZooKeeperClient(
-            kafkaConfig.zkConnect(),
-            kafkaConfig.zkSessionTimeoutMs(),
-            kafkaConfig.zkConnectionTimeoutMs(),
-            kafkaConfig.zkMaxInFlightRequests(),
-            Time.SYSTEM,
-            "kafka.server",
-            "SessionExpireListener",
-            new ZKClientConfig(),
-            "ZkClient");
-
-        KafkaZkClient client = new KafkaZkClient(zookeeperClient, false, Time.SYSTEM);
-
-        client.makeSurePersistentPathExists(BrokerIdsZNode.path());
-        client.registerBroker(brokerInfo);
+        SandboxedZookeeper zookeeper = null;
+        KafkaZkClient client = null;
 
         try {
+            // Instantiates a standalone single-node Zookeeper server.
+            zookeeper = new SandboxedZookeeper(testContext);
+            zookeeper.start();
+            zookeeper.zookeeperStartLatch.await();
+
+            System.setProperty(ZOOKEEPER_CLIENT_CNXN_SOCKET, "ClientCnxnSocketNetty");
+
+            // Instantiates the Zookeeper client running in Kafka.
+            ZooKeeperClient zookeeperClient = new ZooKeeperClient(
+                kafkaConfig.zkConnect(),
+                kafkaConfig.zkSessionTimeoutMs(),
+                kafkaConfig.zkConnectionTimeoutMs(),
+                kafkaConfig.zkMaxInFlightRequests(),
+                Time.SYSTEM,
+                "kafka.server",
+                "SessionExpireListener",
+                new ZKClientConfig(),
+                "ZkClient");
+
+            client = new KafkaZkClient(zookeeperClient, false, Time.SYSTEM);
+
+            client.makeSurePersistentPathExists(BrokerIdsZNode.path());
+            client.registerBroker(brokerInfo);
+
             // Send the multi(14) to create the broker znode only once the second session is created
             // on the server although not acknowledged by the client.
             secondZookeeperSession.awaitProcessed();
@@ -288,11 +300,8 @@ public class ZkBrokerRegistrationTest {
             //     at kafka.repro.BrokerRegistrationTest.main(BrokerRegistrationTest.java:137)
         } finally {
             testContext.terminate();
-
-            // Delete znode so that we don't need for the znode to expire to rerun the test.
-            client.deletePath(brokerInfo.path(), -1, false);
-            client.close();
-            zookeeperStopLatch.countDown();
+            Utils.closeQuietly(client, "KafkaAdminClient");
+            Utils.closeQuietly(zookeeper, "Sandboxed Zookeeper");
         }
     }
 }

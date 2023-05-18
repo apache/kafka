@@ -17,8 +17,11 @@
 package kafka.zk;
 
 import org.apache.zookeeper.server.ClientCnxnLimitException;
+import org.apache.zookeeper.server.PrepRequestProcessor;
+import org.apache.zookeeper.server.RequestProcessor;
 import org.apache.zookeeper.server.ServerCnxn;
 import org.apache.zookeeper.server.SessionTracker;
+import org.apache.zookeeper.server.SyncRequestProcessor;
 import org.apache.zookeeper.server.ZKDatabase;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
@@ -60,6 +63,15 @@ public class InstrumentedZooKeeperServer extends ZooKeeperServer {
             initialConfig
         );
         this.testContext = testContext;
+    }
+
+    @Override
+    protected void setupRequestProcessors() {
+        InstrumentedRequestProcessor processor = new InstrumentedRequestProcessor(this, testContext);
+        RequestProcessor syncProcessor = new SyncRequestProcessor(this, processor);
+        ((SyncRequestProcessor) syncProcessor).start();
+        firstProcessor = new PrepRequestProcessor(this, syncProcessor);
+        ((PrepRequestProcessor) firstProcessor).start();
     }
 
     @Override

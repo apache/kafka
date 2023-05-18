@@ -20,21 +20,15 @@ import org.apache.zookeeper.server.MutedServerCxn;
 import org.apache.zookeeper.server.Request;
 import org.apache.zookeeper.server.ServerCnxn;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Event corresponding to the invocation of the Zookeeper request processor for a request.
  */
 public class ReceiptEvent {
     private final int opCode;
-    private final Lock lock = new ReentrantLock();
-    private final Condition received = lock.newCondition();
-    private final Condition processed = lock.newCondition();
-    private State state = State.notReceived;
+    private final CompletableFuture<Void> processed = new CompletableFuture<>();
     private boolean sendResponse;
 
     public ReceiptEvent(int opCode, boolean sendResponse) {
@@ -46,26 +40,8 @@ public class ReceiptEvent {
         return request.type == opCode;
     }
 
-    public void serverReceived() {
-        lock.lock();
-        try {
-            state = Collections.max(Arrays.asList(state, State.received));
-            received.signalAll();
-
-        } finally {
-            lock.unlock();
-        }
-    }
-
     public void serverProcessed() {
-        lock.lock();
-        try {
-            state = Collections.max(Arrays.asList(state, State.processed));
-            processed.signalAll();
-
-        } finally {
-            lock.unlock();
-        }
+        processed.complete(null);
     }
 
     public Request maybeDecorate(Request request) {
@@ -76,25 +52,16 @@ public class ReceiptEvent {
         return new DelegatingRequest(unresponsiveCxn, request);
     }
 
-    public void awaitProcessed() throws InterruptedException {
-        lock.lock();
+    public void awaitProcessed() throws Throwable {
         try {
-            while (state.compareTo(State.processed) < 0) {
-                processed.await();
-            }
-        } finally {
-            lock.unlock();
+            processed.get();
+        } catch (ExecutionException e) {
+            throw e.getCause();
         }
     }
 
     @Override
     public String toString() {
         return "Received: " + Request.op2String(opCode);
-    }
-
-    enum State {
-        notReceived,
-        received,
-        processed;
     }
 }
