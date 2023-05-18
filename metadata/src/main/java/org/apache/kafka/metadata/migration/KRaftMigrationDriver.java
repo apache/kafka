@@ -623,14 +623,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
+            // Propagator should be aware of any MV updates since it depends on this version to
+            // send the appropriate requests to the Zk brokers during migration.
+            if (delta.featuresDelta() != null) {
+                propagator.setMetadataVersion(image.features().metadataVersion());
+            }
+
             if (migrationState != MigrationDriverState.DUAL_WRITE) {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                     "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 completionHandler.accept(null);
                 return;
-            }
-            if (delta.featuresDelta() != null) {
-                propagator.setMetadataVersion(image.features().metadataVersion());
             }
 
             if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
