@@ -1687,6 +1687,11 @@ class KafkaApis(val requestChannel: RequestChannel,// 请求通道,SocketServer�
     }
   }
 
+  /**
+   * 这是处理 ListGroupsRequest 请求的方法。这类请求的 Response 应该返回集群中的消费者组信息。
+   * @param request
+   * @return
+   */
   def handleListGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val listGroupsRequest = request.body[ListGroupsRequest]
     val hasClusterDescribe = authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
@@ -1698,11 +1703,13 @@ class KafkaApis(val requestChannel: RequestChannel,// 请求通道,SocketServer�
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, listGroupsRequest.getErrorResponse(exception))
       } else {
-        val listGroupsResponse = if (hasClusterDescribe) {
+        val listGroupsResponse = if (hasClusterDescribe) { // 如果Clients具备CLUSTER资源的DESCRIBE权限
           // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
+          // 直接使用刚才拿到的Group数据封装进Response然后发送
           new ListGroupsResponse(response)
         } else {
           // Otherwise, only groups with described group are returned.
+          // 找出Clients对哪些Group有GROUP资源的DESCRIBE权限，返回这些Group信息
           val authorizedGroups = response.groups.asScala.filter { group =>
             authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false)
           }
