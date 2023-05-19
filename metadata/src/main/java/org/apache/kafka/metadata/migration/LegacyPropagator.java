@@ -35,6 +35,4 @@ public interface LegacyPropagator {
     void sendRPCsToBrokersFromMetadataImage(MetadataImage image, int zkControllerEpoch);
 
     void clear();
-
-    void setMetadataVersion(MetadataVersion metadataVersion);
 }

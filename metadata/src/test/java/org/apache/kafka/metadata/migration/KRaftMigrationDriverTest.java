@@ -163,11 +163,6 @@ public class KRaftMigrationDriverTest {
         public void clear() {
 
         }
-
-        @Override
-        public void setMetadataVersion(MetadataVersion metadataVersion) {
-
-        }
     }
 
     RegisterBrokerRecord zkBrokerRecord(int id) {
