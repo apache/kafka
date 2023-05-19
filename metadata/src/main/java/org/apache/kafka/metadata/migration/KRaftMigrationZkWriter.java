@@ -156,13 +156,12 @@ public class KRaftMigrationZkWriter {
 
         // Check for any partition changes in existing topics.
         for (Uuid topicId : topicsInZk) {
-            if (changedTopics.contains(topicId))
-                continue;
             TopicImage topic = topicsImage.getTopic(topicId);
-            Map<Integer, PartitionRegistration> topicPartitionsInImage = topic.partitions();
-            partitionsInZk.getOrDefault(topicId, new HashSet<>()).forEach(topicPartitionsInImage::remove);
-            if (!topicPartitionsInImage.isEmpty()) {
-                newPartitions.put(topicId, topicPartitionsInImage);
+            Set<Integer> topicPartitionsInZk = partitionsInZk.getOrDefault(topicId, new HashSet<>());
+            if (!topicPartitionsInZk.equals(topic.partitions().keySet())) {
+                Map<Integer, PartitionRegistration> newTopicPartitions = new HashMap<>(topic.partitions());
+                topicPartitionsInZk.forEach(newTopicPartitions::remove);
+                newPartitions.put(topicId, newTopicPartitions);
                 changedTopics.add(topicId);
             }
         }

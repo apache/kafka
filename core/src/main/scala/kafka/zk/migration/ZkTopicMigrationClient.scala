@@ -196,7 +196,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     if (resultCodes.forall { case (_, code) => code.equals(Code.OK) } ) {
       state.withMigrationZkVersion(migrationZkVersion)
     } else {
-      throw new MigrationClientException(s"Failed to topic metadata: $topicName. ZK transaction had results $resultCodes")
+      throw new MigrationClientException(s"Failed to update topic metadata: $topicName. ZK transaction had results $resultCodes")
     }
   }
 
