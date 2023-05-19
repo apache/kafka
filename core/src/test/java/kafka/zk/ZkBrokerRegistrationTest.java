@@ -101,7 +101,8 @@ public class ZkBrokerRegistrationTest {
                     config.getClientPortListenBacklog(),
                     null,
                     config.getInitialConfig(),
-                    spec);
+                    spec) {
+                };
 
                 cnxnFactory = ServerCnxnFactory.createFactory();
                 cnxnFactory.configure(

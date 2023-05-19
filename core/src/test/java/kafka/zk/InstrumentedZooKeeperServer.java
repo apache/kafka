@@ -32,6 +32,8 @@ import java.nio.ByteBuffer;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 
+import static org.apache.zookeeper.server.ZkBrokerRegistrationStubs.newInstrumentedRequestProcessor;
+
 /**
  * A specialization of the ZooKeeperServer which allows to intercept new connection
  * and session expiration in order to validate they correspond to the expected test
@@ -67,7 +69,7 @@ public class InstrumentedZooKeeperServer extends ZooKeeperServer {
 
     @Override
     protected void setupRequestProcessors() {
-        InstrumentedRequestProcessor processor = new InstrumentedRequestProcessor(this, testContext);
+        RequestProcessor processor = newInstrumentedRequestProcessor(this, testContext);
         RequestProcessor syncProcessor = new SyncRequestProcessor(this, processor);
         ((SyncRequestProcessor) syncProcessor).start();
         firstProcessor = new PrepRequestProcessor(this, syncProcessor);

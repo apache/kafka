@@ -60,7 +60,7 @@ public class DelegatingRequest extends Request {
 
     @Override
     public String toString() {
-        return "(DelegatingRequest) " + delegate.toString();
+        return "(DelegatingRequest) " + delegate.toString() + " " + cnxn;
     }
 
     @Override

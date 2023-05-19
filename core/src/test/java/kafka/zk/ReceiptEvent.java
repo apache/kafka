@@ -16,12 +16,13 @@
  */
 package kafka.zk;
 
-import org.apache.zookeeper.server.MutedServerCxn;
 import org.apache.zookeeper.server.Request;
 import org.apache.zookeeper.server.ServerCnxn;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+
+import static org.apache.zookeeper.server.ZkBrokerRegistrationStubs.muteConnection;
 
 /**
  * Event corresponding to the invocation of the Zookeeper request processor for a request.
@@ -48,7 +49,8 @@ public class ReceiptEvent {
         if (sendResponse) {
             return request;
         }
-        ServerCnxn unresponsiveCxn = new MutedServerCxn(request.cnxn);
+
+        ServerCnxn unresponsiveCxn = muteConnection(request.cnxn);
         return new DelegatingRequest(unresponsiveCxn, request);
     }
 
