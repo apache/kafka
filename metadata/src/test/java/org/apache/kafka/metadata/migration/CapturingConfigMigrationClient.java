@@ -45,6 +45,11 @@ public class CapturingConfigMigrationClient implements ConfigMigrationClient {
     }
 
     @Override
+    public void iterateTopicConfigs(BiConsumer<String, Map<String, String>> configConsumer) {
+
+    }
+
+    @Override
     public ZkMigrationLeadershipState writeConfigs(ConfigResource configResource, Map<String, String> configMap, ZkMigrationLeadershipState state) {
         writtenConfigs.put(configResource, configMap);
         return state;

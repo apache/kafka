@@ -38,6 +38,8 @@ public interface ConfigMigrationClient {
 
     void iterateBrokerConfigs(BiConsumer<String, Map<String, String>> configConsumer);
 
+    void iterateTopicConfigs(BiConsumer<String, Map<String, String>> configConsumer);
+
     ZkMigrationLeadershipState writeConfigs(
         ConfigResource configResource,
         Map<String, String> configMap,
