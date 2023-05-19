@@ -52,7 +52,7 @@ public abstract class KafkaTopicBasedBackingStore {
     private Set<String> createTopics(NewTopic topicDescription, TopicAdmin admin, WorkerConfig config, Time time) {
         // get the prefixless default api timeout and retry backoff for topic creation retry configs
         AdminClientConfig adminClientConfig = new AdminClientConfig(config.originals());
-        long timeoutMs = adminClientConfig.getLong(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        long timeoutMs = adminClientConfig.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         long backOffMs = adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
         return admin.createTopicsWithRetry(topicDescription, timeoutMs, backOffMs, time);
     }
