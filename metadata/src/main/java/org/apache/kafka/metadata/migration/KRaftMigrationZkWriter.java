@@ -17,7 +17,6 @@
 
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
