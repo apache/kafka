@@ -338,6 +338,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         this.offset = -1;
         this.topicAdminSupplier = adminSupplier;
         this.clientId = Objects.requireNonNull(clientIdBase) + "configs";
+        this.time = time;
 
         this.baseProducerProps = baseProducerProps(config);
         // By default, Connect disables idempotent behavior for all producers, even though idempotence became
@@ -356,7 +357,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
         this.configTransformer = configTransformer;
-        this.time = time;
     }
 
     @Override
