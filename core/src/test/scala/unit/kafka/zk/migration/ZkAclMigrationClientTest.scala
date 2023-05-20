@@ -115,4 +115,10 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
       authorizer.close()
     }
   }
+
+
+  @Test
+  def testAclsChangesInSnapshot(): Unit = {
+    
+  }
 }
