@@ -351,12 +351,12 @@ public class KafkaStatusBackingStoreTest {
         store.read(consumerRecord(1, "status-task-conn-0", value));
 
         // The latest task status should reflect RUNNING status from the newer generation
-        TaskStatus status = new TaskStatus(TASK, ConnectorStatus.State.RUNNING, otherWorkerId, 10);
+        TaskStatus status = new TaskStatus(TASK, TaskStatus.State.RUNNING, otherWorkerId, 10);
         assertEquals(status, store.get(TASK));
 
         // This  status is from the another worker not necessarily belonging to the above group.
         // In this case, the status should get updated irrespective of whatever status info was present before.
-        TaskStatus latestStatus = new TaskStatus(TASK, ConnectorStatus.State.RUNNING, yetAnotherWorkerId, 1);
+        TaskStatus latestStatus = new TaskStatus(TASK, TaskStatus.State.RUNNING, yetAnotherWorkerId, 1);
         store.put(latestStatus);
         assertEquals(latestStatus, store.get(TASK));
     }
