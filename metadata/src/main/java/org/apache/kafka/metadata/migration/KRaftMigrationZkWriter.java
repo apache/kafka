@@ -200,6 +200,7 @@ public class KRaftMigrationZkWriter {
             .collect(Collectors.toSet());
         Set<ConfigResource> resourcesToUpdate = new HashSet<>();
         BiConsumer<ConfigResource, Map<String, String>> processConfigsForResource = (ConfigResource resource, Map<String, String> configs) -> {
+            newResources.remove(resource);
             Map<String, String> kraftProps = configsImage.configMapForResource(resource);
             if (!kraftProps.equals(configs)) {
                 resourcesToUpdate.add(resource);
@@ -213,7 +214,6 @@ public class KRaftMigrationZkWriter {
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
             processConfigsForResource.accept(topicResource, configs);
         });
-        newResources.removeAll(resourcesToUpdate);
 
         newResources.forEach(resource -> {
             Map<String, String> props = configsImage.configMapForResource(resource);
