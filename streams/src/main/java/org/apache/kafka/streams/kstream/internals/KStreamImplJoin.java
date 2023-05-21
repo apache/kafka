@@ -44,11 +44,11 @@ import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
@@ -60,7 +60,7 @@ class KStreamImplJoin {
     private final boolean rightOuter;
 
     static class TimeTrackerSupplier {
-        private final Map<TaskId, TimeTracker> tracker = new HashMap<>();
+        private final Map<TaskId, TimeTracker> tracker = new ConcurrentHashMap<>();
 
         public TimeTracker get(final TaskId taskId) {
             return tracker.computeIfAbsent(taskId, taskId1 -> new TimeTracker());
