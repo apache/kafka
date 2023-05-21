@@ -31,7 +31,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -591,14 +590,14 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             CacheEntry<TaskStatus> entry = getOrAdd(id);
 
             // During frequent rebalances, there could be a race condition because of which
-            // an UNASSIGNED state of a prior generation can be sent by a worker despite a
-            // RUNNING status in a newer generation by another worker because the first worker
-            // couldn't read the newer RUNNING status. This can lead to an inaccurate status
+            // an UNASSIGNED state of a prior or same generation can be sent by a worker despite a
+            // RUNNING status by another worker because the first worker
+            // couldn't read the latest RUNNING status. This can lead to an inaccurate status
             // representation even though the task might be actually running.
             if (status.state() == TaskStatus.State.UNASSIGNED
                     && entry.get() != null
                     && entry.get().state() == TaskStatus.State.RUNNING
-                    && entry.get().generation() > status.generation()) {
+                    && entry.get().generation() >= status.generation()) {
                 log.trace("Ignoring stale status {} in favour of more upto date status {}", status, entry.get());
                 return;
             }
