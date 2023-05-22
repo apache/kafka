@@ -85,15 +85,22 @@ class ControllerContext extends ControllerChannelContext {
   // 因为处于关闭状态的 Broker 是不适合执行某些操作的，如分区重分配（Reassignment）以及主题删除等。
   val shuttingDownBrokerIds = mutable.Set.empty[Int] // 该字段保存所有正在关闭中的 Broker ID 列表
   private val liveBrokers = mutable.Set.empty[Broker] // 当前运行中Broker对象列表
-  private val liveBrokerEpochs = mutable.Map.empty[Int, Long] // 运行中Broker Epoch列表
+  private val liveBrokerEpochs = mutable.Map.empty[Int, Long] // 运行中Broker ,Kafka 使用 Epoch 数据防止 Zombie Broker，即一个非常老的 Broker 被选举成为 Controller。
+  /**
+   * epoch 实际上就是 ZooKeeper 中 /controller_epoch 节点的值，你可以认为它就是 Controller 在整个 Kafka 集群的版本号，
+   * 而 epochZkVersion 实际上是 /controller_epoch 节点的 dataVersion 值。
+   * Kafka 使用 epochZkVersion 来判断和防止 Zombie Controller。
+   * 这也就是说，原先在老 Controller 任期内的 Controller 操作在新 Controller 不能成功执行，
+   * 因为新 Controller 的 epochZkVersion 要比老 Controller 的大。
+   */
   var epoch: Int = KafkaController.InitialControllerEpoch // Controller当前Epoch值
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion // Controller对应ZooKeeper节点的Epoch值
 
   val allTopics = mutable.Set.empty[String] // 集群主题列表
   var topicIds = mutable.Map.empty[String, Uuid]
   var topicNames = mutable.Map.empty[Uuid, String]
-  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]] // 主题分区的副本列表
-  private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch] // 主题分区的Leader/ISR副本信息
+  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]] // 主题分区的副本列表,该字段保存所有主题分区的副本分配情况。
+  private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch] // 每个分区对应的分区主副本，isr集合，还有controller的epoch数
   val partitionsBeingReassigned = mutable.Set.empty[TopicPartition] // 正处于副本重分配过程的主题分区列表
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState] // 主题分区状态列表
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState] // 主题分区的副本状态列表
@@ -215,18 +222,35 @@ class ControllerContext extends ControllerChannelContext {
     liveBrokerEpochs --= brokerIds
   }
 
+  /**
+   * 每当新增或移除已有 Broker 时，ZooKeeper 就会更新其保存的 Broker 数据，
+   * 从而引发 Controller 修改元数据，也就是会调用 updateBrokerMetadata 方法来增减 Broker 列表中的对象。
+   * @param oldMetadata
+   * @param newMetadata
+   */
   def updateBrokerMetadata(oldMetadata: Broker, newMetadata: Broker): Unit = {
     liveBrokers -= oldMetadata
     liveBrokers += newMetadata
   }
 
   // getter
+  /**
+   * liveBrokerEpochs 的 keySet 方法返回 Broker 序号列表，然后从中移除关闭中的 Broker 序号，
+   * 剩下的自然就是处于运行中的 Broker 序号列表了。
+   * 大多使用这个字段来获取所有运行中 Broker 的 ID 序号
+   * @return
+   */
   def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet.diff(shuttingDownBrokerIds)
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
   def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
 
+  /**
+   * Kafka 要获取某个 Broker 上的所有分区
+   * @param brokerId
+   * @return
+   */
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
       case (topic, topicReplicaAssignment) => topicReplicaAssignment.filter {
@@ -268,6 +292,11 @@ class ControllerContext extends ControllerChannelContext {
     }.toSet
   }
 
+  /**
+   * 如果 Kafka 要获取某个主题的所有分区对象
+   * @param topic
+   * @return
+   */
   def partitionsForTopic(topic: String): collection.Set[TopicPartition] = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).map {
       case (partition, _) => new TopicPartition(topic, partition)

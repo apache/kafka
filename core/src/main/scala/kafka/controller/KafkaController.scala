@@ -1669,12 +1669,13 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processTopicChange(): Unit = {
-    if (!isActive) return
-    val topics = zkClient.getAllTopicsInCluster(true)
-    val newTopics = topics -- controllerContext.allTopics
-    val deletedTopics = controllerContext.allTopics.diff(topics)
-    controllerContext.setAllTopics(topics)
+    if (!isActive) return // 如果Controller已经关闭，直接返回
+    val topics = zkClient.getAllTopicsInCluster(true) // 从ZooKeeper中获取当前所有主题列表
+    val newTopics = topics -- controllerContext.allTopics // 找出当前元数据中不存在、ZooKeeper中存在的主题，视为新增主题
+    val deletedTopics = controllerContext.allTopics.diff(topics) // 找出当前元数据中存在、ZooKeeper中不存在的主题，视为已删除主题
+    controllerContext.setAllTopics(topics) // 更新Controller元数据
 
+    // 为新增主题和已删除主题执行后续处理操作
     registerPartitionModificationsHandlers(newTopics.toSeq)
     val addedPartitionReplicaAssignment = zkClient.getReplicaAssignmentAndTopicIdForTopics(newTopics)
     deletedTopics.foreach(controllerContext.removeTopic)
@@ -2751,6 +2752,11 @@ case class PartitionAndReplica(topicPartition: TopicPartition, replica: Int) {
   }
 }
 
+/**
+ *
+ * @param leaderAndIsr
+ * @param controllerEpoch 可以理解是controller换了多少次。比如epoch = 5，说明controller前前后后更换过6次
+ */
 case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int) {
   override def toString: String = {
     val leaderAndIsrInfo = new StringBuilder
