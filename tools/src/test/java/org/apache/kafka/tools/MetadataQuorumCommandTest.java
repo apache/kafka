@@ -174,22 +174,22 @@ class MetadataQuorumCommandTest {
 
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1),
-    })
+    @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
     public void testHumanReadableTimestamps() {
-        String replicationOutput0 = ToolsTestUtils.captureStandardOut(() ->
+        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "-hr"));
+        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status", "-hr"));
+        String out0 = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
-        assertFalse(replicationOutput0.split("\n")[1].contains("ms ago"));
-        String replicationOutput1 = ToolsTestUtils.captureStandardOut(() ->
+        assertFalse(out0.split("\n")[1].matches("\\d*"));
+        String out1 = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication", "-hr")
         );
-        assertHumanReadable(replicationOutput1);
-        String replicationOutput2 = ToolsTestUtils.captureStandardOut(() ->
+        assertHumanReadable(out1);
+        String out2 = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication", "--human-readable")
          );
-        assertHumanReadable(replicationOutput2);
+        assertHumanReadable(out2);
     }
 
     private static void assertHumanReadable(String output) {

@@ -80,13 +80,11 @@ public class MetadataQuorumCommand {
             .addArgument("--bootstrap-server")
             .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.")
             .required(true);
-
         parser
             .addArgument("--command-config")
             .type(Arguments.fileType())
             .help("Property file containing configs to be passed to Admin Client.");
-        Subparsers subparsers = parser.addSubparsers().dest("command");
-        addDescribeParser(subparsers);
+        addDescribeSubParser(parser);
 
         Admin admin = null;
         try {
@@ -105,12 +103,15 @@ public class MetadataQuorumCommand {
                     boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
                     handleDescribeReplication(admin, humanReadable);
                 } else if (namespace.getBoolean("status")) {
+                    if (namespace.getBoolean("human_readable")) {
+                        throw new TerseException("The option -hr/--human-readable is only supported along with --replication");
+                    }
                     handleDescribeStatus(admin);
                 } else {
                     throw new TerseException("One of --status or --replication must be specified with describe sub-command");
                 }
             } else {
-                throw new IllegalStateException("Unknown command: " + command + ", only 'describe' is supported");
+                throw new IllegalStateException(format("Unknown command: %s, only 'describe' is supported", command));
             }
         } finally {
             if (admin != null)
@@ -128,7 +129,8 @@ public class MetadataQuorumCommand {
         }
     }
 
-    private static void addDescribeParser(Subparsers subparsers) {
+    private static void addDescribeSubParser(ArgumentParser parser) {
+        Subparsers subparsers = parser.addSubparsers().dest("command");
         Subparser describeParser = subparsers
             .addParser("describe")
             .help("Describe the metadata quorum info");
@@ -138,6 +140,7 @@ public class MetadataQuorumCommand {
             .addArgument("--status")
             .help("A short summary of the quorum status and the other provides detailed information about the status of replication.")
             .action(Arguments.storeTrue());
+
         ArgumentGroup replicationArgs = describeParser.addArgumentGroup("Replication");
         replicationArgs
             .addArgument("--replication")
