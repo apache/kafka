@@ -51,7 +51,19 @@ public class ReceiptEvent {
         }
 
         ServerCnxn unresponsiveCxn = muteConnection(request.cnxn);
-        return new DelegatingRequest(unresponsiveCxn, request);
+        Request muted = new Request(
+            unresponsiveCxn,
+            request.sessionId,
+            request.cxid,
+            request.type,
+            request.request,
+            request.authInfo);
+
+        muted.setTxn(request.getTxn());
+        muted.setHdr(request.getHdr());
+        muted.setOwner(request.getOwner());
+        muted.setTxnDigest(request.getTxnDigest());
+        return muted;
     }
 
     public void awaitProcessed() throws Throwable {
