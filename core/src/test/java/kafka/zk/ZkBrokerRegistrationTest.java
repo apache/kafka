@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.lang.reflect.Field;
 import java.net.ServerSocket;
 import java.nio.file.Files;
@@ -45,7 +44,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT;
@@ -66,101 +64,6 @@ public class ZkBrokerRegistrationTest {
     private KafkaConfig kafkaConfig;
     private BrokerInfo brokerInfo;
     private int zkPort;
-
-    private volatile boolean isActive = true;
-
-    private class SandboxedZookeeper extends Thread implements Closeable {
-        private final CountDownLatch zookeeperStartLatch = new CountDownLatch(1);
-        private final ZkTestContext spec;
-
-        SandboxedZookeeper(ZkTestContext spec) {
-            this.spec = spec;
-        }
-
-        public void run() {
-            ServerCnxnFactory cnxnFactory = null;
-
-            try {
-                Path dataDir = Files.createTempDirectory("zk");
-
-                Properties zkProperties = new Properties();
-                zkProperties.put("dataDir", dataDir.toFile().getPath());
-                zkProperties.put("clientPort", String.valueOf(zkPort));
-                zkProperties.put("serverCnxnFactory", "org.apache.zookeeper.server.NettyServerCnxnFactory");
-
-                QuorumPeerConfig config = new QuorumPeerConfig();
-                config.parseProperties(zkProperties);
-                FileTxnSnapLog txnLog = new FileTxnSnapLog(config.getDataLogDir(), config.getDataDir());
-
-                ZooKeeperServer zookeeper = new InstrumentedZooKeeperServer(
-                    null,
-                    txnLog,
-                    config.getTickTime(),
-                    config.getMinSessionTimeout(),
-                    config.getMaxSessionTimeout(),
-                    config.getClientPortListenBacklog(),
-                    null,
-                    config.getInitialConfig(),
-                    spec) {
-                };
-
-                cnxnFactory = ServerCnxnFactory.createFactory();
-                cnxnFactory.configure(
-                    config.getClientPortAddress(),
-                    config.getMaxClientCnxns(),
-                    config.getClientPortListenBacklog(),
-                    false);
-                cnxnFactory.startup(zookeeper);
-
-                zookeeperStartLatch.countDown();
-
-                while (isActive) {
-                    try {
-                        synchronized (this) {
-                            wait();
-                        }
-                    } catch (InterruptedException e) {
-                        if (isActive) {
-                            log.debug("Sandboxed Zookeeper thread interrupted but still active," +
-                                "not shutting down Zookeeper.");
-                        }
-                    }
-                }
-
-                log.info("Shutting down sandboxed Zookeeper.");
-
-            } catch (Exception e) {
-                log.error("Error while starting the Zookeeper server", e);
-
-            } finally {
-                try {
-                    // Zookeeper is not shutting down the Netty event executor which spins a non-daemon thread
-                    // so we have to manually shut it down.
-                    if (cnxnFactory != null) {
-                        Field channelGroupField = cnxnFactory.getClass().getDeclaredField("allChannels");
-                        channelGroupField.setAccessible(true);
-                        ChannelGroup channelGroup = (ChannelGroup) channelGroupField.get(cnxnFactory);
-
-                        Field executorField = channelGroup.getClass().getDeclaredField("executor");
-                        executorField.setAccessible(true);
-                        EventExecutor executor = (EventExecutor) executorField.get(channelGroup);
-
-                        executor.shutdownGracefully();
-                    }
-                    // This shuts down the Zookeeper server too.
-                    cnxnFactory.shutdown();
-                } catch (Exception e) {
-                    log.error("Error while shutting down Zookeeper", e);
-                }
-            }
-        }
-
-        @Override
-        public void close() {
-            isActive = false;
-            interrupt();
-        }
-    }
 
     @BeforeEach
     public void setup() throws Exception {
@@ -250,14 +153,12 @@ public class ZkBrokerRegistrationTest {
             connectionTimeline,
             sessionExpirationTimeline);
 
-        SandboxedZookeeper zookeeper = null;
+        ServerCnxnFactory cnxnFactory = null;
         KafkaZkClient client = null;
 
         try {
-            // Instantiates a standalone single-node Zookeeper server.
-            zookeeper = new SandboxedZookeeper(testContext);
-            zookeeper.start();
-            zookeeper.zookeeperStartLatch.await();
+            // Instantiate and start standalone single-node Zookeeper server.
+            cnxnFactory = startZookeeper(testContext);
 
             System.setProperty(ZOOKEEPER_CLIENT_CNXN_SOCKET, "ClientCnxnSocketNetty");
 
@@ -302,7 +203,66 @@ public class ZkBrokerRegistrationTest {
         } finally {
             testContext.terminate();
             Utils.closeQuietly(client, "KafkaAdminClient");
-            Utils.closeQuietly(zookeeper, "Sandboxed Zookeeper");
+            stopZookeeper(cnxnFactory);
+        }
+    }
+
+    private ServerCnxnFactory startZookeeper(ZkTestContext spec) throws Exception {
+        Path dataDir = Files.createTempDirectory("zk");
+
+        Properties zkProperties = new Properties();
+        zkProperties.put("dataDir", dataDir.toFile().getPath());
+        zkProperties.put("clientPort", String.valueOf(zkPort));
+        zkProperties.put("serverCnxnFactory", "org.apache.zookeeper.server.NettyServerCnxnFactory");
+
+        QuorumPeerConfig config = new QuorumPeerConfig();
+        config.parseProperties(zkProperties);
+        FileTxnSnapLog txnLog = new FileTxnSnapLog(config.getDataLogDir(), config.getDataDir());
+
+        ZooKeeperServer zookeeper = new InstrumentedZooKeeperServer(
+            null,
+            txnLog,
+            config.getTickTime(),
+            config.getMinSessionTimeout(),
+            config.getMaxSessionTimeout(),
+            config.getClientPortListenBacklog(),
+            null,
+            config.getInitialConfig(),
+            spec);
+
+        ServerCnxnFactory cnxnFactory = ServerCnxnFactory.createFactory();
+        cnxnFactory.configure(
+            config.getClientPortAddress(),
+            config.getMaxClientCnxns(),
+            config.getClientPortListenBacklog(),
+            false);
+
+        cnxnFactory.startup(zookeeper);
+        return cnxnFactory;
+    }
+
+    private void stopZookeeper(ServerCnxnFactory cnxnFactory) {
+        log.info("Shutting down sandboxed Zookeeper.");
+
+        try {
+            // Zookeeper is not shutting down the Netty event executor which spins a non-daemon thread
+            // so we have to manually shut it down.
+            if (cnxnFactory != null) {
+                Field channelGroupField = cnxnFactory.getClass().getDeclaredField("allChannels");
+                channelGroupField.setAccessible(true);
+                ChannelGroup channelGroup = (ChannelGroup) channelGroupField.get(cnxnFactory);
+
+                Field executorField = channelGroup.getClass().getDeclaredField("executor");
+                executorField.setAccessible(true);
+                EventExecutor executor = (EventExecutor) executorField.get(channelGroup);
+
+                executor.shutdownGracefully();
+            }
+            // This shuts down the Zookeeper server too.
+            cnxnFactory.shutdown();
+
+        } catch (Exception e) {
+            log.error("Error while shutting down Zookeeper", e);
         }
     }
 }
