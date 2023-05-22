@@ -21,12 +21,17 @@ import kafka.zk.ZkTestContext;
 import org.apache.jute.Record;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.proto.ReplyHeader;
+import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
+import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;

@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.client.ZKClientConfig;
 import org.apache.zookeeper.server.ServerCnxnFactory;
+import org.apache.zookeeper.server.ZkBrokerRegistrationStubs;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
