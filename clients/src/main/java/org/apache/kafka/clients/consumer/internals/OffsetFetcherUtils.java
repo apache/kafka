@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -67,6 +68,7 @@ class OffsetFetcherUtils {
 
     /**
      * Callback for the response of the list offset call.
+     *
      * @param listOffsetsResponse The response from the server.
      * @return {@link OffsetFetcherUtils.ListOffsetResult} extracted from the response, containing the fetched offsets
      * and partitions to retry.
@@ -220,11 +222,34 @@ class OffsetFetcherUtils {
         return partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
     }
 
+    void updateSubscriptionState(Map<TopicPartition, OffsetFetcherUtils.ListOffsetData> fetchedOffsets,
+                                 IsolationLevel isolationLevel) {
+        for (final Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+
+            // if the interested partitions are part of the subscriptions, use the returned offset to update
+            // the subscription state as well:
+            //   * with read-committed, the returned offset would be LSO;
+            //   * with read-uncommitted, the returned offset would be HW;
+            if (subscriptionState.isAssigned(partition)) {
+                final long offset = entry.getValue().offset;
+                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                    log.trace("Updating last stable offset for partition {} to {}", partition, offset);
+                    subscriptionState.updateLastStableOffset(partition, offset);
+                } else {
+                    log.trace("Updating high watermark for partition {} to {}", partition, offset);
+                    subscriptionState.updateHighWatermark(partition, offset);
+                }
+            }
+        }
+    }
+
     static class ListOffsetResult {
         final Map<TopicPartition, OffsetFetcherUtils.ListOffsetData> fetchedOffsets;
         final Set<TopicPartition> partitionsToRetry;
 
-        ListOffsetResult(Map<TopicPartition, OffsetFetcherUtils.ListOffsetData> fetchedOffsets, Set<TopicPartition> partitionsNeedingRetry) {
+        ListOffsetResult(Map<TopicPartition, OffsetFetcherUtils.ListOffsetData> fetchedOffsets,
+                         Set<TopicPartition> partitionsNeedingRetry) {
             this.fetchedOffsets = fetchedOffsets;
             this.partitionsToRetry = partitionsNeedingRetry;
         }
@@ -232,6 +257,11 @@ class OffsetFetcherUtils {
         ListOffsetResult() {
             this.fetchedOffsets = new HashMap<>();
             this.partitionsToRetry = new HashSet<>();
+        }
+
+        Map<TopicPartition, Long> offsetAndMetadataMap() {
+            return fetchedOffsets.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
         }
     }
 
