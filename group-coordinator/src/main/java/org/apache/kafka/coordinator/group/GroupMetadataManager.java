@@ -607,7 +607,7 @@ public class GroupMetadataManager {
         List<Record> records = new ArrayList<>();
 
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-        ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+        group.getOrMaybeCreateMember(memberId, false);
 
         log.info("[GroupId " + groupId + "] Member " + memberId + " left the consumer group.");
 
@@ -632,31 +632,6 @@ public class GroupMetadataManager {
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
         records.add(newGroupEpochRecord(groupId, groupEpoch));
-
-        // We update the target assignment for the group and write it to
-        // the log.
-        String assignorName = group.preferredServerAssignor(
-            member.memberId(),
-            Optional.empty()
-        ).orElse(defaultAssignor.name());
-
-        try {
-            TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
-                new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(assignorName))
-                    .withMembers(group.members())
-                    .withSubscriptionMetadata(subscriptionMetadata)
-                    .removeMember(member.memberId())
-                    .build();
-
-            log.info("[GroupId " + groupId + "] Computed a new target assignment for epoch " + groupEpoch + ": "
-                + assignmentResult.targetAssignment() + ".");
-
-            records.addAll(assignmentResult.records());
-        } catch (PartitionAssignorException ex) {
-            String msg = "Failed to compute a new target assignment for epoch " + groupEpoch + ": " + ex + ".";
-            log.error("[GroupId " + groupId + "] " + msg);
-            throw new UnknownServerException(msg, ex);
-        }
 
         return new Result<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)

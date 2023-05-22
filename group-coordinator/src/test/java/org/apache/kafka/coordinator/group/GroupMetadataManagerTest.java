@@ -1014,7 +1014,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testLeavingMemberTriggersNewTargetAssignment() {
+    public void testLeavingMemberBumpsGroupEpoch() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
         String memberId1 = Uuid.randomUuid().toString();
@@ -1072,13 +1072,6 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId1, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                mkTopicAssignment(barTopicId, 0, 1, 2)
-            )))
-        ));
-
         // Member 3 leaves the consumer group.
         Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
@@ -1107,12 +1100,7 @@ public class GroupMetadataManagerTest {
                     put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                 }
             }),
-            RecordHelpers.newGroupEpochRecord(groupId, 11),
-            RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                mkTopicAssignment(barTopicId, 0, 1, 2)
-            )),
-            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11)
+            RecordHelpers.newGroupEpochRecord(groupId, 11)
         );
 
         assertEquals(expectedRecords, result.records());
@@ -1963,58 +1951,6 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignor("range")
-                    .setTopicPartitions(Collections.emptyList())));
-    }
-
-    @Test
-    public void testPartitionAssignorExceptionOnLeaveHeartbeat() {
-        String groupId = "fooup";
-        // Use a static member id as it makes the test easier.
-        String memberId1 = Uuid.randomUuid().toString();
-
-        Uuid fooTopicId = Uuid.randomUuid();
-        String fooTopicName = "foo";
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
-
-        PartitionAssignor assignor = mock(PartitionAssignor.class);
-        when(assignor.assign(any())).thenThrow(new PartitionAssignorException("Assignment failed."));
-
-        // Consumer group with two members.
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
-            .withTopicsImage(new TopicsImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 6)
-                .addTopic(barTopicId, barTopicName, 3)
-                .build())
-            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                .withMember(new ConsumerGroupMember.Builder(memberId1)
-                    .setMemberEpoch(10)
-                    .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
-                    .setClientId("client")
-                    .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                    .setServerAssignorName("range")
-                    .setAssignedPartitions(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                        mkTopicAssignment(barTopicId, 0, 1)))
-                    .build())
-                .withAssignment(memberId1, mkAssignment(
-                    mkTopicAssignment(fooTopicId, 0, 1, 2),
-                    mkTopicAssignment(barTopicId, 0, 1)))
-                .withAssignmentEpoch(10))
-            .build();
-
-        // Member 3 leaves the consumer group.
-        assertThrows(UnknownServerException.class, () ->
-            context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                    .setGroupId(groupId)
-                    .setMemberId(memberId1)
-                    .setMemberEpoch(-1)
-                    .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setTopicPartitions(Collections.emptyList())));
     }
 
