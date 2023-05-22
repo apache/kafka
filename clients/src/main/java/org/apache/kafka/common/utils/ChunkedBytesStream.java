@@ -23,12 +23,14 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
- * ChunkedBytesStream is a copy of {@link ByteBufferInputStream} with the following differences:
+ * ChunkedBytesStream is a copy of {@link BufferedInputStream} with the following differences:
  * - Unlike {@link java.io.BufferedInputStream#skip(long)} this class could be configured to not push skip() to
  * input stream. We may want to avoid pushing this to input stream because it's implementation maybe inefficient,
  * e.g. the case of ZstdInputStream which allocates a new buffer from buffer pool, per skip call.
  * - Unlike {@link java.io.BufferedInputStream}, which allocates an intermediate buffer, this uses a buffer supplier to
  * create the intermediate buffer.
+ * - Unlike {@link java.io.BufferedInputStream}, this implementation does not support {@link InputStream#mark(int)} and
+ * {@link InputStream#markSupported()} will return false.
  * <p>
  * Note that:
  * - this class is not thread safe and shouldn't be used in scenarios where multiple threads access this.
@@ -74,11 +76,13 @@ public class ChunkedBytesStream extends FilterInputStream {
      */
     private final ByteBuffer intermediateBufRef;
     /**
-     * Determines if the skip be pushed down
+     * If this flag is true, we will delegate the responsibility of skipping to the
+     * sourceStream. This is an alternative to reading the data from source stream, storing in an intermediate buffer and
+     * skipping the values using this implementation.
      */
-    private final boolean pushSkipToSourceStream;
+    private final boolean delegateSkipToSourceStream;
 
-    public ChunkedBytesStream(InputStream in, BufferSupplier bufferSupplier, int intermediateBufSize, boolean pushSkipToSourceStream) {
+    public ChunkedBytesStream(InputStream in, BufferSupplier bufferSupplier, int intermediateBufSize, boolean delegateSkipToSourceStream) {
         super(in);
         this.bufferSupplier = bufferSupplier;
         intermediateBufRef = bufferSupplier.get(intermediateBufSize);
@@ -86,7 +90,7 @@ public class ChunkedBytesStream extends FilterInputStream {
             throw new IllegalArgumentException("provided ByteBuffer lacks array or has non-zero arrayOffset");
         }
         intermediateBuf = intermediateBufRef.array();
-        this.pushSkipToSourceStream = pushSkipToSourceStream;
+        this.delegateSkipToSourceStream = delegateSkipToSourceStream;
     }
 
     /**
@@ -101,8 +105,7 @@ public class ChunkedBytesStream extends FilterInputStream {
     }
 
     /**
-     * See
-     * the general contract of the <code>read</code>
+     * See the general contract of the <code>read</code>
      * method of <code>InputStream</code>.
      *
      * @return the next byte of data, or <code>-1</code> if the end of the
@@ -264,9 +267,9 @@ public class ChunkedBytesStream extends FilterInputStream {
      * stream be promptly closed if an I/O error occurs.
      * <p>
      * This method first skips and discards bytes in the intermediate buffer.
-     * After that, depending on the value of pushSkipToSourceStream, it either pushes down skippping of bytes to the
-     * sourceStream or it reads the data from input stream in chunks, copies the data into intermediate buffer
-     * and skips it.
+     * After that, depending on the value of {@link #delegateSkipToSourceStream}, it either delegates the skipping of
+     * bytes to the sourceStream or it reads the data from input stream in chunks, copies the data into intermediate
+     * buffer and skips it.
      * <p>
      * Starting JDK 12, a new method was introduced in InputStream, skipNBytes which has a similar behaviour as
      * this method.
@@ -292,7 +295,7 @@ public class ChunkedBytesStream extends FilterInputStream {
         remaining -= bytesSkipped;
 
         while (remaining > 0) {
-            if (pushSkipToSourceStream) {
+            if (delegateSkipToSourceStream) {
                 // Use sourceStream's skip() to skip the rest.
                 // conversion to int is acceptable because toSkip and remaining are int.
                 bytesSkipped = getInIfOpen().skip(remaining);

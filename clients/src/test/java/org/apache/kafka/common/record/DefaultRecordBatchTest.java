@@ -534,7 +534,8 @@ public class DefaultRecordBatchTest {
                 // verify the number of read() calls to zstd JNI stream. Each read() call is a JNI call.
                 verify(zstdStream, times(expectedJniCalls)).read(any(byte[].class), anyInt(), anyInt());
                 // verify that we don't use the underlying skip() functionality. The underlying skip() allocates
-                // 1 buffer per skip call from he buffer pool whereas our implementation
+                // 1 buffer per skip call from he buffer pool whereas our implementation does not perform any allocation
+                // during skip.
                 verify(zstdStream, never()).skip(anyLong());
             }
         }

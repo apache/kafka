@@ -415,10 +415,16 @@ public class DefaultRecord implements Record {
 
 
     /**
-     * Skips n bytes from the data input.
+     * Skips over and discards exactly {@code bytesToSkip} bytes from the input stream.
+     *
+     * We require a loop over {@link InputStream#skip(long)} because it is possible for InputStream to skip smaller
+     * number of bytes than expected (see javadoc for InputStream#skip).
      *
      * No-op for case where bytesToSkip <= 0. This could occur for cases where field is expected to be null.
-     * @throws  InvalidRecordException if the number of bytes could not be skipped.
+     * @throws InvalidRecordException if end of stream is encountered before we could skip required bytes.
+     * @throws IOException is an I/O error occurs while trying to skip from InputStream.
+     * 
+     * @see java.io.InputStream#skip(long)
      */
     private static void skipBytes(InputStream in, int bytesToSkip) throws IOException {
         if (bytesToSkip <= 0) return;
