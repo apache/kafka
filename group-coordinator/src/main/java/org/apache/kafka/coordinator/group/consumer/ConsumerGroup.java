@@ -28,12 +28,10 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 
 /**
  * A Consumer Group. All the metadata in this class are backed by
@@ -88,6 +86,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, ConsumerGroupMember> members;
 
     /**
+     * The number of subscribers per topic.
+     */
+    private final TimelineHashMap<String, Integer> subscribedTopicNames;
+
+    /**
      * The metadata of the subscribed topics.
      */
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
@@ -120,6 +123,7 @@ public class ConsumerGroup implements Group {
         this.state = new TimelineObject<>(snapshotRegistry, ConsumerGroupState.EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.assignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.assignments = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -239,6 +243,7 @@ public class ConsumerGroup implements Group {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
+        maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateGroupState();
     }
@@ -394,46 +399,39 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Computes a new subscription metadata with a member's updated topic subscriptions.
+     * Computes the subscription metadata based on the current subscription and
+     * an updated member.
      *
-     * @param memberId                      The member id.
-     * @param updatedMemberSubscriptions    The member's updated topic subscriptions.
-     * @param topicsImage                   The topic metadata.
+     * @param oldMember     The old member.
+     * @param newMember     The new member.
+     * @param topicsImage   The topic metadata.
      *
      * @return The new subscription metadata as an immutable Map.
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        String memberId,
-        List<String> updatedMemberSubscriptions,
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember,
         TopicsImage topicsImage
     ) {
-        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscriptionMetadata().size());
+        // Copy and update the current subscriptions.
+        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
+        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
 
-        Consumer<List<String>> updateSubscription = subscribedTopicNames -> {
-            subscribedTopicNames.forEach(topicName ->
-                newSubscriptionMetadata.computeIfAbsent(topicName, __ -> {
-                    TopicImage topicImage = topicsImage.getTopic(topicName);
-                    if (topicImage == null) {
-                        return null;
-                    } else {
-                        return new TopicMetadata(
-                            topicImage.id(),
-                            topicImage.name(),
-                            topicImage.partitions().size()
-                        );
-                    }
-                })
-            );
-        };
-
-        if (updatedMemberSubscriptions != null) {
-            updateSubscription.accept(updatedMemberSubscriptions);
-        }
-
-        members.forEach((mid, member) -> {
-            if (!mid.equals(memberId)) {
-                updateSubscription.accept(member.subscribedTopicNames());
-            }
+        // Create the topic metadata for each subscribed topic.
+        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
+        subscribedTopicNames.forEach((topicName, count) -> {
+            newSubscriptionMetadata.computeIfAbsent(topicName, __ -> {
+                TopicImage topicImage = topicsImage.getTopic(topicName);
+                if (topicImage == null) {
+                    return null;
+                } else {
+                    return new TopicMetadata(
+                        topicImage.id(),
+                        topicImage.name(),
+                        topicImage.partitions().size()
+                    );
+                }
+            });
         });
 
         return Collections.unmodifiableMap(newSubscriptionMetadata);
@@ -456,6 +454,49 @@ public class ConsumerGroup implements Group {
             }
 
             state.set(ConsumerGroupState.STABLE);
+        }
+    }
+
+    /**
+     * Updates the subscribed topic names count.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateSubscribedTopicNames(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
+    }
+
+    /**
+     * Updates the subscription count.
+     *
+     * @param subscribedTopicCount  The map to update.
+     * @param oldMember             The old member.
+     * @param newMember             The new member.
+     */
+    private static void maybeUpdateSubscribedTopicNames(
+        Map<String, Integer> subscribedTopicCount,
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        if (oldMember != null) {
+            oldMember.subscribedTopicNames().forEach(topicName -> {
+                subscribedTopicCount.compute(topicName, (__, value) -> {
+                    if (value == null) return null;
+                    return value == 1 ? null : value - 1;
+                });
+            });
+        }
+
+        if (newMember != null) {
+            newMember.subscribedTopicNames().forEach(topicName -> {
+                subscribedTopicCount.compute(topicName, (__, value) -> {
+                    return value == null ? 1 : value + 1;
+                });
+            });
         }
     }
 

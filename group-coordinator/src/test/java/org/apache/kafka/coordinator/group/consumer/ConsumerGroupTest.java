@@ -26,10 +26,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -294,33 +294,147 @@ public class ConsumerGroupTest {
             .addTopic(zarTopicId, "zar", 3)
             .build();
 
-        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Arrays.asList("foo"))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setSubscribedTopicNames(Arrays.asList("bar"))
+            .build();
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
+            .setSubscribedTopicNames(Arrays.asList("zar"))
+            .build();
 
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .build());
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .build());
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member3")
-            .setSubscribedTopicNames(Arrays.asList("bar", "zar"))
-            .build());
+        ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
 
-        Map<String, TopicMetadata> expectedSubscriptionMetadata = new HashMap<>();
-        expectedSubscriptionMetadata.put("foo", new TopicMetadata(fooTopicId, "foo", 1));
-        expectedSubscriptionMetadata.put("bar", new TopicMetadata(barTopicId, "bar", 2));
-        expectedSubscriptionMetadata.put("zar", new TopicMetadata(zarTopicId, "zar", 3));
-        assertEquals(expectedSubscriptionMetadata, consumerGroup.computeSubscriptionMetadata(
-            null,
-            Collections.emptyList(),
-            image
-        ));
+        // It should be empty by default.
+        assertEquals(
+            Collections.emptyMap(),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                null,
+                image
+            )
+        );
 
-        expectedSubscriptionMetadata.remove("zar");
-        assertEquals(expectedSubscriptionMetadata, consumerGroup.computeSubscriptionMetadata(
-            "member3",
-            Collections.emptyList(),
-            image
-        ));
+        // Adding member1.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                member1,
+                image
+            )
+        );
+
+        // Updating the group with member1.
+        consumerGroup.updateMember(member1);
+
+        // It should return foo now.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                null,
+                image
+            )
+        );
+
+        // Removing member1 results in an empty map.
+        assertEquals(
+            Collections.emptyMap(),
+            consumerGroup.computeSubscriptionMetadata(
+                member1,
+                null,
+                image
+            )
+        );
+
+        // Adding member2 adds bar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                member2,
+                image
+            )
+        );
+
+        // Updating the group with member2.
+        consumerGroup.updateMember(member2);
+
+        // It should return foo and bar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                null,
+                image
+            )
+        );
+
+        // Removing member2 results in returning foo.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                member2,
+                null,
+                image
+            )
+        );
+
+        // Removing member1 results in returning bar.
+        assertEquals(
+            mkMap(
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                member1,
+                null,
+                image
+            )
+        );
+
+        // Adding member3 adds zar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                member3,
+                image
+            )
+        );
+
+        // Updating group with member3.
+        consumerGroup.updateMember(member3);
+
+        // It should return foo, bar and zar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                member3,
+                image
+            )
+        );
     }
 }

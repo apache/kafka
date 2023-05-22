@@ -496,8 +496,8 @@ public class GroupMetadataManager {
                     updatedMember.subscribedTopicNames());
 
                 subscriptionMetadata = group.computeSubscriptionMetadata(
-                    updatedMember.memberId(),
-                    updatedMember.subscribedTopicNames(),
+                    member,
+                    updatedMember,
                     topicsImage
                 );
 
@@ -607,7 +607,7 @@ public class GroupMetadataManager {
         List<Record> records = new ArrayList<>();
 
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-        group.getOrMaybeCreateMember(memberId, false);
+        ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
         log.info("[GroupId " + groupId + "] Member " + memberId + " left the consumer group.");
 
@@ -618,7 +618,7 @@ public class GroupMetadataManager {
 
         // We update the subscription metadata without the leaving member.
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-            memberId,
+            member,
             null,
             topicsImage
         );
