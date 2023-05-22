@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import java.util.concurrent.TimeUnit;
 
 /**
  * An interface to schedule and cancel operations.
  */
-@InterfaceStability.Unstable
 public interface Timer {
 
     /**
@@ -29,10 +28,10 @@ public interface Timer {
      * already exists, replace it with the new operation.
      *
      * @param key         The key to identify this operation.
-     * @param deadlineMs  The deadline to expire the operation in milliseconds.
-     * @param operation   The operation to perform.
+     * @param delay       The delay to wait before expiring.
+     * @param operation   The operation to perform upon expiration.
      */
-    void schedule(String key, long deadlineMs, Runnable operation);
+    void schedule(String key, TimeUnit delay, Runnable operation);
 
     /**
      * Remove an operation corresponding to a given key.
