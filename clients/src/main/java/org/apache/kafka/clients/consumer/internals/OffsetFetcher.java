@@ -184,24 +184,7 @@ public class OffsetFetcher {
                         result.fetchedOffsets.putAll(value.fetchedOffsets);
                         remainingToSearch.keySet().retainAll(value.partitionsToRetry);
 
-                        for (final Map.Entry<TopicPartition, ListOffsetData> entry: value.fetchedOffsets.entrySet()) {
-                            final TopicPartition partition = entry.getKey();
-
-                            // if the interested partitions are part of the subscriptions, use the returned offset to update
-                            // the subscription state as well:
-                            //   * with read-committed, the returned offset would be LSO;
-                            //   * with read-uncommitted, the returned offset would be HW;
-                            if (subscriptions.isAssigned(partition)) {
-                                final long offset = entry.getValue().offset;
-                                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-                                    log.trace("Updating last stable offset for partition {} to {}", partition, offset);
-                                    subscriptions.updateLastStableOffset(partition, offset);
-                                } else {
-                                    log.trace("Updating high watermark for partition {} to {}", partition, offset);
-                                    subscriptions.updateHighWatermark(partition, offset);
-                                }
-                            }
-                        }
+                        offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
                     }
                 }
 
