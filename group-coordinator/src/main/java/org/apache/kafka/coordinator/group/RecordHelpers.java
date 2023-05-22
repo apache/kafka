@@ -372,7 +372,7 @@ public class RecordHelpers {
         GenericGroup group,
         MetadataVersion metadataVersion
     ) {
-        List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>();
+        List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>(group.allMembers().size());
         group.allMembers().forEach(member -> {
             byte[] subscription = group.protocolName().map(member::metadata).orElse(null);
             if (subscription == null) {

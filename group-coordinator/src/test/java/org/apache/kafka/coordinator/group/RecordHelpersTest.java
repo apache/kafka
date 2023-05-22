@@ -457,7 +457,7 @@ public class RecordHelpersTest {
                     .setGeneration(1)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-            expectedGroupMetadataValueVersion));
+                expectedGroupMetadataValueVersion));
 
         GenericGroup group = new GenericGroup(
             new LogContext(),
