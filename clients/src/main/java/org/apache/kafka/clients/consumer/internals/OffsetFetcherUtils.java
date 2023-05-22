@@ -69,6 +69,7 @@ class OffsetFetcherUtils {
 
     /**
      * Callback for the response of the list offset call.
+     *
      * @param listOffsetsResponse The response from the server.
      * @return {@link OffsetFetcherUtils.ListOffsetResult} extracted from the response, containing the fetched offsets
      * and partitions to retry.
@@ -273,6 +274,11 @@ class OffsetFetcherUtils {
         ListOffsetResult() {
             this.fetchedOffsets = new HashMap<>();
             this.partitionsToRetry = new HashSet<>();
+        }
+
+        Map<TopicPartition, Long> offsetAndMetadataMap() {
+            return fetchedOffsets.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
         }
     }
 
