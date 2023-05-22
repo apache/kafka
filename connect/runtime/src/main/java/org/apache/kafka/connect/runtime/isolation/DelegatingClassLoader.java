@@ -243,50 +243,47 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     private void initPluginLoader(String path) {
-        try {
-            if (CLASSPATH_NAME.equals(path)) {
-                scanUrlsAndAddPlugins(
-                        getParent(),
-                        ClasspathHelper.forJavaClassPath().toArray(new URL[0])
-                );
-            } else {
-                Path pluginPath = Paths.get(path).toAbsolutePath();
-                // Update for exception handling
-                path = pluginPath.toString();
-                // Currently 'plugin.paths' property is a list of top-level directories
-                // containing plugins
-                if (Files.isDirectory(pluginPath)) {
-                    for (Path pluginLocation : PluginUtils.pluginLocations(pluginPath)) {
-                        registerPlugin(pluginLocation);
-                    }
-                } else if (PluginUtils.isArchive(pluginPath)) {
-                    registerPlugin(pluginPath);
+        if (CLASSPATH_NAME.equals(path)) {
+            scanUrlsAndAddPlugins(
+                    getParent(),
+                    ClasspathHelper.forJavaClassPath().toArray(new URL[0])
+            );
+        } else {
+            Path pluginPath = Paths.get(path).toAbsolutePath();
+            // Currently 'plugin.paths' property is a list of top-level directories
+            // containing plugins
+            if (Files.isDirectory(pluginPath)) {
+                for (Path pluginLocation : PluginUtils.pluginLocations(pluginPath)) {
+                    registerPlugin(pluginLocation);
                 }
+            } else if (PluginUtils.isArchive(pluginPath)) {
+                registerPlugin(pluginPath);
             }
-        } catch (InvalidPathException | MalformedURLException e) {
-            log.error("Invalid path in plugin path: {}. Ignoring.", path, e);
-        } catch (IOException e) {
-            log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
         }
     }
 
-    private void registerPlugin(Path pluginLocation)
-        throws IOException {
-        log.info("Loading plugin from: {}", pluginLocation);
-        List<URL> pluginUrls = new ArrayList<>();
-        for (Path path : PluginUtils.pluginUrls(pluginLocation)) {
-            pluginUrls.add(path.toUri().toURL());
+    private void registerPlugin(Path pluginLocation) {
+        try {
+            log.info("Loading plugin from: {}", pluginLocation);
+            List<URL> pluginUrls = new ArrayList<>();
+            for (Path path : PluginUtils.pluginUrls(pluginLocation)) {
+                pluginUrls.add(path.toUri().toURL());
+            }
+            URL[] urls = pluginUrls.toArray(new URL[0]);
+            if (log.isDebugEnabled()) {
+                log.debug("Loading plugin urls: {}", Arrays.toString(urls));
+            }
+            PluginClassLoader loader = newPluginClassLoader(
+                    pluginLocation.toUri().toURL(),
+                    urls,
+                    this
+            );
+            scanUrlsAndAddPlugins(loader, urls);
+        } catch (InvalidPathException | MalformedURLException e) {
+            log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
+        } catch (IOException e) {
+            log.error("Could not register plugin at path: {}. Ignoring.", pluginLocation, e);
         }
-        URL[] urls = pluginUrls.toArray(new URL[0]);
-        if (log.isDebugEnabled()) {
-            log.debug("Loading plugin urls: {}", Arrays.toString(urls));
-        }
-        PluginClassLoader loader = newPluginClassLoader(
-                pluginLocation.toUri().toURL(),
-                urls,
-                this
-        );
-        scanUrlsAndAddPlugins(loader, urls);
     }
 
     private void scanUrlsAndAddPlugins(

@@ -188,7 +188,7 @@ public class PluginUtils {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
 
-    public static List<Path> pluginLocations(Path topPath) throws IOException {
+    public static List<Path> pluginLocations(Path topPath) {
         List<Path> locations = new ArrayList<>();
         try (
                 DirectoryStream<Path> listing = Files.newDirectoryStream(
@@ -199,6 +199,8 @@ public class PluginUtils {
             for (Path dir : listing) {
                 locations.add(dir);
             }
+        } catch (IOException e) {
+            log.error("Could not get listing for plugin path: {}. Ignoring.", topPath, e);
         }
         return locations;
     }

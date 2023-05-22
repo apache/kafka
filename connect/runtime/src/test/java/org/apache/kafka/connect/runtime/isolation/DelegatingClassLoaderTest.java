@@ -22,6 +22,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -52,27 +53,29 @@ public class DelegatingClassLoaderTest {
     }
 
     @Test
-    public void testLoadingUnloadedPluginClass() {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+    public void testLoadingUnloadedPluginClass() throws IOException {
+        try (DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 Collections.emptyList(),
                 DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
+        )) {
+            classLoader.initLoaders();
+            for (String pluginClassName : TestPlugins.pluginClasses()) {
+                assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
+            }
         }
     }
 
     @Test
-    public void testLoadingPluginClass() throws ClassNotFoundException {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+    public void testLoadingPluginClass() throws ClassNotFoundException, IOException {
+        try (DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 TestPlugins.pluginPath(),
                 DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertNotNull(classLoader.loadClass(pluginClassName));
-            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+        )) {
+            classLoader.initLoaders();
+            for (String pluginClassName : TestPlugins.pluginClasses()) {
+                assertNotNull(classLoader.loadClass(pluginClassName));
+                assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+            }
         }
     }
 
@@ -80,11 +83,12 @@ public class DelegatingClassLoaderTest {
     public void testLoadingInvalidUberJar() throws Exception {
         pluginDir.newFile("invalid.jar");
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+        try (DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+        )) {
+            classLoader.initLoaders();
+        }
     }
 
     @Test
@@ -92,31 +96,34 @@ public class DelegatingClassLoaderTest {
         pluginDir.newFolder("my-plugin");
         pluginDir.newFile("my-plugin/invalid.jar");
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+        try (DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+        )) {
+            classLoader.initLoaders();
+        }
     }
 
     @Test
-    public void testLoadingNoPlugins() {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+    public void testLoadingNoPlugins() throws IOException {
+        try (DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+        )) {
+            classLoader.initLoaders();
+        }
     }
 
     @Test
     public void testLoadingPluginDirEmpty() throws Exception {
         pluginDir.newFolder("my-plugin");
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+        try (DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
+        )) {
+            classLoader.initLoaders();
+        }
     }
 
     @Test
