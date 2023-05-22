@@ -535,8 +535,7 @@ public class ConsumerGroupMember {
      * @return A string representation of the current assignment state.
      */
     public String currentAssignmentSummary() {
-        return "CurrentAssignment(" +
-            ", memberEpoch=" + memberEpoch +
+        return "CurrentAssignment(memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
             ", nextMemberEpoch=" + nextMemberEpoch +
             ", state=" + state +

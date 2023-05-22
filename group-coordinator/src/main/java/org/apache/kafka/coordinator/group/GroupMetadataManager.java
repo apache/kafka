@@ -458,12 +458,13 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
+        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
-        // Get or create the member.
+        // Get or create the member. Note that member is the persisted member anytime
+        // in this method.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
-        ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
+        final ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
         throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
 
         if (memberEpoch == 0) {
@@ -512,8 +513,6 @@ public class GroupMetadataManager {
 
                 log.info("[GroupId " + groupId + "] Bumped group epoch to " + groupEpoch + ".");
             }
-
-            member = updatedMember;
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
@@ -522,8 +521,8 @@ public class GroupMetadataManager {
         Assignment targetAssignment = group.targetAssignment(memberId);
         if (groupEpoch > targetAssignmentEpoch) {
             String preferredServerAssignor = group.preferredServerAssignor(
-                member.memberId(),
-                member.serverAssignorName()
+                member,
+                updatedMember
             ).orElse(defaultAssignor.name());
 
             try {
@@ -532,14 +531,14 @@ public class GroupMetadataManager {
                         .withMembers(group.members())
                         .withSubscriptionMetadata(subscriptionMetadata)
                         .withTargetAssignment(group.targetAssignments())
-                        .addOrUpdateMember(member.memberId(), member)
+                        .addOrUpdateMember(memberId, updatedMember)
                         .build();
 
                 log.info("[GroupId " + groupId + "] Computed a new target assignment for epoch " + groupEpoch + ": "
                     + assignmentResult.targetAssignment() + ".");
 
                 records.addAll(assignmentResult.records());
-                targetAssignment = assignmentResult.targetAssignment().get(member.memberId());
+                targetAssignment = assignmentResult.targetAssignment().get(memberId);
                 targetAssignmentEpoch = groupEpoch;
             } catch (PartitionAssignorException ex) {
                 String msg = "Failed to compute a new target assignment for epoch " + groupEpoch + ": " + ex + ".";
@@ -551,8 +550,9 @@ public class GroupMetadataManager {
         // 3. Reconcile the member's assignment with the target assignment. This is only required if
         // the member is not stable or if a new target assignment has been installed.
         boolean assignmentUpdated = false;
-        if (member.state() != ConsumerGroupMember.MemberState.STABLE || member.nextMemberEpoch() != targetAssignmentEpoch) {
-            updatedMember = new CurrentAssignmentBuilder(member)
+        if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.nextMemberEpoch() != targetAssignmentEpoch) {
+            ConsumerGroupMember prevMember = updatedMember;
+            updatedMember = new CurrentAssignmentBuilder(updatedMember)
                 .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
                 .withCurrentPartitionEpoch(group::currentPartitionEpoch)
                 .withOwnedTopicPartitions(ownedTopicPartitions)
@@ -560,7 +560,7 @@ public class GroupMetadataManager {
 
             // Checking the reference is enough here because a new instance
             // is created only when the state has changed.
-            if (updatedMember != member) {
+            if (updatedMember != prevMember) {
                 assignmentUpdated = true;
                 records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
@@ -568,8 +568,6 @@ public class GroupMetadataManager {
                     member.currentAssignmentSummary() + " to " + updatedMember.currentAssignmentSummary() + ".");
 
                 // TODO(dajac) Starts or restarts the timer for the revocation timeout.
-
-                member = updatedMember;
             }
         }
 
@@ -577,8 +575,8 @@ public class GroupMetadataManager {
 
         // Prepare the response.
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
-            .setMemberId(member.memberId())
-            .setMemberEpoch(member.memberEpoch())
+            .setMemberId(updatedMember.memberId())
+            .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
 
         // The assignment is only provided in the following cases:
@@ -586,7 +584,7 @@ public class GroupMetadataManager {
         // 2. The member just joined or rejoined to group. This is signaled with epoch equals to zero;
         // 3. The member's assignment has been updated.
         if (ownedTopicPartitions != null || memberEpoch == 0 || assignmentUpdated) {
-            response.setAssignment(createResponseAssignment(member));
+            response.setAssignment(createResponseAssignment(updatedMember));
         }
 
         return new Result<>(records, response);

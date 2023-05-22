@@ -86,6 +86,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, ConsumerGroupMember> members;
 
     /**
+     * The number of members per server assignor name.
+     */
+    private final TimelineHashMap<String, Integer> serverAssignors;
+
+    /**
      * The number of subscribers per topic.
      */
     private final TimelineHashMap<String, Integer> subscribedTopicNames;
@@ -123,6 +128,7 @@ public class ConsumerGroup implements Group {
         this.state = new TimelineObject<>(snapshotRegistry, ConsumerGroupState.EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.assignmentEpoch = new TimelineInteger(snapshotRegistry);
@@ -244,6 +250,7 @@ public class ConsumerGroup implements Group {
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateSubscribedTopicNames(oldMember, newMember);
+        maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateGroupState();
     }
@@ -350,26 +357,18 @@ public class ConsumerGroup implements Group {
      * Compute the preferred (server side) assignor for the group while
      * using the provided assignor for the member.
      *
-     * @param updatedMemberId       The member id.
-     * @param serverAssignorNameOpt The assignor name.
+     * @param oldMember The old member.
+     * @param newMember The new member.
      *
      * @return An Optional containing the preferred assignor.
      */
     public Optional<String> preferredServerAssignor(
-        String updatedMemberId,
-        Optional<String> serverAssignorNameOpt
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
     ) {
-        Map<String, Integer> counts = new HashMap<>();
-
-        serverAssignorNameOpt.ifPresent(serverAssignorName ->
-            counts.put(serverAssignorName, 1)
-        );
-
-        members.forEach((memberId, member) -> {
-            if (!memberId.equals(updatedMemberId) && member.serverAssignorName().isPresent()) {
-                counts.compute(member.serverAssignorName().get(), (k, v) -> v == null ? 1 : v + 1);
-            }
-        });
+        // Copy the current count and update it.
+        Map<String, Integer> counts = new HashMap<>(this.serverAssignors);
+        maybeUpdateServerAssignors(counts, oldMember, newMember);
 
         return counts.entrySet().stream()
             .max(Map.Entry.comparingByValue())
@@ -458,6 +457,43 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Updates the server assignors count.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateServerAssignors(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        maybeUpdateServerAssignors(serverAssignors, oldMember, newMember);
+    }
+
+    /**
+     * Updates the server assignors count.
+     *
+     * @param serverAssignorCount   The count to update.
+     * @param oldMember             The old member.
+     * @param newMember             The new member.
+     */
+    private static void maybeUpdateServerAssignors(
+        Map<String, Integer> serverAssignorCount,
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        if (oldMember != null) {
+            oldMember.serverAssignorName().ifPresent(name ->
+                serverAssignorCount.compute(name, ConsumerGroup::decValue)
+            );
+        }
+        if (newMember != null) {
+            newMember.serverAssignorName().ifPresent(name ->
+                serverAssignorCount.compute(name, ConsumerGroup::incValue)
+            );
+        }
+    }
+
+    /**
      * Updates the subscribed topic names count.
      *
      * @param oldMember The old member.
@@ -483,20 +519,15 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null) {
-            oldMember.subscribedTopicNames().forEach(topicName -> {
-                subscribedTopicCount.compute(topicName, (__, value) -> {
-                    if (value == null) return null;
-                    return value == 1 ? null : value - 1;
-                });
-            });
+            oldMember.subscribedTopicNames().forEach(topicName ->
+                subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
+            );
         }
 
         if (newMember != null) {
-            newMember.subscribedTopicNames().forEach(topicName -> {
-                subscribedTopicCount.compute(topicName, (__, value) -> {
-                    return value == null ? 1 : value + 1;
-                });
-            });
+            newMember.subscribedTopicNames().forEach(topicName ->
+                subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
+            );
         }
     }
 
@@ -584,5 +615,21 @@ public class ConsumerGroup implements Group {
                 return partitionsOrNull;
             });
         });
+    }
+
+    /**
+     * Decrements value by 1; returns null when reaching zero. This helper is
+     * meant to be used with Map#compute.
+     */
+    private static Integer decValue(String key, Integer value) {
+        if (value == null) return null;
+        return value == 1 ? null : value - 1;
+    }
+
+    /**
+     * Increments value by 1; This helper is meant to be used with Map#compute.
+     */
+    private static Integer incValue(String key, Integer value) {
+        return value == null ? 1 : value + 1;
     }
 }

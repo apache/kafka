@@ -246,39 +246,99 @@ public class ConsumerGroupTest {
     public void testPreferredServerAssignor() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member1")
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setServerAssignorName("range")
-            .build());
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member2")
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
             .setServerAssignorName("range")
-            .build());
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member3")
+            .build();
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
             .setServerAssignorName("uniform")
-            .build());
+            .build();
 
-        assertEquals(Optional.of("range"), consumerGroup.preferredServerAssignor(
-            null,
-            Optional.empty())
+        assertEquals(
+            Optional.empty(),
+            consumerGroup.preferredServerAssignor(null, null)
         );
 
-        assertEquals(Optional.of("uniform"), consumerGroup.preferredServerAssignor(
-            "member2",
-            Optional.of("uniform"))
+        assertEquals(
+            Optional.of("range"),
+            consumerGroup.preferredServerAssignor(null, member1)
         );
 
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member1")
-            .setServerAssignorName(null)
-            .build());
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member2")
-            .setServerAssignorName(null)
-            .build());
-        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member3")
-            .setServerAssignorName(null)
-            .build());
+        consumerGroup.updateMember(member1);
 
-        assertEquals(Optional.empty(), consumerGroup.preferredServerAssignor(
-            null,
-            Optional.empty())
+        assertEquals(
+            Optional.of("range"),
+            consumerGroup.preferredServerAssignor(null, null)
+        );
+
+        assertEquals(
+            Optional.empty(),
+            consumerGroup.preferredServerAssignor(member1, null)
+        );
+
+        assertEquals(
+            Optional.of("range"),
+            consumerGroup.preferredServerAssignor(null, member2)
+        );
+
+        consumerGroup.updateMember(member2);
+
+        assertEquals(
+            Optional.of("range"),
+            consumerGroup.preferredServerAssignor(null, null)
+        );
+
+        consumerGroup.updateMember(member3);
+
+        assertEquals(
+            Optional.of("range"),
+            consumerGroup.preferredServerAssignor(null, null)
+        );
+
+        // Members without assignors
+        ConsumerGroupMember updatedMember1 = new ConsumerGroupMember.Builder("member1")
+            .setServerAssignorName(null)
+            .build();
+        ConsumerGroupMember updatedMember2 = new ConsumerGroupMember.Builder("member2")
+            .setServerAssignorName(null)
+            .build();
+        ConsumerGroupMember updatedMember3 = new ConsumerGroupMember.Builder("member3")
+            .setServerAssignorName(null)
+            .build();
+
+
+        Optional<String> assignor = consumerGroup.preferredServerAssignor(member1, updatedMember1);
+        assertTrue(assignor.equals(Optional.of("range")) || assignor.equals(Optional.of("uniform")));
+
+        consumerGroup.updateMember(updatedMember1);
+
+        assignor = consumerGroup.preferredServerAssignor(member1, updatedMember1);
+        assertTrue(assignor.equals(Optional.of("range")) || assignor.equals(Optional.of("uniform")));
+
+        assertEquals(
+            Optional.of("uniform"),
+            consumerGroup.preferredServerAssignor(member2, updatedMember2)
+        );
+
+        consumerGroup.updateMember(updatedMember2);
+
+        assertEquals(
+            Optional.of("uniform"),
+            consumerGroup.preferredServerAssignor(null, null)
+        );
+
+        assertEquals(
+            Optional.empty(),
+            consumerGroup.preferredServerAssignor(member3, updatedMember3)
+        );
+
+        consumerGroup.updateMember(updatedMember3);
+
+        assertEquals(
+            Optional.empty(),
+            consumerGroup.preferredServerAssignor(null, null)
         );
     }
 
