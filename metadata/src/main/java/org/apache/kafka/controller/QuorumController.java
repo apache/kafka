@@ -104,6 +104,7 @@ import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
+import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -160,6 +161,14 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
+    /**
+     * The maximum records any user-initiated operation is allowed to generate.
+     */
+    final static int MAX_RECORDS_PER_USER_OP = 10000;
+
+    /**
+     * The maximum records that the controller will write in a single batch.
+     */
     private final static int MAX_RECORDS_PER_BATCH = 10000;
 
     /**
@@ -457,9 +466,13 @@ public final class QuorumController implements Controller {
         long endProcessingTime = time.nanoseconds();
         long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
         long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
-        if (exception instanceof ApiException) {
+        if ((exception instanceof ApiException) ||
+                (exception instanceof BoundedListTooLongException)) {
             log.info("{}: failed with {} in {} us. Reason: {}", name,
                 exception.getClass().getSimpleName(), deltaUs, exception.getMessage());
+            if (exception instanceof BoundedListTooLongException) {
+                exception = new UnknownServerException(exception.getMessage());
+            }
             return exception;
         }
         if (isActiveController()) {
@@ -2206,7 +2219,8 @@ public final class QuorumController implements Controller {
         }
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
-            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(context, topics);
+            final ControllerResult<List<CreatePartitionsTopicResult>> result =
+                    replicationControl.createPartitions(context, topics);
             if (validateOnly) {
                 log.debug("Validate-only CreatePartitions result(s): {}", result.response());
                 return result.withoutRecords();

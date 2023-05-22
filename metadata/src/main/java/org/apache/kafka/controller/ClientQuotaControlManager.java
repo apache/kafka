@@ -27,6 +27,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
@@ -42,6 +43,8 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class ClientQuotaControlManager {
@@ -64,7 +67,8 @@ public class ClientQuotaControlManager {
      */
     ControllerResult<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
             Collection<ClientQuotaAlteration> quotaAlterations) {
-        List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
+        List<ApiMessageAndVersion> outputRecords =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         Map<ClientQuotaEntity, ApiError> outputResults = new HashMap<>();
 
         quotaAlterations.forEach(quotaAlteration -> {

@@ -248,6 +248,7 @@ public class ClientQuotaControlManagerTest {
             new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
                 new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
                     setKey("request_percentage").setValue(60.60).setRemove(false), (short) 0));
+        records = new ArrayList<>(records);
         RecordTestUtils.deepSortRecords(records);
         RecordTestUtils.deepSortRecords(expectedRecords);
         assertEquals(expectedRecords, records);
