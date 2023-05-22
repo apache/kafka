@@ -21,7 +21,6 @@ import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
@@ -641,7 +640,7 @@ public class GroupMetadataManagerTest {
         context.replay(RecordHelpers.newCurrentAssignmentRecord(groupId, member));
 
         // Member epoch is greater than the expected epoch.
-        assertThrows(NotCoordinatorException.class, () ->
+        assertThrows(FencedMemberEpochException.class, () ->
             context.consumerGroupHeartbeat(
                 new ConsumerGroupHeartbeatRequestData()
                     .setGroupId(groupId)

@@ -371,17 +371,16 @@ public class GroupMetadataManager {
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) {
         if (receivedMemberEpoch > member.memberEpoch()) {
-            // The member has likely got a bump from another coordinator and this coordinator
-            // is stale. Return NOT_COORDINATOR to force the member to refresh its coordinator.
-            throw new NotCoordinatorException("The consumer group member has a larger member "
-                + "epoch (" + receivedMemberEpoch + ") than the one known by this group coordinator ("
-                + member.memberEpoch() + ").");
+            throw new FencedMemberEpochException("The consumer group member has a greater member "
+                + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
+                + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
         } else if (receivedMemberEpoch < member.memberEpoch()) {
             // If the member comes with the previous epoch and has a subset of the current assignment partitions,
             // we accept it because the response with the bumped epoch may have been lost.
             if (receivedMemberEpoch != member.previousMemberEpoch() || !isSubset(ownedTopicPartitions, member.assignedPartitions())) {
-                throw new FencedMemberEpochException("The consumer group member has an old member "
-                    + "epoch. The member must abandon all its partitions and rejoin.");
+                throw new FencedMemberEpochException("The consumer group member has a smaller member "
+                    + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
+                    + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
             }
         }
     }
