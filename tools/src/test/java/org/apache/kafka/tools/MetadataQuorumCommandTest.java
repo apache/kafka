@@ -183,12 +183,24 @@ class MetadataQuorumCommandTest {
         );
         assertFalse(replicationOutput0.split("\n")[1].contains("ms ago"));
         String replicationOutput1 = ToolsTestUtils.captureStandardOut(() ->
-            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "-hr", "describe", "--replication")
+            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication", "-hr")
         );
-        assertTrue(replicationOutput1.split("\n")[1].contains("ms ago"));
+        assertHumanReadable(replicationOutput1);
         String replicationOutput2 = ToolsTestUtils.captureStandardOut(() ->
-            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "--human-readable", "describe", "--replication")
+            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication", "--human-readable")
          );
-        assertTrue(replicationOutput2.split("\n")[1].contains("ms ago"));
+        assertHumanReadable(replicationOutput2);
+    }
+
+    private static void assertHumanReadable(String output) {
+        String dataRow = output.split("\n")[1];
+        String lastFetchTimestamp = dataRow.split("\t")[3];
+        String lastFetchTimestampValue = lastFetchTimestamp.split(" ")[0];
+        String lastCaughtUpTimestamp = dataRow.split("\t")[4];
+        String lastCaughtUpTimestampValue = lastCaughtUpTimestamp.split(" ")[0];
+        assertTrue(lastFetchTimestamp.contains("ms ago"));
+        assertTrue(lastFetchTimestampValue.matches("\\d*"));
+        assertTrue(lastCaughtUpTimestamp.contains("ms ago"));
+        assertTrue(lastCaughtUpTimestampValue.matches("\\d*"));
     }
 }

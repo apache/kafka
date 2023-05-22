@@ -26,12 +26,15 @@ import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.QuorumInfo;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.ToolsUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -82,10 +85,6 @@ public class MetadataQuorumCommand {
             .addArgument("--command-config")
             .type(Arguments.fileType())
             .help("Property file containing configs to be passed to Admin Client.");
-        parser
-            .addArgument("-hr", "--human-readable")
-            .action(Arguments.storeTrue())
-            .help("Print human-readable timestamps");
         Subparsers subparsers = parser.addSubparsers().dest("command");
         addDescribeParser(subparsers);
 
@@ -99,12 +98,12 @@ public class MetadataQuorumCommand {
             props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"));
             admin = Admin.create(props);
 
-            boolean readable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
             if (command.equals("describe")) {
                 if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
                     throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
                 } else if (namespace.getBoolean("replication")) {
-                    handleDescribeReplication(admin, readable);
+                    boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
+                    handleDescribeReplication(admin, humanReadable);
                 } else if (namespace.getBoolean("status")) {
                     handleDescribeStatus(admin);
                 } else {
@@ -144,17 +143,21 @@ public class MetadataQuorumCommand {
             .addArgument("--replication")
             .help("Detailed information about the status of replication")
             .action(Arguments.storeTrue());
+        replicationArgs
+            .addArgument("-hr", "--human-readable")
+            .help("Print human-readable timestamps")
+            .action(Arguments.storeTrue());
     }
 
-    private static void handleDescribeReplication(Admin admin, boolean readable) throws ExecutionException, InterruptedException {
+    private static void handleDescribeReplication(Admin admin, boolean humanReadable) throws ExecutionException, InterruptedException {
         QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
         int leaderId = quorumInfo.leaderId();
         QuorumInfo.ReplicaState leader = quorumInfo.voters().stream().filter(voter -> voter.replicaId() == leaderId).findFirst().get();
 
         List<List<String>> rows = new ArrayList<>();
-        rows.addAll(quorumInfoToRows(leader, Stream.of(leader), "Leader", readable));
-        rows.addAll(quorumInfoToRows(leader, quorumInfo.voters().stream().filter(v -> v.replicaId() != leaderId), "Follower", readable));
-        rows.addAll(quorumInfoToRows(leader, quorumInfo.observers().stream(), "Observer", readable));
+        rows.addAll(quorumInfoToRows(leader, Stream.of(leader), "Leader", humanReadable));
+        rows.addAll(quorumInfoToRows(leader, quorumInfo.voters().stream().filter(v -> v.replicaId() != leaderId), "Follower", humanReadable));
+        rows.addAll(quorumInfoToRows(leader, quorumInfo.observers().stream(), "Observer", humanReadable));
 
         ToolsUtils.prettyPrintTable(
             asList("NodeId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
@@ -166,16 +169,14 @@ public class MetadataQuorumCommand {
     private static List<List<String>> quorumInfoToRows(QuorumInfo.ReplicaState leader,
                                                        Stream<QuorumInfo.ReplicaState> infos,
                                                        String status,
-                                                       boolean readable) {
+                                                       boolean humanReadable) {
         return infos.map(info -> {
-            final double nowMs = System.currentTimeMillis();
             String lastFetchTimestamp = !info.lastFetchTimestamp().isPresent() ? "-1" :
-                valueOf(readable ? format("%.0f ms ago", nowMs - info.lastFetchTimestamp().getAsLong())
-                    : info.lastFetchTimestamp().getAsLong());
+                humanReadable ? format("%d ms ago", durationMs(info.lastFetchTimestamp().getAsLong())) :
+                    valueOf(info.lastFetchTimestamp().getAsLong());
             String lastCaughtUpTimestamp = !info.lastCaughtUpTimestamp().isPresent() ? "-1" :
-                valueOf(readable ? format("%.0f ms ago", nowMs - info.lastCaughtUpTimestamp().getAsLong())
-                    : info.lastCaughtUpTimestamp().getAsLong());
-
+                humanReadable ? format("%d ms ago", durationMs(info.lastCaughtUpTimestamp().getAsLong())) :
+                    valueOf(info.lastCaughtUpTimestamp().getAsLong());
             return Stream.of(
                 info.replicaId(),
                 info.logEndOffset(),
@@ -185,6 +186,15 @@ public class MetadataQuorumCommand {
                 status
             ).map(r -> r.toString()).collect(Collectors.toList());
         }).collect(Collectors.toList());
+    }
+
+    private static long durationMs(long timestampMs) {
+        Instant instant = Instant.ofEpochMilli(timestampMs);
+        Instant now = Instant.now();
+        if (!(instant.isAfter(Instant.EPOCH) && instant.isBefore(now))) {
+            throw new KafkaException("Invalid timestamp, possible drift in system clock");
+        }
+        return Duration.between(instant, now).toMillis();
     }
 
     private static void handleDescribeStatus(Admin admin) throws ExecutionException, InterruptedException {
