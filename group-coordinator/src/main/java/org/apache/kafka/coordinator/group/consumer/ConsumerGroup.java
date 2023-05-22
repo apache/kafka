@@ -235,6 +235,9 @@ public class ConsumerGroup implements Group {
      * @param newMember The new member state.
      */
     public void updateMember(ConsumerGroupMember newMember) {
+        if (newMember == null) {
+            throw new IllegalArgumentException("newMember cannot be null.");
+        }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateGroupState();
@@ -274,7 +277,7 @@ public class ConsumerGroup implements Group {
     /**
      * Returns the members keyed by their id.
      *
-     * @return A immutable Map containing all the members.
+     * @return An immutable Map containing all the members.
      */
     public Map<String, ConsumerGroupMember> members() {
         return Collections.unmodifiableMap(members);
@@ -310,9 +313,9 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns the target assignments for the entire group.
+     * Returns the target assignments for the entire group keyed by member id.
      *
-     * @return A immutable Map containing all the target assignments.
+     * @return An immutable Map containing all the target assignments.
      */
     public Map<String, Assignment> targetAssignments() {
         return Collections.unmodifiableMap(assignments);
@@ -379,7 +382,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the subscription metadata. This replace the previous one.
+     * Updates the subscription metadata. This replaces the previous one.
      *
      * @param subscriptionMetadata The new subscription metadata.
      */
@@ -391,8 +394,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Computes new subscription metadata but with specific information for
-     * a member.
+     * Computes a new subscription metadata with a member's updated topic subscriptions.
      *
      * @param memberId                      The member id.
      * @param updatedMemberSubscriptions    The member's updated topic subscriptions.
@@ -446,8 +448,7 @@ public class ConsumerGroup implements Group {
         } else if (groupEpoch.get() > assignmentEpoch.get()) {
             state.set(ConsumerGroupState.ASSIGNING);
         } else {
-            for (Map.Entry<String, ConsumerGroupMember> keyValue : members.entrySet()) {
-                ConsumerGroupMember member = keyValue.getValue();
+            for (ConsumerGroupMember member : members.values()) {
                 if (member.nextMemberEpoch() != assignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
                     state.set(ConsumerGroupState.RECONCILING);
                     return;
@@ -460,6 +461,9 @@ public class ConsumerGroup implements Group {
 
     /**
      * Updates the partition epochs based on the old and the new member.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
      */
     private void maybeUpdatePartitionEpoch(
         ConsumerGroupMember oldMember,
@@ -482,6 +486,8 @@ public class ConsumerGroup implements Group {
 
     /**
      * Removes the partition epochs for the provided member.
+     *
+     * @param oldMember The old member.
      */
     private void maybeRemovePartitionEpoch(
         ConsumerGroupMember oldMember
@@ -494,6 +500,8 @@ public class ConsumerGroup implements Group {
 
     /**
      * Removes the partition epochs based on the provided assignment.
+     *
+     * @param assignment    The assignment.
      */
     private void removePartitionEpochs(
         Map<Uuid, Set<Integer>> assignment
@@ -516,6 +524,9 @@ public class ConsumerGroup implements Group {
 
     /**
      * Adds the partitions epoch based on the provided assignment.
+     *
+     * @param assignment    The assignment.
+     * @param epoch         The new epoch.
      */
     private void addPartitionEpochs(
         Map<Uuid, Set<Integer>> assignment,
@@ -523,7 +534,9 @@ public class ConsumerGroup implements Group {
     ) {
         assignment.forEach((topicId, assignedPartitions) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
-                if (partitionsOrNull == null) partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, 1);
+                if (partitionsOrNull == null) {
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
+                }
                 for (Integer partitionId : assignedPartitions) {
                     partitionsOrNull.put(partitionId, epoch);
                 }
@@ -531,5 +544,4 @@ public class ConsumerGroup implements Group {
             });
         });
     }
-
 }

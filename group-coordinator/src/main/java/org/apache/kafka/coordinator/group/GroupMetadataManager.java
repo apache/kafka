@@ -210,8 +210,9 @@ public class GroupMetadataManager {
      * @return A ConsumerGroup.
      * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
      *                                  if the group is not a consumer group.
+     *
+     * Package private for testing.
      */
-    // Package private for testing.
     ConsumerGroup getOrMaybeCreateConsumerGroup(
         String groupId,
         boolean createIfNotExists
@@ -305,7 +306,7 @@ public class GroupMetadataManager {
     /**
      * Verifies that the partitions currently owned by the member (the ones set in the
      * request) matches the ones that the member should own. It matches if the consumer
-     * only owns partitions which are in the assigned partitions. If does not match if
+     * only owns partitions which are in the assigned partitions. It does not match if
      * it owns any other partitions.
      *
      * @param ownedTopicPartitions  The partitions provided by the consumer in the request.
@@ -355,7 +356,7 @@ public class GroupMetadataManager {
      * Validates the member epoch provided in the heartbeat request.
      *
      * @param member                The consumer group member.
-     * @param memberEpoch           The member epoch.
+     * @param receivedMemberEpoch   The member epoch.
      * @param ownedTopicPartitions  The owned partitions.
      *
      * @throws NotCoordinatorException if the provided epoch is ahead of the epoch known
@@ -366,19 +367,19 @@ public class GroupMetadataManager {
      */
     private void throwIfMemberEpochIsInvalid(
         ConsumerGroupMember member,
-        int memberEpoch,
+        int receivedMemberEpoch,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) {
-        if (memberEpoch > member.memberEpoch()) {
+        if (receivedMemberEpoch > member.memberEpoch()) {
             // The member has likely got a bump from another coordinator and this coordinator
             // is stale. Return NOT_COORDINATOR to force the member to refresh its coordinator.
             throw new NotCoordinatorException("The consumer group member has a larger member "
-                + "epoch (" + memberEpoch + ") than the one known by this group coordinator ("
+                + "epoch (" + receivedMemberEpoch + ") than the one known by this group coordinator ("
                 + member.memberEpoch() + ").");
-        } else if (memberEpoch < member.memberEpoch()) {
+        } else if (receivedMemberEpoch < member.memberEpoch()) {
             // If the member comes with the previous epoch and has a subset of the current assignment partitions,
             // we accept it because the response with the bumped epoch may have been lost.
-            if (memberEpoch != member.previousMemberEpoch() || !isSubset(ownedTopicPartitions, member.assignedPartitions())) {
+            if (receivedMemberEpoch != member.previousMemberEpoch() || !isSubset(ownedTopicPartitions, member.assignedPartitions())) {
                 throw new FencedMemberEpochException("The consumer group member has an old member "
                     + "epoch. The member must abandon all its partitions and rejoin.");
             }
@@ -413,7 +414,13 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handles a regular heartbeat from a consumer group member.
+     * Handles a regular heartbeat from a consumer group member. It mainly consists of
+     * three parts:
+     * 1) The member is created or updated. The group epoch is bumped if the member
+     *    has been created or updated.
+     * 2) The target assignment for the consumer group is updated if the group epoch
+     *    is larger than the current target assignment epoch.
+     * 3) The member's assignment is reconciled with the target assignment.
      *
      * @param groupId               The group id from the request.
      * @param memberId              The member id from the request.
@@ -448,11 +455,13 @@ public class GroupMetadataManager {
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
         List<Record> records = new ArrayList<>();
-        boolean createIfNotExists = memberEpoch == 0;
 
+        // Get or create the consumer group.
+        boolean createIfNotExists = memberEpoch == 0;
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
+        // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
         ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
         throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
@@ -461,9 +470,11 @@ public class GroupMetadataManager {
             log.info("[GroupId " + groupId + "] Member " + memberId + " re-joins the consumer group.");
         }
 
-        // Update the subscription part of the member if we received new values. If the member has
-        // changed, we write it to the log. If the subscribed topics have changed, we also recompute
-        // the subscription metadata.
+        // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
+        // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
+        // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
+        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
+        // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
         int groupEpoch = group.groupEpoch();
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
         ConsumerGroupMember updatedMember = new ConsumerGroupMember.Builder(member)
@@ -505,8 +516,8 @@ public class GroupMetadataManager {
             member = updatedMember;
         }
 
-        // Update target assignment if needed. If the new target has any changes, we write the
-        // changes to the log.
+        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
+        // delta between the current and the new target assignment is persisted to the partition.
         int targetAssignmentEpoch = group.assignmentEpoch();
         Assignment targetAssignment = group.targetAssignment(memberId);
         if (groupEpoch > targetAssignmentEpoch) {
@@ -537,12 +548,10 @@ public class GroupMetadataManager {
             }
         }
 
-        // If the member is stable and its next epoch matches the current target epoch
-        // of the assignment, we don't have to update its current assignment. Otherwise,
-        // we reconcile its current state based on the target assignment.
+        // 3. Reconcile the member's assignment with the target assignment. This is only required if
+        // the member is not stable or if a new target assignment has been installed.
         boolean assignmentUpdated = false;
-        if (member.state() != ConsumerGroupMember.MemberState.STABLE
-            || member.nextMemberEpoch() != targetAssignmentEpoch) {
+        if (member.state() != ConsumerGroupMember.MemberState.STABLE || member.nextMemberEpoch() != targetAssignmentEpoch) {
             updatedMember = new CurrentAssignmentBuilder(member)
                 .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
                 .withCurrentPartitionEpoch(group::currentPartitionEpoch)
@@ -566,11 +575,16 @@ public class GroupMetadataManager {
 
         // TODO(dajac) Starts or restarts the timer for the session timeout.
 
+        // Prepare the response.
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
             .setMemberId(member.memberId())
             .setMemberEpoch(member.memberEpoch())
             .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
 
+        // The assignment is only provided in the following cases:
+        // 1. The member reported its owned partitions;
+        // 2. The member just joined or rejoined to group. This is signaled with epoch equals to zero;
+        // 3. The member's assignment has been updated.
         if (ownedTopicPartitions != null || memberEpoch == 0 || assignmentUpdated) {
             response.setAssignment(createResponseAssignment(member));
         }
@@ -692,7 +706,8 @@ public class GroupMetadataManager {
 
     /**
      * Replays ConsumerGroupMemberMetadataKey/Value to update the hard state of
-     * the consumer group.
+     * the consumer group. It updates the subscription part of the member or
+     * delete the member.
      *
      * @param key   A ConsumerGroupMemberMetadataKey key.
      * @param value A ConsumerGroupMemberMetadataValue record.
@@ -727,7 +742,8 @@ public class GroupMetadataManager {
 
     /**
      * Replays ConsumerGroupMetadataKey/Value to update the hard state of
-     * the consumer group.
+     * the consumer group. It updates the group epoch of the consumer
+     * group or deletes the consumer group.
      *
      * @param key   A ConsumerGroupMetadataKey key.
      * @param value A ConsumerGroupMetadataValue record.
@@ -749,7 +765,8 @@ public class GroupMetadataManager {
             }
             if (!consumerGroup.targetAssignments().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + consumerGroup.targetAssignments().size() + " members.");
+                    + " but the target assignment still has " + consumerGroup.targetAssignments().size()
+                    + " members.");
             }
             if (consumerGroup.assignmentEpoch() != -1) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
@@ -762,7 +779,8 @@ public class GroupMetadataManager {
 
     /**
      * Replays ConsumerGroupPartitionMetadataKey/Value to update the hard state of
-     * the consumer group.
+     * the consumer group. It updates the subscription metadata of the consumer
+     * group.
      *
      * @param key   A ConsumerGroupPartitionMetadataKey key.
      * @param value A ConsumerGroupPartitionMetadataValue record.
@@ -787,7 +805,7 @@ public class GroupMetadataManager {
 
     /**
      * Replays ConsumerGroupTargetAssignmentMemberKey/Value to update the hard state of
-     * the consumer group.
+     * the consumer group. It updates the target assignment of the member or deletes it.
      *
      * @param key   A ConsumerGroupTargetAssignmentMemberKey key.
      * @param value A ConsumerGroupTargetAssignmentMemberValue record.
@@ -809,7 +827,8 @@ public class GroupMetadataManager {
 
     /**
      * Replays ConsumerGroupTargetAssignmentMetadataKey/Value to update the hard state of
-     * the consumer group.
+     * the consumer group. It updates the target assignment epoch or set it to -1 to signal
+     * that it has been deleted.
      *
      * @param key   A ConsumerGroupTargetAssignmentMetadataKey key.
      * @param value A ConsumerGroupTargetAssignmentMetadataValue record.
@@ -834,7 +853,7 @@ public class GroupMetadataManager {
 
     /**
      * Replays ConsumerGroupCurrentMemberAssignmentKey/Value to update the hard state of
-     * the consumer group.
+     * the consumer group. It updates the assignment of a member or deletes it.
      *
      * @param key   A ConsumerGroupCurrentMemberAssignmentKey key.
      * @param value A ConsumerGroupCurrentMemberAssignmentValue record.
