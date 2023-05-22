@@ -29,9 +29,10 @@ public interface Timer {
      *
      * @param key         The key to identify this operation.
      * @param delay       The delay to wait before expiring.
+     * @param unit        The delay unit.
      * @param operation   The operation to perform upon expiration.
      */
-    void schedule(String key, TimeUnit delay, Runnable operation);
+    void schedule(String key, long delay, TimeUnit unit, Runnable operation);
 
     /**
      * Remove an operation corresponding to a given key.
