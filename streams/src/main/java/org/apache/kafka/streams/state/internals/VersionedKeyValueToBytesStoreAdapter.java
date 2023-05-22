@@ -115,7 +115,7 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
 
     @Override
     public boolean isOpen() {
-        return inner.persistent();
+        return inner.isOpen();
     }
 
     @Override

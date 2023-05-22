@@ -68,7 +68,7 @@ public class KRaftMigrationZkWriter {
         this.operationConsumer = operationConsumer;
     }
 
-    public void handleSnapshot(MetadataImage image) {
+    public void handleLoadSnapshot(MetadataImage image) {
         handleTopicsSnapshot(image.topics());
         handleConfigsSnapshot(image.configs());
         handleClientQuotasSnapshot(image.clientQuotas(), image.scram());

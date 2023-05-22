@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class CurrentAssignmentBuilderTest {

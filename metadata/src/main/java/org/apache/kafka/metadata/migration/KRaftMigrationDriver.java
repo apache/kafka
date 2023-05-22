@@ -639,7 +639,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             if (isSnapshot) {
-                zkMetadataWriter.handleSnapshot(image);
+                zkMetadataWriter.handleLoadSnapshot(image);
             } else {
                 zkMetadataWriter.handleDelta(prevImage, image, delta);
             }

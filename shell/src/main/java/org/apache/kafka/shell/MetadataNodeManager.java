@@ -113,7 +113,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+        public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
             try {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();

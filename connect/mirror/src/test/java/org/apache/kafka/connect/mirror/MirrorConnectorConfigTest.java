@@ -43,7 +43,8 @@ public class MirrorConnectorConfigTest {
     @Test
     public void testSourceConsumerConfig() {
         Map<String, String> connectorProps = makeProps(
-                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.interval.ms", "120000"
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.interval.ms", "120000",
+                MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + "bootstrap.servers", "localhost:2345"
         );
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig("test");
@@ -52,11 +53,13 @@ public class MirrorConnectorConfigTest {
         expectedConsumerProps.put("auto.offset.reset", "earliest");
         expectedConsumerProps.put("max.poll.interval.ms", "120000");
         expectedConsumerProps.put("client.id", "source1->target2|ConnectorName|test");
+        expectedConsumerProps.put("bootstrap.servers", "localhost:2345");
         assertEquals(expectedConsumerProps, connectorConsumerProps);
 
         // checking auto.offset.reset override works
         connectorProps = makeProps(
-                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest"
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest",
+                MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + "bootstrap.servers", "localhost:2345"
         );
         config = new TestMirrorConnectorConfig(connectorProps);
         connectorConsumerProps = config.sourceConsumerConfig("test");
