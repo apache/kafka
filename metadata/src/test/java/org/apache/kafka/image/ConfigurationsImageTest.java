@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
@@ -84,31 +85,65 @@ public class ConfigurationsImageTest {
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(ConfigurationsImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(ConfigurationsImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(ConfigurationsImage image) throws Throwable {
-        RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+    private static void testToImage(ConfigurationsImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(ConfigurationsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(ConfigurationsImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image all the way to the final image
         ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
+        RecordTestUtils.replayAll(delta, fromRecords);
         ConfigurationsImage nextImage = delta.apply();
         assertEquals(image, nextImage);
+        // test from empty image stopping each of the various intermediate images along the way
+        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(ConfigurationsImage image) {
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().build());
+        return writer.records();
+    }
+
+    private static void testThroughAllIntermediateImagesLeadingToFinalImage(ConfigurationsImage finalImage, List<ApiMessageAndVersion> fromRecords) {
+        for (int numRecordsForIntermediateImage = 1; numRecordsForIntermediateImage < fromRecords.size(); ++numRecordsForIntermediateImage) {
+            ConfigurationsImage intermediateImage;
+            // create intermediate image from first numRecordsForIntermediateImage records
+            ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
+            RecordTestUtils.replayInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
+            intermediateImage = delta.apply();
+            // apply rest of records on top of intermediate image to obtain what should be the same final image
+            delta = new ConfigurationsDelta(intermediateImage);
+            RecordTestUtils.replayAllButInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
+            ConfigurationsImage receivedFinalImage = delta.apply();
+            assertEquals(finalImage, receivedFinalImage);
+        }
     }
 }

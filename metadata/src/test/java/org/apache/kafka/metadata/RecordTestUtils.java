@@ -95,6 +95,34 @@ public class RecordTestUtils {
         replayAll(target, Collections.singletonList(recordAndVersion));
     }
 
+    public static void replayInitialRecords(
+        Object target,
+        List<ApiMessageAndVersion> imageRecords,
+        int numRecordstoReplay
+    ) {
+        int recordNumber = 0;
+        for (ApiMessageAndVersion record : imageRecords) {
+            if (recordNumber++ < numRecordstoReplay) {
+                replayOne(target, record);
+            } else {
+                break;
+            }
+        }
+    }
+
+    public static void replayAllButInitialRecords(
+        Object target,
+        List<ApiMessageAndVersion> imageRecords,
+        int numRecordsToSkipBeforeReplaying
+    ) {
+        int recordNumber = 0;
+        for (ApiMessageAndVersion record : imageRecords) {
+            if (recordNumber++ >= numRecordsToSkipBeforeReplaying) {
+                replayOne(target, record);
+            }
+        }
+    }
+
     /**
      * Replay a list of record batches.
      *

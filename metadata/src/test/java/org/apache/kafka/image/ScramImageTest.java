@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 
 import static org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_256;
@@ -113,36 +114,70 @@ public class ScramImageTest {
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(ScramImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(ScramImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(ScramImage image) throws Throwable {
-        RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+    private static void testToImage(ScramImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(ScramImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(ScramImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image all the way to the final image
         ScramDelta delta = new ScramDelta(ScramImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
+        RecordTestUtils.replayAll(delta, fromRecords);
         ScramImage nextImage = delta.apply();
         assertEquals(image, nextImage);
+        // test from empty image stopping each of the various intermediate images along the way
+        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(ScramImage image) {
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().build());
+        return writer.records();
+    }
+
+    private static void testThroughAllIntermediateImagesLeadingToFinalImage(ScramImage finalImage, List<ApiMessageAndVersion> fromRecords) {
+        for (int numRecordsForIntermediateImage = 1; numRecordsForIntermediateImage < fromRecords.size(); ++numRecordsForIntermediateImage) {
+            ScramImage intermediateImage;
+            // create intermediate image from first numRecordsForIntermediateImage records
+            ScramDelta delta = new ScramDelta(ScramImage.EMPTY);
+            RecordTestUtils.replayInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
+            intermediateImage = delta.apply();
+            // apply rest of records on top of intermediate image to obtain what should be the same final image
+            delta = new ScramDelta(intermediateImage);
+            RecordTestUtils.replayAllButInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
+            ScramImage receivedFinalImage = delta.apply();
+            assertEquals(finalImage, receivedFinalImage);
+        }
     }
 
     @Test
-    public void testEmptyWithInvalidIBP() throws Throwable {
+    public void testEmptyWithInvalidIBP() {
         ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
                 setMetadataVersion(MetadataVersion.IBP_3_4_IV0).build();
         RecordListWriter writer = new RecordListWriter();
@@ -150,7 +185,7 @@ public class ScramImageTest {
     }
 
     @Test
-    public void testImage1withInvalidIBP() throws Throwable {
+    public void testImage1withInvalidIBP() {
         ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
                 setMetadataVersion(MetadataVersion.IBP_3_4_IV0).build();
         RecordListWriter writer = new RecordListWriter();
