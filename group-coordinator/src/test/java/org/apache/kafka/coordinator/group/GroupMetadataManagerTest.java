@@ -75,8 +75,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.consumer.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
