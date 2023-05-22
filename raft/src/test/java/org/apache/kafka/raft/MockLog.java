@@ -525,7 +525,7 @@ public class MockLog implements ReplicatedLog {
         if (startOffset() > snapshotId.offset()) {
             throw new OffsetOutOfRangeException(
                 String.format(
-                    "New log start (%s) is less than the curent log start offset (%s)",
+                    "New log start (%s) is less than the current log start offset (%s)",
                     snapshotId,
                     startOffset()
                 )
