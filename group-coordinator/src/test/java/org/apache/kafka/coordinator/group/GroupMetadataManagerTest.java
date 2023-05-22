@@ -856,10 +856,12 @@ public class GroupMetadataManagerTest {
 
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
-            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {{
+            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
                     put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
                     put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
-                }}),
+                }
+            }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
