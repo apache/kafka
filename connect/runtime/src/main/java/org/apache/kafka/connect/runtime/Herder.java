@@ -306,7 +306,7 @@ public interface Herder {
     /**
      * Alter a connector's offsets.
      * @param connName the name of the connector whose offsets are to be altered
-     * @param offsets a mapping from partitions to offsets that need to be overwritten
+     * @param offsets a mapping from partitions to offsets that need to be written
      * @param cb callback to invoke upon completion
      */
     void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);

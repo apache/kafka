@@ -333,7 +333,7 @@ public class OffsetsApiIntegrationTest {
         }
 
         String response = connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter));
-        assertThat(response, containsString("The Connect framework managed offsets for this connector have been altered successfully. " +
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually altered in the system that the connector uses."));
 
         waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions - 1, 5,
@@ -536,7 +536,7 @@ public class OffsetsApiIntegrationTest {
         }
 
         String response = connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter));
-        assertThat(response, containsString("The Connect framework managed offsets for this connector have been altered successfully. " +
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually altered in the system that the connector uses."));
 
         waitForExpectedSourceConnectorOffsets(connect, CONNECTOR_NAME, NUM_TASKS, 5,

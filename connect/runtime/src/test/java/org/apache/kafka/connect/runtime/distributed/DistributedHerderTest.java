@@ -4212,8 +4212,6 @@ public class DistributedHerderTest {
         member.wakeup();
         PowerMock.expectLastCall();
         member.ensureActive();
-        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
-        PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -4245,9 +4243,10 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         member.ensureActive();
         PowerMock.expectLastCall();
-        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
+        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
         Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
         worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
         Message msg = new Message("The offsets for this connector have been altered successfully");
@@ -4291,6 +4290,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall().anyTimes();
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
+        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
         EasyMock.expect(herder.connectorType(EasyMock.anyObject())).andReturn(ConnectorType.SOURCE).anyTimes();
 
         // Expect a round of zombie fencing to occur
@@ -4312,8 +4312,8 @@ public class DistributedHerderTest {
         }
 
         Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
-        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
         Message msg = new Message("The offsets for this connector have been altered successfully");
+        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
         EasyMock.expectLastCall().andAnswer(() -> {
             workerCallbackCapture.getValue().onCompletion(null, msg);
             return null;
@@ -4321,8 +4321,9 @@ public class DistributedHerderTest {
 
         // Handle the second alter connector offsets request. No zombie fencing request to the worker is expected now since we
         // already did a round of zombie fencing last time and no new tasks came up in the meanwhile. The config snapshot is
-        // refreshed once at the beginning of the DistributedHerder::alterConnectorOffsets method and once before checking
-        // whether zombie fencing is required.
+        // refreshed once at the beginning of the DistributedHerder::alterConnectorOffsets method, once before checking
+        // whether zombie fencing is required, and once before actually proceeding to alter connector offsets.
+        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1_FENCED);
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1_FENCED);
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1_FENCED);
         Capture<Callback<Message>> workerCallbackCapture2 = Capture.newInstance();
@@ -4404,7 +4405,7 @@ public class DistributedHerderTest {
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
-        assertEquals("Failed to perform zombie fencing for exactly-once source connector prior to altering offsets",
+        assertEquals("Failed to perform zombie fencing for source connector prior to altering offsets",
                 e.getCause().getMessage());
 
         PowerMock.verifyAll();

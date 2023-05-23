@@ -1531,24 +1531,22 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.trace("Submitting alter offsets request for connector '{}'", connName);
 
         addRequest(() -> {
-            refreshConfigSnapshot(workerSyncTimeoutMs);
             if (!alterConnectorOffsetsChecks(connName, callback)) {
                 return null;
             }
             // At this point, we should be the leader (the call to alterConnectorOffsetsChecks makes sure of that) and can safely run
             // a zombie fencing request
             if (isSourceConnector(connName) && config.exactlyOnceSourceEnabled()) {
-                log.debug("Performing a round of zombie fencing before altering offsets for source connector {} with exactly-once semantics enabled.", connName);
+                log.debug("Performing a round of zombie fencing before altering offsets for source connector {} with exactly-once support enabled.", connName);
                 getFenceZombieSourceTasksCallable(connName, (error, ignored) -> {
                     if (error != null) {
-                        log.error("Failed to perform zombie fencing for exactly-once source connector prior to altering offsets", error);
-                        callback.onCompletion(new ConnectException("Failed to perform zombie fencing for exactly-once source connector prior to altering offsets",
+                        log.error("Failed to perform zombie fencing for source connector prior to altering offsets", error);
+                        callback.onCompletion(new ConnectException("Failed to perform zombie fencing for source connector prior to altering offsets",
                                 error), null);
                     } else {
                         log.debug("Successfully completed zombie fencing for source connector {}; proceeding to alter offsets.", connName);
-                        // We need to ensure that we perform the necessary checks again inside alterConnectorOffsetsHerderRequest
-                        // since it is being run in a separate herder request and the conditions could have changed since the
-                        // previous check
+                        // We need to ensure that we perform the necessary checks again before proceeding to actually altering the connector offsets since
+                        // zombie fencing is done asynchronously and the conditions could have changed since the previous check
                         addRequest(getAlterConnectorOffsetsCallable(connName, offsets, callback), forwardErrorCallback(callback));
                     }
                 }).call();
@@ -1581,20 +1579,27 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (checkRebalanceNeeded(callback)) {
             return false;
         }
+
+        if (!isLeader()) {
+            callback.onCompletion(new NotLeaderException("Only the leader can process alter offsets requests", leaderUrl()), null);
+            return false;
+        }
+
+        if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
+            throw new ConnectException("Failed to read to end of config topic before altering connector offsets");
+        }
+
         if (!configState.contains(connName)) {
             callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
             return false;
         }
+
         // If the target state for the connector is stopped, its task count is 0, and there is no rebalance pending (checked above),
         // we can be sure that the tasks have at least been attempted to be stopped (or cancelled if they took too long to stop).
         // Zombie tasks are handled by a round of zombie fencing for exactly once source connectors. Zombie sink tasks are handled
         // naturally because requests to alter consumer group offsets will fail if there are still active members in the group.
         if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
             callback.onCompletion(new BadRequestException("The connector needs to be stopped before its offsets can be altered"), null);
-            return false;
-        }
-        if (!isLeader()) {
-            callback.onCompletion(new NotLeaderException("Only the leader can process alter offsets requests", leaderUrl()), null);
             return false;
         }
         return true;

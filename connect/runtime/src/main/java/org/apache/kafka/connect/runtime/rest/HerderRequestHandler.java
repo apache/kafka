@@ -111,7 +111,7 @@ public class HerderRequestHandler {
                 log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
                 return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
             } else {
-                log.info("Request '{} {}' failed because it couldn't find the target Connect worker within two hops (between workers).",
+                log.error("Request '{} {}' failed because it couldn't find the target Connect worker within two hops (between workers).",
                         method, path);
                 // we should find the right target for the query within two hops, so if
                 // we don't, it probably means that a rebalance has taken place.

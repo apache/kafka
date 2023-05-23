@@ -37,6 +37,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.MockTime;
@@ -156,6 +157,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstructionWithAnswer;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -1765,7 +1767,7 @@ public class WorkerTest {
         assertEquals("test-topic", offsets.offsets().get(0).partition().get(SinkUtils.KAFKA_TOPIC_KEY));
 
         verify(admin).listConsumerGroupOffsets(eq(SinkUtils.consumerGroupId(CONNECTOR_ID)), any(ListConsumerGroupOffsetsOptions.class));
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
     }
 
@@ -1813,7 +1815,7 @@ public class WorkerTest {
         assertEquals(ConnectException.class, e.getCause().getClass());
 
         verify(admin).listConsumerGroupOffsets(eq(SinkUtils.consumerGroupId(CONNECTOR_ID)), any(ListConsumerGroupOffsetsOptions.class));
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
     }
 
@@ -1915,7 +1917,9 @@ public class WorkerTest {
                 "support altering of offsets"));
 
         FutureCallback<Message> cb = new FutureCallback<>();
-        worker.alterConnectorOffsets(CONNECTOR_ID, connectorProps, new HashMap<>(), cb);
+        worker.alterConnectorOffsets(CONNECTOR_ID, connectorProps,
+                Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                cb);
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
@@ -2076,7 +2080,6 @@ public class WorkerTest {
         assertEquals(new TopicPartition("test_topic", 20), deleteOffsetsSetCapture.getValue().iterator().next());
     }
 
-    @SuppressWarnings("unchecked")
     private void alterOffsetsSinkConnector(Map<Map<String, ?>, Map<String, ?>> partitionOffsets,
                                            ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture,
                                            ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture) throws Exception {
@@ -2098,12 +2101,8 @@ public class WorkerTest {
             AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
             when(admin.alterConsumerGroupOffsets(anyString(), alterOffsetsMapCapture.capture(), any(AlterConsumerGroupOffsetsOptions.class)))
                     .thenReturn(alterConsumerGroupOffsetsResult);
-            KafkaFuture<Void> alterFuture = mock(KafkaFuture.class);
+            KafkaFuture<Void> alterFuture = KafkaFuture.completedFuture(null);
             when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
-            when(alterFuture.whenComplete(any(KafkaFuture.BiConsumer.class))).thenAnswer(invocation -> {
-                invocation.getArgument(0, KafkaFuture.BiConsumer.class).accept(null, null);
-                return null;
-            });
         }
 
         // If deleteOffsetsSetCapture is null, then we won't stub any of the following methods resulting in test failures in case
@@ -2112,12 +2111,8 @@ public class WorkerTest {
             DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = mock(DeleteConsumerGroupOffsetsResult.class);
             when(admin.deleteConsumerGroupOffsets(anyString(), deleteOffsetsSetCapture.capture(), any(DeleteConsumerGroupOffsetsOptions.class)))
                     .thenReturn(deleteConsumerGroupOffsetsResult);
-            KafkaFuture<Void> deleteFuture = mock(KafkaFuture.class);
+            KafkaFuture<Void> deleteFuture = KafkaFuture.completedFuture(null);
             when(deleteConsumerGroupOffsetsResult.all()).thenReturn(deleteFuture);
-            when(deleteFuture.whenComplete(any(KafkaFuture.BiConsumer.class))).thenAnswer(invocation -> {
-                invocation.getArgument(0, KafkaFuture.BiConsumer.class).accept(null, null);
-                return null;
-            });
         }
 
         FutureCallback<Message> cb = new FutureCallback<>();
@@ -2125,12 +2120,11 @@ public class WorkerTest {
                 Thread.currentThread().getContextClassLoader(), cb);
         assertEquals("The offsets for this connector have been altered successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
 
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testAlterOffsetsSinkConnectorAlterOffsetsError() throws Exception {
         mockKafkaClusterId();
         String connectorClass = SampleSinkConnector.class.getName();
@@ -2147,25 +2141,15 @@ public class WorkerTest {
         AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
         when(admin.alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class)))
                 .thenReturn(alterConsumerGroupOffsetsResult);
-        KafkaFuture<Void> alterFuture = mock(KafkaFuture.class);
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.completeExceptionally(new ClusterAuthorizationException("Test exception"));
         when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
-        when(alterFuture.whenComplete(any(KafkaFuture.BiConsumer.class))).thenAnswer(invocation -> {
-            invocation.getArgument(0, KafkaFuture.BiConsumer.class)
-                    .accept(null, new ClusterAuthorizationException("Test exception"));
-            return null;
-        });
-        // Don't expect an attempt to delete offsets for partitions when the attempt to alter offsets for partitions
-        // fails first.
 
-        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
         Map<String, String> partition1 = new HashMap<>();
         partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
         partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
-        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
-        Map<String, String> partition2 = new HashMap<>();
-        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
-        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
-        partitionOffsets.put(partition2, null);
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = Collections.singletonMap(partition1,
+                Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
 
         FutureCallback<Message> cb = new FutureCallback<>();
         worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
@@ -2174,7 +2158,7 @@ public class WorkerTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
 
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyNoMoreInteractions(admin);
         verifyKafkaClusterId();
     }
@@ -2197,23 +2181,15 @@ public class WorkerTest {
         AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
         when(admin.alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class)))
                 .thenReturn(alterConsumerGroupOffsetsResult);
-        KafkaFuture<Void> alterFuture = mock(KafkaFuture.class);
+        KafkaFuture<Void> alterFuture = KafkaFuture.completedFuture(null);
         when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
-        when(alterFuture.whenComplete(any(KafkaFuture.BiConsumer.class))).thenAnswer(invocation -> {
-            invocation.getArgument(0, KafkaFuture.BiConsumer.class).accept(null, null);
-            return null;
-        });
 
         DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = mock(DeleteConsumerGroupOffsetsResult.class);
         when(admin.deleteConsumerGroupOffsets(anyString(), anySet(), any(DeleteConsumerGroupOffsetsOptions.class)))
                 .thenReturn(deleteConsumerGroupOffsetsResult);
-        KafkaFuture<Void> deleteFuture = mock(KafkaFuture.class);
+        KafkaFutureImpl<Void> deleteFuture = new KafkaFutureImpl<>();
+        deleteFuture.completeExceptionally(new ClusterAuthorizationException("Test exception"));
         when(deleteConsumerGroupOffsetsResult.all()).thenReturn(deleteFuture);
-        when(deleteFuture.whenComplete(any(KafkaFuture.BiConsumer.class))).thenAnswer(invocation -> {
-            invocation.getArgument(0, KafkaFuture.BiConsumer.class)
-                    .accept(null, new ClusterAuthorizationException("Test exception"));
-            return null;
-        });
 
         Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
         Map<String, String> partition1 = new HashMap<>();
@@ -2232,7 +2208,7 @@ public class WorkerTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
 
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyNoMoreInteractions(admin);
         verifyKafkaClusterId();
     }
@@ -2267,7 +2243,7 @@ public class WorkerTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
 
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyNoMoreInteractions(admin);
         verifyKafkaClusterId();
     }

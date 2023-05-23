@@ -55,7 +55,7 @@ public final class SinkUtils {
     }
 
     /**
-     * Validate that the provided partitions (keys in the {@code partitionOffsets} map) look like:
+     * Ensure that the provided partitions (keys in the {@code partitionOffsets} map) look like:
      * <pre>
      *     {
      *       "kafka_topic": "topic"
@@ -70,7 +70,7 @@ public final class SinkUtils {
      *     }
      * </pre>
      *
-     * This method then parses them into a mapping from {@link TopicPartition}s to their corresponding {@link Long}
+     * and then parse them into a mapping from {@link TopicPartition}s to their corresponding {@link Long}
      * valued offsets.
      *
      * @param partitionOffsets the partitions to offset map that needs to be validated and parsed.
@@ -78,7 +78,7 @@ public final class SinkUtils {
      *
      * @throws BadRequestException if the provided offsets aren't in the expected format
      */
-    public static Map<TopicPartition, Long> validateAndParseSinkConnectorOffsets(Map<Map<String, ?>, Map<String, ?>> partitionOffsets) {
+    public static Map<TopicPartition, Long> parseSinkConnectorOffsets(Map<Map<String, ?>, Map<String, ?>> partitionOffsets) {
         Map<TopicPartition, Long> parsedOffsetMap = new HashMap<>();
 
         for (Map.Entry<Map<String, ?>, Map<String, ?>> partitionOffset : partitionOffsets.entrySet()) {
@@ -93,9 +93,8 @@ public final class SinkUtils {
             String topic = String.valueOf(partitionMap.get(KAFKA_TOPIC_KEY));
             int partition;
             try {
-                // This is because both "10" and 10 should be accepted as valid partition values in the REST API's
-                // JSON request payload. If the following line throws an exception, we should propagate it since it's
-                // indicative of a badly formatted value.
+                // We parse it this way because both "10" and 10 should be accepted as valid partition values in the REST API's
+                // JSON request payload. If it throws an exception, we should propagate it since it's indicative of a badly formatted value.
                 partition = Integer.parseInt(String.valueOf(partitionMap.get(KAFKA_PARTITION_KEY)));
             } catch (Exception e) {
                 throw new BadRequestException("Failed to parse the following Kafka partition value in the provided offsets: '" +
@@ -116,9 +115,8 @@ public final class SinkUtils {
                 }
                 long offset;
                 try {
-                    // This is because both "1000" and 1000 should be accepted as valid offset values in the REST API's
-                    // JSON request payload. If the following line throws an exception, we should propagate it since
-                    // it's indicative of a badly formatted value.
+                    // We parse it this way because both "1000" and 1000 should be accepted as valid offset values in the REST API's
+                    // JSON request payload. If it throws an exception, we should propagate it since it's indicative of a badly formatted value.
                     offset = Long.parseLong(String.valueOf(offsetMap.get(KAFKA_OFFSET_KEY)));
                 } catch (Exception e) {
                     throw new BadRequestException("Failed to parse the following Kafka offset value in the provided offsets: '" +
