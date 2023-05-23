@@ -17,8 +17,12 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 class RequestState {
+
+    private final Logger log;
     final static int RETRY_BACKOFF_EXP_BASE = 2;
     final static double RETRY_BACKOFF_JITTER = 0.2;
     private final ExponentialBackoff exponentialBackoff;
@@ -27,26 +31,21 @@ class RequestState {
     private int numAttempts = 0;
     private long backoffMs = 0;
 
-    public RequestState(long retryBackoffMs) {
-        this.exponentialBackoff = new ExponentialBackoff(
-            retryBackoffMs,
-            RETRY_BACKOFF_EXP_BASE,
-            retryBackoffMs,
-            RETRY_BACKOFF_JITTER
-        );
+    public RequestState(final LogContext logContext, final long retryBackoffMs) {
+        this(logContext, retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMs, RETRY_BACKOFF_JITTER);
     }
 
     // Visible for testing
-    RequestState(final long retryBackoffMs,
+    RequestState(final LogContext logContext,
+                 final long retryBackoffMs,
                  final int retryBackoffExpBase,
                  final long retryBackoffMaxMs,
                  final double jitter) {
-        this.exponentialBackoff = new ExponentialBackoff(
-            retryBackoffMs,
-            retryBackoffExpBase,
-            retryBackoffMaxMs,
-            jitter
-        );
+        this.log = logContext.logger(RequestState.class);
+        this.exponentialBackoff = new ExponentialBackoff(retryBackoffMs,
+                retryBackoffExpBase,
+                retryBackoffMaxMs,
+                jitter);
     }
 
     /**
@@ -66,13 +65,19 @@ class RequestState {
             return true;
         }
 
-        if (this.lastReceivedMs == -1 ||
-                this.lastReceivedMs < this.lastSentMs) {
-            // there is an inflight request
+        if (this.lastReceivedMs == -1 || this.lastReceivedMs < this.lastSentMs) {
+            log.debug("An inflight request already exists; lastReceivedMs: {}, lastSentMs:  {}", lastReceivedMs, lastSentMs);
             return false;
         }
 
-        return requestBackoffExpired(currentTimeMs);
+        long remainingBackoffMs = remainingBackoffMs(currentTimeMs);
+
+        if (remainingBackoffMs <= 0) {
+            return true;
+        } else {
+            log.debug("There are {} ms remaining before another attempt can be sent", remainingBackoffMs);
+            return false;
+        }
     }
 
     public void onSendAttempt(final long currentTimeMs) {
@@ -106,12 +111,19 @@ class RequestState {
         this.numAttempts++;
     }
 
-    private boolean requestBackoffExpired(final long currentTimeMs) {
-        return remainingBackoffMs(currentTimeMs) <= 0;
-    }
-
     long remainingBackoffMs(final long currentTimeMs) {
         long timeSinceLastReceiveMs = currentTimeMs - this.lastReceivedMs;
         return Math.max(0, backoffMs - timeSinceLastReceiveMs);
+    }
+
+    @Override
+    public String toString() {
+        return "RequestState{" +
+                "exponentialBackoff=" + exponentialBackoff +
+                ", lastSentMs=" + lastSentMs +
+                ", lastReceivedMs=" + lastReceivedMs +
+                ", numAttempts=" + numAttempts +
+                ", backoffMs=" + backoffMs +
+                '}';
     }
 }

@@ -58,6 +58,8 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
+
 /**
  * {@code AbstractFetch} represents the basic state and logic for record fetching processing.
  * @param <K> Type for the message key
@@ -274,11 +276,11 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
         try {
             while (recordsRemaining > 0) {
-                if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
+                if (nextInLineFetch == null || nextInLineFetch.isConsumed()) {
                     CompletedFetch<K, V> records = completedFetches.peek();
                     if (records == null) break;
 
-                    if (!records.initialized) {
+                    if (!records.isInitialized()) {
                         try {
                             nextInLineFetch = initializeCompletedFetch(records);
                         } catch (Exception e) {
@@ -336,7 +338,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                 throw new IllegalStateException("Missing position for fetchable partition " + nextInLineFetch.partition);
             }
 
-            if (nextInLineFetch.nextFetchOffset == position.offset) {
+            if (nextInLineFetch.nextFetchOffset() == position.offset) {
                 List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(maxRecords);
 
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
@@ -344,10 +346,10 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
                 boolean positionAdvanced = false;
 
-                if (nextInLineFetch.nextFetchOffset > position.offset) {
+                if (nextInLineFetch.nextFetchOffset() > position.offset) {
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
-                            nextInLineFetch.nextFetchOffset,
-                            nextInLineFetch.lastEpoch,
+                            nextInLineFetch.nextFetchOffset(),
+                            nextInLineFetch.lastEpoch(),
                             position.currentLeader);
                     log.trace("Updating fetch position from {} to {} for partition {} and returning {} records from `poll()`",
                             position, nextPosition, nextInLineFetch.partition, partRecords.size());
@@ -369,7 +371,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
                 log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                        nextInLineFetch.partition, nextInLineFetch.nextFetchOffset, position);
+                        nextInLineFetch.partition, nextInLineFetch.nextFetchOffset(), position);
             }
         }
 
@@ -381,7 +383,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
     private List<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> exclude = new HashSet<>();
-        if (nextInLineFetch != null && !nextInLineFetch.isConsumed) {
+        if (nextInLineFetch != null && !nextInLineFetch.isConsumed()) {
             exclude.add(nextInLineFetch.partition);
         }
         for (CompletedFetch<K, V> completedFetch : completedFetches) {
@@ -421,7 +423,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                         " using the leader instead.", nodeId, partition);
                 // Note that this condition may happen due to stale metadata, so we clear preferred replica and
                 // refresh metadata.
-                requestMetadataUpdate(partition);
+                requestMetadataUpdate(metadata, subscriptions, partition);
                 return leaderReplica;
             }
         } else {
@@ -528,7 +530,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
     private CompletedFetch<K, V> handleInitializeCompletedFetchSuccess(final CompletedFetch<K, V> completedFetch) {
         final TopicPartition tp = completedFetch.partition;
-        final long fetchOffset = completedFetch.nextFetchOffset;
+        final long fetchOffset = completedFetch.nextFetchOffset();
 
         // we are interested in this fetch only if the beginning offset matches the
         // current consumed position
@@ -586,14 +588,14 @@ public abstract class AbstractFetch<K, V> implements Closeable {
             });
         }
 
-        completedFetch.initialized = true;
+        completedFetch.setInitialized();
         return completedFetch;
     }
 
     private void handleInitializeCompletedFetchErrors(final CompletedFetch<K, V> completedFetch,
                                                       final Errors error) {
         final TopicPartition tp = completedFetch.partition;
-        final long fetchOffset = completedFetch.nextFetchOffset;
+        final long fetchOffset = completedFetch.nextFetchOffset();
 
         if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
                 error == Errors.REPLICA_NOT_AVAILABLE ||
@@ -601,16 +603,16 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                 error == Errors.FENCED_LEADER_EPOCH ||
                 error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
-            requestMetadataUpdate(tp);
+            requestMetadataUpdate(metadata, subscriptions, tp);
         } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
             log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
-            requestMetadataUpdate(tp);
+            requestMetadataUpdate(metadata, subscriptions, tp);
         } else if (error == Errors.UNKNOWN_TOPIC_ID) {
             log.warn("Received unknown topic ID error in fetch for partition {}", tp);
-            requestMetadataUpdate(tp);
+            requestMetadataUpdate(metadata, subscriptions, tp);
         } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
             log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
-            requestMetadataUpdate(tp);
+            requestMetadataUpdate(metadata, subscriptions, tp);
         } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
             Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
 
@@ -782,10 +784,5 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     @Override
     public void close() {
         close(time.timer(0));
-    }
-
-    private void requestMetadataUpdate(final TopicPartition topicPartition) {
-        metadata.requestUpdate();
-        subscriptions.clearPreferredReadReplica(topicPartition);
     }
 }
