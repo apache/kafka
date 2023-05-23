@@ -1104,7 +1104,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     writeTaskConfigs(connName, Collections.emptyList());
                     configBackingStore.putTargetState(connName, TargetState.STOPPED);
                     // Force a read of the new target state for the connector
-                    refreshConfigSnapshot(workerSyncTimeoutMs);
+                    if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
+                        throw new ConnectException("Failed to read to end of config topic");
+                    }
 
                     callback.onCompletion(null, null);
                     return null;
