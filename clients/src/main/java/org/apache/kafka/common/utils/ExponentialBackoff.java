@@ -54,4 +54,14 @@ public class ExponentialBackoff {
             ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
         return (long) (randomFactor * term);
     }
+
+    @Override
+    public String toString() {
+        return "ExponentialBackoff{" +
+                "multiplier=" + multiplier +
+                ", expMax=" + expMax +
+                ", initialInterval=" + initialInterval +
+                ", jitter=" + jitter +
+                '}';
+    }
 }

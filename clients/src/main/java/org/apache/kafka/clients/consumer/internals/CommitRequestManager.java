@@ -54,6 +54,7 @@ public class CommitRequestManager implements RequestManager {
     private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
     // TODO: We will need to refactor the subscriptionState
     private final SubscriptionState subscriptions;
+    private final LogContext logContext;
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
@@ -69,6 +70,7 @@ public class CommitRequestManager implements RequestManager {
                                 final CoordinatorRequestManager coordinatorRequestManager,
                                 final GroupState groupState) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
+        this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
         if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
@@ -233,7 +235,7 @@ public class CommitRequestManager implements RequestManager {
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
                                        final GroupState.Generation generation,
                                        final long retryBackoffMs) {
-            super(retryBackoffMs);
+            super(logContext, retryBackoffMs);
             this.requestedPartitions = partitions;
             this.requestedGeneration = generation;
             this.future = new CompletableFuture<>();

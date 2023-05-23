@@ -67,7 +67,7 @@ public class CoordinatorRequestManager implements RequestManager {
         this.log = logContext.logger(this.getClass());
         this.nonRetriableErrorHandler = errorHandler;
         this.groupId = groupId;
-        this.coordinatorRequestState = new RequestState(retryBackoffMs);
+        this.coordinatorRequestState = new RequestState(logContext, retryBackoffMs);
     }
 
     /**
