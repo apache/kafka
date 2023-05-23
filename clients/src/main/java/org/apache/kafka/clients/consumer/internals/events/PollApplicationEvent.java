@@ -17,10 +17,23 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 public class PollApplicationEvent extends ApplicationEvent {
-    public final long pollTimeMs;
 
-    protected PollApplicationEvent(final long currentTimeMs) {
+    private final long pollTimeMs;
+
+    public PollApplicationEvent(final long pollTimeMs) {
         super(Type.POLL);
-        this.pollTimeMs = currentTimeMs;
+        this.pollTimeMs = pollTimeMs;
+    }
+
+    public long pollTimeMs() {
+        return pollTimeMs;
+    }
+
+    @Override
+    public String toString() {
+        return "PollApplicationEvent{" +
+                "pollTimeMs=" + pollTimeMs +
+                ", type=" + type +
+                '}';
     }
 }

@@ -16,26 +16,24 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.Objects;
+
 /**
  * This is the abstract definition of the events created by the KafkaConsumer API
  */
-abstract public class ApplicationEvent {
-    public final Type type;
+public abstract class ApplicationEvent {
+
+    public enum Type {
+        NOOP, COMMIT, POLL, FETCH, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, UNSUBSCRIBE,
+    }
+
+    protected final Type type;
 
     protected ApplicationEvent(Type type) {
-        this.type = type;
+        this.type = Objects.requireNonNull(type);
     }
-    /**
-     * process the application event. Return true upon succesful execution,
-     * false otherwise.
-     * @return true if the event was successfully executed; false otherwise.
-     */
 
-    @Override
-    public String toString() {
-        return type + " ApplicationEvent";
-    }
-    public enum Type {
-        NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, UNSUBSCRIBE,
+    public Type type() {
+        return type;
     }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -41,6 +43,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class DefaultEventHandler implements EventHandler {
 
+    private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final DefaultBackgroundThread backgroundThread;
@@ -77,6 +80,7 @@ public class DefaultEventHandler implements EventHandler {
                                final Metrics metrics,
                                final ClusterResourceListeners clusterResourceListeners,
                                final Sensor fetcherThrottleTimeSensor) {
+        this.time = time;
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
 
@@ -104,9 +108,11 @@ public class DefaultEventHandler implements EventHandler {
     }
 
     // VisibleForTesting
-    DefaultEventHandler(final DefaultBackgroundThread backgroundThread,
+    DefaultEventHandler(final Time time,
+                        final DefaultBackgroundThread backgroundThread,
                         final BlockingQueue<ApplicationEvent> applicationEventQueue,
                         final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+        this.time = time;
         this.backgroundThread = backgroundThread;
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
@@ -127,6 +133,12 @@ public class DefaultEventHandler implements EventHandler {
     public boolean add(final ApplicationEvent event) {
         backgroundThread.wakeup();
         return applicationEventQueue.add(event);
+    }
+
+    @Override
+    public <T> T addAndGet(CompletableApplicationEvent<T> event, Duration timeout) {
+        add(event);
+        return event.get(time.timer(timeout));
     }
 
     public void close() {

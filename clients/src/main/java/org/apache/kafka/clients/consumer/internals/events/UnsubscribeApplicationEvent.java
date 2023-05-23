@@ -21,4 +21,11 @@ public class UnsubscribeApplicationEvent extends ApplicationEvent {
     public UnsubscribeApplicationEvent() {
         super(Type.UNSUBSCRIBE);
     }
+
+    @Override
+    public String toString() {
+        return "UnsubscribeApplicationEvent{" +
+                "type=" + type +
+                '}';
+    }
 }
