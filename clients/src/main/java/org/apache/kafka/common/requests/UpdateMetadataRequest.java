@@ -41,6 +41,11 @@ import java.util.Map;
 
 import static java.util.Collections.singletonList;
 
+/**
+ * UpdateMetadataRequest：该请求会更新 Broker 上的元数据缓存。
+ * 集群上的所有元数据变更，都首先发生在 Controller 端，然后再经由这个请求广播给集群上的所有 Broker。
+ * 这个请求如果被处理得不及时，才导致集群 Broker 无法获取到最新的元数据信息。
+ */
 public class UpdateMetadataRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {

@@ -24,9 +24,9 @@ public abstract class AbstractControlRequest extends AbstractRequest {
     public static final long UNKNOWN_BROKER_EPOCH = -1L;
 
     public static abstract class Builder<T extends AbstractRequest> extends AbstractRequest.Builder<T> {
-        protected final int controllerId;
-        protected final int controllerEpoch;
-        protected final long brokerEpoch;
+        protected final int controllerId; //Controller 所在的 Broker ID。
+        protected final int controllerEpoch; // Controller 的版本信息。
+        protected final long brokerEpoch; //目标 Broker 的 Epoch。后面这两个 Epoch 字段用于隔离 Zombie Controller 和 Zombie Broker，以保证集群的一致性。
         protected final boolean kraftController;
 
         protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch, long brokerEpoch) {

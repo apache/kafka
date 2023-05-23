@@ -212,15 +212,41 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   }
 }
 
+/**
+ * 每个 QueueItem 的核心字段都是 AbstractControlRequest.Builder 对象。
+ * 基本上可以认为，它就是阻塞队列上 AbstractControlRequest 类型。
+ * @param apiKey
+ * @param request 这里的“<:”符号，它在 Scala 中表示上边界的意思，即字段 request 必须是 AbstractControlRequest 的子类，
+ *                也就是那三类请求：LeaderAndIsrRequest，StopReplicaRequest，UpdateMetadataRequest。
+ * @param callback
+ * @param enqueueTimeMs
+ */
 case class QueueItem(apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                      callback: AbstractResponse => Unit, enqueueTimeMs: Long)
 
-class RequestSendThread(val controllerId: Int,
+/**
+ * Controller 会为集群中的每个 Broker 都创建一个对应的 RequestSendThread 线程。
+ * Broker 上的这个线程，持续地从阻塞队列中获取待发送的请求。
+ *
+ * 它依然是一个线程安全的阻塞队列，Controller 事件处理线程 负责向这个队列写入待发送的请求，
+ * 而一个名为 RequestSendThread 的线程负责执行真正的请求发送。
+ * @param controllerId
+ * @param controllerEpoch
+ * @param queue 每个 QueueItem 实际保存的都是那三类请求中的其中一类。如果使用一个 BlockingQueue 对象来保存这些 QueueItem，那么，代码就实现了一个请求阻塞队列。
+ * @param networkClient
+ * @param brokerNode
+ * @param config
+ * @param time
+ * @param requestRateAndQueueTimeMetrics
+ * @param stateChangeLogger
+ * @param name
+ */
+class RequestSendThread(val controllerId: Int, // Controller所在Broker的Id
                         controllerEpoch: () => Int,
-                        val queue: BlockingQueue[QueueItem],
-                        val networkClient: NetworkClient,
-                        val brokerNode: Node,
-                        val config: KafkaConfig,
+                        val queue: BlockingQueue[QueueItem],//线程安全的请求阻塞队列
+                        val networkClient: NetworkClient, // 用于执行发送的网络I/O类
+                        val brokerNode: Node, // 目标Broker节点
+                        val config: KafkaConfig, // Kafka配置信息
                         val time: Time,
                         val requestRateAndQueueTimeMetrics: Timer,
                         val stateChangeLogger: StateChangeLogger,
@@ -232,6 +258,10 @@ class RequestSendThread(val controllerId: Int,
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
+  /**
+   * doWork 的逻辑很直观。它的主要作用是从阻塞队列中取出待发送的请求，然后把它发送出去，之后等待 Response 的返回。
+   * 在等待 Response 的过程中，线程将一直处于阻塞状态。当接收到 Response 之后，调用 callback 执行请求处理完成后的回调逻辑。
+   */
   override def doWork(): Unit = {
 
     def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
@@ -246,6 +276,7 @@ class RequestSendThread(val controllerId: Int,
         // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
         // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
         try {
+          // 如果没有创建与目标Broker的TCP连接，或连接暂时不可用
           if (!brokerReady()) {
             isSendSuccessful = false
             backoff()
@@ -253,6 +284,7 @@ class RequestSendThread(val controllerId: Int,
           else {
             val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
               time.milliseconds(), true)
+            // 发送请求，等待接收Response;调用sendAndReceive后，会原地进入阻塞状态，等待 Response 返回。
             clientResponse = NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
             isSendSuccessful = true
           }
@@ -261,14 +293,17 @@ class RequestSendThread(val controllerId: Int,
             warn(s"Controller $controllerId epoch ${controllerEpoch()} fails to send request " +
               s"$requestBuilder " +
               s"to broker $brokerNode. Reconnecting to broker.", e)
+            // 如果出现异常，关闭与对应Broker的连接
             networkClient.close(brokerNode.idString)
             isSendSuccessful = false
             backoff()
         }
       }
+      // 如果接收到了Response
       if (clientResponse != null) {
         val requestHeader = clientResponse.requestHeader
         val api = requestHeader.apiKey
+        // 此Response的请求类型必须是LeaderAndIsrRequest、StopReplicaRequest或UpdateMetadataRequest中的一种
         if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA)
           throw new KafkaException(s"Unexpected apiKey received: $apiKey")
 
@@ -279,7 +314,7 @@ class RequestSendThread(val controllerId: Int,
           s"${requestHeader.correlationId} sent to broker $brokerNode")
 
         if (callback != null) {
-          callback(response)
+          callback(response)// 处理回调
         }
       }
     } catch {
