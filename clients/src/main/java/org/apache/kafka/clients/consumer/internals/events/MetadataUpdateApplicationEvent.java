@@ -24,4 +24,16 @@ public class MetadataUpdateApplicationEvent extends ApplicationEvent {
         super(Type.METADATA_UPDATE);
         this.timestamp = timestamp;
     }
+
+    public long timestamp() {
+        return timestamp;
+    }
+
+    @Override
+    public String toString() {
+        return "MetadataUpdateApplicationEvent{" +
+                "timestamp=" + timestamp +
+                ", type=" + type +
+                '}';
+    }
 }

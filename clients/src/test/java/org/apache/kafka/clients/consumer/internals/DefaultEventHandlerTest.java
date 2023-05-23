@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -69,7 +70,7 @@ public class DefaultEventHandlerTest {
         final DefaultBackgroundThread bt = mock(DefaultBackgroundThread.class);
         final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
-        final DefaultEventHandler handler = new DefaultEventHandler(bt, aq, bq);
+        final DefaultEventHandler handler = new DefaultEventHandler(new MockTime(), bt, aq, bq);
         assertTrue(handler.isEmpty());
         assertFalse(handler.poll().isPresent());
         handler.add(new NoopApplicationEvent("test"));

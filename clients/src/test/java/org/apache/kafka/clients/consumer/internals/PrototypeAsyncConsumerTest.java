@@ -39,6 +39,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.mockito.MockedConstruction;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -150,15 +151,19 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testCommitted() {
         Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
-        mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
-            when(mock.complete(any())).thenReturn(new HashMap<>());
-        });
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-        assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
-        verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        MockedConstruction<OffsetFetchApplicationEvent> mockedCtor = null;
+
+        try {
+            mockedCtor = mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> when(mock.get(any())).thenReturn(new HashMap<>()));
+            consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+            assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1)));
+            verify(eventHandler).addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class), any(Duration.class));
+        } finally {
+            if (mockedCtor != null)
+                mockedCtor.close();
+        }
     }
 
     @Test

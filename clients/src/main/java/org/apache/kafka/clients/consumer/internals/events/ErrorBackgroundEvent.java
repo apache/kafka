@@ -17,10 +17,22 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 public class ErrorBackgroundEvent extends BackgroundEvent {
-    private final Throwable exception;
+    private final Throwable error;
 
-    public ErrorBackgroundEvent(Throwable e) {
-        super(EventType.ERROR);
-        exception = e;
+    public ErrorBackgroundEvent(Throwable error) {
+        super(Type.ERROR);
+        this.error = error;
+    }
+
+    public Throwable error() {
+        return error;
+    }
+
+    @Override
+    public String toString() {
+        return "ErrorBackgroundEvent{" +
+                "error=" + error +
+                ", type=" + type +
+                '}';
     }
 }
