@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public class CapturingConfigMigrationClient implements ConfigMigrationClient {
     public List<ConfigResource> deletedResources = new ArrayList<>();
@@ -46,6 +47,11 @@ public class CapturingConfigMigrationClient implements ConfigMigrationClient {
 
     @Override
     public void iterateTopicConfigs(BiConsumer<String, Map<String, String>> configConsumer) {
+
+    }
+
+    @Override
+    public void readTopicConfigs(String topicName, Consumer<Map<String, String>> configConsumer) {
 
     }
 

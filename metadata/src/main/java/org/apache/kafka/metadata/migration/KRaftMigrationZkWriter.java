@@ -98,7 +98,8 @@ public class KRaftMigrationZkWriter {
 
     /**
      * Handle a snapshot of the topic metadata. This requires scanning through all the topics and partitions
-     * in ZooKeeper to determine what has changed.
+     * in ZooKeeper to determine what has changed. Topic configs are not handled here since they exist in the
+     * ConfigurationsImage.
      */
     void handleTopicsSnapshot(TopicsImage topicsImage) {
         Map<Uuid, String> deletedTopics = new HashMap<>();
@@ -206,6 +207,7 @@ public class KRaftMigrationZkWriter {
                 resourcesToUpdate.add(resource);
             }
         };
+
         migrationClient.configClient().iterateBrokerConfigs((broker, configs) -> {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, broker);
             processConfigsForResource.accept(brokerResource, configs);

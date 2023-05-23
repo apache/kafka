@@ -154,7 +154,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         String maybeDone = migrationLeadershipState.zkMigrationComplete() ? "done" : "not done";
         log.info("Recovered migration state {}. ZK migration is {}.", migrationLeadershipState, maybeDone);
 
-        // Once we've recovered the migration state from ZK, install this class as a metadata published
+        // Once we've recovered the migration state from ZK, install this class as a metadata publisher
         // by calling the initialZkLoadHandler.
         initialZkLoadHandler.accept(this);
 

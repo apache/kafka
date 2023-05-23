@@ -36,7 +36,7 @@ import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import java.{lang, util}
 import java.util.Properties
-import java.util.function.BiConsumer
+import java.util.function.{BiConsumer, Consumer}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -148,18 +148,23 @@ class ZkConfigMigrationClient(
 
   override def iterateTopicConfigs(configConsumer: BiConsumer[String, util.Map[String, String]]): Unit = {
     val topicEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Topic)
-    zkClient.getEntitiesConfigs(ConfigType.Topic, topicEntities.toSet).foreach { case (topic, props) =>
-      val topicResource = fromZkEntityName(topic)
-      val decodedProps = props.asScala.map { case (key, value) =>
-        if (DynamicBrokerConfig.isPasswordConfig(key))
-          key -> passwordEncoder.decode(value).value
-        else
-          key -> value
-      }.toMap.asJava
+    topicEntities.foreach { topic =>
+      readTopicConfigs(topic, props => configConsumer.accept(topic, props))
+    }
+  }
 
-      logAndRethrow(this, s"Error in topic config consumer. Broker was $topicResource.") {
-        configConsumer.accept(topicResource, decodedProps)
-      }
+  override def readTopicConfigs(topicName: String, configConsumer: Consumer[util.Map[String, String]]): Unit = {
+    val topicResource = fromZkEntityName(topicName)
+    val props = zkClient.getEntityConfigs(ConfigType.Topic, topicResource)
+    val decodedProps = props.asScala.map { case (key, value) =>
+      if (DynamicBrokerConfig.isPasswordConfig(key))
+        key -> passwordEncoder.decode(value).value
+      else
+        key -> value
+    }.toMap.asJava
+
+    logAndRethrow(this, s"Error in topic config consumer. Topic was $topicResource.") {
+      configConsumer.accept(decodedProps)
     }
   }
 

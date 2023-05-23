@@ -20,9 +20,10 @@ import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.coordinator.transaction.ProducerIdManager
 import kafka.server.{ConfigType, KafkaConfig}
+import kafka.zk.migration.ZkMigrationTestHarness
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.metadata._
+import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, PartitionRecord, ProducerIdsRecord, TopicRecord}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
@@ -281,8 +282,8 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
     props.put(KafkaConfig.SslKeystorePasswordProp, SECRET) // sensitive config
 
-//    // Leave Zk in an incomplete state.
-//    zkClient.createTopicAssignment(topicName, Some(topicId), Map(tp -> Seq(1)))
+    //    // Leave Zk in an incomplete state.
+    //    zkClient.createTopicAssignment(topicName, Some(topicId), Map(tp -> Seq(1)))
 
     val delta = new MetadataDelta(MetadataImage.EMPTY)
     delta.replay(new TopicRecord()
@@ -328,7 +329,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     topicIdReplicaAssignment.foreach { assignment =>
       assertEquals(topicName, assignment.topic)
       assertEquals(Some(topicId), assignment.topicId)
-      assertEquals(Map(tp-> ReplicaAssignment(replicas.asScala.map(Integer2int).toSeq)),
+      assertEquals(Map(tp -> ReplicaAssignment(replicas.asScala.map(Integer2int).toSeq)),
         assignment.assignment)
     }
 

@@ -76,7 +76,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     newProps.put(KafkaConfig.SslKeystorePasswordProp, NEW_SECRET) // sensitive config
     migrationState = migrationClient.configClient().writeConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), newProps, migrationState)
-    assertEquals(0, zkClient.getEntityConfigs(ConfigType.Broker, "1").size())
     val actualPropsInZk = zkClient.getEntityConfigs(ConfigType.Broker, "1")
     assertEquals(2, actualPropsInZk.size())
     actualPropsInZk.forEach { case (key, value) =>
