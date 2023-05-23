@@ -267,8 +267,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 return
                     newState == MigrationDriverState.INACTIVE ||
                     newState == MigrationDriverState.ZK_MIGRATION ||
-                    newState == MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM;
+                    newState == MigrationDriverState.SYNC_KRAFT_TO_ZK;
             case ZK_MIGRATION:
+                return
+                    newState == MigrationDriverState.INACTIVE ||
+                    newState == MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM;
+            case SYNC_KRAFT_TO_ZK:
                 return
                     newState == MigrationDriverState.INACTIVE ||
                     newState == MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM;
@@ -392,6 +396,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 case ZK_MIGRATION:
                     eventQueue.append(new MigrateMetadataEvent());
                     break;
+                case SYNC_KRAFT_TO_ZK:
+                    eventQueue.append(new SyncKRaftMetadataEvent());
+                    break;
                 case KRAFT_CONTROLLER_TO_BROKER_COMM:
                     eventQueue.append(new SendRPCsToBrokersEvent());
                     break;
@@ -495,6 +502,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             if (migrationState == MigrationDriverState.BECOME_CONTROLLER) {
+                applyMigrationOperation("Load ZK State", zkMigrationClient::getOrCreateMigrationRecoveryState);
                 applyMigrationOperation("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                     log.debug("Unable to claim leadership, will retry until we learn of a different KRaft leader");
@@ -502,7 +510,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     if (!migrationLeadershipState.zkMigrationComplete()) {
                         transitionTo(MigrationDriverState.ZK_MIGRATION);
                     } else {
-                        transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
+                        transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
                     }
                 }
             }
@@ -571,6 +579,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();
                 super.handleException(t);
+            }
+        }
+    }
+
+    class SyncKRaftMetadataEvent extends MigrationEvent {
+        @Override
+        public void run() throws Exception {
+            if (migrationState == MigrationDriverState.SYNC_KRAFT_TO_ZK) {
+                log.info("Performing a full metadata sync from KRaft to ZK since the active controller changed.");
+                zkMetadataWriter.handleSnapshot(image);
+                transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             }
         }
     }

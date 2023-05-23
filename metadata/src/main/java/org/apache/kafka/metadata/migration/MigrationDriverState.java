@@ -45,6 +45,7 @@ public enum MigrationDriverState {
     WAIT_FOR_BROKERS(false),                // Wait for Zk brokers to be ready for migration.
     BECOME_CONTROLLER(false),              // Become controller for the Zk Brokers.
     ZK_MIGRATION(true),                    // The cluster has satisfied the migration criteria
+    SYNC_KRAFT_TO_ZK(true),                // A full sync of metadata from KRaft to ZK.
     KRAFT_CONTROLLER_TO_BROKER_COMM(true), // First communication from Controller to send full RPCs to the Zk brokers.
     DUAL_WRITE(true);                      // The data has been migrated
 
