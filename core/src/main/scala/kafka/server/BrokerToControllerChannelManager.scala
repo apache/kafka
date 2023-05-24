@@ -346,7 +346,7 @@ class BrokerToControllerRequestThread(
           // We don't care if disconnect has an error, just log it and get a new network client
           networkClient.disconnect(controllerAddress.idString)
         } catch {
-          case t: Throwable => error("Had an error while disconnecting from NetworkClient.", t)
+          case t: Throwable => error(s"Had an error while disconnecting NetworkClient from stale controller ${controllerAddress.idString}.", t)
         }
       }}
 

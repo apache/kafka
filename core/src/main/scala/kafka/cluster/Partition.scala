@@ -1453,7 +1453,7 @@ class Partition(val topicPartition: TopicPartition,
         // This means isrState was updated through leader election or some other mechanism before we got the AlterIsr
         // response. We don't know what happened on the controller exactly, but we do know this response is out of date
         // so we ignore it.
-        debug(s"Ignoring failed ISR update to $proposedIsrState since we have already updated state to $isrState")
+        warn(s"Ignoring failed ISR update to $proposedIsrState since we have already updated state to $isrState")
         return
       }
 
@@ -1462,11 +1462,11 @@ class Partition(val topicPartition: TopicPartition,
           isrChangeListener.markFailed()
           error match {
             case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-              debug(s"Failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
+              warn(s"Failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
             case Errors.FENCED_LEADER_EPOCH =>
-              debug(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
+              warn(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
             case Errors.INVALID_UPDATE_VERSION =>
-              debug(s"Failed to update ISR to $proposedIsrState due to invalid version. Giving up.")
+              warn(s"Failed to update ISR to $proposedIsrState due to invalid version. Giving up.")
             case _ =>
               warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
               sendAlterIsrRequest(proposedIsrState)
@@ -1474,10 +1474,10 @@ class Partition(val topicPartition: TopicPartition,
         case Right(leaderAndIsr: LeaderAndIsr) =>
           // Success from controller, still need to check a few things
           if (leaderAndIsr.leaderEpoch != leaderEpoch) {
-            debug(s"Ignoring new ISR ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
+            warn(s"Ignoring new ISR ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
             isrChangeListener.markFailed()
           } else if (leaderAndIsr.zkVersion < zkVersion) {
-            debug(s"Ignoring new ISR ${leaderAndIsr} since we have a newer version $zkVersion.")
+            warn(s"Ignoring new ISR ${leaderAndIsr} since we have a newer version $zkVersion.")
             isrChangeListener.markFailed()
           } else {
             // This is one of two states:

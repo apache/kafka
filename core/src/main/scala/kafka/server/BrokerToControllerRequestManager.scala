@@ -125,14 +125,18 @@ abstract class AbstractBrokerToControllerRequestManager[Item <: BrokerToControll
   private def sendRequest(itemsToSend: Seq[Item]): Unit = {
     val brokerEpoch = brokerEpochSupplier.apply()
     val request = buildRequest(itemsToSend, brokerEpoch)
-    debug(s"Sending to controller $request")
+    info(s"Sending to controller ${request.getClass.getName} of ~${request.toString.length} bytes (${itemsToSend.length} items)")
+    debug(s"Full request: $request")
 
     // We will not timeout the request, instead letting it retry indefinitely
     // until a response is received.
     controllerChannelManager.sendRequest(request,
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
-          debug(s"Received response $response")
+          // several tests create ClientResponses with null requestHeaders
+          val requestType = if (response.requestHeader != null) response.requestHeader.apiKey.name else "unknown-BrokerToControllerRequest"
+          info(s"Received ${requestType} response of ~${response.toString.length} bytes")
+          debug(s"Full response: $response")
           val error = try {
             if (response.authenticationException != null) {
               // For now we treat authentication errors as retriable. We use the
@@ -141,6 +145,7 @@ abstract class AbstractBrokerToControllerRequestManager[Item <: BrokerToControll
               // authentication errors so that users have a chance to fix the problem.
               Errors.NETWORK_EXCEPTION
             } else if (response.versionMismatch != null) {
+              warn(s"Unsupported version: controller response ${response}")
               Errors.UNSUPPORTED_VERSION
             } else {
               handleResponse(response, brokerEpoch, itemsToSend)
@@ -157,7 +162,8 @@ abstract class AbstractBrokerToControllerRequestManager[Item <: BrokerToControll
               maybeSendRequest()
             case _ =>
               // If we received a top-level error from the controller, retry the request in the near future
-              scheduler.schedule("send-alter-isr", () => maybeSendRequest(), 50, -1, TimeUnit.MILLISECONDS)
+              // (could be either AlterIsrRequest or ElectLeadersRequest)
+              scheduler.schedule(s"send-${requestType}", () => maybeSendRequest(), 50, -1, TimeUnit.MILLISECONDS)
           }
         }
 
