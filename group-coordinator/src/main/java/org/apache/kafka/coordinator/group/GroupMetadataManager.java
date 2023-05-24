@@ -250,6 +250,38 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Throws an InvalidRequestException if the value is non-null and empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    private void throwIfEmptyString(
+        String value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null && value.isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is non-null.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    private void throwIfNotNull(
+        Object value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
      * Validates the request.
      *
      * @param request The request to validate.
@@ -260,20 +292,14 @@ public class GroupMetadataManager {
     private void throwIfConsumerGroupHeartbeatRequestIsInvalid(
         ConsumerGroupHeartbeatRequestData request
     ) throws InvalidRequestException, UnsupportedAssignorException {
-        if (request.groupId().isEmpty()) {
-            throw new InvalidRequestException("GroupId can't be empty.");
-        }
+        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
+        throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
+        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
+        throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
+        throwIfNotNull(request.clientAssignors(), "Client side assignors are not supported yet.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == -1) {
-            if (request.memberId().isEmpty()) {
-                throw new InvalidRequestException("MemberId can't be empty.");
-            }
-            if (request.instanceId() != null) {
-                throw new InvalidRequestException("InstanceId should only be provided in first request.");
-            }
-            if (request.rackId() != null) {
-                throw new InvalidRequestException("RackId should only be provided in first request.");
-            }
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         } else if (request.memberEpoch() == 0) {
             if (request.rebalanceTimeoutMs() == -1) {
                 throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
@@ -292,14 +318,6 @@ public class GroupMetadataManager {
             throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
                 + " is not supported. Supported assignors: " + String.join(", ", assignors.keySet())
                 + ".");
-        }
-
-        if (request.subscribedTopicRegex() != null) {
-            throw new InvalidRequestException("SubscribedTopicRegex is not supported yet.");
-        }
-
-        if (request.clientAssignors() != null) {
-            throw new InvalidRequestException("Client side assignors are not supported yet.");
         }
     }
 

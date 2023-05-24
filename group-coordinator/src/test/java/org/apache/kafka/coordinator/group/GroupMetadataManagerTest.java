@@ -485,16 +485,16 @@ public class GroupMetadataManagerTest {
                 .setGroupId("foo")
                 .setMemberId(Uuid.randomUuid().toString())
                 .setMemberEpoch(1)
-                .setInstanceId("instance-id")));
-        assertEquals("InstanceId should only be provided in first request.", ex.getMessage());
+                .setInstanceId("")));
+        assertEquals("InstanceId can't be empty.", ex.getMessage());
 
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberId(Uuid.randomUuid().toString())
                 .setMemberEpoch(1)
-                .setRackId("rack-id")));
-        assertEquals("RackId should only be provided in first request.", ex.getMessage());
+                .setRackId("")));
+        assertEquals("RackId can't be empty.", ex.getMessage());
 
         ex = assertThrows(UnsupportedAssignorException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
