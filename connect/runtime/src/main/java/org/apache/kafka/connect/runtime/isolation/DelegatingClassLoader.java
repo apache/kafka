@@ -360,19 +360,17 @@ public class DelegatingClassLoader extends URLClassLoader {
         builder.useParallelExecutor();
         Reflections reflections = new InternalReflections(builder);
 
-        try (LoaderSwap loaderSwap = withClassLoader(loader)) {
-            return new PluginScanResult(
-                    getPluginDesc(reflections, SinkConnector.class, loader),
-                    getPluginDesc(reflections, SourceConnector.class, loader),
-                    getPluginDesc(reflections, Converter.class, loader),
-                    getPluginDesc(reflections, HeaderConverter.class, loader),
-                    getTransformationPluginDesc(loader, reflections),
-                    getPredicatePluginDesc(loader, reflections),
-                    getServiceLoaderPluginDesc(ConfigProvider.class, loader),
-                    getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
-                    getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
-            );
-        }
+        return new PluginScanResult(
+                getPluginDesc(reflections, SinkConnector.class, loader),
+                getPluginDesc(reflections, SourceConnector.class, loader),
+                getPluginDesc(reflections, Converter.class, loader),
+                getPluginDesc(reflections, HeaderConverter.class, loader),
+                getTransformationPluginDesc(loader, reflections),
+                getPredicatePluginDesc(loader, reflections),
+                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
+                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
+                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
+        );
     }
 
     @SuppressWarnings({"unchecked"})
