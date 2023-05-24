@@ -25,13 +25,15 @@ import org.apache.kafka.common.requests.OffsetCommitRequestTest.assertResponseEq
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetCommitResponse}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
 
 import java.util.Optional.empty
 import java.util.Properties
 import scala.collection.{Map, Seq}
 import scala.collection.immutable.ListMap
-import scala.jdk.CollectionConverters.{ListHasAsScala, MapHasAsJava, SeqHasAsJava}
+import scala.jdk.CollectionConverters.{MapHasAsJava, SeqHasAsJava}
 
 class OffsetCommitRequestTest extends BaseRequestTest {
   override def brokerCount: Int = 1
@@ -56,8 +58,14 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     consumer = createConsumer(configOverrides = configOverrides)
   }
 
-  @Test
-  def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+  def testTopicIdsArePopulatedInOffsetCommitResponses(version: Short): Unit = {
+    if (version < 9) {
+      // No support of topic id prior to version 9.
+      return
+    }
+
     val topicNames = Seq("topic1", "topic2", "topic3")
     topicNames.foreach(createTopic(_))
     consumer.subscribe(topicNames.asJava)
@@ -67,7 +75,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     sendOffsetCommitRequest(
       topics.map { case(name, id) => (NameAndId(name, id), ListMap(0 -> offset)) }.toSeq,
       topics.map { case(name, id) => (NameAndId(name, id), Map(0 -> Errors.NONE)) }.toSeq,
-      ApiKeys.OFFSET_COMMIT.allVersions().asScala
+      version
     )
   }
 
@@ -78,8 +86,14 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     consumer.commitSync(offsetsToCommit(topicNames, offset))
   }
 
-  @Test
-  def testOffsetCommitWithUnknownTopicId(): Unit = {
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+  def testOffsetCommitWithUnknownTopicId(version: Short): Unit = {
+    if (version < 9) {
+      // No support of topic id prior to version 9.
+      return
+    }
+
     val topicNames = Seq("topic1", "topic2", "topic3")
     topicNames.foreach(createTopic(_))
     val topicIds = getTopicIds(topicNames)
@@ -89,7 +103,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
         ++ Seq((NameAndId("unresolvable"), ListMap(0 -> offset))),
       Seq((NameAndId("unresolvable"), ListMap(0 -> Errors.UNKNOWN_TOPIC_ID)))
         ++ topicIds.map { case(name, id) => (NameAndId(name, id), Map(0 -> Errors.NONE)) }.toSeq,
-      ApiKeys.OFFSET_COMMIT.allVersions().asScala.filter(_ >= 9)
+      version
     )
   }
 
@@ -110,23 +124,21 @@ class OffsetCommitRequestTest extends BaseRequestTest {
 
   def sendOffsetCommitRequest(offsets: Seq[(NameAndId, Map[Int, Long])],
                               responses: Seq[(NameAndId, Map[Int, Errors])],
-                              versions: Seq[java.lang.Short]): Unit = {
+                              version: Short): Unit = {
 
     val requestData = newOffsetCommitRequestData(
       groupId = "group",
       offsets = offsets
     )
 
-    versions.foreach { version =>
-      val expectedResponse = newOffsetCommitResponseData(
-        version,
-        topicPartitions = responses,
-      )
-      val response = connectAndReceive[OffsetCommitResponse](
-        new OffsetCommitRequest.Builder(requestData, true).build(version)
-      )
-      assertResponseEquals(new OffsetCommitResponse(expectedResponse), response)
-    }
+    val expectedResponse = newOffsetCommitResponseData(
+      version,
+      topicPartitions = responses,
+    )
+    val response = connectAndReceive[OffsetCommitResponse](
+      new OffsetCommitRequest.Builder(requestData, true).build(version)
+    )
+    assertResponseEquals(new OffsetCommitResponse(expectedResponse), response)
   }
 
   private def offsetsToCommit(topics: Seq[String], offset: Long): java.util.Map[TopicPartition, OffsetAndMetadata] = {
