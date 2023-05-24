@@ -21,13 +21,10 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
-import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
-import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
@@ -73,13 +70,12 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.image.TopicsImageTest.DELTA1_RECORDS;
 import static org.apache.kafka.image.TopicsImageTest.IMAGE1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class KRaftMigrationDriverTest {
     List<Node> controllerNodes = Arrays.asList(
@@ -283,7 +279,8 @@ public class KRaftMigrationDriverTest {
     public void testMigrationWithClientException(boolean authException) throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CountDownLatch claimLeaderAttempts = new CountDownLatch(3);
-        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)), new CapturingTopicMigrationClient(), null, null) {
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)),
+                new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient()) {
             @Override
             public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
                 if (claimLeaderAttempts.getCount() == 0) {
@@ -388,7 +385,8 @@ public class KRaftMigrationDriverTest {
     @Test
     public void testSkipWaitForBrokersInDualWrite() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
-        CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(), null, null, null);
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(),
+            new CapturingTopicMigrationClient(), new CapturingConfigMigrationClient(), new CapturingAclMigrationClient());
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
         try (KRaftMigrationDriver driver = new KRaftMigrationDriver(
                 3000,
@@ -580,7 +578,7 @@ public class KRaftMigrationDriverTest {
     }
 
     @Test
-    public void testFailover() throws Exception {
+    public void testControllerFailover() throws Exception {
         setupTopicDualWrite((driver, migrationClient, topicClient, configClient) -> {
             MetadataImage image = new MetadataImage(
                 MetadataProvenance.EMPTY,
@@ -614,13 +612,13 @@ public class KRaftMigrationDriverTest {
             migrationClient.setMigrationRecoveryState(
                 ZkMigrationLeadershipState.EMPTY.withKRaftMetadataOffsetAndEpoch(100, 1));
 
-            // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz
+            // Modify topics in a KRaft -- delete foo, modify bar, add baz
             provenance = new MetadataProvenance(200, 1, 1);
             delta = new MetadataDelta(image);
             RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
             image = delta.apply(provenance);
 
-            // Standby driver does not do anything with this delta
+            // Standby driver does not do anything with this delta besides remember the image
             driver.onMetadataUpdate(delta, image, new LogDeltaManifest(provenance, newLeader, 1, 100, 42));
 
             // Standby becomes leader

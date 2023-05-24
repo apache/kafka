@@ -50,7 +50,7 @@ class TestMigration(ProduceConsumeValidateTest):
             wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.replication_factor, timeout_sec=60,
                        backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
-    def do_migration(self):
+    def do_migration(self, roll_controller = False, downgrade_to_zk = False):
         # Start up KRaft controller in migration mode
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
         controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
@@ -78,7 +78,15 @@ class TestMigration(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
             self.wait_until_rejoin()
 
-    def test_online_migration(self):
+        if roll_controller:
+            self.logger.info("Restarting KRaft quorum")
+            for node in controller.nodes:
+                controller.stop_node(node)
+                controller.start_node(node)
+
+    @parametrize(roll_controller = True)
+    @parametrize(roll_controller = False)
+    def test_online_migration(self, roll_controller):
         zk_quorum = partial(ServiceQuorumInfo, zk)
         self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
         self.kafka = KafkaService(self.test_context,
@@ -116,7 +124,7 @@ class TestMigration(ProduceConsumeValidateTest):
                                         self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=DEV_BRANCH)
 
-        self.run_produce_consume_validate(core_test_action=self.do_migration)
+        self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller = roll_controller))
         self.kafka.stop()
 
     @parametrize(metadata_quorum=isolated_kraft)

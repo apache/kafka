@@ -259,8 +259,9 @@ class ZkMigrationIntegrationTest {
       verifyProducerId(producerIdBlock, zkClient)
 
     } finally {
-      zkCluster.stop()
+      zkCluster.brokerIds().forEach(zkCluster.shutdownBroker(_))
       kraftCluster.close()
+      zkCluster.stop()
     }
   }
 
