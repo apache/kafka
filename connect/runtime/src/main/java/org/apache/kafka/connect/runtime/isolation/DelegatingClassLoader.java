@@ -360,8 +360,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         builder.useParallelExecutor();
         Reflections reflections = new InternalReflections(builder);
 
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
-        try {
+        try (LoaderSwap loaderSwap = withClassLoader(loader)) {
             return new PluginScanResult(
                     getPluginDesc(reflections, SinkConnector.class, loader),
                     getPluginDesc(reflections, SourceConnector.class, loader),
@@ -373,8 +372,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                     getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
                     getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
             );
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
         }
     }
 
@@ -405,7 +402,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                try {
+                try (LoaderSwap loaderSwap = withClassLoader(loader)) {
                     result.add(pluginDesc(plugin, versionFor(plugin), loader));
                 } catch (ReflectiveOperationException | LinkageError e) {
                     log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), plugin.getSimpleName(), reflectiveErrorDescription(e), e);
@@ -427,15 +424,17 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
-            T pluginImpl;
-            try {
-                pluginImpl = iterator.next();
-            } catch (ServiceConfigurationError t) {
-                log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
-                continue;
+            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
+                T pluginImpl;
+                try {
+                    pluginImpl = iterator.next();
+                } catch (ServiceConfigurationError t) {
+                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
+                    continue;
+                }
+                result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
+                    versionFor(pluginImpl), loader));
             }
-            result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
-                versionFor(pluginImpl), loader));
         }
         return result;
     }
@@ -470,6 +469,16 @@ public class DelegatingClassLoader extends URLClassLoader {
             return ": Failed to invoke plugin constructor";
         } else {
             return "";
+        }
+    }
+
+    public LoaderSwap withClassLoader(ClassLoader loader) {
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
+        try {
+            return new LoaderSwap(savedLoader);
+        } catch (Throwable t) {
+            Plugins.compareAndSwapLoaders(savedLoader);
+            throw t;
         }
     }
 
