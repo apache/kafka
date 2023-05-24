@@ -84,7 +84,7 @@ public class KRaftMigrationZkWriter {
         if (delta.configsDelta() != null) {
             handleConfigsDelta(image.configs(), delta.configsDelta());
         }
-        if (delta.clientQuotasDelta() != null) {
+        if ((delta.clientQuotasDelta() != null) || (delta.scramDelta() != null)) {
             handleClientQuotasDelta(image, delta);
         }
         if (delta.producerIdsDelta() != null) {
@@ -323,7 +323,8 @@ public class KRaftMigrationZkWriter {
             users.forEach(userName -> {
                 Map<String, String> userScramMap = getScramCredentialStringsForUser(metadataImage.scram(), userName);
                 ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
-                if (metadataImage.clientQuotas() == null) {
+                if ((metadataImage.clientQuotas() == null) ||
+                    (metadataImage.clientQuotas().entities().get(clientQuotaEntity) == null)) {
                     operationConsumer.accept("Updating client quota " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), Collections.emptyMap(), userScramMap, migrationState));
                 } else {
