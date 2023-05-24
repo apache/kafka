@@ -255,7 +255,7 @@ class ZkMigrationIntegrationTest {
     new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
     new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
   ))
-  def testDualWriteQuota(zkCluster: ClusterInstance): Unit = {
+  def testDualWrite(zkCluster: ClusterInstance): Unit = {
     // Create a topic in ZK mode
     var admin = zkCluster.createAdminClient()
     val newTopics = new util.ArrayList[NewTopic]()
