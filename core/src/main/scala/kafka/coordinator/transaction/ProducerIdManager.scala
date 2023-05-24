@@ -221,6 +221,7 @@ class RPCProducerIdManager(brokerId: Int,
         requestInFlight.compareAndSet(false, true) ) {
 
         sendRequest()
+        // Reset backoff after a successful send.
         backoffDeadlineMs.set(NoRetry)
       }
     }
