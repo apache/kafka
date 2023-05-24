@@ -22,10 +22,10 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetCommitRequestTest.assertResponseEquals
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetCommitResponse}
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import java.util.Optional.empty
 import java.util.Properties
@@ -56,59 +56,52 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     consumer = createConsumer(configOverrides = configOverrides)
   }
 
-  @AfterEach
-  override def tearDown(): Unit = {
-    super.tearDown()
-  }
-
-  private def createTopics(topicNames: String*): Seq[NameAndId] = {
-    topicNames.map { topic =>
-      createTopic(topic)
-      val topicId: Uuid = getTopicIds().get(topic) match {
-        case Some(x) => x
-        case _ => throw new AssertionError("Topic ID not found for " + topic)
-      }
-      NameAndId(topic, topicId)
-    }
-  }
-
   @Test
   def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
-    consumer.subscribe(topics.map(_.name).asJava)
+    val topicNames = Seq("topic1", "topic2", "topic3")
+    topicNames.foreach(createTopic(_))
+    consumer.subscribe(topicNames.asJava)
+
+    val topics = getTopicIds(topicNames.toSeq)
 
     sendOffsetCommitRequest(
-      topics.map((_, ListMap(0 -> offset))),
-      topics.map((_, Map(0 -> Errors.NONE))),
+      topics.map { case(name, id) => (NameAndId(name, id), ListMap(0 -> offset)) }.toSeq,
+      topics.map { case(name, id) => (NameAndId(name, id), Map(0 -> Errors.NONE)) }.toSeq,
       ApiKeys.OFFSET_COMMIT.allVersions().asScala
     )
   }
 
   @Test
   def testCommitOffsetFromConsumer(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
-    consumer.commitSync(offsetsToCommit(topics, offset))
+    val topicNames = Seq("topic1", "topic2", "topic3")
+    topicNames.foreach(createTopic(_))
+    consumer.commitSync(offsetsToCommit(topicNames, offset))
   }
 
   @Test
   def testOffsetCommitWithUnknownTopicId(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
+    val topicNames = Seq("topic1", "topic2", "topic3")
+    topicNames.foreach(createTopic(_))
+    val topicIds = getTopicIds(topicNames)
 
     sendOffsetCommitRequest(
-      topics.map((_, ListMap(0 -> offset))) ++ Seq((NameAndId("unresolvable"), ListMap(0 -> offset))),
-      Seq((NameAndId("unresolvable"), ListMap(0 -> Errors.UNKNOWN_TOPIC_ID))) ++ topics.map((_, Map(0 -> Errors.NONE))),
+      topicIds.map { case(name, id) => (NameAndId(name, id), ListMap(0 -> offset)) }.toSeq
+        ++ Seq((NameAndId("unresolvable"), ListMap(0 -> offset))),
+      Seq((NameAndId("unresolvable"), ListMap(0 -> Errors.UNKNOWN_TOPIC_ID)))
+        ++ topicIds.map { case(name, id) => (NameAndId(name, id), Map(0 -> Errors.NONE)) }.toSeq,
       ApiKeys.OFFSET_COMMIT.allVersions().asScala.filter(_ >= 9)
     )
   }
 
   @Test
   def alterConsumerGroupOffsetsDoNotUseTopicIds(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
+    val topicNames = Seq("topic1", "topic2", "topic3")
+    topicNames.foreach(createTopic(_))
     val admin = createAdminClient()
 
     try {
       // Would throw an UnknownTopicId exception if the OffsetCommitRequest was set to version 9 or higher.
-      admin.alterConsumerGroupOffsets(groupId, offsetsToCommit(topics, offset)).all.get()
+      admin.alterConsumerGroupOffsets(groupId, offsetsToCommit(topicNames, offset)).all.get()
 
     } finally {
       Utils.closeQuietly(admin, "AdminClient")
@@ -136,9 +129,9 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     }
   }
 
-  private def offsetsToCommit(topics: Seq[NameAndId], offset: Long): java.util.Map[TopicPartition, OffsetAndMetadata] = {
+  private def offsetsToCommit(topics: Seq[String], offset: Long): java.util.Map[TopicPartition, OffsetAndMetadata] = {
     topics
-      .map(t => new TopicPartition(t.name, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
+      .map(t => new TopicPartition(t, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
       .toMap
       .asJava
   }
