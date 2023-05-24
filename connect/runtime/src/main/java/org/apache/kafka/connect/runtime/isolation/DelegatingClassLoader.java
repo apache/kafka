@@ -349,10 +349,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         );
     }
 
-    protected LoaderSwap withClassLoader(ClassLoader loader) {
-        return LoaderSwap.use(loader);
-    }
-
     private PluginScanResult scanPluginPath(
             ClassLoader loader,
             URL[] urls
@@ -364,7 +360,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         builder.useParallelExecutor();
         Reflections reflections = new InternalReflections(builder);
 
-        try (LoaderSwap loaderSwap = withClassLoader(loader)) {
+        try (LoaderSwap loaderSwap = LoaderSwap.use(loader)) {
             return new PluginScanResult(
                     getPluginDesc(reflections, SinkConnector.class, loader),
                     getPluginDesc(reflections, SourceConnector.class, loader),
@@ -406,7 +402,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                try (LoaderSwap loaderSwap = withClassLoader(loader)) {
+                try {
                     result.add(pluginDesc(plugin, versionFor(plugin), loader));
                 } catch (ReflectiveOperationException | LinkageError e) {
                     log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), plugin.getSimpleName(), reflectiveErrorDescription(e), e);
@@ -429,7 +425,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
             T pluginImpl;
-            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
+            try {
                 pluginImpl = iterator.next();
             } catch (ServiceConfigurationError t) {
                 log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);

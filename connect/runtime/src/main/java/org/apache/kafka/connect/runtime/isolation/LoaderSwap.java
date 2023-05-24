@@ -24,8 +24,7 @@ public class LoaderSwap implements AutoCloseable {
 
     private final ClassLoader savedLoader;
 
-    // package-local, intended only for internal use.
-    static LoaderSwap use(ClassLoader loader) {
+    public static LoaderSwap use(ClassLoader loader) {
         ClassLoader savedLoader = compareAndSwapLoaders(loader);
         try {
             return new LoaderSwap(savedLoader);
