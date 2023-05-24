@@ -709,9 +709,8 @@ public class TransactionManager {
     }
     synchronized void handleFailedBatch(ProducerBatch batch,
                                         RuntimeException exception,
-                                        boolean adjustSequenceNumbers,
-                                        InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
-        maybeTransitionToErrorState(exception, invalidStateDetectionStrategy);
+                                        boolean adjustSequenceNumbers) {
+        maybeTransitionToErrorState(exception, InvalidStateDetectionStrategy.BACKGROUND);
         removeInFlightBatch(batch);
 
         if (hasFatalError()) {

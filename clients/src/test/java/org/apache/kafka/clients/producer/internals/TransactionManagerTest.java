@@ -2807,7 +2807,7 @@ public class TransactionManagerTest {
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
         assertEquals(Integer.valueOf(2), transactionManager.sequenceNumber(tp0));
         transactionManager.markSequenceUnresolved(b2);
-        transactionManager.handleFailedBatch(b2, new TimeoutException(), false, BACKGROUND);
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // We only had one inflight batch, so we should be able to clear the unresolved status
@@ -2835,7 +2835,7 @@ public class TransactionManagerTest {
 
         // The first batch fails with a timeout
         transactionManager.markSequenceUnresolved(b1);
-        transactionManager.handleFailedBatch(b1, new TimeoutException(), false, BACKGROUND);
+        transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The reset should not occur until sequence numbers have been resolved
@@ -2844,7 +2844,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The second batch fails as well with a timeout
-        transactionManager.handleFailedBatch(b2, new TimeoutException(), false, BACKGROUND);
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), false);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertTrue(transactionManager.hasUnresolvedSequences());
@@ -2873,7 +2873,7 @@ public class TransactionManagerTest {
 
         // The first batch fails with a timeout
         transactionManager.markSequenceUnresolved(b1);
-        transactionManager.handleFailedBatch(b1, new TimeoutException(), false, BACKGROUND);
+        transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // The second batch succeeds, but sequence numbers are still not resolved
@@ -2884,7 +2884,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasUnresolvedSequences());
 
         // When the last inflight batch fails, we have to bump the epoch
-        transactionManager.handleFailedBatch(b3, new TimeoutException(), false, BACKGROUND);
+        transactionManager.handleFailedBatch(b3, new TimeoutException(), false);
 
         // Run sender loop to trigger epoch bump
         runUntil(() -> transactionManager.producerIdAndEpoch().epoch == 2);
@@ -2902,7 +2902,7 @@ public class TransactionManagerTest {
         TopicPartition tp0 = new TopicPartition("foo", 0);
         ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
         // Handling b1 should bump the epoch after OutOfOrderSequenceException
-        transactionManager.handleFailedBatch(b1, new OutOfOrderSequenceException("out of sequence"), false, BACKGROUND);
+        transactionManager.handleFailedBatch(b1, new OutOfOrderSequenceException("out of sequence"), false);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         ProducerIdAndEpoch idAndEpochAfterFirstBatch = new ProducerIdAndEpoch(producerId, (short) (epoch + 1));
         assertEquals(idAndEpochAfterFirstBatch, transactionManager.producerIdAndEpoch());
@@ -2911,7 +2911,7 @@ public class TransactionManagerTest {
 
         // The second batch should not bump the epoch as txn manager is already in fatal error state
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
-        transactionManager.handleFailedBatch(b2, new TimeoutException(), true, BACKGROUND);
+        transactionManager.handleFailedBatch(b2, new TimeoutException(), true);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(idAndEpochAfterFirstBatch, transactionManager.producerIdAndEpoch());
     }
@@ -3456,7 +3456,7 @@ public class TransactionManagerTest {
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will result in a poisoning of the transaction manager for all subsequent transactional operations since
         // it was performed in the background.
-        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new KafkaException(), false, BACKGROUND));
+        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new KafkaException(), false));
         assertTrue(transactionManager.hasFatalError());
 
         // Validate that all of these operations will fail after the invalid state transition attempt above.
@@ -3472,7 +3472,7 @@ public class TransactionManagerTest {
     public void testForegroundInvalidStateTransitionIsRecoverable() {
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will not poison the transaction manager since it was performed in the foreground.
-        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new KafkaException(), false, FOREGROUND));
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort(FOREGROUND));
         assertFalse(transactionManager.hasFatalError());
 
         // Validate that the transactions can still run after the invalid state transition attempt above.
