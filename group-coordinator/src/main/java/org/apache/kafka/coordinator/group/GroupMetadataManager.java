@@ -478,14 +478,13 @@ public class GroupMetadataManager {
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
-        // Get or create the member. Note that member is the persisted member anytime
-        // in this method.
+        // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
         final ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
         throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
 
         if (memberEpoch == 0) {
-            log.info("[GroupId " + groupId + "] Member " + memberId + " re-joins the consumer group.");
+            log.info("[GroupId " + groupId + "] Member " + memberId + " joins the consumer group.");
         }
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue

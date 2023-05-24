@@ -1073,7 +1073,7 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
-        // Member 3 leaves the consumer group.
+        // Member 2 leaves the consumer group.
         Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)

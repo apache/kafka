@@ -355,7 +355,9 @@ public class ConsumerGroup implements Group {
 
     /**
      * Compute the preferred (server side) assignor for the group while
-     * using the provided assignor for the member.
+     * taking into account the updated member. The computation relies
+     * on {{@link ConsumerGroup#serverAssignors}} persisted structure
+     * but it does not update it.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
@@ -419,18 +421,14 @@ public class ConsumerGroup implements Group {
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
         subscribedTopicNames.forEach((topicName, count) -> {
-            newSubscriptionMetadata.computeIfAbsent(topicName, __ -> {
-                TopicImage topicImage = topicsImage.getTopic(topicName);
-                if (topicImage == null) {
-                    return null;
-                } else {
-                    return new TopicMetadata(
-                        topicImage.id(),
-                        topicImage.name(),
-                        topicImage.partitions().size()
-                    );
-                }
-            });
+            TopicImage topicImage = topicsImage.getTopic(topicName);
+            if (topicImage != null) {
+                newSubscriptionMetadata.put(topicName, new TopicMetadata(
+                    topicImage.id(),
+                    topicImage.name(),
+                    topicImage.partitions().size()
+                ));
+            }
         });
 
         return Collections.unmodifiableMap(newSubscriptionMetadata);
