@@ -96,8 +96,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -129,7 +127,6 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
@@ -2828,7 +2825,14 @@ public abstract class ConsumerCoordinatorTest {
         assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
     }
 
-    static Stream<Arguments> commitOffsetTestArgs() {
+    private static Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata(Map<TopicIdPartition, Long> offsets) {
+        return offsets.entrySet().stream()
+            .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), new OffsetAndMetadata(e.getValue(), "metadata")))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    @Test
+    public void testTopicIdsArePopulatedByTheConsumerCoordinatorInV9() {
         Map<TopicIdPartition, Long> byTopicIdOffsets = new HashMap<>();
         byTopicIdOffsets.put(ti1p, 100L);
         byTopicIdOffsets.put(ti2p, 200L);
@@ -2859,74 +2863,80 @@ public abstract class ConsumerCoordinatorTest {
                         .setPartitionIndex(ti2p.partition())
                         .setCommittedOffset(200L)
                         .setCommittedMetadata("metadata")))
-            ));
+        ));
 
         OffsetCommitRequestData byTopicNameData = byTopicIdData.duplicate();
         byTopicNameData.topics().add(new OffsetCommitRequestTopic()
-            .setName(unknownTopicIdPartition.topic())
-            .setPartitions(singletonList(new OffsetCommitRequestPartition()
-                .setPartitionIndex(5)
-                .setCommittedOffset(300L)
-                .setCommittedMetadata("metadata")))
+                .setName(unknownTopicIdPartition.topic())
+                .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                        .setPartitionIndex(5)
+                        .setCommittedOffset(300L)
+                        .setCommittedMetadata("metadata")))
         );
-
-        return Stream.of(
-            Arguments.of(true, byTopicIdOffsets, byTopicIdData, (short) 9),
-            Arguments.of(false, byTopicIdOffsets, byTopicIdData, (short) 9),
-            Arguments.of(true, byTopicNameOffsets, byTopicNameData, (short) 8),
-            Arguments.of(false, byTopicNameOffsets, byTopicNameData, (short) 8)
-        );
-    }
-
-    private static Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata(Map<TopicIdPartition, Long> offsets) {
-        return offsets.entrySet().stream()
-            .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), new OffsetAndMetadata(e.getValue(), "metadata")))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    @ParameterizedTest
-    @MethodSource("commitOffsetTestArgs")
-    public void testTopicIdsArePopulatedByTheConsumerCoordinator(
-            boolean commitSync,
-            Map<TopicIdPartition, Long> offsets,
-            OffsetCommitRequestData expectedRequestData,
-            short expectedRequestVersion) {
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         OffsetCommitRequestCaptor captor = new OffsetCommitRequestCaptor();
-        prepareOffsetCommitRequest(offsets, Errors.NONE, false, captor);
+        prepareOffsetCommitRequest(byTopicIdOffsets, Errors.NONE, false, captor);
 
-        Map<TopicPartition, OffsetAndMetadata> input = offsetAndMetadata(offsets);
+        Map<TopicPartition, OffsetAndMetadata> input = offsetAndMetadata(byTopicIdOffsets);
 
-        if (commitSync) {
-            assertTrue(coordinator.commitOffsetsSync(input, time.timer(Long.MAX_VALUE)));
-
-        } else {
-            AtomicBoolean callbackInvoked = new AtomicBoolean();
-            coordinator.commitOffsetsAsync(input, (inputOffsets, exception) -> {
-                // Notes:
-                // 1) The offsets passed to the callback are the same object provided to the offset commit method.
-                //    The validation on the offsets is not required but defensive.
-                // 2) We validate that the commit was successful, which is the case if the exception is null.
-                // 3) We validate this callback was invoked, which is not necessary but defensive.
-                assertSame(inputOffsets, input);
-                assertNull(exception);
-                callbackInvoked.set(true);
-            });
-
-            coordinator.invokeCompletedOffsetCommitCallbacks();
-            assertTrue(callbackInvoked.get());
-        }
+        assertTrue(coordinator.commitOffsetsSync(input, time.timer(Long.MAX_VALUE)));
 
         // The consumer does not provide a guarantee on the order of occurrence of topics and partitions in the
         // OffsetCommit request, since a map of offsets is provided to the consumer API. Here, both requests
         // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
-        assertRequestEquals(
-            new OffsetCommitRequest(expectedRequestData, expectedRequestVersion),
-            captor.request
-        );
+        assertRequestEquals(new OffsetCommitRequest(byTopicIdData, (short) 9), captor.request);
+    }
+
+    @Test
+    public void testUseOffsetCommitRequestV8IfATopicIdIsMissing() {
+        TopicIdPartition unknownTopicIdPartition =
+                new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic3", 5));
+
+        Map<TopicIdPartition, Long> byTopicNameOffsets = new HashMap<>();
+        byTopicNameOffsets.put(ti1p, 100L);
+        byTopicNameOffsets.put(ti2p, 200L);
+        byTopicNameOffsets.put(unknownTopicIdPartition, 300L);
+
+        OffsetCommitRequestData byTopicNameData = new OffsetCommitRequestData()
+            .setGroupId(groupId)
+            .setGenerationId(OffsetCommitRequest.DEFAULT_GENERATION_ID)
+            .setTopics(Arrays.asList(
+                new OffsetCommitRequestTopic()
+                    .setTopicId(ti1p.topicId())
+                    .setName(topic1)
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                        .setPartitionIndex(ti1p.partition())
+                        .setCommittedOffset(100L)
+                        .setCommittedMetadata("metadata"))),
+                new OffsetCommitRequestTopic()
+                    .setTopicId(ti2p.topicId())
+                    .setName(topic2)
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                        .setPartitionIndex(ti2p.partition())
+                        .setCommittedOffset(200L)
+                        .setCommittedMetadata("metadata"))),
+                new OffsetCommitRequestTopic()
+                    .setName(unknownTopicIdPartition.topic())
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                        .setPartitionIndex(5)
+                        .setCommittedOffset(300L)
+                        .setCommittedMetadata("metadata")))
+            ));
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        OffsetCommitRequestCaptor captor = new OffsetCommitRequestCaptor();
+        prepareOffsetCommitRequest(byTopicNameOffsets, Errors.NONE, false, captor);
+
+        Map<TopicPartition, OffsetAndMetadata> input = offsetAndMetadata(byTopicNameOffsets);
+
+        assertTrue(coordinator.commitOffsetsSync(input, time.timer(Long.MAX_VALUE)));
+        // If topic ids cannot be used, OffsetCommitRequest v8 should be used.
+        assertRequestEquals(new OffsetCommitRequest(byTopicNameData, (short) 8), captor.request);
     }
 
     @ParameterizedTest
