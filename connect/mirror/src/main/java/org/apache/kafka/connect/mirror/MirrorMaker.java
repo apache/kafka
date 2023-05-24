@@ -23,7 +23,6 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.mirror.rest.MirrorRestServer;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -267,41 +266,40 @@ public class MirrorMaker {
         }
         String workerId = sourceAndTarget.toString();
         Plugins plugins = new Plugins(workerProps);
-        try (LoaderSwap loaderSwap = plugins.withClassLoader(plugins.delegatingLoader())) {
-            DistributedConfig distributedConfig = new DistributedConfig(workerProps);
-            String kafkaClusterId = distributedConfig.kafkaClusterId();
-            String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
-            // Create the admin client to be shared by all backing stores for this herder
-            Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
-            adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "shared-admin");
-            ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
-            SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
-            KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase,
-                    plugins.newInternalConverter(true, JsonConverter.class.getName(),
-                            Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
-            offsetBackingStore.configure(distributedConfig);
-            ConnectorClientConfigOverridePolicy clientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
-            clientConfigOverridePolicy.configure(config.originals());
-            Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, clientConfigOverridePolicy);
-            WorkerConfigTransformer configTransformer = worker.configTransformer();
-            Converter internalValueConverter = worker.getInternalValueConverter();
-            StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin, clientIdBase);
-            statusBackingStore.configure(distributedConfig);
-            ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
-                    internalValueConverter,
-                    distributedConfig,
-                    configTransformer,
-                    sharedAdmin,
-                    clientIdBase);
-            // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
-            // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
-            // tracking the various shared admin objects in this class.
-            Herder herder = new DistributedHerder(distributedConfig, time, worker,
-                    kafkaClusterId, statusBackingStore, configBackingStore,
-                    advertisedUrl, restClient, clientConfigOverridePolicy,
-                    restNamespace, sharedAdmin);
-            herders.put(sourceAndTarget, herder);
-        }
+        plugins.compareAndSwapWithDelegatingLoader();
+        DistributedConfig distributedConfig = new DistributedConfig(workerProps);
+        String kafkaClusterId = distributedConfig.kafkaClusterId();
+        String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
+        // Create the admin client to be shared by all backing stores for this herder
+        Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
+        adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "shared-admin");
+        ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
+        SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase,
+                plugins.newInternalConverter(true, JsonConverter.class.getName(),
+                        Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
+        offsetBackingStore.configure(distributedConfig);
+        ConnectorClientConfigOverridePolicy clientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
+        clientConfigOverridePolicy.configure(config.originals());
+        Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, clientConfigOverridePolicy);
+        WorkerConfigTransformer configTransformer = worker.configTransformer();
+        Converter internalValueConverter = worker.getInternalValueConverter();
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin, clientIdBase);
+        statusBackingStore.configure(distributedConfig);
+        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
+                internalValueConverter,
+                distributedConfig,
+                configTransformer,
+                sharedAdmin,
+                clientIdBase);
+        // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
+        // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
+        // tracking the various shared admin objects in this class.
+        Herder herder = new DistributedHerder(distributedConfig, time, worker,
+                kafkaClusterId, statusBackingStore, configBackingStore,
+                advertisedUrl, restClient, clientConfigOverridePolicy,
+                restNamespace, sharedAdmin);
+        herders.put(sourceAndTarget, herder);
     }
 
     private static String encodePath(String rawPath) throws UnsupportedEncodingException {

@@ -24,32 +24,13 @@ public class LoaderSwap implements AutoCloseable {
 
     private final ClassLoader savedLoader;
 
-    public static LoaderSwap use(ClassLoader loader) {
-        ClassLoader savedLoader = compareAndSwapLoaders(loader);
-        try {
-            return new LoaderSwap(savedLoader);
-        } catch (Throwable t) {
-            compareAndSwapLoaders(savedLoader);
-            throw t;
-        }
-    }
-
-    private LoaderSwap(ClassLoader savedLoader) {
+    public LoaderSwap(ClassLoader savedLoader) {
         this.savedLoader = savedLoader;
     }
 
-
     @Override
     public void close() {
-        compareAndSwapLoaders(savedLoader);
-    }
-
-    private static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
-        ClassLoader current = Thread.currentThread().getContextClassLoader();
-        if (!current.equals(loader)) {
-            Thread.currentThread().setContextClassLoader(loader);
-        }
-        return current;
+        Plugins.compareAndSwapLoaders(savedLoader);
     }
 
 }
