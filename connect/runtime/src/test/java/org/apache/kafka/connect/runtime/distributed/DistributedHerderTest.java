@@ -4246,7 +4246,6 @@ public class DistributedHerderTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
-        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
         Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
         worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
         Message msg = new Message("The offsets for this connector have been altered successfully");

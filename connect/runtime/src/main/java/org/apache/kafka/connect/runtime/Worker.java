@@ -1320,7 +1320,7 @@ public class Worker {
                 Admin admin = adminFactory.apply(adminConfig);
 
                 try {
-                    KafkaFuture<Void> adminFuture = KafkaFuture.completedFuture(null);
+                    List<KafkaFuture<Void>> adminFutures = new ArrayList<>();
 
                     Map<TopicPartition, OffsetAndMetadata> offsetsToAlter = parsedOffsets.entrySet()
                             .stream()
@@ -1335,7 +1335,7 @@ public class Worker {
                         AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = admin.alterConsumerGroupOffsets(groupId, offsetsToAlter,
                                 alterConsumerGroupOffsetsOptions);
 
-                        adminFuture = alterConsumerGroupOffsetsResult.all();
+                        adminFutures.add(alterConsumerGroupOffsetsResult.all());
                     }
 
                     Set<TopicPartition> partitionsToReset = parsedOffsets.entrySet()
@@ -1352,10 +1352,13 @@ public class Worker {
                         DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = admin.deleteConsumerGroupOffsets(groupId, partitionsToReset,
                                 deleteConsumerGroupOffsetsOptions);
 
-                        adminFuture = KafkaFuture.allOf(adminFuture, deleteConsumerGroupOffsetsResult.all());
+                        adminFutures.add(deleteConsumerGroupOffsetsResult.all());
                     }
 
-                    adminFuture.whenComplete((ignored, error) -> {
+                    @SuppressWarnings("rawtypes")
+                    KafkaFuture<Void> compositeAdminFuture = KafkaFuture.allOf(adminFutures.toArray(new KafkaFuture[0]));
+
+                    compositeAdminFuture.whenComplete((ignored, error) -> {
                         if (error != null) {
                             // When a consumer group is non-empty, only group members can commit offsets. An attempt to alter offsets via the admin client
                             // will result in an UnknownMemberIdException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped
@@ -1373,6 +1376,9 @@ public class Worker {
                         } else {
                             completeAlterOffsetsCallback(alterOffsetsResult, cb);
                         }
+                    }).whenComplete((ignored, ignoredError) -> {
+                        // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
+                        // an exception itself, and we can thus ignore the error here
                         Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
                     });
                 } catch (Throwable t) {
