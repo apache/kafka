@@ -2800,9 +2800,9 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(offsetCommitResponse(singletonMap(ti1p, Errors.UNKNOWN_TOPIC_ID)));
         client.prepareResponse(offsetCommitResponse(singletonMap(ti1p, Errors.NONE)));
 
-         return singletonMap(
-                t1p,
-                new OffsetAndMetadata(100L, "metadata")
+        return singletonMap(
+            t1p,
+            new OffsetAndMetadata(100L, "metadata")
         );
     }
 

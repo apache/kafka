@@ -1289,8 +1289,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return RequestFuture.failure(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
             }
 
-            Uuid topicId = topicIdAndNames.topicIdOrZero(topicPartition.topic());
-            if (ZERO_UUID.equals(topicId)) {
+            Uuid topicIdOrZero = topicIdAndNames.topicIdOrZero(topicPartition.topic());
+            if (ZERO_UUID.equals(topicIdOrZero)) {
                 canUseTopicIds = false;
             }
 
@@ -1298,7 +1298,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     .getOrDefault(topicPartition.topic(),
                             new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                     .setName(topicPartition.topic())
-                                    .setTopicId(topicId)
+                                    .setTopicId(topicIdOrZero)
                     );
 
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
