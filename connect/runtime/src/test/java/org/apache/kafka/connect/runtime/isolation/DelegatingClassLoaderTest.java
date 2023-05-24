@@ -138,14 +138,15 @@ public class DelegatingClassLoaderTest {
             Files.copy(source, pluginPath.resolve(source.getFileName()));
         }
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
+        try (DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
-        );
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertNotNull(classLoader.loadClass(pluginClassName));
-            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+        )) {
+            classLoader.initLoaders();
+            for (String pluginClassName : TestPlugins.pluginClasses()) {
+                assertNotNull(classLoader.loadClass(pluginClassName));
+                assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+            }
         }
     }
 }
