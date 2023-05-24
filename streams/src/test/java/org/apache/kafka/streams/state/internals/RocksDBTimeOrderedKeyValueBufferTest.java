@@ -32,7 +32,6 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBTimeOrderedKeyValueBufferTest {
     public RocksDBTimeOrderedKeyValueBuffer<String, String> buffer;
-    public Duration grace;
     @Mock
     public SerdeGetter serdeGetter;
     public InternalProcessorContext<String, String> context;
@@ -42,15 +41,17 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Before
     public void setUp() {
-        grace = Duration.ZERO;
-        final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier("testing",  1,false).get();
-        buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, grace, "testing");
         when(serdeGetter.keySerde()).thenReturn(new Serdes.StringSerde());
         when(serdeGetter.valueSerde()).thenReturn(new Serdes.StringSerde());
-        buffer.setSerdesIfNull(serdeGetter);
         final Metrics metrics = new Metrics();
         streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
         context = new MockInternalNewProcessorContext<>(StreamsTestUtils.getStreamsConfig(), new TaskId(0,0), TestUtils.tempDirectory());
+    }
+
+    public void createJoin(final Duration grace) {
+        final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier("testing",  1,false).get();
+        buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, grace, "testing");
+        buffer.setSerdesIfNull(serdeGetter);
         store.init((StateStoreContext) context, store);
         buffer.init((StateStoreContext) context, store);
     }
@@ -63,6 +64,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Test
     public void shouldAddAndEvictRecord() {
+        createJoin(Duration.ZERO);
         AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
@@ -71,6 +73,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Test
     public void shouldAddAndEvictRecordTwice() {
+        createJoin(Duration.ZERO);
         AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
@@ -81,7 +84,20 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     @Test
+    public void shouldAddAndEvictRecordTwiceWithNonZeroGrace() {
+        createJoin(Duration.ofMillis(1));
+        AtomicInteger count = new AtomicInteger(0);
+        pipeRecord("1", "0", 0L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(0));
+        pipeRecord("2", "0", 1L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(1));
+    }
+
+    @Test
     public void shouldAddRecrodsTwiceAndEvictRecordsOnce() {
+        createJoin(Duration.ZERO);
         AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
@@ -93,10 +109,26 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Test
     public void shouldDropLateRecords() {
+        createJoin(Duration.ZERO);
         AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 1L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
+        pipeRecord("2", "0", 0L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(1));
+    }
+
+    @Test
+    public void shouldDropLateRecordsWithNonZeroGrace() {
+        createJoin(Duration.ofMillis(1));
+        AtomicInteger count = new AtomicInteger(0);
+        pipeRecord("1", "0", 2L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(0));
+        pipeRecord("2", "0", 1L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(1));
         pipeRecord("2", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));

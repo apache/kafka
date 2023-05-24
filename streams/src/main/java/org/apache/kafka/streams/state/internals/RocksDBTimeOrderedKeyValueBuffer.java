@@ -87,7 +87,9 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                 keyValue = iterator.next();
             }
             if (keyValue == null) {
-                minTimestamp = Long.MAX_VALUE;
+                if (numRecords() == 0) {
+                    minTimestamp = Long.MAX_VALUE;
+                }
                 return;
             }
             BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
@@ -99,7 +101,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                 new Change<>(bufferValue.newValue(), bufferValue.oldValue())
             );
             while (keyValue != null && predicate.get() && wrapped().observedStreamTime - gracePeriod.toMillis() >= minTimestamp()) {
-
                 if (bufferValue.context().timestamp() != minTimestamp) {
                     throw new IllegalStateException(
                         "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
@@ -154,7 +155,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         wrapped().put(serializedKey, buffered.serialize(0).array());
         bufferSize += computeRecordSize(serializedKey, buffered);
         numRec++;
-        if (minTimestamp > record.timestamp()) {
+        if (minTimestamp() > record.timestamp()) {
             minTimestamp = record.timestamp();
         }
     }
