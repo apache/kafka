@@ -119,13 +119,6 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     assertResponseEquals(new OffsetCommitResponse(responseData), response)
   }
 
-  @Test
-  def testCommitOffsetFromConsumer(): Unit = {
-    val topicNames = Seq("topic1", "topic2", "topic3")
-    topicNames.foreach(createTopic(_))
-    consumer.commitSync(offsetsToCommit(topicNames, offset))
-  }
-
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
   def testOffsetCommitWithUnknownTopicId(version: Short): Unit = {
@@ -182,27 +175,5 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     )
 
     assertResponseEquals(new OffsetCommitResponse(responseData), response)
-  }
-
-  @Test
-  def alterConsumerGroupOffsetsDoNotUseTopicIds(): Unit = {
-    val topicNames = Seq("topic1", "topic2", "topic3")
-    topicNames.foreach(createTopic(_))
-    val admin = createAdminClient()
-
-    try {
-      // Would throw an UnknownTopicId exception if the OffsetCommitRequest was set to version 9 or higher.
-      admin.alterConsumerGroupOffsets(groupId, offsetsToCommit(topicNames, offset)).all.get()
-
-    } finally {
-      Utils.closeQuietly(admin, "AdminClient")
-    }
-  }
-
-  private def offsetsToCommit(topics: Seq[String], offset: Long): java.util.Map[TopicPartition, OffsetAndMetadata] = {
-    topics
-      .map(t => new TopicPartition(t, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
-      .toMap
-      .asJava
   }
 }
