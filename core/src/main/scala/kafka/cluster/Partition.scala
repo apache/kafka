@@ -726,7 +726,7 @@ class Partition(val topicPartition: TopicPartition,
           s"with partition epoch ${partitionState.partitionEpoch}, high watermark ${leaderLog.highWatermark}, " +
           s"ISR ${isr.mkString("[", ",", "]")}, adding replicas ${addingReplicas.mkString("[", ",", "]")} and " +
           s"removing replicas ${removingReplicas.mkString("[", ",", "]")} ${if (isUnderMinIsr) "(under-min-isr)" else ""}. " +
-          s"Previous leader epoch was $leaderEpoch.")
+          s"Previous leader $leaderReplicaIdOpt and previous leader epoch was $leaderEpoch.")
 
         // In the case of successive leader elections in a short time period, a follower may have
         // entries in its log from a later epoch than any entry in the new leader's log. In order
@@ -819,7 +819,7 @@ class Partition(val topicPartition: TopicPartition,
         stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
           s"offset $leaderEpochEndOffset with partition epoch ${partitionState.partitionEpoch} and " +
           s"high watermark ${followerLog.highWatermark}. Current leader is ${partitionState.leader}. " +
-          s"Previous leader epoch was $leaderEpoch.")
+          s"Previous leader $leaderReplicaIdOpt and previous leader epoch was $leaderEpoch.")
       } else {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
           s"and partition state $partitionState since it is already a follower with leader epoch $leaderEpoch.")
