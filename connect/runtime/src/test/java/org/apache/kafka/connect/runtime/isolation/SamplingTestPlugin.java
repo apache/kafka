@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -36,6 +37,13 @@ public interface SamplingTestPlugin {
      * @return the ClassLoader used to initialize this plugin instance
      */
     ClassLoader classloader();
+
+    /**
+     * @return All known instances of this class, including this instance.
+     */
+    default List<SamplingTestPlugin> allInstances() {
+        return Collections.singletonList(this);
+    }
 
     /**
      * @return a group of other SamplingTestPlugin instances known by this plugin

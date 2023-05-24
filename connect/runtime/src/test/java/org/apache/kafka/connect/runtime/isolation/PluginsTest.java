@@ -296,7 +296,7 @@ public class PluginsTest {
         // Assert that the service loaded subclass is found in both environments
         assertTrue(samples.containsKey("ServiceLoadedSubclass.static"));
         assertTrue(samples.containsKey("ServiceLoadedSubclass.dynamic"));
-        assertPluginClassLoaderAlwaysActive(samples);
+        assertPluginClassLoaderAlwaysActive(plugin);
     }
 
     @Test
@@ -307,9 +307,7 @@ public class PluginsTest {
             Converter.class
         );
 
-        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
-        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
-        assertPluginClassLoaderAlwaysActive(samples);
+        assertPluginClassLoaderAlwaysActive(plugin);
     }
 
     @Test
@@ -335,7 +333,7 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure"));
-        assertPluginClassLoaderAlwaysActive(samples);
+        assertPluginClassLoaderAlwaysActive(plugin);
     }
 
     @Test
@@ -358,7 +356,7 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure"));
-        assertPluginClassLoaderAlwaysActive(samples);
+        assertPluginClassLoaderAlwaysActive(plugin);
     }
 
     @Test
@@ -378,7 +376,7 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure")); // HeaderConverter::configure was called
-        assertPluginClassLoaderAlwaysActive(samples);
+        assertPluginClassLoaderAlwaysActive(plugin);
     }
 
     @Test
@@ -388,7 +386,7 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("<init>")); // constructor was called
-        assertPluginClassLoaderAlwaysActive(samples);
+        assertPluginClassLoaderAlwaysActive(plugin);
     }
 
     @Test
@@ -404,7 +402,7 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure")); // Configurable::configure was called
-        assertPluginClassLoaderAlwaysActive(samples);
+        assertPluginClassLoaderAlwaysActive(plugin);
     }
 
     @Test
@@ -471,19 +469,23 @@ public class PluginsTest {
                 converter.toConnectData(null, null).value());
     }
 
-    public static void assertPluginClassLoaderAlwaysActive(Map<String, SamplingTestPlugin> samples) {
-        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
-            String sampleName = "\"" + e.getKey() + "\" (" + e.getValue() + ")";
-            assertInstanceOf(
-                PluginClassLoader.class,
-                e.getValue().staticClassloader(),
-                sampleName + " has incorrect static classloader"
-            );
-            assertInstanceOf(
-                PluginClassLoader.class,
-                e.getValue().classloader(),
-                sampleName + " has incorrect dynamic classloader"
-            );
+    public static void assertPluginClassLoaderAlwaysActive(Object plugin) {
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
+        for (SamplingTestPlugin instance : ((SamplingTestPlugin) plugin).allInstances()) {
+            Map<String, SamplingTestPlugin> samples = instance.flatten();
+            for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
+                String sampleName = "\"" + e.getKey() + "\" (" + e.getValue() + ")";
+                assertInstanceOf(
+                        PluginClassLoader.class,
+                        e.getValue().staticClassloader(),
+                        sampleName + " has incorrect static classloader"
+                );
+                assertInstanceOf(
+                        PluginClassLoader.class,
+                        e.getValue().classloader(),
+                        sampleName + " has incorrect dynamic classloader"
+                );
+            }
         }
     }
 

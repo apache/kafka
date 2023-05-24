@@ -18,6 +18,8 @@
 package test.plugins;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -32,14 +34,16 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
  * <p>Samples data about its initialization environment for later analysis.
  */
-public class SamplingConnector extends SinkConnector implements SamplingTestPlugin {
+public final class SamplingConnector extends SinkConnector implements SamplingTestPlugin {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
+  private static List<SamplingTestPlugin> instances;
   private final ClassLoader classloader;
   private Map<String, SamplingTestPlugin> samples;
 
   static {
     STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+    instances = Collections.synchronizedList(new ArrayList<>());
   }
 
   {
@@ -49,6 +53,7 @@ public class SamplingConnector extends SinkConnector implements SamplingTestPlug
 
   public SamplingConnector() {
     logMethodCall(samples);
+    instances.add(this);
   }
 
   @Override
@@ -98,5 +103,10 @@ public class SamplingConnector extends SinkConnector implements SamplingTestPlug
   @Override
   public Map<String, SamplingTestPlugin> otherSamples() {
     return samples;
+  }
+
+  @Override
+  public List<SamplingTestPlugin> allInstances() {
+    return instances;
   }
 }
