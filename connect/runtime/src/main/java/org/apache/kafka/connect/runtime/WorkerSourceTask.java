@@ -321,10 +321,21 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
     }
 
     private void updateCommittableOffsets() {
+        if (sourceOffsets != null) {
+            Optional<Map<Map<String, Object>, Map<String, Object>>> mayBeUpdatedOffsets = task.updateOffsets(sourceOffsets);
+            if (mayBeUpdatedOffsets.isPresent() && !mayBeUpdatedOffsets.get().isEmpty()) {
+                Map<Map<String, Object>, Map<String, Object>> updatedOffsets = mayBeUpdatedOffsets.get();
+                for (Map.Entry<Map<String, Object>, Map<String, Object>> offset : updatedOffsets.entrySet()) {
+                    SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(offset.getKey(), offset.getValue());
+                    submittedRecord.ack();
+                }
+            }
+        }
         CommittableOffsets newOffsets = submittedRecords.committableOffsets();
         synchronized (this) {
             this.committableOffsets = this.committableOffsets.updatedWith(newOffsets);
         }
+        sourceOffsets = null;
     }
 
     private void maybeThrowProducerSendException() {

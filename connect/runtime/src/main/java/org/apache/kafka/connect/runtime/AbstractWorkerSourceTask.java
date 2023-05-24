@@ -183,7 +183,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     protected final OffsetStorageWriter offsetWriter;
     protected final Producer<byte[], byte[]> producer;
 
-    private final SourceTask task;
+    protected final SourceTask task;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
@@ -198,6 +198,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     // Visible for testing
     List<SourceRecord> toSend;
+    Map<Map<String, Object>, Map<String, Object>> sourceOffsets;
     protected Map<String, String> taskConfig;
     protected boolean started = false;
     private volatile boolean producerClosed = false;
@@ -351,6 +352,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                     toSend = poll();
                     if (toSend != null) {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
+                        getPolledOffsets();
                     }
                 }
                 if (toSend == null) {
@@ -377,6 +379,13 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             throw e;
         }
         finalOffsetCommit(false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void getPolledOffsets() {
+        for (SourceRecord record : toSend) {
+            sourceOffsets.put((Map<String, Object>) record.sourcePartition(), (Map<String, Object>) record.sourceOffset());
+        }
     }
 
     /**
