@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.coordinator.transaction.ProducerIdManager.{NoRetry, RetryBackoffMs}
+import kafka.coordinator.transaction.ProducerIdManager.{IterationLimit, NoRetry, RetryBackoffMs}
 import kafka.server.{BrokerToControllerChannelManager, ControllerRequestCompletionHandler}
 import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
@@ -43,6 +43,7 @@ import scala.util.{Failure, Success, Try}
 object ProducerIdManager {
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
   val PidPrefetchThreshold = 0.90
+  val IterationLimit = 3
   val RetryBackoffMs = 50
   val NoRetry = -1L
 
@@ -165,7 +166,6 @@ class RPCProducerIdManager(brokerId: Int,
 
   this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
 
-  private val IterationLimit = 3
   // Visible for testing
   private[transaction] var nextProducerIdBlock = new AtomicReference[ProducerIdsBlock](null)
   private val currentProducerIdBlock: AtomicReference[ProducerIdsBlock] = new AtomicReference(ProducerIdsBlock.EMPTY)
@@ -213,19 +213,15 @@ class RPCProducerIdManager(brokerId: Int,
 
   // Visible for testing
   private[transaction] def maybeRequestNextBlock(): Unit = {
-    if (nextProducerIdBlock.get == null &&
-      requestInFlight.compareAndSet(false, true) ) {
+    val retryTimestamp = backoffDeadlineMs.get()
+    if (retryTimestamp == NoRetry || time.milliseconds() >= retryTimestamp) {
+      // Send a request only if we reached the retry deadline, or if no deadline was set.
 
-      val retryTimestamp = backoffDeadlineMs.get()
-      if (retryTimestamp == NoRetry || time.milliseconds() >= retryTimestamp) {
-        if (backoffDeadlineMs.compareAndSet(retryTimestamp, NoRetry)) {
-          // Allow only one thread to send a request after
-          // the backoff deadline.
-          sendRequest()
-        }
-      } else {
-        // Reset flag if we didn't actually send the request.
-        requestInFlight.set(false)
+      if (nextProducerIdBlock.get == null &&
+        requestInFlight.compareAndSet(false, true) ) {
+
+        sendRequest()
+        backoffDeadlineMs.set(NoRetry)
       }
     }
   }
