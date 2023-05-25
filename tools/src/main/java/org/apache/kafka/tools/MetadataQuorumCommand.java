@@ -147,8 +147,8 @@ public class MetadataQuorumCommand {
             .help("Detailed information about the status of replication")
             .action(Arguments.storeTrue());
         replicationArgs
-            .addArgument("-hr", "--human-readable")
-            .help("Print human-readable timestamps")
+            .addArgument("--human-readable")
+            .help("Human-readable output")
             .action(Arguments.storeTrue());
     }
 
@@ -175,10 +175,10 @@ public class MetadataQuorumCommand {
                                                        boolean humanReadable) {
         return infos.map(info -> {
             String lastFetchTimestamp = !info.lastFetchTimestamp().isPresent() ? "-1" :
-                humanReadable ? format("%d ms ago", durationMs(info.lastFetchTimestamp().getAsLong())) :
+                humanReadable ? format("%d ms ago", delayMs(info.lastFetchTimestamp().getAsLong(), "last fetch")) :
                     valueOf(info.lastFetchTimestamp().getAsLong());
             String lastCaughtUpTimestamp = !info.lastCaughtUpTimestamp().isPresent() ? "-1" :
-                humanReadable ? format("%d ms ago", durationMs(info.lastCaughtUpTimestamp().getAsLong())) :
+                humanReadable ? format("%d ms ago", delayMs(info.lastCaughtUpTimestamp().getAsLong(), "last caught up")) :
                     valueOf(info.lastCaughtUpTimestamp().getAsLong());
             return Stream.of(
                 info.replicaId(),
@@ -191,13 +191,16 @@ public class MetadataQuorumCommand {
         }).collect(Collectors.toList());
     }
 
-    private static long durationMs(long timestampMs) {
-        Instant instant = Instant.ofEpochMilli(timestampMs);
+    /* test */ static long delayMs(long timestampMs, String desc) {
+        Instant lastTimestamp = Instant.ofEpochMilli(timestampMs);
         Instant now = Instant.now();
-        if (!(instant.isAfter(Instant.EPOCH) && instant.isBefore(now))) {
-            throw new KafkaException("Invalid timestamp, possible drift in system clock");
+        if (!(lastTimestamp.isAfter(Instant.EPOCH) && lastTimestamp.isBefore(now))) {
+            throw new KafkaException(
+                format("Error while computing delay, possible drift in system clock.%n" +
+                    "Current timestamp is %d, %s timestamp is %d", now.toEpochMilli(), desc, timestampMs)
+            );
         }
-        return Duration.between(instant, now).toMillis();
+        return Duration.between(lastTimestamp, now).toMillis();
     }
 
     private static void handleDescribeStatus(Admin admin) throws ExecutionException, InterruptedException {
