@@ -371,7 +371,7 @@ public class KRaftMigrationZkWriter {
         return new ResourcePattern(acl.resourceType(), acl.resourceName(), acl.patternType());
     }
 
-    void handleAclsSnapshot(AclsImage image, KRaftMigrationOperationConsumer opConsumer) {
+    void handleAclsSnapshot(AclsImage image, KRaftMigrationOperationConsumer operationConsumer) {
         // Need to compare contents of image with all ACLs in ZK and issue updates
         Map<ResourcePattern, Set<AccessControlEntry>> allAclsInSnapshot = new HashMap<>();
 
@@ -400,19 +400,19 @@ public class KRaftMigrationZkWriter {
         newResources.forEach(resourcePattern -> {
             Set<AccessControlEntry> accessControlEntries = allAclsInSnapshot.get(resourcePattern);
             String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            operationConsumer.accept(name, migrationState ->
+            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
 
         resourcesToDelete.forEach(deletedResource -> {
             String name = "Deleting resource " + deletedResource + " which has no ACLs in snapshot";
-            opConsumer.accept("deleteAcl", name, migrationState ->
+            operationConsumer.accept(DELETE_ACL, name, migrationState ->
                 migrationClient.aclClient().deleteResource(deletedResource, migrationState));
         });
 
         changedResources.forEach((resourcePattern, accessControlEntries) -> {
             String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            opConsumer.accept("updateAcl", name, migrationState ->
+            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
     }
