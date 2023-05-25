@@ -64,7 +64,12 @@ class QueuedEvent(val event: ControllerEvent,
   // 标识事件是否被处理过
   val spent = new AtomicBoolean(false)
 
-  // 处理事件
+  /**
+   * 处理事件
+   * 方法首先会判断该事件是否已经被处理过，如果是，就直接返回；
+   * 如果不是，就调用 ControllerEventProcessor 的 process 方法处理事件。
+   * @param processor
+   */
   def process(processor: ControllerEventProcessor): Unit = {
     // 若已经被处理过，直接返回
     if (spent.getAndSet(true))

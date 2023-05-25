@@ -2580,9 +2580,15 @@ class KafkaController(val config: KafkaConfig,
     onControllerResignation()
   }
 
-
+  /**
+   * 这个 process 方法接收一个 ControllerEvent 实例，接着会判断它是哪类 Controller 事件，并调用相应的处理方法。
+   * 比如，如果是 AutoPreferredReplicaLeaderElection 事件，则调用 processAutoPreferredReplicaLeaderElection 方法；
+   * 如果是其他类型的事件，则调用 process*** 方法。
+   * @param event
+   */
   override def process(event: ControllerEvent): Unit = {
     try {
+      // 依次匹配ControllerEvent事件
       event match {
         case event: MockEvent =>
           // Used only in test cases
@@ -2645,8 +2651,10 @@ class KafkaController(val config: KafkaConfig,
           processStartup()
       }
     } catch {
+      // 如果Controller换成了别的Broker
       case e: ControllerMovedException =>
         info(s"Controller moved to another broker when processing $event.", e)
+        // 执行Controller卸任逻辑
         maybeResign()
       case e: Throwable =>
         error(s"Error processing event $event", e)
