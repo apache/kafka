@@ -89,15 +89,10 @@ import static org.mockito.Mockito.when;
 public class GroupMetadataManagerTest {
     static class MockPartitionAssignor implements PartitionAssignor {
         private final String name;
-        private AssignmentSpec lastSpecReceived = null;
         private GroupAssignment prepareGroupAssignment = null;
 
         MockPartitionAssignor(String name) {
             this.name = name;
-        }
-
-        public AssignmentSpec lastSpecReceived() {
-            return lastSpecReceived;
         }
 
         public void prepareGroupAssignment(GroupAssignment prepareGroupAssignment) {
@@ -111,7 +106,6 @@ public class GroupMetadataManagerTest {
 
         @Override
         public GroupAssignment assign(AssignmentSpec assignmentSpec) throws PartitionAssignorException {
-            lastSpecReceived = assignmentSpec;
             return prepareGroupAssignment;
         }
     }
@@ -161,11 +155,6 @@ public class GroupMetadataManagerTest {
             return this;
         }
 
-        public ConsumerGroupBuilder withAssignment(String memberId, Assignment assignment) {
-            this.assignments.put(memberId, assignment);
-            return this;
-        }
-
         public ConsumerGroupBuilder withAssignmentEpoch(int assignmentEpoch) {
             this.assignmentEpoch = assignmentEpoch;
             return this;
@@ -182,21 +171,18 @@ public class GroupMetadataManagerTest {
             // Add subscription metadata.
             Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
             members.forEach((memberId, member) -> {
-                member.subscribedTopicNames().forEach(topicName ->
-                    subscriptionMetadata.computeIfAbsent(topicName, __ -> {
-                        TopicImage topicImage = topicsImage.getTopic(topicName);
-                        if (topicImage == null) {
-                            return null;
-                        } else {
-                            return new TopicMetadata(
-                                topicImage.id(),
-                                topicImage.name(),
-                                topicImage.partitions().size()
-                            );
-                        }
-                    })
-                );
+                member.subscribedTopicNames().forEach(topicName -> {
+                    TopicImage topicImage = topicsImage.getTopic(topicName);
+                    if (topicImage != null) {
+                        subscriptionMetadata.put(topicName, new TopicMetadata(
+                            topicImage.id(),
+                            topicImage.name(),
+                            topicImage.partitions().size()
+                        ));
+                    }
+                });
             });
+
             if (!subscriptionMetadata.isEmpty()) {
                 records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
@@ -223,22 +209,12 @@ public class GroupMetadataManagerTest {
 
     static class GroupMetadataManagerTestContext {
         static class Builder {
-            private LogContext logContext;
-            private SnapshotRegistry snapshotRegistry;
+            final private LogContext logContext = new LogContext();
+            final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
             private TopicsImage topicsImage;
             private List<PartitionAssignor> assignors;
             private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
             private int consumerGroupMaxSize = Integer.MAX_VALUE;
-
-            public Builder withLogContext(LogContext logContext) {
-                this.logContext = logContext;
-                return this;
-            }
-
-            public Builder withSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
-                this.snapshotRegistry = snapshotRegistry;
-                return this;
-            }
 
             public Builder withTopicsImage(TopicsImage topicsImage) {
                 this.topicsImage = topicsImage;
@@ -261,8 +237,6 @@ public class GroupMetadataManagerTest {
             }
 
             public GroupMetadataManagerTestContext build() {
-                if (logContext == null) logContext = new LogContext();
-                if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
                 if (topicsImage == null) topicsImage = TopicsImage.EMPTY;
                 if (assignors == null) assignors = Collections.emptyList();
 
@@ -439,16 +413,19 @@ public class GroupMetadataManagerTest {
             .build();
         Exception ex;
 
+        // GroupId must be present in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
+        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)));
         assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
 
+        // TopicPartitions must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
@@ -456,6 +433,7 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)));
         assertEquals("TopicPartitions must be empty when (re-)joining.", ex.getMessage());
 
+        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
@@ -464,22 +442,15 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(Collections.emptyList())));
         assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
 
-        ex = assertThrows(UnsupportedAssignorException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
-                .setTopicPartitions(Collections.emptyList())
-                .setSubscribedTopicNames(Collections.singletonList("foo"))
-                .setServerAssignor("bar")));
-        assertEquals("ServerAssignor bar is not supported. Supported assignors: range.", ex.getMessage());
-
+        // MemberId must be non-empty in all requests except for the first one where it
+        // could be empty (epoch != 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(1)));
         assertEquals("MemberId can't be empty.", ex.getMessage());
 
+        // InstanceId must be non-empty if provided in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
@@ -488,6 +459,7 @@ public class GroupMetadataManagerTest {
                 .setInstanceId("")));
         assertEquals("InstanceId can't be empty.", ex.getMessage());
 
+        // RackId must be non-empty if provided in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
@@ -496,6 +468,7 @@ public class GroupMetadataManagerTest {
                 .setRackId("")));
         assertEquals("RackId can't be empty.", ex.getMessage());
 
+        // ServerAssignor must exist if provided in all requests.
         ex = assertThrows(UnsupportedAssignorException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
@@ -1450,7 +1423,8 @@ public class GroupMetadataManagerTest {
         assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, context.consumerGroupMemberState(groupId, memberId3));
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, context.consumerGroupState(groupId));
 
-        // Member 3 heartbeats but without acknowledging the revocation yet. This is basically a no-op.
+        // Member 3 heartbeats. Member 2 has not acknowledged the revocation of its partition so
+        // member keeps its current assignment.
         result = context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
             .setGroupId(groupId)
             .setMemberId(memberId3)

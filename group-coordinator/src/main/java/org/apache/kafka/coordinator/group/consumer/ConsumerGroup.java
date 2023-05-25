@@ -86,7 +86,7 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, ConsumerGroupMember> members;
 
     /**
-     * The number of members per server assignor name.
+     * The number of members supporting each server assignor name.
      */
     private final TimelineHashMap<String, Integer> serverAssignors;
 
@@ -96,26 +96,26 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, Integer> subscribedTopicNames;
 
     /**
-     * The metadata of the subscribed topics.
+     * The metadata associated with each subscribed topic name.
      */
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
-     * The assignment epoch. An assignment epoch smaller than the group epoch means
-     * that a new assignment is required. The assignment epoch is updated when a new
-     * assignment is installed.
+     * The target assignment epoch. An assignment epoch smaller than the group epoch
+     * means that a new assignment is required. The assignment epoch is updated when
+     * a new assignment is installed.
      */
-    private final TimelineInteger assignmentEpoch;
+    private final TimelineInteger targetAssignmentEpoch;
 
     /**
-     * The target assignment.
+     * The target assignment per member id.
      */
-    private final TimelineHashMap<String, Assignment> assignments;
+    private final TimelineHashMap<String, Assignment> targetAssignment;
 
     /**
      * The current partition epoch maps each topic-partitions to their current epoch where
      * the epoch is the epoch of their owners. When a member revokes a partition, it removes
-     * itself from this map. When a member gets a partition, it adds itself to this map.
+     * its epochs from this map. When a member gets a partition, it adds its epochs to this map.
      */
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
 
@@ -131,14 +131,12 @@ public class ConsumerGroup implements Group {
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.assignmentEpoch = new TimelineInteger(snapshotRegistry);
-        this.assignments = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
+        this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
-     * The type of this group.
-     *
      * @return The group type (Consumer).
      */
     @Override
@@ -147,8 +145,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * The state of this group.
-     *
      * @return The current state as a String.
      */
     @Override
@@ -157,8 +153,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * The group id.
-     *
      * @return The group id.
      */
     @Override
@@ -167,8 +161,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * The state of this group.
-     *
      * @return The current state.
      */
     public ConsumerGroupState state() {
@@ -176,8 +168,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns the current group epoch.
-     *
      * @return The group epoch.
      */
     public int groupEpoch() {
@@ -195,21 +185,19 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns the current assignment epoch.
-     *
-     * @return The current assignment epoch.
+     * @return The target assignment epoch.
      */
     public int assignmentEpoch() {
-        return assignmentEpoch.get();
+        return targetAssignmentEpoch.get();
     }
 
     /**
      * Sets the assignment epoch.
      *
-     * @param assignmentEpoch The new assignment epoch.
+     * @param targetAssignmentEpoch The new assignment epoch.
      */
-    public void setAssignmentEpoch(int assignmentEpoch) {
-        this.assignmentEpoch.set(assignmentEpoch);
+    public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
+        this.targetAssignmentEpoch.set(targetAssignmentEpoch);
         maybeUpdateGroupState();
     }
 
@@ -278,8 +266,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns the number of members in the group.
-     *
      * @return The number of members.
      */
     public int numMembers() {
@@ -287,22 +273,20 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns the members keyed by their id.
-     *
-     * @return An immutable Map containing all the members.
+     * @return An immutable Map containing all the members keyed by their id.
      */
     public Map<String, ConsumerGroupMember> members() {
         return Collections.unmodifiableMap(members);
     }
 
     /**
-     * Returns the current target assignment of the member.
+     * Returns the target assignment of the member.
      *
      * @return The ConsumerGroupMemberAssignment or an EMPTY one if it does not
      *         exist.
      */
     public Assignment targetAssignment(String memberId) {
-        return assignments.getOrDefault(memberId, Assignment.EMPTY);
+        return targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
     }
 
     /**
@@ -312,7 +296,7 @@ public class ConsumerGroup implements Group {
      * @param newTargetAssignment   The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
-        assignments.put(memberId, newTargetAssignment);
+        targetAssignment.put(memberId, newTargetAssignment);
     }
 
     /**
@@ -321,16 +305,14 @@ public class ConsumerGroup implements Group {
      * @param memberId The member id.
      */
     public void removeTargetAssignment(String memberId) {
-        assignments.remove(memberId);
+        targetAssignment.remove(memberId);
     }
 
     /**
-     * Returns the target assignments for the entire group keyed by member id.
-     *
-     * @return An immutable Map containing all the target assignments.
+     * @return An immutable Map containing all the target assignment keyed by member id.
      */
-    public Map<String, Assignment> targetAssignments() {
-        return Collections.unmodifiableMap(assignments);
+    public Map<String, Assignment> targetAssignment() {
+        return Collections.unmodifiableMap(targetAssignment);
     }
 
     /**
@@ -364,7 +346,7 @@ public class ConsumerGroup implements Group {
      *
      * @return An Optional containing the preferred assignor.
      */
-    public Optional<String> preferredServerAssignor(
+    public Optional<String> computePreferredServerAssignor(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
@@ -378,10 +360,17 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns the subscription metadata for all the topics whose
-     * members are subscribed to.
-     *
-     * @return An immutable Map containing the subscription metadata.
+     * @return The preferred assignor for the group.
+     */
+    public Optional<String> preferredServerAssignor() {
+        return serverAssignors.entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey);
+    }
+
+    /**
+     * @return An immutable Map containing the subscription metadata for all the topics whose
+     *         members are subscribed to.
      */
     public Map<String, TopicMetadata> subscriptionMetadata() {
         return Collections.unmodifiableMap(subscribedTopicMetadata);
@@ -440,11 +429,11 @@ public class ConsumerGroup implements Group {
     private void maybeUpdateGroupState() {
         if (members.isEmpty()) {
             state.set(ConsumerGroupState.EMPTY);
-        } else if (groupEpoch.get() > assignmentEpoch.get()) {
+        } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             state.set(ConsumerGroupState.ASSIGNING);
         } else {
             for (ConsumerGroupMember member : members.values()) {
-                if (member.nextMemberEpoch() != assignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
+                if (member.nextMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
                     state.set(ConsumerGroupState.RECONCILING);
                     return;
                 }

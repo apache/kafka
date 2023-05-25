@@ -536,7 +536,7 @@ public class GroupMetadataManager {
         int targetAssignmentEpoch = group.assignmentEpoch();
         Assignment targetAssignment = group.targetAssignment(memberId);
         if (groupEpoch > targetAssignmentEpoch) {
-            String preferredServerAssignor = group.preferredServerAssignor(
+            String preferredServerAssignor = group.computePreferredServerAssignor(
                 member,
                 updatedMember
             ).orElse(defaultAssignor.name());
@@ -546,7 +546,7 @@ public class GroupMetadataManager {
                     new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
                         .withMembers(group.members())
                         .withSubscriptionMetadata(subscriptionMetadata)
-                        .withTargetAssignment(group.targetAssignments())
+                        .withTargetAssignment(group.targetAssignment())
                         .addOrUpdateMember(memberId, updatedMember)
                         .build();
 
@@ -597,7 +597,7 @@ public class GroupMetadataManager {
 
         // The assignment is only provided in the following cases:
         // 1. The member reported its owned partitions;
-        // 2. The member just joined or rejoined to group. This is signaled with epoch equals to zero;
+        // 2. The member just joined or rejoined to group (epoch equals to zero);
         // 3. The member's assignment has been updated.
         if (ownedTopicPartitions != null || memberEpoch == 0 || assignmentUpdated) {
             response.setAssignment(createResponseAssignment(updatedMember));
@@ -721,7 +721,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete member " + memberId
                     + " but did not receive ConsumerGroupCurrentMemberAssignmentValue tombstone.");
             }
-            if (consumerGroup.targetAssignments().containsKey(memberId)) {
+            if (consumerGroup.targetAssignment().containsKey(memberId)) {
                 throw new IllegalStateException("Received a tombstone record to delete member " + memberId
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
@@ -752,9 +752,9 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
                     + " but the group still has " + consumerGroup.members().size() + " members.");
             }
-            if (!consumerGroup.targetAssignments().isEmpty()) {
+            if (!consumerGroup.targetAssignment().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment still has " + consumerGroup.targetAssignments().size()
+                    + " but the target assignment still has " + consumerGroup.targetAssignment().size()
                     + " members.");
             }
             if (consumerGroup.assignmentEpoch() != -1) {
@@ -830,13 +830,13 @@ public class GroupMetadataManager {
         ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
 
         if (value != null) {
-            consumerGroup.setAssignmentEpoch(value.assignmentEpoch());
+            consumerGroup.setTargetAssignmentEpoch(value.assignmentEpoch());
         } else {
-            if (!consumerGroup.targetAssignments().isEmpty()) {
+            if (!consumerGroup.targetAssignment().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                    + " but the assignment still has " + consumerGroup.targetAssignments().size() + " members.");
+                    + " but the assignment still has " + consumerGroup.targetAssignment().size() + " members.");
             }
-            consumerGroup.setAssignmentEpoch(-1);
+            consumerGroup.setTargetAssignmentEpoch(-1);
         }
     }
 
