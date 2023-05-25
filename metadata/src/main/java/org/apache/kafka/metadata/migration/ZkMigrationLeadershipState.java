@@ -138,6 +138,21 @@ public class ZkMigrationLeadershipState {
         return new OffsetAndEpoch(kraftMetadataOffset, kraftMetadataEpoch);
     }
 
+    public boolean loggableChangeSinceState(ZkMigrationLeadershipState other) {
+        if (other == null) {
+            return false;
+        }
+        if (this.equals(other)) {
+            return false;
+        } else {
+            // Did the controller change, or did we finish the migration?
+            return
+                this.kraftControllerId != other.kraftControllerId ||
+                this.kraftControllerEpoch != other.kraftControllerEpoch ||
+                (!other.zkMigrationComplete() && this.zkMigrationComplete());
+        }
+    }
+
     @Override
     public String toString() {
         return "ZkMigrationLeadershipState{" +
@@ -176,7 +191,7 @@ public class ZkMigrationLeadershipState {
             kraftMetadataEpoch,
             lastUpdatedTimeMs,
             migrationZkVersion,
-                zkControllerEpoch,
-                zkControllerEpochZkVersion);
+            zkControllerEpoch,
+            zkControllerEpochZkVersion);
     }
 }

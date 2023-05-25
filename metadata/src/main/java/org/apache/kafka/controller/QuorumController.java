@@ -88,6 +88,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
+import org.apache.kafka.metadata.util.RecordRedactor;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
@@ -106,6 +107,7 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -130,7 +132,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -377,6 +378,7 @@ public final class QuorumController implements Controller {
         public void accept(ConfigResource configResource) {
             switch (configResource.type()) {
                 case BROKER_LOGGER:
+                    // BROKER_LOGGER are always allowed.
                     break;
                 case BROKER:
                     // Cluster configs are always allowed.
@@ -429,15 +431,6 @@ public final class QuorumController implements Controller {
             return new NotControllerException("The controller is in pre-migration mode.");
         } else {
             return new NotControllerException("No controller appears to be active.");
-        }
-    }
-
-    public static int exceptionToApparentController(NotControllerException e) {
-        if (e.getMessage().startsWith(ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX)) {
-            return Integer.parseInt(e.getMessage().substring(
-                ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX.length()));
-        } else {
-            return -1;
         }
     }
 
@@ -963,15 +956,8 @@ public final class QuorumController implements Controller {
                             // If the controller is a standby, replay the records that were
                             // created by the active controller.
                             if (log.isDebugEnabled()) {
-                                if (log.isTraceEnabled()) {
-                                    log.trace("Replaying commits from the active node up to " +
-                                        "offset {} and epoch {}: {}.", offset, epoch, messages.stream()
-                                        .map(ApiMessageAndVersion::toString)
-                                        .collect(Collectors.joining(", ")));
-                                } else {
-                                    log.debug("Replaying commits from the active node up to " +
-                                        "offset {} and epoch {}.", offset, epoch);
-                                }
+                                log.debug("Replaying commits from the active node up to " +
+                                    "offset {} and epoch {}.", offset, epoch);
                             }
                             int i = 1;
                             for (ApiMessageAndVersion message : messages) {
@@ -1008,16 +994,16 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            appendRaftEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
+        public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            appendRaftEvent(String.format("handleLoadSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
+                    String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
                     if (isActiveController()) {
-                        throw fatalFaultHandler.handleFault(String.format("Asked to load snapshot " +
-                            "(%s) when it is the active controller (%d)", reader.snapshotId(),
-                            curClaimEpoch));
+                        throw fatalFaultHandler.handleFault("Asked to load snapshot " + snapshotName +
+                            ", but we are the active controller at epoch " + curClaimEpoch);
                     }
-                    log.info("Starting to replay snapshot ({}), from last commit offset ({}) and epoch ({})",
-                        reader.snapshotId(), lastCommittedOffset, lastCommittedEpoch);
+                    log.info("Starting to replay snapshot {}, from last commit offset {} and epoch {}",
+                        snapshotName, lastCommittedOffset, lastCommittedEpoch);
 
                     resetToEmptyState();
 
@@ -1026,16 +1012,8 @@ public final class QuorumController implements Controller {
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
 
-                        if (log.isDebugEnabled()) {
-                            if (log.isTraceEnabled()) {
-                                log.trace("Replaying snapshot ({}) batch with last offset of {}: {}",
-                                    reader.snapshotId(), offset, messages.stream().map(ApiMessageAndVersion::toString).
-                                        collect(Collectors.joining(", ")));
-                            } else {
-                                log.debug("Replaying snapshot ({}) batch with last offset of {}",
-                                    reader.snapshotId(), offset);
-                            }
-                        }
+                        log.debug("Replaying snapshot {} batch with last offset of {}",
+                            snapshotName, offset);
 
                         int i = 1;
                         for (ApiMessageAndVersion message : messages) {
@@ -1052,6 +1030,7 @@ public final class QuorumController implements Controller {
                             i++;
                         }
                     }
+                    log.info("Finished replaying snapshot {}", snapshotName);
 
                     updateLastCommittedState(
                         reader.lastContainedLogOffset(),
@@ -1509,6 +1488,16 @@ public final class QuorumController implements Controller {
      *                          if this record is from a snapshot, this is used along with RegisterBrokerRecord
      */
     private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long batchLastOffset) {
+        if (log.isTraceEnabled()) {
+            if (snapshotId.isPresent()) {
+                log.trace("Replaying snapshot {} record {}",
+                    Snapshots.filenameFromSnapshotId(snapshotId.get()),
+                        recordRedactor.toLoggableString(message));
+            } else {
+                log.trace("Replaying log record {} with batchLastOffset {}",
+                        recordRedactor.toLoggableString(message), batchLastOffset);
+            }
+        }
         logReplayTracker.replay(message);
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
@@ -1588,11 +1577,6 @@ public final class QuorumController implements Controller {
      * Handles faults that should normally be fatal to the process.
      */
     private final FaultHandler fatalFaultHandler;
-
-    /**
-     * The slf4j log context, used to create new loggers.
-     */
-    private final LogContext logContext;
 
     /**
      * The slf4j logger.
@@ -1781,11 +1765,6 @@ public final class QuorumController implements Controller {
     private boolean noOpRecordScheduled = false;
 
     /**
-     * Tracks if a snapshot generate was scheduled.
-     */
-    private boolean generateSnapshotScheduled = false;
-
-    /**
      * The bootstrap metadata to use for initialization if needed.
      */
     private final BootstrapMetadata bootstrapMetadata;
@@ -1799,6 +1778,10 @@ public final class QuorumController implements Controller {
      */
     private final int maxRecordsPerBatch;
 
+    /**
+     * Supports converting records to strings without disclosing passwords.
+     */
+    private final RecordRedactor recordRedactor;
 
     private QuorumController(
         FaultHandler fatalFaultHandler,
@@ -1827,7 +1810,6 @@ public final class QuorumController implements Controller {
         boolean zkMigrationEnabled
     ) {
         this.fatalFaultHandler = fatalFaultHandler;
-        this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.clusterId = clusterId;
@@ -1835,7 +1817,7 @@ public final class QuorumController implements Controller {
         this.time = time;
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
-        this.deferredEventQueue = new DeferredEventQueue();
+        this.deferredEventQueue = new DeferredEventQueue(logContext);
         this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager.Builder().
             setLogContext(logContext).
@@ -1901,11 +1883,13 @@ public final class QuorumController implements Controller {
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();
         this.zkRecordConsumer = new MigrationRecordConsumer();
         this.zkMigrationEnabled = zkMigrationEnabled;
+        this.recordRedactor = new RecordRedactor(configSchema);
         updateWriteOffset(-1);
 
         resetToEmptyState();
 
-        log.info("Creating new QuorumController with clusterId {}, authorizer {}.", clusterId, authorizer);
+        log.info("Creating new QuorumController with clusterId {}, authorizer {}.{}",
+                clusterId, authorizer, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
 
         this.raftClient.register(metaLogListener);
     }
@@ -2023,6 +2007,11 @@ public final class QuorumController implements Controller {
     public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures(
         ControllerRequestContext context
     ) {
+        // It's possible that we call ApiVersionRequest before consuming the log since ApiVersionRequest is sent when
+        // initialize NetworkClient, we should not return an error since it would stop the NetworkClient from working correctly.
+        if (lastCommittedOffset == -1) {
+            return CompletableFuture.completedFuture(new FinalizedControllerFeatures(Collections.emptyMap(), -1));
+        }
         return appendReadEvent("getFinalizedFeatures", context.deadlineNs(),
             () -> featureControl.finalizedFeatures(lastCommittedOffset));
     }

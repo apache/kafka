@@ -52,11 +52,11 @@ public class ConfigurationsImageTest {
         broker0Map.put("foo", "bar");
         broker0Map.put("baz", "quux");
         map1.put(new ConfigResource(BROKER, "0"),
-            new ConfigurationImage(broker0Map));
+            new ConfigurationImage(new ConfigResource(BROKER, "0"), broker0Map));
         Map<String, String> broker1Map = new HashMap<>();
         broker1Map.put("foobar", "foobaz");
         map1.put(new ConfigResource(BROKER, "1"),
-            new ConfigurationImage(broker1Map));
+            new ConfigurationImage(new ConfigResource(BROKER, "1"), broker1Map));
         IMAGE1 = new ConfigurationsImage(map1);
 
         DELTA1_RECORDS = new ArrayList<>();
@@ -74,12 +74,12 @@ public class ConfigurationsImageTest {
         Map<String, String> broker0Map2 = new HashMap<>();
         broker0Map2.put("baz", "quux");
         map2.put(new ConfigResource(BROKER, "0"),
-            new ConfigurationImage(broker0Map2));
+            new ConfigurationImage(new ConfigResource(BROKER, "0"), broker0Map2));
         Map<String, String> broker1Map2 = new HashMap<>();
         broker1Map2.put("foobar", "foobaz");
         broker1Map2.put("barfoo", "bazfoo");
         map2.put(new ConfigResource(BROKER, "1"),
-            new ConfigurationImage(broker1Map2));
+            new ConfigurationImage(new ConfigResource(BROKER, "1"), broker1Map2));
         IMAGE2 = new ConfigurationsImage(map2);
     }
 
