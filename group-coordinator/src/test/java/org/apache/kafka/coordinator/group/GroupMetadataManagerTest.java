@@ -39,6 +39,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
@@ -679,7 +680,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -783,7 +784,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -903,17 +904,17 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            new HashMap<String, org.apache.kafka.coordinator.group.assignor.MemberAssignment>() {
+            new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 1)
                     )));
-                    put(memberId3, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
@@ -1139,17 +1140,17 @@ public class GroupMetadataManagerTest {
 
         // Prepare new assignment for the group.
         assignor.prepareGroupAssignment(new GroupAssignment(
-            new HashMap<String, org.apache.kafka.coordinator.group.assignor.MemberAssignment>() {
+            new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 2)
                     )));
-                    put(memberId3, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 1)
                     )));
@@ -1504,11 +1505,11 @@ public class GroupMetadataManagerTest {
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setAssignedTopicPartitions(Arrays.asList(
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                            .setTopicId(barTopicId)
-                            .setPartitions(Arrays.asList(1)),
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                             .setTopicId(fooTopicId)
-                            .setPartitions(Arrays.asList(4, 5))))),
+                            .setPartitions(Arrays.asList(4, 5)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(Arrays.asList(1))))),
             result.response()
         );
 
@@ -1518,8 +1519,8 @@ public class GroupMetadataManagerTest {
                 .setPreviousMemberEpoch(11)
                 .setNextMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
-                    mkTopicAssignment(barTopicId, 1),
-                    mkTopicAssignment(fooTopicId, 4, 5)))
+                    mkTopicAssignment(fooTopicId, 4, 5),
+                    mkTopicAssignment(barTopicId, 1)))
                 .build())),
             result.records()
         );
@@ -1568,12 +1569,12 @@ public class GroupMetadataManagerTest {
 
         // Prepare new assignment for the group.
         assignor.prepareGroupAssignment(new GroupAssignment(
-            new HashMap<String, org.apache.kafka.coordinator.group.assignor.MemberAssignment>() {
+            new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)
                     )));
-                    put(memberId2, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2)
                     )));
                 }
@@ -1654,15 +1655,15 @@ public class GroupMetadataManagerTest {
 
         // Prepare new assignment for the group.
         assignor.prepareGroupAssignment(new GroupAssignment(
-            new HashMap<String, org.apache.kafka.coordinator.group.assignor.MemberAssignment>() {
+            new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(memberId2, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2)
                     )));
-                    put(memberId3, new org.apache.kafka.coordinator.group.assignor.MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)
                     )));
                 }
