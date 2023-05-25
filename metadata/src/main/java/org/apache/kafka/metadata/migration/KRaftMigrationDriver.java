@@ -586,7 +586,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
-    private KRaftMigrationZkWriter.KRaftMigrationOperationConsumer countingOperationConsumer(
+    private KRaftMigrationOperationConsumer countingOperationConsumer(
         Map<String, Integer> dualWriteCounts
     ) {
         return (opType, logMsg, operation) -> {

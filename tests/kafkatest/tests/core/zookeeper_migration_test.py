@@ -264,3 +264,98 @@ class TestMigration(ProduceConsumeValidateTest):
 
         assert saw_expected_log, "Did not see expected INFO log after upgrading from a 3.4 migration"
         self.kafka.stop()
+
+    def test_reconcile_kraft_to_zk(self):
+        """
+        Perform a migration and delete a topic directly from ZK. Ensure that the topic is added back
+        by KRaft during a failover. This exercises the snapshot reconciliation.
+        """
+        zk_quorum = partial(ServiceQuorumInfo, zk)
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=3,
+                                  zk=self.zk,
+                                  version=DEV_BRANCH,
+                                  quorum_info_provider=zk_quorum,
+                                  allow_zk_with_kraft=True,
+                                  server_prop_overrides=[["zookeeper.metadata.migration.enable", "false"]])
+
+        remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
+        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
+                                  allow_zk_with_kraft=True,
+                                  isolated_kafka=self.kafka,
+                                  server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
+                                                         ["zookeeper.metadata.migration.enable", "true"]],
+                                  quorum_info_provider=remote_quorum)
+
+        self.kafka.security_protocol = "PLAINTEXT"
+        self.kafka.interbroker_security_protocol = "PLAINTEXT"
+        self.zk.start()
+        self.logger.info("Pre-generating clusterId for ZK.")
+        cluster_id_json = """{"version": "1", "id": "%s"}""" % CLUSTER_ID
+        self.zk.create(path="/cluster")
+        self.zk.create(path="/cluster/id", value=cluster_id_json)
+        self.kafka.start()
+
+        topic_cfg = {
+            "topic": self.topic,
+            "partitions": self.partitions,
+            "replication-factor": self.replication_factor,
+            "configs": {"min.insync.replicas": 2}
+        }
+        self.kafka.create_topic(topic_cfg)
+
+        # Create topics in ZK mode
+        for i in range(10):
+            topic_cfg = {
+                "topic": f"zk-topic-{i}",
+                "partitions": self.partitions,
+                "replication-factor": self.replication_factor,
+                "configs": {"min.insync.replicas": 2}
+            }
+            self.kafka.create_topic(topic_cfg)
+
+        controller.start()
+        self.kafka.reconfigure_zk_for_migration(controller)
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
+
+        # Check the controller's logs for the INFO message that we're done with migration
+        saw_expected_log = False
+        for node in self.kafka.controller_quorum.nodes:
+            with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+                monitor.offset = 0
+                try:
+                    # Shouldn't have to wait too long to see this log message after startup
+                    monitor.wait_until(
+                        "Finished migrating ZK data to KRaft",
+                        timeout_sec=10.0, backoff_sec=.25,
+                        err_msg=""
+                    )
+                    saw_expected_log = True
+                    break
+                except TimeoutError:
+                    continue
+
+        assert saw_expected_log, "Did not see expected INFO log after migration"
+
+        # Manually delete a topic from ZK to simulate a missed dual-write
+        self.zk.delete(path="/brokers/topics/zk-topic-0", recursive=True)
+
+        # Roll the controller nodes to force a failover, this causes a snapshot reconciliation
+        for node in controller.nodes:
+            controller.stop_node(node)
+            controller.start_node(node)
+
+        def topic_in_zk():
+            topics_in_zk = self.zk.get_children(path="/brokers/topics")
+            return "zk-topic-0" in topics_in_zk
+
+        wait_until(topic_in_zk, timeout_sec=60,
+            backoff_sec=1, err_msg="Topic did not appear in ZK in time.")
+
+        self.kafka.stop()
+        controller.stop()
+        self.zk.stop()
