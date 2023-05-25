@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -207,7 +208,7 @@ public class PluginUtils {
                 } else if (isArchive(pluginPathElement)) {
                     pluginLocations.add(pluginPathElement);
                 }
-            } catch (IOException e) {
+            } catch (InvalidPathException | IOException e) {
                 log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
             }
         }
