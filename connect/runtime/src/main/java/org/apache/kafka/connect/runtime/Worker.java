@@ -1414,6 +1414,7 @@ public class Worker {
         ConnectorOffsetBackingStore offsetStore = config.exactlyOnceSourceEnabled()
                 ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector, producer)
                 : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector, producer);
+        offsetStore.configure(config);
 
         OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, connName, internalKeyConverter, internalValueConverter);
         alterSourceConnectorOffsets(connName, connector, connectorConfig, offsets, offsetStore, producer, offsetWriter, connectorLoader, cb);
@@ -1433,49 +1434,45 @@ public class Worker {
                     throw new ConnectException("Failed to alter offsets for connector " + connName + " because it doesn't support external " +
                             "modification of offsets", e);
                 }
-
-                offsetStore.configure(config);
                 // This reads to the end of the offsets topic and can be a potentially time-consuming operation
                 offsetStore.start();
 
-                try {
-                    // The alterSourceConnectorOffsets method should only be called after all the connector's tasks have been stopped, and it's
-                    // safe to write offsets via an offset writer
-                    offsets.forEach(offsetWriter::offset);
+                // The alterSourceConnectorOffsets method should only be called after all the connector's tasks have been stopped, and it's
+                // safe to write offsets via an offset writer
+                offsets.forEach(offsetWriter::offset);
 
-                    // We can call begin flush without a timeout because this newly created single-purpose offset writer can't do concurrent
-                    // offset writes. We can also ignore the return value since it returns false if and only if there is no data to be flushed,
-                    // and we've just put some data in the previous statement
-                    offsetWriter.beginFlush();
+                // We can call begin flush without a timeout because this newly created single-purpose offset writer can't do concurrent
+                // offset writes. We can also ignore the return value since it returns false if and only if there is no data to be flushed,
+                // and we've just put some data in the previous statement
+                offsetWriter.beginFlush();
 
-                    if (config.exactlyOnceSourceEnabled()) {
-                        producer.initTransactions();
-                        producer.beginTransaction();
-                    }
-                    log.debug("Committing the following offsets for source connector {}: {}", connName, offsets);
-                    FutureCallback<Void> offsetWriterCallback = new FutureCallback<>();
-                    offsetWriter.doFlush(offsetWriterCallback);
-                    if (config.exactlyOnceSourceEnabled()) {
-                        producer.commitTransaction();
-                    }
-
-                    try {
-                        offsetWriterCallback.get(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-                    } catch (ExecutionException e) {
-                        throw new ConnectException("Failed to alter offsets for source connector " + connName, e.getCause());
-                    } catch (TimeoutException e) {
-                        throw new ConnectException("Timed out while attempting to alter offsets for source connector " + connName, e);
-                    } catch (InterruptedException e) {
-                        throw new ConnectException("Unexpectedly interrupted while attempting to alter offsets for source connector " + connName, e);
-                    }
-
-                    completeAlterOffsetsCallback(alterOffsetsResult, cb);
-                } finally {
-                    Utils.closeQuietly(offsetStore::stop, "Offset store for offset alter request for connector " + connName);
+                if (config.exactlyOnceSourceEnabled()) {
+                    producer.initTransactions();
+                    producer.beginTransaction();
                 }
+                log.debug("Committing the following offsets for source connector {}: {}", connName, offsets);
+                FutureCallback<Void> offsetWriterCallback = new FutureCallback<>();
+                offsetWriter.doFlush(offsetWriterCallback);
+                if (config.exactlyOnceSourceEnabled()) {
+                    producer.commitTransaction();
+                }
+
+                try {
+                    offsetWriterCallback.get(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                } catch (ExecutionException e) {
+                    throw new ConnectException("Failed to alter offsets for source connector " + connName, e.getCause());
+                } catch (TimeoutException e) {
+                    throw new ConnectException("Timed out while attempting to alter offsets for source connector " + connName, e);
+                } catch (InterruptedException e) {
+                    throw new ConnectException("Unexpectedly interrupted while attempting to alter offsets for source connector " + connName, e);
+                }
+
+                completeAlterOffsetsCallback(alterOffsetsResult, cb);
             } catch (Throwable t) {
                 log.error("Failed to alter offsets for source connector {}", connName, t);
                 cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to alter offsets for source connector " + connName), null);
+            } finally {
+                Utils.closeQuietly(offsetStore::stop, "Offset store for offset alter request for connector " + connName);
             }
         }));
     }

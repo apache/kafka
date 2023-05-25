@@ -1587,7 +1587,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // Zombie tasks are handled by a round of zombie fencing for exactly once source connectors. Zombie sink tasks are handled
         // naturally because requests to alter consumer group offsets will fail if there are still active members in the group.
         if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
-            callback.onCompletion(new BadRequestException("The connector needs to be stopped before its offsets can be altered"), null);
+            callback.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be altered. This " +
+                    "can be done for the specified connector by issuing a PUT request to the /connectors/" + connName + "/stop endpoint"), null);
             return false;
         }
         return true;

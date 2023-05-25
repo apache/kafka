@@ -4137,7 +4137,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testAlterOffsetsConnectorNotFound() throws Exception {
+    public void testAlterConnectorOffsetsUnknownConnector() throws Exception {
         // Get the initial assignment
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
@@ -4212,6 +4212,7 @@ public class DistributedHerderTest {
         member.wakeup();
         PowerMock.expectLastCall();
         member.ensureActive();
+        PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -4223,6 +4224,50 @@ public class DistributedHerderTest {
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
         assertTrue(e.getCause() instanceof NotLeaderException);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnector() throws Exception {
+        EasyMock.reset(herder);
+        EasyMock.expect(herder.connectorType(EasyMock.anyObject())).andReturn(ConnectorType.SINK).anyTimes();
+        PowerMock.expectPrivate(herder, "updateDeletedConnectorStatus").andVoid().anyTimes();
+        PowerMock.expectPrivate(herder, "updateDeletedTaskStatus").andVoid().anyTimes();
+
+        // Get the initial assignment
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // Now handle the alter connector offsets request
+        Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
+        Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
+        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
+        Message msg = new Message("The offsets for this connector have been altered successfully");
+        EasyMock.expectLastCall().andAnswer(() -> {
+            workerCallbackCapture.getValue().onCompletion(null, msg);
+            return null;
+        });
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        FutureCallback<Message> callback = new FutureCallback<>();
+        herder.alterConnectorOffsets(CONN1, offsets, callback);
+        herder.tick();
+        assertEquals(msg, callback.get(1000L, TimeUnit.MILLISECONDS));
+        assertEquals("The offsets for this connector have been altered successfully", msg.message());
 
         PowerMock.verifyAll();
     }

@@ -90,6 +90,12 @@ public final class SinkUtils {
                 throw new BadRequestException(String.format("The partition for a sink connector offset must contain the keys '%s' and '%s'",
                         KAFKA_TOPIC_KEY, KAFKA_PARTITION_KEY));
             }
+            if (partitionMap.get(KAFKA_TOPIC_KEY) == null) {
+                throw new BadRequestException("Kafka topic names must be valid strings and may not be null");
+            }
+            if (partitionMap.get(KAFKA_PARTITION_KEY) == null) {
+                throw new BadRequestException("Kafka partitions must be valid numbers and may not be null");
+            }
             String topic = String.valueOf(partitionMap.get(KAFKA_TOPIC_KEY));
             int partition;
             try {

@@ -160,6 +160,22 @@ public class SinkUtilsTest {
         partitionOffsets.put(null, offset);
         ConnectException e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
         assertThat(e.getMessage(), containsString("The partition for a sink connector offset cannot be null or missing"));
+
+        Map<String, Object> partitionMap = new HashMap<>();
+        partitionMap.put(SinkUtils.KAFKA_TOPIC_KEY, "topic");
+        partitionMap.put(SinkUtils.KAFKA_PARTITION_KEY, null);
+        partitionOffsets.clear();
+        partitionOffsets.put(partitionMap, offset);
+
+        e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
+        assertThat(e.getMessage(), containsString("Kafka partitions must be valid numbers and may not be null"));
+    }
+
+    @Test
+    public void testNullTopic() {
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = createPartitionOffsetMap(null, "10", 100);
+        ConnectException e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
+        assertThat(e.getMessage(), containsString("Kafka topic names must be valid strings and may not be null"));
     }
 
     private Map<Map<String, ?>, Map<String, ?>> createPartitionOffsetMap(String topic, Object partition, Object offset) {

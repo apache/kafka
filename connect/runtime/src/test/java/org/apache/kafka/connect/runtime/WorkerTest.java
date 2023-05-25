@@ -1866,7 +1866,6 @@ public class WorkerTest {
         assertEquals("partitionValue", offsets.offsets().get(0).partition().get("partitionKey"));
         assertEquals("offsetValue", offsets.offsets().get(0).offset().get("offsetKey"));
 
-        verify(offsetStore).configure(config);
         verify(offsetStore).start();
         verify(offsetReader).close();
         verify(offsetStore).stop();
@@ -1895,7 +1894,6 @@ public class WorkerTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
 
-        verify(offsetStore).configure(config);
         verify(offsetStore).start();
         verify(offsetReader).close();
         verify(offsetStore).stop();
@@ -1958,7 +1956,6 @@ public class WorkerTest {
                 offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
         assertEquals("The offsets for this connector have been altered successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
 
-        verify(offsetStore).configure(config);
         verify(offsetStore).start();
         partitionOffsets.forEach((partition, offset) -> verify(offsetWriter).offset(partition, offset));
         verify(offsetWriter).beginFlush();
@@ -1996,7 +1993,6 @@ public class WorkerTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS).message());
         assertEquals(ConnectException.class, e.getCause().getClass());
 
-        verify(offsetStore).configure(config);
         verify(offsetStore).start();
         partitionOffsets.forEach((partition, offset) -> verify(offsetWriter).offset(partition, offset));
         verify(offsetWriter).beginFlush();
@@ -2048,11 +2044,8 @@ public class WorkerTest {
         expectedTopicPartitionsForOffsetDelete.add(new TopicPartition("test_topic", 10));
         expectedTopicPartitionsForOffsetDelete.add(new TopicPartition("test_topic", 20));
 
-        assertEquals(2, deleteOffsetsSetCapture.getValue().size());
-
         // Verify that contents are equal without caring about order
-        assertTrue(expectedTopicPartitionsForOffsetDelete.containsAll(deleteOffsetsSetCapture.getValue()));
-        assertTrue(deleteOffsetsSetCapture.getValue().containsAll(expectedTopicPartitionsForOffsetDelete));
+        assertEquals(expectedTopicPartitionsForOffsetDelete, deleteOffsetsSetCapture.getValue());
     }
 
     @Test
@@ -2076,8 +2069,8 @@ public class WorkerTest {
         assertEquals(1, alterOffsetsMapCapture.getValue().size());
         assertEquals(100, alterOffsetsMapCapture.getValue().get(new TopicPartition("test_topic", 10)).offset());
 
-        assertEquals(1, deleteOffsetsSetCapture.getValue().size());
-        assertEquals(new TopicPartition("test_topic", 20), deleteOffsetsSetCapture.getValue().iterator().next());
+        Set<TopicPartition> expectedTopicPartitionsForOffsetDelete = Collections.singleton(new TopicPartition("test_topic", 20));
+        assertEquals(expectedTopicPartitionsForOffsetDelete, deleteOffsetsSetCapture.getValue());
     }
 
     private void alterOffsetsSinkConnector(Map<Map<String, ?>, Map<String, ?>> partitionOffsets,
@@ -2164,7 +2157,6 @@ public class WorkerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testAlterOffsetsSinkConnectorDeleteOffsetsError() throws Exception {
         mockKafkaClusterId();
         String connectorClass = SampleSinkConnector.class.getName();
