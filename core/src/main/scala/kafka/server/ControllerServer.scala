@@ -32,6 +32,7 @@ import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.LogContext
@@ -181,8 +182,9 @@ class ControllerServer(
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
+      val metricsNotnull = if (metrics == null) new Metrics() else metrics
       socketServer = new SocketServer(config,
-        metrics,
+        metricsNotnull,
         time,
         credentialProvider,
         apiVersionManager)
