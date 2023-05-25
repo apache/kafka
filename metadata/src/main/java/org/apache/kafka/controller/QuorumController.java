@@ -2013,7 +2013,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new FinalizedControllerFeatures(Collections.emptyMap(), -1));
         }
         return appendReadEvent("getFinalizedFeatures", context.deadlineNs(),
-            () -> featureControl.finalizedFeatures(Long.MAX_VALUE));
+            () -> featureControl.finalizedFeatures(lastCommittedOffset));
     }
 
     @Override
