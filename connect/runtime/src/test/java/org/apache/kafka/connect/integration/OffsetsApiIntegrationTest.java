@@ -72,6 +72,7 @@ public class OffsetsApiIntegrationTest {
     private static final String TOPIC = "test-topic";
     private static final Integer NUM_TASKS = 2;
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
+    private static final long OFFSET_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
     private static final int NUM_WORKERS = 3;
     private Map<String, String> workerProps;
     private EmbeddedConnectCluster connect;
@@ -597,8 +598,25 @@ public class OffsetsApiIntegrationTest {
         return props;
     }
 
+    /**
+     * Verify whether the actual consumer group offsets for a sink connector match the expected offsets. The verification
+     * is done using the `GET /connectors/{connector}/offsets` REST API which is repeatedly queried until the offsets match
+     * or the {@link #OFFSET_READ_TIMEOUT_MS timeout} is reached. Note that this assumes the following:
+     * <ol>
+     *     <li>The sink connector is consuming from a single Kafka topic</li>
+     *     <li>The expected offset for each partition in the topic is the same</li>
+     * </ol>
+     *
+     * @param connectorName the name of the sink connector whose offsets are to be verified
+     * @param expectedTopic the name of the Kafka topic that the sink connector is consuming from
+     * @param expectedPartitions the number of partitions that exist for the Kafka topic
+     * @param expectedOffset the expected consumer group offset for each partition
+     * @param conditionDetails the condition that we're waiting to achieve (for example: Sink connector should process
+     *                         10 records)
+     * @throws InterruptedException if the thread is interrupted while waiting for the actual offsets to match the expected offsets
+     */
     private void waitForExpectedSinkConnectorOffsets(String connectorName, String expectedTopic, int expectedPartitions,
-                                                     int expectedOffset, String conditionDetails) throws Exception {
+                                                     int expectedOffset, String conditionDetails) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
             if (offsets.offsets().size() != expectedPartitions) {
@@ -611,11 +629,25 @@ public class OffsetsApiIntegrationTest {
                 }
             }
             return true;
-        }, conditionDetails);
+        }, OFFSET_READ_TIMEOUT_MS, conditionDetails);
     }
 
+    /**
+     * Verify whether the actual offsets for a source connector match the expected offsets. The verification is done using the
+     * `GET /connectors/{connector}/offsets` REST API which is repeatedly queried until the offsets match or the
+     * {@link #OFFSET_READ_TIMEOUT_MS timeout} is reached. Note that this assumes that the source connector is a
+     * {@link MonitorableSourceConnector}
+     *
+     * @param connect the Connect cluster that is running the source connector
+     * @param connectorName the name of the source connector whose offsets are to be verified
+     * @param numTasks the number of tasks for the source connector
+     * @param expectedOffset the expected offset for each source partition
+     * @param conditionDetails the condition that we're waiting to achieve (for example: Source connector should process
+     *                         10 records)
+     * @throws InterruptedException if the thread is interrupted while waiting for the actual offsets to match the expected offsets
+     */
     private void waitForExpectedSourceConnectorOffsets(EmbeddedConnectCluster connect, String connectorName, int numTasks,
-                                                       int expectedOffset, String conditionDetails) throws Exception {
+                                                       int expectedOffset, String conditionDetails) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
             // The MonitorableSourceConnector has a source partition per task
@@ -629,6 +661,6 @@ public class OffsetsApiIntegrationTest {
                 }
             }
             return true;
-        }, conditionDetails);
+        }, OFFSET_READ_TIMEOUT_MS, conditionDetails);
     }
 }

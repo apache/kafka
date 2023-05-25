@@ -1960,7 +1960,7 @@ public class WorkerTest {
         partitionOffsets.forEach((partition, offset) -> verify(offsetWriter).offset(partition, offset));
         verify(offsetWriter).beginFlush();
         verify(offsetWriter).doFlush(any());
-        verify(offsetStore).stop();
+        verify(offsetStore, timeout(1000)).stop();
         verifyKafkaClusterId();
     }
 
@@ -1997,7 +1997,7 @@ public class WorkerTest {
         partitionOffsets.forEach((partition, offset) -> verify(offsetWriter).offset(partition, offset));
         verify(offsetWriter).beginFlush();
         verify(offsetWriter).doFlush(any());
-        verify(offsetStore).stop();
+        verify(offsetStore, timeout(1000)).stop();
         verifyKafkaClusterId();
     }
 
