@@ -17,13 +17,16 @@
 
 package test.plugins;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.ServiceLoader;
-import java.util.Iterator;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.storage.Converter;
+
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 
 /**
@@ -31,43 +34,60 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
  * <p>Samples data about its initialization environment for later analysis.
  */
-public class ServiceLoaderPlugin implements SamplingTestPlugin, Converter {
+public final class SamplingConnector extends SinkConnector implements SamplingTestPlugin {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
-  private static final Map<String, SamplingTestPlugin> SAMPLES;
+  private static List<SamplingTestPlugin> instances;
   private final ClassLoader classloader;
+  private Map<String, SamplingTestPlugin> samples;
 
   static {
     STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-    SAMPLES = new HashMap<>();
-    Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
-    while (it.hasNext()) {
-      ServiceLoadedClass loaded = it.next();
-      SAMPLES.put(loaded.getClass().getSimpleName() + ".static", loaded);
-    }
+    instances = Collections.synchronizedList(new ArrayList<>());
   }
 
   {
+    samples = new HashMap<>();
     classloader = Thread.currentThread().getContextClassLoader();
-    Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
-    while (it.hasNext()) {
-      ServiceLoadedClass loaded = it.next();
-      SAMPLES.put(loaded.getClass().getSimpleName() + ".dynamic", loaded);
-    }
+  }
+
+  public SamplingConnector() {
+    logMethodCall(samples);
+    instances.add(this);
   }
 
   @Override
-  public void configure(final Map<String, ?> configs, final boolean isKey) {
+  public void start(Map<String, String> props) {
+    logMethodCall(samples);
   }
 
   @Override
-  public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-    return new byte[0];
-  }
-
-  @Override
-  public SchemaAndValue toConnectData(final String topic, final byte[] value) {
+  public Class<? extends Task> taskClass() {
+    logMethodCall(samples);
     return null;
+  }
+
+  @Override
+  public List<Map<String, String>> taskConfigs(int maxTasks) {
+    logMethodCall(samples);
+    return null;
+  }
+
+  @Override
+  public void stop() {
+    logMethodCall(samples);
+  }
+
+  @Override
+  public ConfigDef config() {
+    logMethodCall(samples);
+    return null;
+  }
+
+  @Override
+  public String version() {
+    logMethodCall(samples);
+    return "1.0.0";
   }
 
   @Override
@@ -82,6 +102,11 @@ public class ServiceLoaderPlugin implements SamplingTestPlugin, Converter {
 
   @Override
   public Map<String, SamplingTestPlugin> otherSamples() {
-    return SAMPLES;
+    return samples;
+  }
+
+  @Override
+  public List<SamplingTestPlugin> allInstances() {
+    return instances;
   }
 }
