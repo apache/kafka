@@ -64,6 +64,7 @@ import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
+import org.opentest4j.AssertionFailedError;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
@@ -745,7 +746,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
 
-        assertEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -844,7 +845,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
 
-        assertEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -983,9 +984,9 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
-        assertEquals(expectedRecords.subList(0, 2), result.records().subList(0, 2));
+        assertRecordsEquals(expectedRecords.subList(0, 2), result.records().subList(0, 2));
         assertUnorderedListEquals(expectedRecords.subList(2, 5), result.records().subList(2, 5));
-        assertEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
+        assertRecordsEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
     }
 
     @Test
@@ -1078,7 +1079,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newGroupEpochRecord(groupId, 11)
         );
 
-        assertEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -1197,7 +1198,7 @@ public class GroupMetadataManagerTest {
 
         // We only check the last record as the subscription/target assignment updates are
         // already covered by other tests.
-        assertEquals(
+        assertRecordEquals(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(0)
@@ -1237,7 +1238,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
@@ -1280,7 +1281,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
@@ -1351,7 +1352,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
@@ -1408,7 +1409,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
@@ -1476,7 +1477,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
@@ -1513,7 +1514,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
@@ -1606,7 +1607,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(
+        assertRecordEquals(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(0)
@@ -1638,7 +1639,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
@@ -1695,7 +1696,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(
+        assertRecordEquals(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(0)
@@ -1727,7 +1728,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
                 RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1761,7 +1762,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        assertEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(11)
@@ -1988,5 +1989,85 @@ public class GroupMetadataManagerTest {
             assigmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
         });
         return assigmentMap;
+    }
+
+    private void assertRecordsEquals(
+        List<Record> expectedRecords,
+        List<Record> actualRecords
+    ) {
+        try {
+            assertEquals(expectedRecords.size(), actualRecords.size());
+
+            for (int i = 0; i < expectedRecords.size(); i++) {
+                Record expectedRecord = expectedRecords.get(i);
+                Record actualRecord = actualRecords.get(i);
+                assertRecordEquals(expectedRecord, actualRecord);
+            }
+        } catch (AssertionFailedError e) {
+            assertionFailure()
+                .expected(expectedRecords)
+                .actual(actualRecords)
+                .buildAndThrow();
+        }
+    }
+
+    private void assertRecordEquals(
+        Record expected,
+        Record actual
+    ) {
+        try {
+            assertApiMessageAndVersionEquals(expected.key(), actual.key());
+            assertApiMessageAndVersionEquals(expected.value(), actual.value());
+        } catch (AssertionFailedError e) {
+            assertionFailure()
+                .expected(expected)
+                .actual(actual)
+                .buildAndThrow();
+        }
+    }
+
+    private void assertApiMessageAndVersionEquals(
+        ApiMessageAndVersion expected,
+        ApiMessageAndVersion actual
+    ) {
+        if (expected == actual) return;
+
+        assertEquals(expected.version(), actual.version());
+
+        if (actual.message() instanceof ConsumerGroupCurrentMemberAssignmentValue) {
+            // The order of the topics stored in ConsumerGroupCurrentMemberAssignmentValue is not
+            // always guaranteed. Therefore, we need a special comparator.
+            ConsumerGroupCurrentMemberAssignmentValue expectedValue =
+                (ConsumerGroupCurrentMemberAssignmentValue) expected.message();
+            ConsumerGroupCurrentMemberAssignmentValue actualValue =
+                (ConsumerGroupCurrentMemberAssignmentValue) actual.message();
+
+            assertEquals(expectedValue.memberEpoch(), actualValue.memberEpoch());
+            assertEquals(expectedValue.previousMemberEpoch(), actualValue.previousMemberEpoch());
+            assertEquals(expectedValue.targetMemberEpoch(), actualValue.targetMemberEpoch());
+            assertEquals(expectedValue.error(), actualValue.error());
+            assertEquals(expectedValue.metadataVersion(), actualValue.metadataVersion());
+            assertEquals(expectedValue.metadataBytes(), actualValue.metadataBytes());
+
+            // We transform those to Maps before comparing them.
+            assertEquals(fromTopicPartitions(expectedValue.assignedPartitions()),
+                fromTopicPartitions(actualValue.assignedPartitions()));
+            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingRevocation()),
+                fromTopicPartitions(actualValue.partitionsPendingRevocation()));
+            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
+                fromTopicPartitions(actualValue.partitionsPendingAssignment()));
+        } else {
+            assertEquals(expected.message(), actual.message());
+        }
+    }
+
+    private Map<Uuid, Set<Integer>> fromTopicPartitions(
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
+    ) {
+        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
+        assignment.forEach(topicPartitions -> {
+            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
+        });
+        return assignmentMap;
     }
 }
