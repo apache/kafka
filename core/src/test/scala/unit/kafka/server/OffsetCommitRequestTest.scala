@@ -21,20 +21,17 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetCommitRequestTest.assertResponseEquals
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.{OffsetCommitRequestData, OffsetCommitResponseData}
 import org.apache.kafka.common.message.OffsetCommitRequestData.{OffsetCommitRequestPartition, OffsetCommitRequestTopic}
 import org.apache.kafka.common.message.OffsetCommitResponseData.{OffsetCommitResponsePartition, OffsetCommitResponseTopic}
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetCommitResponse}
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 
-import java.util.Optional.empty
 import java.util.Properties
 import scala.collection.Seq
-import scala.jdk.CollectionConverters.{MapHasAsJava, SeqHasAsJava}
+import scala.jdk.CollectionConverters.SeqHasAsJava
 
 class OffsetCommitRequestTest extends BaseRequestTest {
   override def brokerCount: Int = 1

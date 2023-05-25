@@ -196,7 +196,7 @@ public class OffsetCommitRequestTest {
      * Compares the two {@link OffsetCommitRequest} independently of the order in which the
      * {@link OffsetCommitRequestTopic} and {@link OffsetCommitRequestPartition} are defined in the response.
      */
-    public static void assertRequestEquals(OffsetCommitRequest expectedRequest, OffsetCommitRequest actualRequest) {
+    public static boolean assertRequestEquals(OffsetCommitRequest expectedRequest, OffsetCommitRequest actualRequest) {
         if (expectedRequest.version() > 9 || actualRequest.version() > 9) {
             throw new AssertionError("A new version of OffsetCommitRequest has been detected. Please " +
                     "review the equality contract enforced here and add/remove fields accordingly.");
@@ -212,6 +212,8 @@ public class OffsetCommitRequestTest {
         assertEquals(expected.memberId(), actual.memberId(), "Member id mismatch");
         assertEquals(expected.retentionTimeMs(), actual.retentionTimeMs(), "Retention time mismatch");
         assertEquals(partition(expected), partition(actual));
+
+        return true;
     }
 
     private static Map<TopicIdPartition, OffsetCommitRequestPartition> partition(OffsetCommitRequestData requestData) {

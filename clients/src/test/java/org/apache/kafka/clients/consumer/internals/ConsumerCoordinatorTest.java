@@ -123,7 +123,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -2877,17 +2876,15 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-        OffsetCommitRequestCaptor captor = new OffsetCommitRequestCaptor();
-        prepareOffsetCommitRequest(byTopicIdOffsets, Errors.NONE, false, captor);
+        MockClient.RequestMatcher requestMatcher = request -> assertRequestEquals(
+            new OffsetCommitRequest(byTopicIdData, (short) 9),
+            (OffsetCommitRequest) request
+        );
+
+        prepareOffsetCommitRequest(byTopicIdOffsets, Errors.NONE, false, requestMatcher);
 
         Map<TopicPartition, OffsetAndMetadata> input = offsetAndMetadata(byTopicIdOffsets);
-
         assertTrue(coordinator.commitOffsetsSync(input, time.timer(Long.MAX_VALUE)));
-
-        // The consumer does not provide a guarantee on the order of occurrence of topics and partitions in the
-        // OffsetCommit request, since a map of offsets is provided to the consumer API. Here, both requests
-        // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
-        assertRequestEquals(new OffsetCommitRequest(byTopicIdData, (short) 9), captor.request);
     }
 
     @Test
@@ -2929,14 +2926,15 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-        OffsetCommitRequestCaptor captor = new OffsetCommitRequestCaptor();
-        prepareOffsetCommitRequest(byTopicNameOffsets, Errors.NONE, false, captor);
+        MockClient.RequestMatcher requestMatcher = request -> assertRequestEquals(
+            new OffsetCommitRequest(byTopicNameData, (short) 8),
+            (OffsetCommitRequest) request
+        );
+
+        prepareOffsetCommitRequest(byTopicNameOffsets, Errors.NONE, false, requestMatcher);
 
         Map<TopicPartition, OffsetAndMetadata> input = offsetAndMetadata(byTopicNameOffsets);
-
         assertTrue(coordinator.commitOffsetsSync(input, time.timer(Long.MAX_VALUE)));
-        // If topic ids cannot be used, OffsetCommitRequest v8 should be used.
-        assertRequestEquals(new OffsetCommitRequest(byTopicNameData, (short) 8), captor.request);
     }
 
     @ParameterizedTest
@@ -4304,35 +4302,28 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private void prepareOffsetCommitRequest(Map<TopicIdPartition, Long> expectedOffsets, Errors error) {
-        prepareOffsetCommitRequest(expectedOffsets, error, false);
+        MockClient.RequestMatcher requestMatcher = offsetCommitRequestMatcher(expectedOffsets);
+        prepareOffsetCommitRequest(expectedOffsets, error, false, requestMatcher);
     }
 
     private void prepareOffsetCommitRequestDisconnect(Map<TopicIdPartition, Long> expectedOffsets) {
-        prepareOffsetCommitRequest(expectedOffsets, Errors.NONE, true);
-    }
-
-    private void prepareOffsetCommitRequest(
-            Map<TopicIdPartition, Long> expectedOffsets, Errors error, boolean disconnected) {
-        prepareOffsetCommitRequest(expectedOffsets, error, disconnected, __ -> { });
+        MockClient.RequestMatcher requestMatcher = offsetCommitRequestMatcher(expectedOffsets);
+        prepareOffsetCommitRequest(expectedOffsets, Errors.NONE, true, requestMatcher);
     }
 
     private void prepareOffsetCommitRequest(
         Map<TopicIdPartition, Long> offsets,
         Errors error,
         boolean disconnected,
-        Consumer<OffsetCommitRequest> requestCaptor
+        MockClient.RequestMatcher requestMatcher
     ) {
 
         Map<TopicIdPartition, Errors> errorsByTopicId = offsets.keySet().stream()
             .map(tip -> new SimpleEntry<>(tip, error))
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        Map<TopicPartition, Long> expectedOffsets = offsets.entrySet().stream()
-            .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), e.getValue()))
-            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
-
         client.prepareResponse(
-            offsetCommitRequestMatcher(expectedOffsets, requestCaptor),
+            requestMatcher,
             offsetCommitResponse(errorsByTopicId),
             disconnected);
     }
@@ -4341,10 +4332,7 @@ public abstract class ConsumerCoordinatorTest {
         Map<TopicIdPartition, Errors> errors = expectedOffsets.keySet().stream()
             .map(tp -> new SimpleEntry<>(tp, error))
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
-        Map<TopicPartition, Long> offsets = expectedOffsets.entrySet().stream()
-            .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), e.getValue()))
-            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
-        client.respond(offsetCommitRequestMatcher(offsets, __ -> { }), offsetCommitResponse(errors));
+        client.respond(offsetCommitRequestMatcher(expectedOffsets), offsetCommitResponse(errors));
     }
 
     private void prepareJoinAndSyncResponse(String consumerId, int generation, List<String> subscription, List<TopicPartition> assignment) {
@@ -4360,29 +4348,22 @@ public abstract class ConsumerCoordinatorTest {
         }, syncGroupResponse(assignment, Errors.NONE));
     }
 
-    private MockClient.RequestMatcher offsetCommitRequestMatcher(
-        Map<TopicPartition, Long> expectedOffsets,
-        Consumer<OffsetCommitRequest> requestConsumer
-    ) {
+    private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicIdPartition, Long> expectedOffsets) {
         return body -> {
             OffsetCommitRequest req = (OffsetCommitRequest) body;
             Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicIdAndNameBiMapping);
             if (offsets.size() != expectedOffsets.size())
                 return false;
 
-            for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                if (!offsets.containsKey(expectedOffset.getKey())) {
+            for (Map.Entry<TopicIdPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
+                if (!offsets.containsKey(expectedOffset.getKey().topicPartition())) {
                     return false;
                 } else {
-                    Long actualOffset = offsets.get(expectedOffset.getKey());
+                    Long actualOffset = offsets.get(expectedOffset.getKey().topicPartition());
                     if (!actualOffset.equals(expectedOffset.getValue())) {
                         return false;
                     }
                 }
-            }
-
-            if (requestConsumer != null) {
-                requestConsumer.accept(req);
             }
             return true;
         };
@@ -4461,22 +4442,6 @@ public abstract class ConsumerCoordinatorTest {
                 rackIds.add(subscription.rackId().get());
             });
             return super.assign(partitionsPerTopic, subscriptions);
-        }
-    }
-
-    private static class OffsetCommitRequestCaptor implements Consumer<OffsetCommitRequest> {
-        private OffsetCommitRequest request;
-
-        @Override
-        public synchronized void accept(OffsetCommitRequest offsetCommitRequest) {
-            if (request != null)
-                throw new AssertionError("Multiple OffsetCommitRequest capture is not supported.");
-
-            request = offsetCommitRequest;
-        }
-
-        public synchronized OffsetCommitRequest reques() {
-            return request;
         }
     }
 }
