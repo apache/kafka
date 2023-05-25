@@ -19,6 +19,14 @@ package kafka.controller
 
 import scala.collection.Seq
 
+/**
+ * 每类 ControllerState 都定义一个 value 值，表示 Controller 状态的序号，从 0 开始。
+ * 另外，rateAndTimeMetricName 方法是用于构造 Controller 状态速率的监控指标名称的。
+ *
+ * 比如，TopicChange 是一类 ControllerState，用于表示主题总数发生了变化。
+ * 为了监控这类状态变更速率，代码中的 rateAndTimeMetricName 方法会定义一个名为 TopicChangeRateAndTimeMs 的指标。
+ * 当然，并非所有的 ControllerState 都有对应的速率监控指标，比如，表示空闲状态的 Idle 就没有对应的指标。
+ */
 sealed abstract class ControllerState {
 
   def value: Byte

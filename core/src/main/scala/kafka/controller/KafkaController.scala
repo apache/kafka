@@ -2796,7 +2796,10 @@ private[controller] class ControllerStats {
     metricsGroup.removeMetric(name)
   }
 }
-
+//Controller 事件，也就是事件队列中被处理的对象。
+//每个 ControllerEvent 都定义了一个状态。Controller 在处理具体的事件时，会对状态进行相应的变更。
+//多个 ControllerEvent 可能归属于相同的 ControllerState。
+//比如，TopicChange 和 PartitionModifications 事件都属于 TopicChange 状态，毕竟，它们都与 Topic 的变更有关。
 sealed trait ControllerEvent {
   def state: ControllerState
   // preempt() is not executed by `ControllerEventThread` but by the main thread.
