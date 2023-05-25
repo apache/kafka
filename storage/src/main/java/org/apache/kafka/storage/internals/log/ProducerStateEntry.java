@@ -42,27 +42,21 @@ public class ProducerStateEntry {
     private int coordinatorEpoch;
     private long lastTimestamp;
     private OptionalLong currentTxnFirstOffset;
-    
-    private VerificationState verificationState;
-    
+
+    private Optional<VerificationState> verificationState;
+
     // Before any batches are associated with the entry, the tentative sequence represents the lowest sequence seen.
     private OptionalInt tentativeSequence;
-    
-    public enum VerificationState {
-        EMPTY,
-        VERIFYING,
-        VERIFIED
-    }
 
     public static ProducerStateEntry empty(long producerId) {
-        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY, OptionalInt.empty());
+        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty(), Optional.empty(), OptionalInt.empty());
     }
 
     public static ProducerStateEntry forVerification(long producerId, short producerEpoch, long lastTimestamp) {
-        return new ProducerStateEntry(producerId, producerEpoch, -1, lastTimestamp, OptionalLong.empty(), Optional.empty(), VerificationState.EMPTY, OptionalInt.empty());
+        return new ProducerStateEntry(producerId, producerEpoch, -1, lastTimestamp, OptionalLong.empty(), Optional.empty(), Optional.of(new VerificationState()), OptionalInt.empty());
     }
 
-    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata, VerificationState verificationState, OptionalInt tentativeSequence) {
+    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata, Optional<VerificationState> verificationState, OptionalInt tentativeSequence) {
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
@@ -121,26 +115,27 @@ public class ProducerStateEntry {
             return false;
         }
     }
-
-    public boolean maybeUpdateProducerHigherEpoch(short producerEpoch) {
-        if (this.producerEpoch < producerEpoch) {
-            batchMetadata.clear();
-            this.producerEpoch = producerEpoch;
-            return true;
-        } else {
-            return false;
-        }
-    }
     
-    // We only set tentative sequence if no batches have been written to the log. It is used to avoid OutOfOrderSequenceExceptions
-    // when we saw a lower sequence during transaction verification. We will update the sequence when there is no batch metadata if:
-    //  a) There is no tentative sequence yet
-    //  b) A lower sequence for the same epoch is seen and should thereby block records after that
-    //  c) A higher producer epoch is found that will reset the lowest seen sequence
-    public void maybeUpdateTentativeSequence(int sequence, short producerEpoch) {
-        if (batchMetadata.isEmpty() && 
-                (!this.tentativeSequence.isPresent() || (this.producerEpoch == producerEpoch && this.tentativeSequence.getAsInt() > sequence) || this.producerEpoch < producerEpoch))
+    public void maybeAddVerificationState() {
+        // If we already have a verification state, we can reuse it. This is because we know this is the same transaction 
+        // as the state is cleared upon writing a control marker.
+        if (!this.verificationState.isPresent())
+            this.verificationState = Optional.of(new VerificationState());
+    }
+
+    // We only set tentative sequence if this entry has never had any batch metadata written to it. (We do not need to store if we've just bumped epoch.)
+    // It is used to avoid OutOfOrderSequenceExceptions when we saw a lower sequence during transaction verification.
+    // We will update the sequence if:
+    //  a) The entry is new
+    //  b) A tentative sequence is already there and a lower sequence for the same epoch is seen and should thereby block records after that
+    //  c) A tentative sequence is already there and a higher producer epoch is found that will reset the lowest seen sequence
+    // For C,  also update the producerEpoch. We do not want to update the epoch if tentative state is NOT present, since this will mess up the bumped epoch sequence check later on.
+    public void maybeUpdateTentativeSequenceAndEpoch(int sequence, short producerEpoch, boolean newEntry) {
+        if (newEntry ||
+                (this.tentativeSequence.isPresent() && (this.producerEpoch == producerEpoch && this.tentativeSequence.getAsInt() > sequence) || this.producerEpoch < producerEpoch))
             this.tentativeSequence = OptionalInt.of(sequence);
+        if (this.tentativeSequence.isPresent() && this.producerEpoch < producerEpoch)
+            maybeUpdateProducerEpoch(producerEpoch);
     }
 
     private void addBatchMetadata(BatchMetadata batch) {
@@ -149,21 +144,13 @@ public class ProducerStateEntry {
         if (batchMetadata.size() == ProducerStateEntry.NUM_BATCHES_TO_RETAIN) batchMetadata.removeFirst();
         batchMetadata.add(batch);
     }
-    
-    public boolean compareAndSetVerificationState(short expectedProducerEpoch, VerificationState expectedVerificationState, VerificationState newVerificationState) {
-        if (expectedProducerEpoch == this.producerEpoch && verificationState == expectedVerificationState) {
-            this.verificationState = newVerificationState;
-            return true;
-        }
-        return false;
-    }
 
     public void update(ProducerStateEntry nextEntry) {
         update(nextEntry.producerEpoch, nextEntry.coordinatorEpoch, nextEntry.lastTimestamp, nextEntry.batchMetadata, nextEntry.currentTxnFirstOffset, nextEntry.verificationState);
     }
 
     public void update(short producerEpoch, int coordinatorEpoch, long lastTimestamp) {
-        update(producerEpoch, coordinatorEpoch, lastTimestamp, new ArrayDeque<>(0), OptionalLong.empty(), VerificationState.EMPTY);
+        update(producerEpoch, coordinatorEpoch, lastTimestamp, new ArrayDeque<>(0), OptionalLong.empty(), Optional.empty());
     }
 
     private void update(short producerEpoch,
@@ -171,7 +158,7 @@ public class ProducerStateEntry {
                         long lastTimestamp,
                         Deque<BatchMetadata> batchMetadata,
                         OptionalLong currentTxnFirstOffset,
-                        VerificationState verificationState) {
+                        Optional<VerificationState> verificationState) {
         maybeUpdateProducerEpoch(producerEpoch);
         while (!batchMetadata.isEmpty())
             addBatchMetadata(batchMetadata.removeFirst());
@@ -219,11 +206,11 @@ public class ProducerStateEntry {
     public OptionalLong currentTxnFirstOffset() {
         return currentTxnFirstOffset;
     }
-    
-    public VerificationState verificationState() {
+
+    public Optional<VerificationState> verificationState() {
         return verificationState;
     }
-    
+
     public OptionalInt tentativeSequence() {
         return tentativeSequence;
     }
@@ -237,8 +224,9 @@ public class ProducerStateEntry {
                 ", coordinatorEpoch=" + coordinatorEpoch +
                 ", lastTimestamp=" + lastTimestamp +
                 ", batchMetadata=" + batchMetadata +
-                ", transactionVerificationState=" + verificationState +
+                ", transactionVerificationStateIsPresent=" + verificationState.isPresent() +
                 ", tentativeSequence=" + tentativeSequence +
                 ')';
     }
 }
+

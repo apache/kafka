@@ -56,7 +56,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, ProducerStateEntry, RecordValidationException}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, VerificationState}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.io.File
@@ -638,6 +638,7 @@ class ReplicaManager(val config: KafkaConfig,
       val sTime = time.milliseconds
       
       val transactionalProducerIds = mutable.HashSet[Long]()
+      var verificationState: Optional[VerificationState] = Optional.empty()
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) = 
         if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
           (entriesPerPartition, Map.empty)
@@ -647,9 +648,11 @@ class ReplicaManager(val config: KafkaConfig,
             val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
             transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
             if (transactionalBatches.nonEmpty) {
-              !getPartitionOrException(topicPartition).transactionNeedsVerifying(records.firstBatch().producerId(), records.firstBatch().producerEpoch(), records.firstBatch().baseSequence())
+              // We return verification state if the partition needs to be verified. If no state is present, no need to verify.
+              verificationState = getPartitionOrException(topicPartition).transactionNeedsVerifying(records.firstBatch().producerId, records.firstBatch.producerEpoch, records.firstBatch.baseSequence) 
+              !verificationState.isPresent
             } else { 
-              // If there is no producer ID in the batches, no need to verify.
+              // If there is no producer ID or transactional records in the batches, no need to verify.
               true
             }
           }
@@ -669,7 +672,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
         
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-          origin, verifiedEntries, requiredAcks, requestLocal)
+          origin, verifiedEntries, requiredAcks, requestLocal, verificationState)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
         
         val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
@@ -766,17 +769,8 @@ class ReplicaManager(val config: KafkaConfig,
           .setProducerEpoch(batchInfo.producerEpoch())
           .setVerifyOnly(true)
           .setTopics(topicCollection)
-        
-        def verifiedCallback(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
-          val verifiedPartitions = notYetVerifiedEntriesPerPartition.keySet.map(_.asInstanceOf[TopicPartition]).diff(unverifiedEntries.keySet)
-          verifiedPartitions.foreach { tp => 
-            getPartitionOrException(tp).compareAndSetVerificationState(
-              batchInfo.producerId, batchInfo.producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
-          }
-          appendEntries(allEntries)(unverifiedEntries)
-        }
 
-        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(verifiedCallback(entriesPerPartition)(_))))
+        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
@@ -1049,7 +1043,8 @@ class ReplicaManager(val config: KafkaConfig,
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short,
-                               requestLocal: RequestLocal): Map[TopicPartition, LogAppendResult] = {
+                               requestLocal: RequestLocal,
+                               verificationState: Optional[VerificationState]): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
@@ -1075,7 +1070,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
-          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal)
+          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal, verificationState)
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate

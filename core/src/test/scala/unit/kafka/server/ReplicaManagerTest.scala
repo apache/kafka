@@ -61,7 +61,7 @@ import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogStartOffsetIncrementReason, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationState}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -76,7 +76,6 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
 import org.mockito.Mockito.{doReturn, mock, mockConstruction, never, reset, times, verify, verifyNoMoreInteractions, when}
 
-import scala.collection.immutable.List
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -592,7 +591,7 @@ class ReplicaManagerTest {
       // Simulate producer id expiration.
       // We use -1 because the timestamp in this test is set to -1, so when
       // the expiration check subtracts timestamp, we get max value.
-      partition0.removeExpiredProducers(Long.MaxValue - 1);
+      partition0.removeExpiredProducers(Long.MaxValue - 1)
       assertEquals(1, replicaManagerMetricValue())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2124,15 +2123,13 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(1,
         makeLeaderAndIsrRequest(topicIds(tp1.topic), tp1, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
         (_, _) => ())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.EMPTY)
-      checkVerificationStateAndSequence(replicaManager, tp1, producerId, producerEpoch, ProducerStateEntry.VerificationState.EMPTY)
 
       // If we supply no transactional ID and idempotent records, we do not verify.
       val idempotentRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
       appendRecords(replicaManager, tp0, idempotentRecords)
       verify(addPartitionsToTxnManager, times(0)).addTxnData(any(), any(), any[AddPartitionsToTxnManager.AppendCallback]())
-      checkVerificationStateAndSequence(replicaManager, tp1, producerId, producerEpoch, ProducerStateEntry.VerificationState.EMPTY)
+      checkVerificationStateAndSequence(replicaManager, tp1, producerId, producerEpoch, Optional.empty())
 
       // Append some transactional records. We should add these partitions to the manager to verify.
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
@@ -2150,13 +2147,13 @@ class ReplicaManagerTest {
       val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback.capture())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING)
+      val verificationState = getVerificationState(replicaManager, tp0, producerId)
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
       callback(Map(tp0 -> Errors.INVALID_RECORD).toMap)
       assertEquals(Errors.INVALID_RECORD, result.assertFired.error)
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING)
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState)
 
       // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
       val transactionalRecords2 = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
@@ -2165,8 +2162,8 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
       appendRecordsToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords2, tp1 -> idempotentRecords2), transactionalId, Some(0))
       verify(addPartitionsToTxnManager, times(2)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING)
-      checkVerificationStateAndSequence(replicaManager, tp1, producerId, producerEpoch, ProducerStateEntry.VerificationState.EMPTY)
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState)
+      checkVerificationStateAndSequence(replicaManager, tp1, producerId, producerEpoch, Optional.empty())
     } finally {
       replicaManager.shutdown()
     }
@@ -2188,7 +2185,6 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(1,
         makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
         (_, _) => ())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.EMPTY, OptionalInt.empty())
 
       // Append some transactional records.
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
@@ -2207,21 +2203,22 @@ class ReplicaManagerTest {
       val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback.capture())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(6))
+      val verificationState = getVerificationState(replicaManager, tp0, producerId)
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.of(6))
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
       callback(Map(tp0 -> Errors.INVALID_RECORD).toMap)
       assertEquals(Errors.INVALID_RECORD, result.assertFired.error)
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(6))
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.of(6))
 
       // This time verification is successful
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback2.capture())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(6))
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.of(6))
 
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
       callback2(Map.empty[TopicPartition, Errors].toMap)
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFIED, OptionalInt.empty())
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.empty())
     } finally {
       replicaManager.shutdown()
     }
@@ -2303,7 +2300,8 @@ class ReplicaManagerTest {
 
       appendRecords(replicaManager, tp0, transactionalRecords1, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd1), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(9))
+      val verificationState = getVerificationState(replicaManager, tp0, producerId)
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.of(9))
 
       // Append a record with a higher epoch and a higher sequence number.
       val newProducerEpoch = 1.toShort
@@ -2321,12 +2319,12 @@ class ReplicaManagerTest {
 
       appendRecords(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd2), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(11))
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, verificationState, OptionalInt.of(11))
       
       // Trying to append with a lower epoch will not modify verification state and tentative sequence.
       appendRecords(replicaManager, tp0, transactionalRecords1, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(2)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd1), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(11))
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, newProducerEpoch, verificationState, OptionalInt.of(11))
     } finally {
       replicaManager.shutdown()
     }
@@ -2367,7 +2365,8 @@ class ReplicaManagerTest {
 
       appendRecords(replicaManager, tp0, transactionalRecords1, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(9))
+      val verificationState = getVerificationState(replicaManager, tp0, producerId)
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.of(9))
 
       // Append a record with a lower sequence number.
       val transactionalRecords2 = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, 0,
@@ -2376,12 +2375,12 @@ class ReplicaManagerTest {
       // We add the same metadata to the manager.
       appendRecords(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(2)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(0))
-      
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.of(0))
+
       // If we try to append the higher sequence again, it does not update the tentative sequence.
       appendRecords(replicaManager, tp0, transactionalRecords1, transactionalId = transactionalId, transactionStatePartition = Some(0))
       verify(addPartitionsToTxnManager, times(3)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any())
-      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.of(0))
+      checkVerificationStateAndSequence(replicaManager, tp0, producerId, producerEpoch, verificationState, OptionalInt.of(0))
     } finally {
       replicaManager.shutdown()
     }
@@ -2413,7 +2412,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
-      checkVerificationStateAndSequence(replicaManager, tp, producerId, producerEpoch, ProducerStateEntry.VerificationState.EMPTY, OptionalInt.empty())
+      checkVerificationStateAndSequence(replicaManager, tp, producerId, producerEpoch, Optional.empty(), OptionalInt.empty())
 
       // We should not add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(0)).addTxnData(any(), any(), any())
@@ -2972,15 +2971,23 @@ class ReplicaManagerTest {
       }
     }
   }
+  
+  private def getVerificationState(replicaManager: ReplicaManager,
+                                   tp: TopicPartition,
+                                   producerId: Long): Optional[VerificationState] = {
+    replicaManager.getPartitionOrException(tp).log.get.verificationState(producerId)
+  }
 
   private def checkVerificationStateAndSequence(replicaManager: ReplicaManager,
                                                 tp: TopicPartition,
                                                 producerId: Long,
                                                 producerEpoch: Short,
-                                                expectedState: ProducerStateEntry.VerificationState,
+                                                expectedState: Optional[VerificationState],
                                                 expectedTentativeSequence: OptionalInt = OptionalInt.empty()): Unit = {
-    assertEquals(expectedState, replicaManager.getPartitionOrException(tp).log.get.verificationState(producerId, producerEpoch))
+    assertEquals(expectedState, replicaManager.getPartitionOrException(tp).log.get.verificationState(producerId))
     val entry = replicaManager.getPartitionOrException(tp).log.get.producerStateManager.activeProducers().get(producerId)
+    if (entry != null) 
+      assertEquals(producerEpoch, entry.producerEpoch)
     val tentativeSequence = if (entry == null) OptionalInt.empty() else entry.tentativeSequence()
     assertEquals(expectedTentativeSequence, tentativeSequence)
   }

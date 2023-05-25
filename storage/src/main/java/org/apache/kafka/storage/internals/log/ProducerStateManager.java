@@ -187,14 +187,14 @@ public class ProducerStateManager {
     
     public ProducerStateEntry entryForVerification(long producerId, short producerEpoch, int firstSequence) {
         ProducerStateEntry entry = producers.get(producerId);
-        if (entry != null) {
-            entry.maybeUpdateTentativeSequence(firstSequence, producerEpoch);
-            entry.maybeUpdateProducerHigherEpoch(producerEpoch);
+        boolean newEntry = entry == null;
+        if (!newEntry) {
+            entry.maybeAddVerificationState();
         } else {
             entry = ProducerStateEntry.forVerification(producerId, producerEpoch, time.milliseconds());
             addProducerId(producerId, entry);
-            entry.maybeUpdateTentativeSequence(firstSequence, producerEpoch);
         }
+        entry.maybeUpdateTentativeSequenceAndEpoch(firstSequence, producerEpoch, newEntry);
         return entry;
     }
 
@@ -652,10 +652,9 @@ public class ProducerStateManager {
                 long currentTxnFirstOffset = producerEntryStruct.getLong(CURRENT_TXN_FIRST_OFFSET_FIELD);
 
                 OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
-                ProducerStateEntry.VerificationState verificationState = currentTxnFirstOffsetVal.isPresent() ? ProducerStateEntry.VerificationState.VERIFIED : ProducerStateEntry.VerificationState.EMPTY;
                 Optional<BatchMetadata> batchMetadata =
                         (offset >= 0) ? Optional.of(new BatchMetadata(seq, offset, offsetDelta, timestamp)) : Optional.empty();
-                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata, verificationState, OptionalInt.empty()));
+                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata, Optional.empty(), OptionalInt.empty()));
             }
 
             return entries;

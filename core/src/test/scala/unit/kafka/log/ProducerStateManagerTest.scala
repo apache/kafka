@@ -1092,12 +1092,13 @@ class ProducerStateManagerTest {
     val producerEpoch = 2.toShort
     val earliestSequence = 10
     val originalEntry = stateManager.entryForVerification(producerId, producerEpoch, earliestSequence)
+    val originalEntryVerificationState = originalEntry.verificationState()
     
     def verifyEntry(producerId: Long, sequence: OptionalInt, producerEpoch: Short, entry: ProducerStateEntry): Unit = {
       assertTrue(stateManager.activeProducers().containsKey(producerId))
       assertTrue(stateManager.activeProducers().containsValue(entry))
       assertEquals(producerId, entry.producerId())
-      assertEquals(ProducerStateEntry.VerificationState.EMPTY, entry.verificationState())
+      assertEquals(originalEntryVerificationState, entry.verificationState())
       assertEquals(sequence, entry.tentativeSequence())
       assertEquals(producerEpoch, entry.producerEpoch())
     }
@@ -1127,9 +1128,7 @@ class ProducerStateManagerTest {
     val producerEpoch2 = 2.toShort
     val entry1 = stateManager.entryForVerification(producerId1, producerEpoch1, 2)
     val entry2 = stateManager.entryForVerification(producerId2, producerEpoch2, 3)
-    
-    entry1.compareAndSetVerificationState(producerEpoch1, ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFYING)
-    entry2.compareAndSetVerificationState(producerEpoch2, ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFIED)
+
     append(stateManager, producerId2, producerEpoch2, 0, offset = 2, isTransactional = true)
     stateManager.takeSnapshot()
 
@@ -1139,17 +1138,18 @@ class ProducerStateManagerTest {
     val recoveredEntry1 = recoveredMapping.activeProducers().get(producerId1)
     val recoveredEntry2 = recoveredMapping.activeProducers().get(producerId2)
     
-    // Entry 1 should be empty and have no tentative sequence.
+    // Entries should be empty and have no tentative sequence.
     assertEquals(entry1.producerId(), recoveredEntry1.producerId())
     assertEquals(entry1.producerEpoch(), recoveredEntry1.producerEpoch())
-    assertEquals(ProducerStateEntry.VerificationState.EMPTY, recoveredEntry1.verificationState())
+    assertEquals(entry1.currentTxnFirstOffset(), recoveredEntry1.currentTxnFirstOffset())
+    assertEquals(Optional.empty(), recoveredEntry1.verificationState())
     assertEquals(OptionalInt.empty(), recoveredEntry1.tentativeSequence())
     
-    // Entry 2 should be the same.
     assertEquals(entry2.producerId(), recoveredEntry2.producerId())
     assertEquals(entry2.producerEpoch(), recoveredEntry2.producerEpoch())
-    assertEquals(entry2.verificationState(), recoveredEntry2.verificationState())
-    assertEquals(entry2.tentativeSequence(), recoveredEntry2.tentativeSequence())
+    assertEquals(entry2.currentTxnFirstOffset(), recoveredEntry2.currentTxnFirstOffset())
+    assertEquals(Optional.empty(), recoveredEntry2.verificationState())
+    assertEquals(OptionalInt.empty(), recoveredEntry2.tentativeSequence())
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {

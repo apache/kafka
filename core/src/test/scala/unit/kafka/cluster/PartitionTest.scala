@@ -42,7 +42,7 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
 import java.nio.ByteBuffer
-import java.util.{Optional, OptionalInt, OptionalLong}
+import java.util.{Optional, OptionalLong}
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
@@ -55,7 +55,7 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationState}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -997,9 +997,8 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.transactionNeedsVerifying(1L, 0, 0)
-    partition.compareAndSetVerificationState(1L, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+    val verificationState = partition.transactionNeedsVerifying(1L, 0, 0)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching, verificationState)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(timestamp,
@@ -3248,7 +3247,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testVerificationStateUpdates(): Unit = {
+  def testVerificationState(): Unit = {
     val controllerEpoch = 0
     val leaderEpoch = 5
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
@@ -3267,13 +3266,6 @@ class PartitionTest extends AbstractPartitionTest {
       .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
 
-    def verifyProducerStateEntry(expectedVerificationState: ProducerStateEntry.VerificationState, expectedSequence: OptionalInt): Unit = {
-      val entry = partition.log.get.producerStateManager.activeProducers().get(producerId)
-      assertNotNull(entry)
-      assertEquals(expectedVerificationState, entry.verificationState())
-      assertEquals(expectedSequence, entry.tentativeSequence())
-    }
-
     val idempotentRecords = createIdempotentRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
@@ -3282,11 +3274,6 @@ class PartitionTest extends AbstractPartitionTest {
       producerId = producerId)
     partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
     assertEquals(OptionalLong.empty(), txnFirstOffset(producerId))
-    verifyProducerStateEntry(ProducerStateEntry.VerificationState.EMPTY, OptionalInt.empty())
-
-    assertEquals(OptionalLong.empty(), txnFirstOffset(producerId))
-    // For idempotent records, verification state should remain empty
-    verifyProducerStateEntry(ProducerStateEntry.VerificationState.EMPTY, OptionalInt.empty())
 
     def transactionRecords() = createTransactionalRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -3300,19 +3287,18 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
 
     // Before appendRecordsToLeader is called, ReplicaManager will call transactionNeedsVerifying. We have no tentative sequence, since this entry already has a batch.
-    partition.transactionNeedsVerifying(producerId, 0, 3)
-    verifyProducerStateEntry(ProducerStateEntry.VerificationState.VERIFYING, OptionalInt.empty())
+    val verificationState = partition.transactionNeedsVerifying(producerId, 0, 3)
     
-    // Before we verify, the append should fail.
-    assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
-    
-    // Upon receiving a non-error verification callback, we set to verified.
-    partition.compareAndSetVerificationState(producerId, 0, ProducerStateEntry.VerificationState.VERIFYING, ProducerStateEntry.VerificationState.VERIFIED)
-    verifyProducerStateEntry(ProducerStateEntry.VerificationState.VERIFIED, OptionalInt.empty())
+    // With the wrong verification state, append should fail.
+    assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(),
+      origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, Optional.of(new VerificationState())))
     
     // Append should proceed.
-    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationState)
     assertEquals(OptionalLong.of(3), txnFirstOffset(producerId))
+    
+    // Future appends without verification state will also succeed.
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
   }
 
   private def txnFirstOffset(producerId: Long): OptionalLong = {

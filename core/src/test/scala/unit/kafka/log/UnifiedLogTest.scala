@@ -36,7 +36,6 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.ProducerStateEntry.VerificationState
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -3669,7 +3668,7 @@ class UnifiedLogTest {
   }
   
   @Test
-  def testValidateVerificationState(): Unit = {
+  def testHigherTentativeSequenceIsNotAppended(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3686,23 +3685,16 @@ class UnifiedLogTest {
       new SimpleRecord("1".getBytes),
       new SimpleRecord("2".getBytes)
     )
+
+    val verificationState = log.transactionNeedsVerifying(producerId, producerEpoch, sequence)
     
-    def validateProducerStateEntry(producerId: Long, producerEpoch: Short, verificationState: VerificationState, sequence: OptionalInt): Unit = {
+    def validateProducerStateEntry(producerId: Long, producerEpoch: Short, sequence: OptionalInt): Unit = {
       val entry = log.producerStateManager.activeProducers().get(producerId)
       assertNotNull(entry)
       assertEquals(producerEpoch, entry.producerEpoch())
       assertEquals(verificationState, entry.verificationState())
       assertEquals(sequence, entry.tentativeSequence())
     }
-
-    assertThrows(classOf[InvalidRecordException], () => log.appendAsLeader(transactionalRecords1, leaderEpoch = 0))
-    
-    log.transactionNeedsVerifying(producerId, producerEpoch, sequence)
-    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFYING, OptionalInt.of(sequence))
-    assertThrows(classOf[InvalidRecordException], () => log.appendAsLeader(transactionalRecords1, leaderEpoch = 0))
-
-    log.compareAndSetVerificationState(producerId, producerEpoch, VerificationState.VERIFYING, VerificationState.VERIFIED)
-    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFIED, OptionalInt.of(sequence))
     
     val transactionalRecords2 = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
@@ -3713,11 +3705,95 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
     
-    assertThrows(classOf[OutOfOrderSequenceException], () => log.appendAsLeader(transactionalRecords2, leaderEpoch = 0))
-    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFIED, OptionalInt.of(sequence))
+    assertThrows(classOf[OutOfOrderSequenceException], () => log.appendAsLeader(transactionalRecords2, leaderEpoch = 0, verificationState = verificationState))
+    validateProducerStateEntry(producerId, producerEpoch, OptionalInt.of(sequence))
 
-    log.appendAsLeader(transactionalRecords1, leaderEpoch = 0)
-    validateProducerStateEntry(producerId, producerEpoch, VerificationState.VERIFIED, OptionalInt.empty())
+    log.appendAsLeader(transactionalRecords1, leaderEpoch = 0, verificationState = verificationState)
+    validateProducerStateEntry(producerId, producerEpoch, OptionalInt.empty())
+  }
+
+  @Test
+  def testTransactionIsOngoing(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val sequence = 3
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertEquals(Optional.empty(), log.verificationState(producerId))
+
+    val idempotentRecords = MemoryRecords.withIdempotentRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+    
+    log.appendAsLeader(idempotentRecords, leaderEpoch = 0)
+    assertFalse(log.hasOngoingTransaction(producerId))
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence + 2,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+
+    val verificationState = log.transactionNeedsVerifying(producerId, producerEpoch, sequence)
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationState = verificationState)
+    assertTrue(log.hasOngoingTransaction(producerId))
+    assertEquals(verificationState, log.verificationState(producerId))
+    
+    // A subsequent transactionNeedsVerifying will be empty since we are already verified.
+    assertEquals(Optional.empty(), log.transactionNeedsVerifying(producerId, producerEpoch, sequence + 1))
+
+    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+
+    log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertEquals(Optional.empty(), log.verificationState(producerId))
+    
+    // A new transactionNeedsVerifying will not be empty, as we need to verify the next transaction.
+    assertTrue(log.transactionNeedsVerifying(producerId, producerEpoch, sequence + 1).isPresent)
+  }
+
+  @Test
+  def testAllowNonZeroSequenceOnFirstAppendNonZeroEpoch(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val sequence = 3
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertEquals(Optional.empty(), log.verificationState(producerId))
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+
+    val verificationState = log.transactionNeedsVerifying(producerId, producerEpoch, sequence)
+    val entry = log.producerStateManager.lastEntry(producerId).get
+    assertEquals(producerEpoch, entry.producerEpoch)
+    assertEquals(OptionalInt.of(sequence), entry.tentativeSequence())
+    // Append should not throw error.
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationState = verificationState)
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

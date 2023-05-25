@@ -40,7 +40,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationState}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -579,35 +579,26 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     result
   }
 
-  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short, baseSequence: Int): Boolean = lock synchronized {
+  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short, baseSequence: Int): Optional[VerificationState] = lock synchronized {
     val entry = producerStateManager.entryForVerification(producerId, producerEpoch, baseSequence)
-    (!entry.currentTxnFirstOffset.isPresent) &&
-      (entry.compareAndSetVerificationState(producerEpoch, ProducerStateEntry.VerificationState.EMPTY, ProducerStateEntry.VerificationState.VERIFYING) ||
-        entry.verificationState() == ProducerStateEntry.VerificationState.VERIFYING)
+    if (entry.currentTxnFirstOffset.isPresent) {
+      Optional.empty()
+    } else {
+      entry.verificationState
+    }
   }
   
-  def compareAndSetVerificationState(producerId: Long,
-                                     producerEpoch: Short,
-                                     expectedVerificationState: ProducerStateEntry.VerificationState,
-                                     newVerificationState: ProducerStateEntry.VerificationState): Unit = lock synchronized {
-    val entry = producerStateManager.activeProducers().get(producerId)
-    if (entry == null) {
-      warn(s"There was no cached entry for producer ID $producerId, so verification state was not updated.")
-    }   
-    if (!entry.compareAndSetVerificationState(producerEpoch, expectedVerificationState, newVerificationState))
-      warn(s"The expected state: $expectedVerificationState did not match the current verification state, so the verification state was not updated.")
+  def hasOngoingTransaction(producerId: Long): Boolean = lock synchronized {
+    producerStateManager.activeProducers.getOrDefault(producerId, ProducerStateEntry.empty(producerId)).currentTxnFirstOffset().isPresent
   }
   
-  def verificationState(producerId: Long, producerEpoch: Short): ProducerStateEntry.VerificationState = lock synchronized {
+  def verificationState(producerId: Long): Optional[VerificationState] = lock synchronized {
       val entry = producerStateManager.activeProducers.get(producerId)
-      if (entry != null && entry.producerEpoch() == producerEpoch) {
+      if (entry != null) {
         entry.verificationState()
-      } else if (entry != null) {
-        warn("Producer Epoch on the record batch did not match the entry in the producer state manager, so it's state will be returned as EMPTY")
-        ProducerStateEntry.VerificationState.EMPTY
       } else {
-        warn("The given producer ID did not have an entry in the producer state manager, so it's state will be returned as EMPTY")
-        ProducerStateEntry.VerificationState.EMPTY
+        warn("The given producer ID did not have an entry in the producer state manager, so it's state will be returned as empty")
+        Optional.empty()
       }
     }
 
@@ -691,9 +682,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
-                     requestLocal: RequestLocal = RequestLocal.NoCaching): LogAppendInfo = {
+                     requestLocal: RequestLocal = RequestLocal.NoCaching,
+                     verificationState: Optional[VerificationState] = Optional.empty()): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
-    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), ignoreRecordSize = false)
+    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationState, ignoreRecordSize = false)
   }
 
   /**
@@ -710,6 +702,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       requestLocal = None,
+      verificationState = Optional.empty(),
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
@@ -738,6 +731,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
+                     verificationState: Optional[VerificationState],
                      ignoreRecordSize: Boolean): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
@@ -862,7 +856,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // now that we have valid records, offsets assigned, and timestamps updated, we need to
           // validate the idempotent/transactional state of the producers and collect some metadata
           val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(
-            logOffsetMetadata, validRecords, origin)
+            logOffsetMetadata, validRecords, origin, verificationState)
 
           maybeDuplicate match {
             case Some(duplicate) =>
@@ -990,7 +984,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
                                               records: MemoryRecords,
-                                              origin: AppendOrigin):
+                                              origin: AppendOrigin,
+                                              verificationStateOpt: Optional[VerificationState]):
   (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
@@ -1008,10 +1003,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
 
-          // Verify that if the record is transactional & the append origin is client, that we are in VERIFIED state.
+          // Verify that if the record is transactional & the append origin is client, that we either have an ongoing transaction or verified transaction state
           // Also check that we are not appending a record with a higher sequence than one previously seen through verification.
           if (batch.isTransactional && producerStateManager.producerStateManagerConfig().transactionVerificationEnabled()) {
-            if (verificationState(batch.producerId(), batch.producerEpoch()) != ProducerStateEntry.VerificationState.VERIFIED) {
+            if (!hasOngoingTransaction(batch.producerId) && (verificationStateOpt != verificationState(batch.producerId) || !verificationStateOpt.isPresent)) {
               throw new InvalidRecordException("Record was not part of an ongoing transaction")
             } else if (maybeLastEntry.isPresent && maybeLastEntry.get.tentativeSequence.isPresent && maybeLastEntry.get.tentativeSequence.getAsInt < batch.baseSequence)
               throw new OutOfOrderSequenceException("Partition previously saw a lower sequence, will retry")  

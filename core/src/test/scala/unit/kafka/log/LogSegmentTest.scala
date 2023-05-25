@@ -30,7 +30,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import java.io.File
 import java.util
-import java.util.{OptionalInt, OptionalLong}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -355,7 +355,7 @@ class LogSegmentTest {
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
     stateManager = newProducerStateManager()
-    stateManager.loadProducerEntry(new ProducerStateEntry(pid2, producerEpoch, 0, RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L), java.util.Optional.of(new BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP)), ProducerStateEntry.VerificationState.VERIFIED, OptionalInt.empty))
+    stateManager.loadProducerEntry(new ProducerStateEntry(pid2, producerEpoch, 0, RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L), java.util.Optional.of(new BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP)), Optional.empty(), OptionalInt.empty))
     segment.recover(stateManager)
     assertEquals(108L, stateManager.mapEndOffset)
 

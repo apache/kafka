@@ -124,9 +124,8 @@ public class ProducerAppendInfo {
 
             // If there is no current producer epoch (possibly because all producer records have been deleted due to
             // retention or the DeleteRecords API) accept writes with any sequence number
-            // If this is the first batch for a verified entry, the current last Sequence will be -1. Tentative sequence should already be verified.
-            if (!(currentEntry.producerEpoch() == RecordBatch.NO_PRODUCER_EPOCH || inSequence(currentLastSeq, appendFirstSeq))
-                    && !(currentEntry.batchMetadata().isEmpty() && currentLastSeq == -1)) {
+            // Tentative sequence should already be verified.
+            if (!(currentEntry.producerEpoch() == RecordBatch.NO_PRODUCER_EPOCH || inSequence(currentLastSeq, appendFirstSeq) || currentEntry.tentativeSequence().isPresent())) {
                 throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
                         "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
                         " (incoming seq. number), " + currentLastSeq + " (current end sequence number)");

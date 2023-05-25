@@ -44,7 +44,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateEntry}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationState}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{Map, Seq}
@@ -575,15 +575,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short, baseSequence: Int): Boolean = {
-    leaderLogIfLocal.exists(leaderLog => leaderLog.transactionNeedsVerifying(producerId, producerEpoch, baseSequence))
-  }
-  
-  def compareAndSetVerificationState(producerId: Long,
-                                     producerEpoch: Short,
-                                     expectedVerificationState: ProducerStateEntry.VerificationState,
-                                     newVerficationState: ProducerStateEntry.VerificationState): Unit = {
-    leaderLogIfLocal.foreach(leaderLog => leaderLog.compareAndSetVerificationState(producerId, producerEpoch, expectedVerificationState, newVerficationState))
+  // Returns a verification state if we need to verify. Otherwise return empty.
+  def transactionNeedsVerifying(producerId: Long, producerEpoch: Short, baseSequence: Int): Optional[VerificationState] = {
+    leaderLogIfLocal match {
+      case Some(leaderLog) => leaderLog.transactionNeedsVerifying(producerId, producerEpoch, baseSequence)
+      case None => Optional.empty()
+    }
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition
@@ -1275,7 +1272,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal): LogAppendInfo = {
+                            requestLocal: RequestLocal, verificationState: Optional[VerificationState] = Optional.empty()): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1289,7 +1286,7 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion, requestLocal)
+            interBrokerProtocolVersion, requestLocal, verificationState)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
