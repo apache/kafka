@@ -981,7 +981,8 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     clusterControl::isActive,
-                    featureControl.metadataVersion().isLeaderRecoverySupported());
+                    featureControl.metadataVersion()
+                );
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1362,11 +1363,13 @@ public class ReplicationControlManager {
         if (electionType == ElectionType.UNCLEAN) {
             election = PartitionChangeBuilder.Election.UNCLEAN;
         }
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(
+            partition,
             topicId,
             partitionId,
             clusterControl::isActive,
-            featureControl.metadataVersion().isLeaderRecoverySupported());
+            featureControl.metadataVersion()
+        );
         builder.setElection(election);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
@@ -1481,7 +1484,7 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 clusterControl::isActive,
-                featureControl.metadataVersion().isLeaderRecoverySupported()
+                featureControl.metadataVersion()
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
             builder.build().ifPresent(records::add);
@@ -1697,11 +1700,13 @@ public class ReplicationControlManager {
                 throw new RuntimeException("Partition " + topicIdPart +
                     " existed in isrMembers, but not in the partitions map.");
             }
-            PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
+            PartitionChangeBuilder builder = new PartitionChangeBuilder(
+                partition,
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
-                featureControl.metadataVersion().isLeaderRecoverySupported());
+                featureControl.metadataVersion()
+            );
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -1807,11 +1812,13 @@ public class ReplicationControlManager {
                     "it would require an unclean leader election.");
             }
         }
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(
+            part,
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion().isLeaderRecoverySupported());
+            featureControl.metadataVersion()
+        );
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -1862,11 +1869,13 @@ public class ReplicationControlManager {
         List<Integer> currentReplicas = Replicas.toList(part.replicas);
         PartitionReassignmentReplicas reassignment =
             new PartitionReassignmentReplicas(currentAssignment, targetAssignment);
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(
+            part,
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion().isLeaderRecoverySupported());
+            featureControl.metadataVersion()
+        );
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
