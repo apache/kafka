@@ -221,8 +221,8 @@ public class OffsetCommitRequestTest {
             List<OffsetCommitRequestPartition> partitions = topic.partitions();
             for (OffsetCommitRequestPartition partition : partitions) {
                 topicIdPartitionToCommitResponse.put(
-                        new TopicIdPartition(topic.topicId(), partition.partitionIndex(), topic.name()),
-                        partition
+                    new TopicIdPartition(topic.topicId(), partition.partitionIndex(), topic.name()),
+                    partition
                 );
             }
         }
@@ -246,8 +246,8 @@ public class OffsetCommitRequestTest {
             List<OffsetCommitResponsePartition> partitions = topic.partitions();
             for (OffsetCommitResponsePartition partition : partitions) {
                 topicIdPartitionToCommitResponse.put(
-                        new TopicIdPartition(topic.topicId(), partition.partitionIndex(), topic.name()),
-                        partition
+                    new TopicIdPartition(topic.topicId(), partition.partitionIndex(), topic.name()),
+                    partition
                 );
             }
         }
