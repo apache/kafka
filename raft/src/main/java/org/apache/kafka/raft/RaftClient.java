@@ -58,7 +58,7 @@ public interface RaftClient<T> extends AutoCloseable {
          *
          * @param reader snapshot reader instance which must be iterated and closed
          */
-        void handleSnapshot(SnapshotReader<T> reader);
+        void handleLoadSnapshot(SnapshotReader<T> reader);
 
         /**
          * Called on any change to leadership. This includes both when a leader is elected and
@@ -66,7 +66,7 @@ public interface RaftClient<T> extends AutoCloseable {
          *
          * If this node is the leader, then the notification of leadership will be delayed until
          * the implementation of this interface has caught up to the high-watermark through calls to
-         * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         * {@link #handleLoadSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
          * this case the leader may or may not be known for the current epoch.

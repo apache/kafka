@@ -89,7 +89,7 @@ public class KRaftMigrationZkWriter {
         handleConfigsSnapshot(image.configs(), operationConsumer);
         handleClientQuotasSnapshot(image.clientQuotas(), image.scram(), operationConsumer);
         operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
-            migrationClient.writeProducerId(image.producerIds().highestSeenProducerId(), migrationState));
+            migrationClient.writeProducerId(image.producerIds().nextProducerId(), migrationState));
         handleAclsSnapshot(image.acls(), operationConsumer);
     }
 
@@ -105,7 +105,7 @@ public class KRaftMigrationZkWriter {
         if (delta.configsDelta() != null) {
             handleConfigsDelta(image.configs(), delta.configsDelta(), operationConsumer);
         }
-        if (delta.clientQuotasDelta() != null) {
+        if ((delta.clientQuotasDelta() != null) || (delta.scramDelta() != null)) {
             handleClientQuotasDelta(image, delta, operationConsumer);
         }
         if (delta.producerIdsDelta() != null) {
@@ -354,7 +354,8 @@ public class KRaftMigrationZkWriter {
             users.forEach(userName -> {
                 Map<String, String> userScramMap = getScramCredentialStringsForUser(metadataImage.scram(), userName);
                 ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
-                if (metadataImage.clientQuotas() == null) {
+                if ((metadataImage.clientQuotas() == null) ||
+                    (metadataImage.clientQuotas().entities().get(clientQuotaEntity) == null)) {
                     operationConsumer.accept(UPDATE_SCRAM_CREDENTIAL, "Updating scram credentials for " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), Collections.emptyMap(), userScramMap, migrationState));
                 } else {
@@ -381,9 +382,11 @@ public class KRaftMigrationZkWriter {
             );
         });
 
+        Set<ResourcePattern> newResources = new HashSet<>(allAclsInSnapshot.keySet());
         Set<ResourcePattern> resourcesToDelete = new HashSet<>();
         Map<ResourcePattern, Set<AccessControlEntry>> changedResources = new HashMap<>();
         migrationClient.aclClient().iterateAcls((resourcePattern, accessControlEntries) -> {
+            newResources.remove(resourcePattern);
             if (!allAclsInSnapshot.containsKey(resourcePattern)) {
                 resourcesToDelete.add(resourcePattern);
             } else {
@@ -392,6 +395,13 @@ public class KRaftMigrationZkWriter {
                     changedResources.put(resourcePattern, snapshotEntries);
                 }
             }
+        });
+
+        newResources.forEach(resourcePattern -> {
+            Set<AccessControlEntry> accessControlEntries = allAclsInSnapshot.get(resourcePattern);
+            String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
+            operationConsumer.accept(name, migrationState ->
+                migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
 
         resourcesToDelete.forEach(deletedResource -> {
