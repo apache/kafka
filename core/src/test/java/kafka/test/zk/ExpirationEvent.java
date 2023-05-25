@@ -14,26 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.zk;
+package kafka.test.zk;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Event corresponding to a ConnectRequest to Zookeeper once a TCP connection has
- * been established.
+ * Event expected from the test timeline when Zookeeper is about to expire a session.
  */
-public class ConnectionEvent {
-    private static final Logger log = LoggerFactory.getLogger(ConnectionEvent.class);
+public class ExpirationEvent {
+    private static final Logger log = LoggerFactory.getLogger(ExpirationEvent.class);
 
     private final long delayMs;
 
-    public ConnectionEvent(long delayMs) {
+    public ExpirationEvent(long delayMs) {
         this.delayMs = delayMs;
     }
 
     public void maybeInjectDelay() {
-        log.info("Injecting connection delay: " + delayMs + " ms");
+        log.info("Injecting session expiration delay: " + delayMs + " ms");
 
         if (delayMs > 0) {
             try {

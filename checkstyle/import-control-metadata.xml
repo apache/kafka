@@ -179,3 +179,7 @@
     </subpackage>
 
 </import-control>
+
+<import-controls pkg="org.apache.zookeeper">
+</import-controls>
+

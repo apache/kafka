@@ -43,7 +43,7 @@
     <suppress checks="MethodLength"
               files="(KafkaClusterTestKit).java"/>
     <suppress checks="ImportControl"
-              files="(ZkBrokerRegistrationTest|DelegatingRequest|InstrumentedRequestProcessor|InstrumentedZooKeeperServer|ReceiptEvent|ZkBrokerRegistrationStubs).java"/>
+              files="(ZkBrokerRegistrationStubs).java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"

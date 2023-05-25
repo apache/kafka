@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.zk;
+package kafka.test.zk;
 
 import org.apache.zookeeper.server.Request;
 import org.apache.zookeeper.server.ServerCnxn;

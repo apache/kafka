@@ -14,12 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.zk;
+package kafka.test.zk;
 
 import io.netty.channel.group.ChannelGroup;
 import io.netty.util.concurrent.EventExecutor;
 import kafka.cluster.Broker;
 import kafka.server.KafkaConfig;
+import kafka.zk.BrokerIdsZNode;
+import kafka.zk.BrokerInfo;
+import kafka.zk.KafkaZkClient;
 import kafka.zookeeper.ZooKeeperClient;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Time;
@@ -27,7 +30,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.client.ZKClientConfig;
 import org.apache.zookeeper.server.ServerCnxnFactory;
-import org.apache.zookeeper.server.ZkBrokerRegistrationStubs;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig;

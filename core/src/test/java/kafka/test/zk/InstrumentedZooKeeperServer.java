@@ -14,7 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.zk;
+package kafka.test.zk;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 import org.apache.zookeeper.server.ClientCnxnLimitException;
 import org.apache.zookeeper.server.PrepRequestProcessor;
@@ -26,11 +31,6 @@ import org.apache.zookeeper.server.ZKDatabase;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.apache.zookeeper.server.util.JvmPauseMonitor;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
 
 import static org.apache.zookeeper.server.ZkBrokerRegistrationStubs.newInstrumentedRequestProcessor;
 
