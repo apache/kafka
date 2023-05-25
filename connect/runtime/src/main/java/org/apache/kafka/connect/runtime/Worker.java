@@ -32,6 +32,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -247,20 +248,7 @@ public class Worker {
         connectorStatusMetricsGroup.close();
 
         workerConfigTransformer.close();
-        executor.shutdown();
-        try {
-            // Wait a while for existing tasks to terminate
-            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                executor.shutdownNow(); //cancel current executing threads
-                // Wait a while for tasks to respond to being cancelled
-                if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
-                    log.error("Executor did not terminate in time");
-            }
-        } catch (InterruptedException e) {
-            executor.shutdownNow(); // (Re-)Cancel if current thread also interrupted
-            // Preserve interrupt status
-            Thread.currentThread().interrupt();
-        }
+        ThreadUtils.shutdownExecutorServiceQuietly(executor, EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
     /**

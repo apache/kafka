@@ -115,6 +115,9 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
             }
         }
         changes.apply(metrics);
+        if (delta.featuresDelta() != null) {
+            delta.featuresDelta().getZkMigrationStateChange().ifPresent(state -> metrics.setZkMigrationState(state.value()));
+        }
     }
 
     private void publishSnapshot(MetadataImage newImage) {
@@ -147,6 +150,7 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         metrics.setGlobalPartitionCount(totalPartitions);
         metrics.setOfflinePartitionCount(offlinePartitions);
         metrics.setPreferredReplicaImbalanceCount(partitionsWithoutPreferredLeader);
+        metrics.setZkMigrationState(newImage.features().zkMigrationState().value());
     }
 
     @Override

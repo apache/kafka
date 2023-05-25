@@ -2035,7 +2035,7 @@ class UnifiedLogTest {
       remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true, remoteLogManager = Some(remoteLogManager))
     when(remoteLogManager.findOffsetByTimestamp(log.topicPartition, 0, 0, log.leaderEpochCache.get))
-      .thenReturn(None)
+      .thenReturn(Optional.empty[TimestampAndOffset]())
     assertEquals(None, log.fetchOffsetByTimestamp(0L))
 
     val firstTimestamp = mockTime.milliseconds
@@ -2056,9 +2056,9 @@ class UnifiedLogTest {
       anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache.get)))
       .thenAnswer(ans => {
         val timestamp = ans.getArgument(1).asInstanceOf[Long]
-        Option(timestamp)
+        Optional.of(timestamp)
           .filter(_ == firstTimestamp)
-          .map(new TimestampAndOffset(_, 0L, Optional.of(firstLeaderEpoch)))
+          .map[TimestampAndOffset](x => new TimestampAndOffset(x, 0L, Optional.of(firstLeaderEpoch)))
       })
     log._localLogStartOffset = 1
 

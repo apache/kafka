@@ -55,6 +55,7 @@ import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -300,6 +301,16 @@ public class KafkaConsumerTest {
                 } else {
                     i++;
                     return super.deserialize(topic, data);
+                }
+            }
+
+            @Override
+            public String deserialize(String topic, Headers headers, ByteBuffer data) {
+                if (i == recordIndex) {
+                    throw new SerializationException();
+                } else {
+                    i++;
+                    return super.deserialize(topic, headers, data);
                 }
             }
         };

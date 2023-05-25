@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.ElectionType;
@@ -92,7 +91,6 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -204,19 +202,12 @@ public class ReplicationControlManager {
             if (configurationControl == null) {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
-                throw new IllegalStateException("Cluster controller must be set before building");
+                throw new IllegalStateException("Cluster control must be set before building");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
             if (featureControl == null) {
-                featureControl = new FeatureControlManager.Builder().
-                    setLogContext(logContext).
-                    setSnapshotRegistry(snapshotRegistry).
-                    setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
-                        QuorumFeatures.defaultFeatureMap(),
-                        Collections.singletonList(0))).
-                    setMetadataVersion(MetadataVersion.latest()).
-                    build();
+                throw new IllegalStateException("FeatureControlManager must not be null");
             }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,

@@ -115,11 +115,11 @@ public class ClientQuotaControlManager {
     }
 
     private void alterClientQuotaEntity(
-            ClientQuotaEntity entity,
-            Map<String, Double> newQuotaConfigs,
-            List<ApiMessageAndVersion> outputRecords,
-            Map<ClientQuotaEntity, ApiError> outputResults) {
-
+        ClientQuotaEntity entity,
+        Map<String, Double> newQuotaConfigs,
+        List<ApiMessageAndVersion> outputRecords,
+        Map<ClientQuotaEntity, ApiError> outputResults
+    ) {
         // Check entity types and sanitize the names
         Map<String, String> validatedEntityMap = new HashMap<>(3);
         ApiError error = validateEntity(entity, validatedEntityMap);
@@ -181,7 +181,7 @@ public class ClientQuotaControlManager {
         outputResults.put(entity, ApiError.NONE);
     }
 
-    private ApiError configKeysForEntityType(Map<String, String> entity, Map<String, ConfigDef.ConfigKey> output) {
+    static ApiError configKeysForEntityType(Map<String, String> entity, Map<String, ConfigDef.ConfigKey> output) {
         // We only allow certain combinations of quota entity types. Which type is in use determines which config
         // keys are valid
         boolean hasUser = entity.containsKey(ClientQuotaEntity.USER);
@@ -200,12 +200,8 @@ public class ClientQuotaControlManager {
                     return new ApiError(Errors.INVALID_REQUEST, entity.get(ClientQuotaEntity.IP) + " is not a valid IP or resolvable host.");
                 }
             }
-        } else if (hasUser && hasClientId) {
-            configKeys = QuotaConfigs.userConfigs().configKeys();
-        } else if (hasUser) {
-            configKeys = QuotaConfigs.userConfigs().configKeys();
-        } else if (hasClientId) {
-            configKeys = QuotaConfigs.clientConfigs().configKeys();
+        } else if (hasUser || hasClientId) {
+            configKeys = QuotaConfigs.userAndClientQuotaConfigs().configKeys();
         } else {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity");
         }
@@ -214,46 +210,64 @@ public class ClientQuotaControlManager {
         return ApiError.NONE;
     }
 
-    private ApiError validateQuotaKeyValue(Map<String, ConfigDef.ConfigKey> validKeys, String key, Double value) {
-        // TODO can this validation be shared with alter configs?
+    static ApiError validateQuotaKeyValue(
+        Map<String, ConfigDef.ConfigKey> validKeys,
+        String key,
+        double value
+    ) {
         // Ensure we have an allowed quota key
         ConfigDef.ConfigKey configKey = validKeys.get(key);
         if (configKey == null) {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid configuration key " + key);
         }
+        if (value <= 0.0) {
+            return new ApiError(Errors.INVALID_REQUEST, "Quota " + key + " must be greater than 0");
+        }
 
         // Ensure the quota value is valid
         switch (configKey.type()) {
             case DOUBLE:
-                break;
+                return ApiError.NONE;
             case SHORT:
-            case INT:
-            case LONG:
-                Double epsilon = 1e-6;
-                Long longValue = Double.valueOf(value + epsilon).longValue();
-                if (Math.abs(longValue.doubleValue() - value) > epsilon) {
+                if (value > Short.MAX_VALUE) {
                     return new ApiError(Errors.INVALID_REQUEST,
-                            "Configuration " + key + " must be a Long value");
+                        "Proposed value for " + key + " is too large for a SHORT.");
                 }
-                break;
+                return getErrorForIntegralQuotaValue(value, key);
+            case INT:
+                if (value > Integer.MAX_VALUE) {
+                    return new ApiError(Errors.INVALID_REQUEST,
+                        "Proposed value for " + key + " is too large for an INT.");
+                }
+                return getErrorForIntegralQuotaValue(value, key);
+            case LONG: {
+                if (value > Long.MAX_VALUE) {
+                    return new ApiError(Errors.INVALID_REQUEST,
+                        "Proposed value for " + key + " is too large for a LONG.");
+                }
+                return getErrorForIntegralQuotaValue(value, key);
+            }
             default:
                 return new ApiError(Errors.UNKNOWN_SERVER_ERROR,
                         "Unexpected config type " + configKey.type() + " should be Long or Double");
         }
+    }
+
+    static ApiError getErrorForIntegralQuotaValue(double value, String key) {
+        double remainder = Math.abs(value % 1.0);
+        if (remainder > 1e-6) {
+            return new ApiError(Errors.INVALID_REQUEST, key + " cannot be a fractional value.");
+        }
         return ApiError.NONE;
     }
 
-    // TODO move this somewhere common?
-    private boolean isValidIpEntity(String ip) {
-        if (Objects.nonNull(ip)) {
-            try {
-                InetAddress.getByName(ip);
-                return true;
-            } catch (UnknownHostException e) {
-                return false;
-            }
-        } else {
+    static boolean isValidIpEntity(String ip) {
+        if (ip == null) return true;
+        try {
+            InetAddress.getByName(ip);
             return true;
+        } catch (UnknownHostException e) {
+            return false;
         }
     }
 

@@ -88,10 +88,6 @@ public class MirrorSourceConnectorTest {
                 return true;
             }
 
-            @Override
-            public boolean shouldReplicateSourceDefault(String prop) {
-                return false;
-            }
         };
     }
 

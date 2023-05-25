@@ -399,7 +399,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 log.debug("Exclude {} that is from classloader {}", pluginKlass.getSimpleName(), pluginKlass.getClassLoader());
                 continue;
             }
-            try {
+            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
                 result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), loader));
             } catch (ReflectiveOperationException | LinkageError e) {
                 log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), pluginKlass.getSimpleName(), reflectiveErrorDescription(e), e);
@@ -415,11 +415,10 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @SuppressWarnings("unchecked")
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        try {
-            ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
-            for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
+        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
+        for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
+            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
                 T pluginImpl;
                 try {
                     pluginImpl = iterator.next();
@@ -434,8 +433,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                 }
                 result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), loader));
             }
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
         }
         return result;
     }
@@ -480,6 +477,16 @@ public class DelegatingClassLoader extends URLClassLoader {
             return ": Failed to invoke plugin constructor";
         } else {
             return "";
+        }
+    }
+
+    public LoaderSwap withClassLoader(ClassLoader loader) {
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
+        try {
+            return new LoaderSwap(savedLoader);
+        } catch (Throwable t) {
+            Plugins.compareAndSwapLoaders(savedLoader);
+            throw t;
         }
     }
 

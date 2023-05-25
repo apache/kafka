@@ -194,7 +194,8 @@ public class AbstractConfig {
     }
 
     public String getString(String key) {
-        return (String) get(key);
+        final String res = (String) get(key);
+        return res == null ? res : res.trim();
     }
 
     public ConfigDef.Type typeOf(String key) {
