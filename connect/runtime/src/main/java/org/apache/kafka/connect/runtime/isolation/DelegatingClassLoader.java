@@ -395,8 +395,9 @@ public class DelegatingClassLoader extends URLClassLoader {
                 log.debug("Skipping {} as it is not concrete implementation", pluginKlass);
                 continue;
             }
-            if (!isParentClassloader(pluginKlass.getClassLoader(), loader)) {
-                log.debug("Exclude {} that is from classloader {}", pluginKlass.getSimpleName(), pluginKlass.getClassLoader());
+            if (pluginKlass.getClassLoader() != loader) {
+                log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
+                        pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
                 continue;
             }
             try (LoaderSwap loaderSwap = withClassLoader(loader)) {
@@ -427,24 +428,15 @@ public class DelegatingClassLoader extends URLClassLoader {
                     continue;
                 }
                 Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
-                if (!isParentClassloader(pluginKlass.getClassLoader(), loader)) {
-                    log.debug("Exclude {} that is from classloader {}", pluginKlass.getSimpleName(), pluginKlass.getClassLoader());
+                if (pluginKlass.getClassLoader() != loader) {
+                    log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
+                            pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
                     continue;
                 }
                 result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), loader));
             }
         }
         return result;
-    }
-
-    private static boolean isParentClassloader(ClassLoader loader, ClassLoader parent) {
-        while (loader != null) {
-            if (loader == parent) {
-                return true;
-            }
-            loader = loader.getParent();
-        }
-        return false;
     }
 
     private static <T>  String versionFor(T pluginImpl) {
