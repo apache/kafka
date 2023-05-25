@@ -80,7 +80,7 @@ class KRaftClusterTest {
   }
 
   @Test
-  def testCreateClusterAndRestartNode(): Unit = {
+  def testCreateClusterAndRestartBrokerNode(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
@@ -91,6 +91,32 @@ class KRaftClusterTest {
       val broker = cluster.brokers().values().iterator().next()
       broker.shutdown()
       broker.startup()
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndRestartControllerNode(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(2).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
+      val port = controller.socketServer.boundPort(controller.config.controllerListeners.head.listenerName)
+
+      // shutdown active controller
+      controller.shutdown()
+      // Rewrite The `listeners` config to avoid controller socket server init using different port
+      val config = controller.sharedServer.controllerConfig.props
+      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$port")
+      controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
+
+      // restart controller
+      controller.startup()
     } finally {
       cluster.close()
     }
