@@ -31,7 +31,11 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -339,7 +343,7 @@ public class RecordHelpers {
      * Creates a ConsumerGroupCurrentMemberAssignment tombstone.
      *
      * @param groupId   The consumer group id.
-     * @param memberId    The consumer group member id.
+     * @param memberId  The consumer group member id.
      * @return The record.
      */
     public static Record newCurrentAssignmentTombstoneRecord(
@@ -352,6 +356,81 @@ public class RecordHelpers {
                     .setGroupId(groupId)
                     .setMemberId(memberId),
                 (short) 8
+            ),
+            null // Tombstone
+        );
+    }
+
+    /**
+     * Creates a GroupMetadata record.
+     *
+     * @param group              The generic group.
+     * @param metadataVersion    The metadata version.
+     * @return The record.
+     */
+    public static Record newGroupMetadataRecord(
+        GenericGroup group,
+        MetadataVersion metadataVersion
+    ) {
+        List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>(group.allMembers().size());
+        group.allMembers().forEach(member -> {
+            byte[] subscription = group.protocolName().map(member::metadata).orElse(null);
+            if (subscription == null) {
+                throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol.");
+            }
+
+            byte[] assignment = member.assignment();
+            if (assignment == null) {
+                throw new IllegalStateException("Attempted to write member " + member.memberId() +
+                    " of group + " + group.groupId() + " with no assignment.");
+            }
+
+            members.add(
+                new GroupMetadataValue.MemberMetadata()
+                    .setMemberId(member.memberId())
+                    .setClientId(member.clientId())
+                    .setClientHost(member.clientHost())
+                    .setRebalanceTimeout(member.rebalanceTimeoutMs())
+                    .setSessionTimeout(member.sessionTimeoutMs())
+                    .setGroupInstanceId(member.groupInstanceId().orElse(null))
+                    .setSubscription(subscription)
+                    .setAssignment(assignment)
+            );
+        });
+
+        return new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup(group.groupId()),
+                (short) 2
+            ),
+            new ApiMessageAndVersion(
+                new GroupMetadataValue()
+                    .setProtocol(group.protocolName().orElse(null))
+                    .setProtocolType(group.protocolType().orElse(""))
+                    .setGeneration(group.generationId())
+                    .setLeader(group.leaderOrNull())
+                    .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
+                    .setMembers(members),
+                metadataVersion.groupMetadataValueVersion()
+            )
+        );
+    }
+
+    /**
+     * Creates a GroupMetadata tombstone.
+     *
+     * @param groupId  The group id.
+     * @return The record.
+     */
+    public static Record newGroupMetadataTombstoneRecord(
+        String groupId
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup(groupId),
+                (short) 2
             ),
             null // Tombstone
         );

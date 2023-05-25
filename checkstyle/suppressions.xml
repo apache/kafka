@@ -328,6 +328,8 @@
               files="(GroupMetadataManager).java"/>
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember).java"/>
+    <suppress checks="ClassDataAbstractionCouplingCheck"
+              files="(RecordHelpersTest).java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"

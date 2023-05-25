@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, TopicsImage}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.LegacyPropagator
-import org.apache.kafka.server.common.MetadataVersion
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -57,7 +56,6 @@ class MigrationPropagator(
   config: KafkaConfig
 ) extends LegacyPropagator {
   @volatile private var _image = MetadataImage.EMPTY
-  @volatile private var metadataVersion = MetadataVersion.IBP_3_4_IV0
   val stateChangeLogger = new StateChangeLogger(nodeId, inControllerContext = true, None)
   val channelManager = new ControllerChannelManager(
     () => _image.highestOffsetAndEpoch().epoch(),
@@ -70,7 +68,7 @@ class MigrationPropagator(
   val requestBatch = new MigrationPropagatorBatch(
     config,
     metadataProvider,
-    () => metadataVersion,
+    () => _image.features().metadataVersion(),
     channelManager,
     stateChangeLogger
   )
@@ -247,9 +245,5 @@ class MigrationPropagator(
 
   override def clear(): Unit = {
     requestBatch.clear()
-  }
-
-  override def setMetadataVersion(newMetadataVersion: MetadataVersion): Unit = {
-    metadataVersion = newMetadataVersion
   }
 }
