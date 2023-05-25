@@ -32,6 +32,9 @@
   // Version 7 adds pending offset commit as new error response on partition level.
   //
   // Version 8 is adding support for fetching offsets for multiple groups
+  //
+  // Version 9 adds TopicId field and can return STALE_MEMBER_EPOCH, UNKNOWN_MEMBER_ID,
+  // ILLEGAL_GENERATION, and UNKNOWN_TOPIC_ID errors.
   "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [
@@ -63,8 +66,9 @@
         "about": "The group ID." },
       { "name": "Topics", "type": "[]OffsetFetchResponseTopics", "versions": "8+",
         "about": "The responses per topic.", "fields": [
-        { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",
+        { "name": "Name", "type": "string", "versions": "0-8", "ignorable": true, "entityType": "topicName",
           "about": "The topic name." },
+        { "name": "TopicId", "type": "uuid", "versions": "9+", "ignorable": true, "about": "The unique topic ID" },
         { "name": "Partitions", "type": "[]OffsetFetchResponsePartitions", "versions": "8+",
           "about": "The responses per partition", "fields": [
           { "name": "PartitionIndex", "type": "int32", "versions": "8+",
