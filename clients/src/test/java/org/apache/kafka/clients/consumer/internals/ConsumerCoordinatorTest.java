@@ -679,20 +679,18 @@ public abstract class ConsumerCoordinatorTest {
                         )
                 );
 
-        consumerClient.send(
-            coordinator.checkAndGetCoordinator(),
-            new OffsetCommitRequest.Builder(offsetCommitRequestData, true)
-        ).compose(new RequestFutureAdapter<ClientResponse, Object>() {
-            @Override
-            public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
+        consumerClient.send(coordinator.checkAndGetCoordinator(), new OffsetCommitRequest.Builder(offsetCommitRequestData, true))
+                .compose(new RequestFutureAdapter<ClientResponse, Object>() {
+                    @Override
+                    public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
 
-            @Override
-            public void onFailure(RuntimeException e, RequestFuture<Object> future) {
-                assertTrue(e instanceof DisconnectException, "Unexpected exception type: " + e.getClass());
-                assertTrue(coordinator.coordinatorUnknown());
-                asyncCallbackInvoked.set(true);
-            }
-        });
+                    @Override
+                    public void onFailure(RuntimeException e, RequestFuture<Object> future) {
+                        assertTrue(e instanceof DisconnectException, "Unexpected exception type: " + e.getClass());
+                        assertTrue(coordinator.coordinatorUnknown());
+                        asyncCallbackInvoked.set(true);
+                    }
+                });
 
         coordinator.markCoordinatorUnknown("test cause");
         consumerClient.pollNoWakeup();

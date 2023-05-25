@@ -18,7 +18,7 @@
 package unit.kafka.server
 
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetCommitRequestTest.assertResponseEquals
 import org.apache.kafka.common.message.{OffsetCommitRequestData, OffsetCommitResponseData}
