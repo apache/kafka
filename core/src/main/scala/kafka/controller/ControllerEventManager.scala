@@ -134,15 +134,20 @@ class ControllerEventManager(controllerId: Int,
   }
 
   def put(event: ControllerEvent): QueuedEvent = inLock(putLock) {
+    // 构建QueuedEvent实例
     val queuedEvent = new QueuedEvent(event, time.milliseconds())
+    // 插入到事件队列
     queue.put(queuedEvent)
+    // 返回新建QueuedEvent实例
     queuedEvent
   }
 
   def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock){
     val preemptedEvents = new ArrayList[QueuedEvent]()
     queue.drainTo(preemptedEvents)
+    // 优先处理抢占式事件
     preemptedEvents.forEach(_.preempt(processor))
+    // 调用上面的put方法将给定事件插入到事件队列
     put(event)
   }
 
