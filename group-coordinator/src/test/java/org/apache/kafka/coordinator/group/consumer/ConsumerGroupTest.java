@@ -196,7 +196,7 @@ public class ConsumerGroupTest {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setNextMemberEpoch(1)
+            .setTargetMemberEpoch(1)
             .build();
 
         consumerGroup.updateMember(member1);
@@ -208,7 +208,7 @@ public class ConsumerGroupTest {
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setNextMemberEpoch(1)
+            .setTargetMemberEpoch(1)
             .build();
 
         consumerGroup.updateMember(member2);
@@ -224,7 +224,7 @@ public class ConsumerGroupTest {
         member1 = new ConsumerGroupMember.Builder(member1)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setNextMemberEpoch(2)
+            .setTargetMemberEpoch(2)
             .build();
 
         consumerGroup.updateMember(member1);
@@ -236,7 +236,7 @@ public class ConsumerGroupTest {
         member2 = new ConsumerGroupMember.Builder(member2)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setNextMemberEpoch(2)
+            .setTargetMemberEpoch(2)
             .setPartitionsPendingAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0)))
             .build();
@@ -249,7 +249,7 @@ public class ConsumerGroupTest {
         member2 = new ConsumerGroupMember.Builder(member2)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setNextMemberEpoch(2)
+            .setTargetMemberEpoch(2)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0)))
             .setPartitionsPendingAssignment(Collections.emptyMap())

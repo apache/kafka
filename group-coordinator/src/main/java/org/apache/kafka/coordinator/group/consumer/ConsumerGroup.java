@@ -433,7 +433,7 @@ public class ConsumerGroup implements Group {
             state.set(ConsumerGroupState.ASSIGNING);
         } else {
             for (ConsumerGroupMember member : members.values()) {
-                if (member.nextMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
+                if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
                     state.set(ConsumerGroupState.RECONCILING);
                     return;
                 }

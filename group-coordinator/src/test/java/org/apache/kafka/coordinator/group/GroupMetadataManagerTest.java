@@ -593,7 +593,7 @@ public class GroupMetadataManagerTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
             .setMemberEpoch(100)
             .setPreviousMemberEpoch(99)
-            .setNextMemberEpoch(100)
+            .setTargetMemberEpoch(100)
             .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
@@ -720,7 +720,7 @@ public class GroupMetadataManagerTest {
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setNextMemberEpoch(1)
+            .setTargetMemberEpoch(1)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
@@ -771,7 +771,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setSubscribedTopicNames(Arrays.asList("foo"))
@@ -818,7 +818,7 @@ public class GroupMetadataManagerTest {
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
@@ -872,7 +872,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
@@ -885,7 +885,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
@@ -954,7 +954,7 @@ public class GroupMetadataManagerTest {
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(0)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
@@ -1017,7 +1017,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
@@ -1029,7 +1029,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     // Use zar only here to ensure that metadata needs to be recomputed.
@@ -1107,7 +1107,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
@@ -1120,7 +1120,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
@@ -1202,7 +1202,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(0)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setPartitionsPendingAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 4, 5),
                     mkTopicAssignment(barTopicId, 1)))
@@ -1242,7 +1242,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 0, 1),
                     mkTopicAssignment(barTopicId, 0)))
@@ -1285,7 +1285,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 3),
                     mkTopicAssignment(barTopicId, 2)))
@@ -1356,7 +1356,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 0, 1),
                     mkTopicAssignment(barTopicId, 0)))
@@ -1413,7 +1413,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(barTopicId, 1)))
                 .setPartitionsPendingAssignment(mkAssignment(
@@ -1481,7 +1481,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 2, 3),
                     mkTopicAssignment(barTopicId, 2)))
@@ -1518,7 +1518,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 4, 5),
                     mkTopicAssignment(barTopicId, 1)))
@@ -1552,7 +1552,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
@@ -1611,7 +1611,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(0)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setPartitionsPendingAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 2)))
                 .build()),
@@ -1643,7 +1643,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
-                .setNextMemberEpoch(11)
+                .setTargetMemberEpoch(11)
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 0, 1)))
                 .setPartitionsPendingRevocation(mkAssignment(
@@ -1700,7 +1700,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(0)
-                .setNextMemberEpoch(12)
+                .setTargetMemberEpoch(12)
                 .setPartitionsPendingAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 1)))
                 .build()),
@@ -1732,7 +1732,7 @@ public class GroupMetadataManagerTest {
                 RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(12)
+                    .setTargetMemberEpoch(12)
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)))
                     .setPartitionsPendingRevocation(mkAssignment(
@@ -1766,7 +1766,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(11)
-                .setNextMemberEpoch(12)
+                .setTargetMemberEpoch(12)
                 .setPartitionsPendingAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 2)))
                 .build())),
@@ -1802,7 +1802,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
@@ -1815,7 +1815,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setNextMemberEpoch(10)
+                    .setTargetMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
@@ -1877,7 +1877,7 @@ public class GroupMetadataManagerTest {
         context.replay(RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
             .setPartitionsPendingAssignment(mkAssignment(mkTopicAssignment(fooTopicId, 3)))
             .build()));
@@ -1887,7 +1887,7 @@ public class GroupMetadataManagerTest {
         context.replay(RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2, 3)))
             .build()));
 

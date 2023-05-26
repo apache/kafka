@@ -566,7 +566,7 @@ public class GroupMetadataManager {
         // 3. Reconcile the member's assignment with the target assignment. This is only required if
         // the member is not stable or if a new target assignment has been installed.
         boolean assignmentUpdated = false;
-        if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.nextMemberEpoch() != targetAssignmentEpoch) {
+        if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.targetMemberEpoch() != targetAssignmentEpoch) {
             ConsumerGroupMember prevMember = updatedMember;
             updatedMember = new CurrentAssignmentBuilder(updatedMember)
                 .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
@@ -865,7 +865,7 @@ public class GroupMetadataManager {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(-1)
                 .setPreviousMemberEpoch(-1)
-                .setNextMemberEpoch(-1)
+                .setTargetMemberEpoch(-1)
                 .setAssignedPartitions(Collections.emptyMap())
                 .setPartitionsPendingRevocation(Collections.emptyMap())
                 .setPartitionsPendingAssignment(Collections.emptyMap())
