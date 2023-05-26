@@ -52,7 +52,7 @@ public class ProducerIdsBlock {
         if (nextId > lastProducerId()) {
             return Optional.empty();
         }
-        return nextId > lastProducerId() ? Optional.empty() : Optional.of(nextId);
+        return Optional.of(nextId);
     }
 
     /**

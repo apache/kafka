@@ -175,7 +175,7 @@ class ProducerIdManagerTest {
         }
       }, 0)
     }
-    assertTrue(latch.await(15000, TimeUnit.MILLISECONDS))
+    assertTrue(latch.await(10000, TimeUnit.MILLISECONDS))
     requestHandlerThreadPool.shutdown()
 
     assertEquals(idBlockLen * 3, pidMap.size)

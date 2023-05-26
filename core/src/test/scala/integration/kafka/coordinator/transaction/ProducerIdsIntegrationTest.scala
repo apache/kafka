@@ -72,7 +72,7 @@ class ProducerIdsIntegrationTest {
     clusterInstance.stop()
   }
 
-  @Disabled // TODO: Enable once producer id block size is configurable
+  @Disabled // TODO: Enable once producer id block size is configurable (KAFKA-15029)
   @ClusterTest(clusterType = Type.ZK, brokers = 1, autoStart = AutoStart.NO)
   def testMultipleAllocateProducerIdsRequest(clusterInstance: ClusterInstance): Unit = {
     clusterInstance.config().serverProperties().put(KafkaConfig.NumIoThreadsProp, "2")

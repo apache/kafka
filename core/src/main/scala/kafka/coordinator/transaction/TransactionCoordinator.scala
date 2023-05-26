@@ -115,8 +115,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
-      val result = producerIdManager.generateProducerId()
-      result match {
+      producerIdManager.generateProducerId() match {
         case Success(producerId) =>
           responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
         case Failure(exception) =>
@@ -132,8 +131,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     } else {
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
-          val result = producerIdManager.generateProducerId()
-          result match {
+          producerIdManager.generateProducerId() match {
             case Success(producerId) =>
               val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
                 producerId = producerId,
@@ -145,6 +143,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 topicPartitions = collection.mutable.Set.empty[TopicPartition],
                 txnLastUpdateTimestamp = time.milliseconds())
               txnManager.putTransactionStateIfNotExists(createdMetadata)
+
             case Failure(exception) =>
               Left(Errors.forException(exception))
           }
@@ -244,8 +243,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             if (txnMetadata.isProducerEpochExhausted &&
                 expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
 
-              val result = producerIdManager.generateProducerId()
-              result match {
+              producerIdManager.generateProducerId() match {
                 case Success(producerId) =>
                   Right(txnMetadata.prepareProducerIdRotation(producerId, transactionTimeoutMs, time.milliseconds(),
                     expectedProducerIdAndEpoch.isDefined))
