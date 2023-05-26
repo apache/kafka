@@ -52,7 +52,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceConfigurationError;
@@ -64,7 +63,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
 
 /**
  * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
@@ -94,12 +92,6 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
     private final List<String> pluginPaths;
-
-    private static final String MANIFEST_PREFIX = "META-INF/services/";
-    private static final Class<?>[] SERVICE_LOADER_PLUGINS = new Class<?>[] {ConnectRestExtension.class, ConfigProvider.class};
-    private static final Set<String> PLUGIN_MANIFEST_FILES =
-        Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
-            .collect(Collectors.toSet());
 
     // Although this classloader does not load classes directly but rather delegates loading to a
     // PluginClassLoader or its parent through its base class, because of the use of inheritance in
@@ -398,15 +390,20 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
 
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (Class<? extends T> plugin : plugins) {
-            if (PluginUtils.isConcrete(plugin)) {
-                try (LoaderSwap loaderSwap = withClassLoader(loader)) {
-                    result.add(pluginDesc(plugin, versionFor(plugin), loader));
-                } catch (ReflectiveOperationException | LinkageError e) {
-                    log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), plugin.getSimpleName(), reflectiveErrorDescription(e), e);
-                }
-            } else {
-                log.debug("Skipping {} as it is not concrete implementation", plugin);
+        for (Class<? extends T> pluginKlass : plugins) {
+            if (!PluginUtils.isConcrete(pluginKlass)) {
+                log.debug("Skipping {} as it is not concrete implementation", pluginKlass);
+                continue;
+            }
+            if (pluginKlass.getClassLoader() != loader) {
+                log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
+                        pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
+                continue;
+            }
+            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
+                result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), loader));
+            } catch (ReflectiveOperationException | LinkageError e) {
+                log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), pluginKlass.getSimpleName(), reflectiveErrorDescription(e), e);
             }
         }
         return result;
@@ -430,8 +427,13 @@ public class DelegatingClassLoader extends URLClassLoader {
                     log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
                     continue;
                 }
-                result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
-                    versionFor(pluginImpl), loader));
+                Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
+                if (pluginKlass.getClassLoader() != loader) {
+                    log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
+                            pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
+                    continue;
+                }
+                result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), loader));
             }
         }
         return result;
@@ -542,32 +544,5 @@ public class DelegatingClassLoader extends URLClassLoader {
                 }
             }
         }
-    }
-
-    @Override
-    public URL getResource(String name) {
-        if (serviceLoaderManifestForPlugin(name)) {
-            // Default implementation of getResource searches the parent class loader and if not available/found, its own URL paths.
-            // This will enable thePluginClassLoader to limit its resource search only to its own URL paths.
-            return null;
-        } else {
-            return super.getResource(name);
-        }
-    }
-
-    @Override
-    public Enumeration<URL> getResources(String name) throws IOException {
-        if (serviceLoaderManifestForPlugin(name)) {
-            // Default implementation of getResources searches the parent class loader and also its own URL paths. This will enable the
-            // PluginClassLoader to limit its resource search to only its own URL paths.
-            return Collections.emptyEnumeration();
-        } else {
-            return super.getResources(name);
-        }
-    }
-
-    //Visible for testing
-    static boolean serviceLoaderManifestForPlugin(String name) {
-        return PLUGIN_MANIFEST_FILES.contains(name);
     }
 }

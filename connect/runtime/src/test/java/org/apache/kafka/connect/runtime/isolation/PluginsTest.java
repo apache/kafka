@@ -30,6 +30,9 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -53,8 +56,11 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -430,6 +436,30 @@ public class PluginsTest {
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V2,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V2.className(),
                 "2.0.0", "1.0.0");
+    }
+
+    @Test
+    public void subclassedReflectivePluginShouldNotAppearIsolated() {
+        Set<PluginDesc<Converter>> converters = plugins.converters()
+                .stream()
+                .filter(pluginDesc -> ByteArrayConverter.class.equals(pluginDesc.pluginClass()))
+                .collect(Collectors.toSet());
+        assertFalse("Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_CONVERTER + " as plugin", converters.isEmpty());
+        for (PluginDesc<Converter> byteArrayConverter : converters) {
+            assertEquals("classpath", byteArrayConverter.location());
+        }
+    }
+
+    @Test
+    public void subclassedServiceLoadedPluginShouldNotAppearIsolated() {
+        Set<PluginDesc<ConnectorClientConfigOverridePolicy>> overridePolicies = plugins.connectorClientConfigPolicies()
+                .stream()
+                .filter(pluginDesc -> AllConnectorClientConfigOverridePolicy.class.equals(pluginDesc.pluginClass()))
+                .collect(Collectors.toSet());
+        assertFalse("Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY + " as plugin", overridePolicies.isEmpty());
+        for (PluginDesc<ConnectorClientConfigOverridePolicy> allOverridePolicy : overridePolicies) {
+            assertEquals("classpath", allOverridePolicy.location());
+        }
     }
 
     private void assertClassLoaderReadsVersionFromResource(

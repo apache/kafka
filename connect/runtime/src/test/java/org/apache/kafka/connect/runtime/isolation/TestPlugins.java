@@ -156,7 +156,15 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER);
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER),
+        /**
+         * A reflectively discovered plugin which subclasses another plugin which is present on the classpath
+         */
+        SUBCLASS_OF_CLASSPATH_CONVERTER("subclass-of-classpath", "test.plugins.SubclassOfClasspathConverter"),
+        /**
+         * A ServiceLoader discovered plugin which subclasses another plugin which is present on the classpath
+         */
+        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY("subclass-of-classpath", "test.plugins.SubclassOfClasspathOverridePolicy");
 
         private final String resourceDir;
         private final String className;
