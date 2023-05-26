@@ -21,6 +21,7 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map.Entry;
@@ -81,7 +82,7 @@ public class PluginsTest {
         Map<String, String> pluginProps = new HashMap<>();
 
         // Set up the plugins with some test plugins to test isolation
-        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, String.join(",", TestPlugins.pluginPath()));
+        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, TestPlugins.pluginPathJoined());
         plugins = new Plugins(pluginProps);
         props = new HashMap<>(pluginProps);
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
@@ -466,7 +467,7 @@ public class PluginsTest {
             TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws MalformedURLException {
         URL[] systemPath = TestPlugins.pluginPath(parentResource)
                 .stream()
-                .map(File::new)
+                .map(Path::toFile)
                 .map(File::toURI)
                 .map(uri -> {
                     try {
@@ -482,7 +483,7 @@ public class PluginsTest {
         // to simulate the situation where jars exist on both system classpath and plugin path.
         Map<String, String> pluginProps = Collections.singletonMap(
                 WorkerConfig.PLUGIN_PATH_CONFIG,
-                String.join(",", TestPlugins.pluginPath(childResource))
+                TestPlugins.pluginPathJoined(childResource)
         );
         plugins = new Plugins(pluginProps, parent);
 

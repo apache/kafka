@@ -41,10 +41,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.sql.Driver;
@@ -77,7 +75,6 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
-    private static final String CLASSPATH_NAME = "classpath";
     public static final String UNDEFINED_VERSION = "undefined";
 
     private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
@@ -91,7 +88,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
-    private final List<String> pluginPaths;
+    private final List<Path> pluginLocations;
 
     // Although this classloader does not load classes directly but rather delegates loading to a
     // PluginClassLoader or its parent through its base class, because of the use of inheritance in
@@ -101,9 +98,9 @@ public class DelegatingClassLoader extends URLClassLoader {
         ClassLoader.registerAsParallelCapable();
     }
 
-    public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
+    public DelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
         super(new URL[0], parent);
-        this.pluginPaths = pluginPaths;
+        this.pluginLocations = pluginLocations;
         this.pluginLoaders = new ConcurrentHashMap<>();
         this.aliases = new ConcurrentHashMap<>();
         this.sinkConnectors = new TreeSet<>();
@@ -117,12 +114,12 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.connectorClientConfigPolicies = new TreeSet<>();
     }
 
-    public DelegatingClassLoader(List<String> pluginPaths) {
+    public DelegatingClassLoader(List<Path> pluginLocations) {
         // Use as parent the classloader that loaded this class. In most cases this will be the
         // System classloader. But this choice here provides additional flexibility in managed
         // environments that control classloading differently (OSGi, Spring and others) and don't
         // depend on the System classloader to load Connect's classes.
-        this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
+        this(pluginLocations, DelegatingClassLoader.class.getClassLoader());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -226,40 +223,21 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     protected void initLoaders() {
-        for (String configPath : pluginPaths) {
-            initPluginLoader(configPath);
+        for (Path pluginLocation : pluginLocations) {
+            try {
+                registerPlugin(pluginLocation);
+            } catch (InvalidPathException | MalformedURLException e) {
+                log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
+            } catch (IOException e) {
+                log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
+            }
         }
         // Finally add parent/system loader.
-        initPluginLoader(CLASSPATH_NAME);
+        scanUrlsAndAddPlugins(
+                getParent(),
+                ClasspathHelper.forJavaClassPath().toArray(new URL[0])
+        );
         addAllAliases();
-    }
-
-    private void initPluginLoader(String path) {
-        try {
-            if (CLASSPATH_NAME.equals(path)) {
-                scanUrlsAndAddPlugins(
-                        getParent(),
-                        ClasspathHelper.forJavaClassPath().toArray(new URL[0])
-                );
-            } else {
-                Path pluginPath = Paths.get(path).toAbsolutePath();
-                // Update for exception handling
-                path = pluginPath.toString();
-                // Currently 'plugin.paths' property is a list of top-level directories
-                // containing plugins
-                if (Files.isDirectory(pluginPath)) {
-                    for (Path pluginLocation : PluginUtils.pluginLocations(pluginPath)) {
-                        registerPlugin(pluginLocation);
-                    }
-                } else if (PluginUtils.isArchive(pluginPath)) {
-                    registerPlugin(pluginPath);
-                }
-            }
-        } catch (InvalidPathException | MalformedURLException e) {
-            log.error("Invalid path in plugin path: {}. Ignoring.", path, e);
-        } catch (IOException e) {
-            log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
-        }
     }
 
     private void registerPlugin(Path pluginLocation)
