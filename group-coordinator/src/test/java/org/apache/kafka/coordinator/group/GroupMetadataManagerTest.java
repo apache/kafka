@@ -648,15 +648,15 @@ public class GroupMetadataManagerTest {
         // is accepted as the response with the bumped epoch may have been lost. In this
         // case, we provide back the correct epoch to the member.
         Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                    .setGroupId(groupId)
-                    .setMemberId(memberId)
-                    .setMemberEpoch(99)
-                    .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                    .setTopicPartitions(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(fooTopicId)
-                        .setPartitions(Arrays.asList(1, 2)))));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(99)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(fooTopicId)
+                    .setPartitions(Arrays.asList(1, 2)))));
         assertEquals(100, result.response().memberEpoch());
     }
 

@@ -351,7 +351,7 @@ public class GroupMetadataManager {
 
     /**
      * Checks whether the consumer group can accept a new member or not based on the
-     * max group side defined.
+     * max group size defined.
      *
      * @param group     The consumer group.
      * @param memberId  The member id.
@@ -532,7 +532,7 @@ public class GroupMetadataManager {
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
-        // delta between the current and the new target assignment is persisted to the partition.
+        // delta between the existing and the new target assignment is persisted to the partition.
         int targetAssignmentEpoch = group.assignmentEpoch();
         Assignment targetAssignment = group.targetAssignment(memberId);
         if (groupEpoch > targetAssignmentEpoch) {
