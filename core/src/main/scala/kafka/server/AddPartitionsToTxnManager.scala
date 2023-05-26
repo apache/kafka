@@ -36,43 +36,56 @@ class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransac
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback])
 
 
-class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time: Time) 
+class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time: Time)
   extends InterBrokerSendThread("AddPartitionsToTxnSenderThread-" + config.brokerId, client, config.requestTimeoutMs, time) {
-  
+
   private val inflightNodes = mutable.HashSet[Node]()
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
-  
+
   def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
     nodesToTransactions.synchronized {
       // Check if we have already have either node or individual transaction. Add the Node if it isn't there.
-      val currentNodeAndTransactionData = nodesToTransactions.getOrElseUpdate(node,
+      val existingNodeAndTransactionData = nodesToTransactions.getOrElseUpdate(node,
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
           mutable.Map[String, AddPartitionsToTxnManager.AppendCallback]()))
 
-      val currentTransactionData = currentNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
+      val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
-      // Check if we already have txn ID -- if the epoch is bumped, return invalid producer epoch, otherwise, the client likely disconnected and 
-      // reconnected so return the retriable network exception.
-      if (currentTransactionData != null) {
-        val error = if (currentTransactionData.producerEpoch() < transactionData.producerEpoch())
-          Errors.INVALID_PRODUCER_EPOCH
-        else 
-          Errors.NETWORK_EXCEPTION
-        val topicPartitionsToError = mutable.Map[TopicPartition, Errors]()
-        currentTransactionData.topics().forEach { topic =>
-          topic.partitions().forEach { partition =>
-            topicPartitionsToError.put(new TopicPartition(topic.name(), partition), error)
-          }
+      // There are 3 cases if we already have existing data
+      // 1. Incoming data has a higher epoch -- return INVALID_PRODUCER_EPOCH for existing data since it is fenced
+      // 2. Incoming data has the same epoch -- return NETWORK_EXCEPTION for existing data, since the client is likely retrying and we want another retriable exception
+      // 3. Incoming data has a lower epoch -- return INVALID_PRODUCER_EPOCH for the incoming data since it is fenced, do not add incoming data to verify
+      if (existingTransactionData != null) {
+        if (existingTransactionData.producerEpoch() <= transactionData.producerEpoch()) {
+          val error = if (existingTransactionData.producerEpoch() < transactionData.producerEpoch())
+            Errors.INVALID_PRODUCER_EPOCH
+          else
+            Errors.NETWORK_EXCEPTION
+          val oldCallback = existingNodeAndTransactionData.callbacks(transactionData.transactionalId())
+          existingNodeAndTransactionData.transactionData.remove(transactionData)
+          oldCallback(topicPartitionsToError(existingTransactionData, error))
+        } else {
+          // If the incoming transactionData's epoch is lower, we can return with INVALID_PRODUCER_EPOCH immediately.
+          callback(topicPartitionsToError(transactionData, Errors.INVALID_PRODUCER_EPOCH))
+          return
         }
-        val oldCallback = currentNodeAndTransactionData.callbacks(transactionData.transactionalId())
-        currentNodeAndTransactionData.transactionData.remove(transactionData)
-        oldCallback(topicPartitionsToError.toMap)
       }
-      currentNodeAndTransactionData.transactionData.add(transactionData)
-      currentNodeAndTransactionData.callbacks.put(transactionData.transactionalId(), callback)
+
+      existingNodeAndTransactionData.transactionData.add(transactionData)
+      existingNodeAndTransactionData.callbacks.put(transactionData.transactionalId(), callback)
       wakeup()
     }
+  }
+
+  private def topicPartitionsToError(transactionData: AddPartitionsToTxnTransaction, error: Errors): Map[TopicPartition, Errors] = {
+    val topicPartitionsToError = mutable.Map[TopicPartition, Errors]()
+    transactionData.topics().forEach { topic =>
+      topic.partitions().forEach { partition =>
+        topicPartitionsToError.put(new TopicPartition(topic.name(), partition), error)
+      }
+    }
+    topicPartitionsToError.toMap
   }
 
   private class AddPartitionsToTxnHandler(node: Node, transactionDataAndCallbacks: TransactionDataAndCallbacks) extends RequestCompletionHandler {
@@ -86,7 +99,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
           callback(buildErrorMap(txnId, Errors.forException(response.authenticationException()).code()))
         }
       } else if (response.versionMismatch != null) {
-        // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it. 
+        // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it.
         // In this case, skip verification.
         warn(s"AddPartitionsToTxnRequest failed for node ${response.destination()} with invalid version exception. This suggests verification is not supported." +
           s"Continuing handling the produce request.")
@@ -104,9 +117,9 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
           // Older clients return with INVALID_RECORD and newer ones can return with INVALID_TXN_STATE.
           val finalError = if (addPartitionsToTxnResponseData.errorCode() == Errors.CLUSTER_AUTHORIZATION_FAILED.code)
             Errors.INVALID_RECORD.code
-          else 
+          else
             addPartitionsToTxnResponseData.errorCode()
-          
+
           transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
             callback(buildErrorMap(txnId, finalError))
           }
@@ -118,13 +131,13 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
                 val tp = new TopicPartition(topicResult.name(), partitionResult.partitionIndex())
                 if (partitionResult.partitionErrorCode() != Errors.NONE.code()) {
                   // Producers expect to handle INVALID_PRODUCER_EPOCH in this scenario.
-                  val code = 
+                  val code =
                     if (partitionResult.partitionErrorCode() == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
-                    // Older clients return INVALID_RECORD  
+                    // Older clients return INVALID_RECORD
                     else if (partitionResult.partitionErrorCode() == Errors.INVALID_TXN_STATE.code)
-                      Errors.INVALID_RECORD.code  
-                    else 
+                      Errors.INVALID_RECORD.code
+                    else
                       partitionResult.partitionErrorCode()
                   unverified.put(tp, Errors.forCode(code))
                 }
@@ -137,21 +150,14 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       }
       wakeup()
     }
-    
+
     private def buildErrorMap(transactionalId: String, errorCode: Short): Map[TopicPartition, Errors] = {
-      val errors = new mutable.HashMap[TopicPartition, Errors]()
       val transactionData = transactionDataAndCallbacks.transactionData.find(transactionalId)
-      transactionData.topics.forEach { topic =>
-        topic.partitions().forEach { partition =>
-          errors.put(new TopicPartition(topic.name(), partition), Errors.forCode(errorCode))
-        }
-      }
-      errors.toMap
+      topicPartitionsToError(transactionData, Errors.forCode(errorCode))
     }
   }
 
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-    
     // build and add requests to queue
     val buffer = mutable.Buffer[RequestAndCompletionHandler]()
     val currentTimeMs = time.milliseconds()
