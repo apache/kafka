@@ -119,5 +119,4 @@
       <allow pkg="org.apache.zookeeper"/>
     </subpackage>
   </subpackage>
-
 </import-control>
