@@ -172,7 +172,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     // load snapshot to Zookeeper.
     val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient,
       (_, operation) => { migrationState = operation.apply(migrationState) })
-    kraftMigrationZkWriter.handleLoadSnapshot(image)
+    kraftMigrationZkWriter.handleSnapshot(image)
 
     // Verify the new ACLs in Zookeeper.
     val resource1AclsInZk = zkClient.getVersionedAclsForResource(resource1).acls
