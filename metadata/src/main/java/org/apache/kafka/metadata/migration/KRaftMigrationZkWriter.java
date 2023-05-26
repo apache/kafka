@@ -35,6 +35,8 @@ import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.image.ConfigurationsImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.ProducerIdsDelta;
+import org.apache.kafka.image.ProducerIdsImage;
 import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
@@ -83,8 +85,7 @@ public class KRaftMigrationZkWriter {
         handleTopicsSnapshot(image.topics(), operationConsumer);
         handleConfigsSnapshot(image.configs(), operationConsumer);
         handleClientQuotasSnapshot(image.clientQuotas(), image.scram(), operationConsumer);
-        operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
-            migrationClient.writeProducerId(image.producerIds().nextProducerId(), migrationState));
+        handleProducerIdSnapshot(image.producerIds(), operationConsumer);
         handleAclsSnapshot(image.acls(), operationConsumer);
     }
 
@@ -104,8 +105,7 @@ public class KRaftMigrationZkWriter {
             handleClientQuotasDelta(image, delta, operationConsumer);
         }
         if (delta.producerIdsDelta() != null) {
-            operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
-                migrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
+            handleProducerIdDelta(delta.producerIdsDelta(), operationConsumer);
         }
         if (delta.aclsDelta() != null) {
             handleAclsDelta(image.acls(), delta.aclsDelta(), operationConsumer);
@@ -344,8 +344,23 @@ public class KRaftMigrationZkWriter {
             opConsumer.accept(UPDATE_CLIENT_QUOTA, "Update client quotas for " + userName, migrationState ->
                 migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, scramMap, migrationState));
         });
+    }
 
-
+    void handleProducerIdSnapshot(ProducerIdsImage image, KRaftMigrationOperationConsumer operationConsumer) {
+        if (image.isEmpty()) {
+            // No producer IDs have been allocated, nothing to dual-write
+            return;
+        }
+        Optional<Long> zkProducerId = migrationClient.readProducerId();
+        if (zkProducerId.isPresent()) {
+            if (zkProducerId.get() != image.nextProducerId()) {
+                operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
+                    migrationClient.writeProducerId(image.nextProducerId(), migrationState));
+            }
+        } else {
+            operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
+                migrationClient.writeProducerId(image.nextProducerId(), migrationState));
+        }
     }
 
     void handleConfigsDelta(ConfigurationsImage configsImage, ConfigurationsDelta configsDelta, KRaftMigrationOperationConsumer operationConsumer) {
@@ -406,6 +421,11 @@ public class KRaftMigrationZkWriter {
                 }
             });
         }
+    }
+
+    void handleProducerIdDelta(ProducerIdsDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
+        operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
+            migrationClient.writeProducerId(delta.nextProducerId(), migrationState));
     }
 
     private ResourcePattern resourcePatternFromAcl(StandardAcl acl) {

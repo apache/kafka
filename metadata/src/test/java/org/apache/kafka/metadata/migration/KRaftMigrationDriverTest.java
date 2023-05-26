@@ -367,7 +367,7 @@ public class KRaftMigrationDriverTest {
 
             // Current apiVersions of node 6 has no zkMigrationReady set, should still stay at WAIT_FOR_CONTROLLER_QUORUM state
             apiVersions.update("6", NodeApiVersions.create());
-            driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM);
+            assertEquals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM, driver.migrationState().get(1, TimeUnit.MINUTES));
 
             // all controller nodes are zkMigrationReady, should be able to move to next state
             apiVersions.update("6", new NodeApiVersions(Collections.emptyList(), Collections.emptyList(), true));

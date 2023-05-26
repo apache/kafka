@@ -39,6 +39,7 @@ import org.apache.zookeeper.KeeperException.{AuthFailedException, NoAuthExceptio
 import java.{lang, util}
 import java.util.function.Consumer
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationClient {
@@ -301,6 +302,14 @@ class ZkMigrationClient(
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
     new util.HashSet[Integer](zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava)
+  }
+
+  override def readProducerId(): util.Optional[java.lang.Long] = {
+    val (dataOpt, _) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
+    dataOpt
+      .map(ProducerIdBlockZNode.parseProducerIdBlockData(_).firstProducerId())
+      .map(java.lang.Long.valueOf)
+      .asJava
   }
 
   override def writeProducerId(

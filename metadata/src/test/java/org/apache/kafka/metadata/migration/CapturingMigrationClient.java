@@ -21,6 +21,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -50,6 +51,11 @@ class CapturingMigrationClient implements MigrationClient {
 
         public Builder setConfigMigrationClient(ConfigMigrationClient configMigrationClient) {
             this.configMigrationClient = configMigrationClient;
+            return this;
+        }
+
+        public Builder setAclMigrationClient(AclMigrationClient aclMigrationClient) {
+            this.aclMigrationClient = aclMigrationClient;
             return this;
         }
 
@@ -122,6 +128,11 @@ class CapturingMigrationClient implements MigrationClient {
     @Override
     public AclMigrationClient aclClient() {
         return aclMigrationClient;
+    }
+
+    @Override
+    public Optional<Long> readProducerId() {
+        return Optional.empty();
     }
 
     @Override
