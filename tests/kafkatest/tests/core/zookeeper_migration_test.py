@@ -171,9 +171,15 @@ class TestMigration(ProduceConsumeValidateTest):
 
         # Check the controller's logs for the error message about the migration state
         saw_expected_error = False
+        self.logger.info("Waiting for controller to crash")
+
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node, clean_shutdown=False)
+
         for node in self.kafka.controller_quorum.nodes:
-            wait_until(lambda: not self.kafka.controller_quorum.alive(node), timeout_sec=60,
-                       backoff_sec=1, err_msg="Controller did not halt in the expected amount of time")
+            self.kafka.controller_quorum.stop_node(node, clean_shutdown=False)
+
+        for node in self.kafka.controller_quorum.nodes:
             with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
                 monitor.offset = 0
                 try:

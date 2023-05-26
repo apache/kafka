@@ -64,9 +64,7 @@ public class KRaftMigrationZkWriter {
     private static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
     private static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
     private static final String UPDATE_TOPIC_CONFIG = "UpdateTopicConfig";
-    private static final String DELETE_TOPIC_CONFIG = "DeleteTopicConfig";
     private static final String UPDATE_CLIENT_QUOTA = "UpdateClientQuota";
-    private static final String UPDATE_SCRAM_CREDENTIAL = "UpdateScramCredential";
     private static final String UPDATE_ACL = "UpdateAcl";
     private static final String DELETE_ACL = "DeleteAcl";
 
@@ -360,7 +358,7 @@ public class KRaftMigrationZkWriter {
                 ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
                 if ((metadataImage.clientQuotas() == null) ||
                     (metadataImage.clientQuotas().entities().get(clientQuotaEntity) == null)) {
-                    operationConsumer.accept(UPDATE_SCRAM_CREDENTIAL, "Updating scram credentials for " + clientQuotaEntity, migrationState ->
+                    operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updating scram credentials for " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), Collections.emptyMap(), userScramMap, migrationState));
                 } else {
                     Map<String, Double> quotaMap = metadataImage.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
