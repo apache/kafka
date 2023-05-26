@@ -315,9 +315,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         setImage(image).
                         build();
                 LogDeltaManifest manifest = loadLogDelta(delta, reader);
-                log.info("handleSnapshot: generated a metadata delta from a snapshot at offset {} " +
-                        "in {} us.", manifest.provenance().lastContainedOffset(),
-                        NANOSECONDS.toMicros(manifest.elapsedNs()));
+                if (log.isDebugEnabled()) {
+                    log.debug("handleCommit: Generated a metadata delta between {} and {} from {} batch(es) " +
+                                    "in {} us.", image.offset(), manifest.provenance().lastContainedOffset(),
+                            manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()));
+                }
                 try {
                     image = delta.apply(manifest.provenance());
                 } catch (Throwable e) {
