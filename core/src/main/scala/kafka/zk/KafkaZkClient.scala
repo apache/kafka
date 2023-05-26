@@ -2115,7 +2115,14 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   private class CheckedEphemeral(path: String, data: Array[Byte]) extends Logging {
     private var attempt = 0
     private val maxAttempt = 5
-    private val backoffMs = 1000
+    private val backoffMs = {
+      val negotiatedSessionTimeoutMs = zooKeeperClient.currentZooKeeper.getSessionTimeout
+      // Heuristic which, assuming the maximum number of attempted requests is made
+      // and that the sum of the response time for each of them is less than a second,
+      // sets an upper bound for the total time of the operation close to the timeout
+      // negotiated with Zookeeper for the current session.
+      (negotiatedSessionTimeoutMs + 1000) / maxAttempt
+    }
 
     def create(): Stat = {
       attempt += 1
