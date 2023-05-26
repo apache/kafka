@@ -28,13 +28,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
@@ -356,25 +357,16 @@ public class PluginUtils {
      * Verify whether a given plugin's alias matches another alias in a collection of plugins.
      *
      * @param alias the plugin descriptor to test for alias matching.
-     * @param plugins the collection of plugins to test against.
+     * @param aliases the collection of plugins to test against.
      * @param <U> the plugin type.
      * @return false if a match was found in the collection, otherwise true.
      */
     public static <U> boolean isAliasUnique(
             PluginDesc<U> alias,
-            Collection<PluginDesc<U>> plugins
+            Map<String, String> aliases
     ) {
-        boolean matched = false;
-        for (PluginDesc<U> plugin : plugins) {
-            if (simpleName(alias).equals(simpleName(plugin))
-                    || prunedName(alias).equals(prunedName(plugin))) {
-                if (matched) {
-                    return false;
-                }
-                matched = true;
-            }
-        }
-        return true;
+        // TODO: Mark alias collision and disable ambiguous aliases completely.
+        return !aliases.containsKey(simpleName(alias)) && !aliases.containsKey(prunedName(alias));
     }
 
     private static String prunePluginName(PluginDesc<?> plugin, String suffix) {
@@ -384,6 +376,21 @@ public class PluginUtils {
             return simple.substring(0, pos);
         }
         return simple;
+    }
+
+    public static Map<String, String> computeAliases(PluginScanResult scanResult) {
+        Map<String, String> aliases = new HashMap<>();
+        scanResult.forEach(pluginDesc -> {
+            if (isAliasUnique(pluginDesc, aliases)) {
+                String simple = simpleName(pluginDesc);
+                String pruned = prunedName(pluginDesc);
+                aliases.put(simple, pluginDesc.className());
+                if (!simple.equals(pruned)) {
+                    aliases.put(pruned, pluginDesc.className());
+                }
+            }
+        });
+        return aliases;
     }
 
     private static class DirectoryEntry {
