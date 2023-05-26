@@ -142,7 +142,7 @@ public class TestPlugins {
          */
         BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorThrowsConnector", false, REMOVE_CLASS_FILTER),
         /**
-         * A connector which is incorrectly packaged, which has a private default constructor.
+         * A plugin which is incorrectly packaged, which has a private default constructor.
          */
         BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
         /**
