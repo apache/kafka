@@ -74,6 +74,15 @@
         <p class="first admonition-title">Note</p>
         <p class="last">The internal topics follow the naming convention <code class="docutils literal"><span class="pre">&lt;application.id&gt;-&lt;operatorName&gt;-&lt;suffix&gt;</span></code>, but this convention
           is not guaranteed for future releases.</p>
+      <p>The following settings apply to the default configuration for internal topics:</p>
+      <ul>
+        <li>For all internal topics, <code class="docutils literal"><span class="pre">message.timestamp.type</span></code> is set to <code class="docutils literal"><span class="pre">CreateTime</span></code>.</li>
+        <li>For internal repartition topics, the compaction policy is <code class="docutils literal"><span class="pre">delete</span></code> and the retention time is <code class="docutils literal"><span class="pre">-1</span></code> (infinite).</li>
+        <li>For internal changelog topics for key-value stores, the compaction policy is <code class="docutils literal"><span class="pre">compact</span></code>.</li>
+        <li>For internal changelog topics for windowed key-value stores, the compaction policy is <code class="docutils literal"><span class="pre">delete,compact</span></code>. The retention time is set to 24 hours plus your setting for the windowed store.</li>
+        <li>For internal changelog topics for versioned state stores, the cleanup policy is <code class="docutils literal"><span class="pre">compact</span></code>, and <code class="docutils literal"><span class="pre">min.compaction.lag.ms</span></code> is set to 24 hours plus the store's <span class="pre">historyRetentionMs</span></code> value.</li>
+      </ul>
+        
 </div>
 </div>
 </div>

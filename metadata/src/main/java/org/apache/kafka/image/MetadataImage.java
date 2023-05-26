@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.image.node.MetadataImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -181,16 +182,6 @@ public final class MetadataImage {
 
     @Override
     public String toString() {
-        return "MetadataImage(" +
-            "provenance=" + provenance +
-            ", features=" + features +
-            ", cluster=" + cluster +
-            ", topics=" + topics +
-            ", configs=" + configs +
-            ", clientQuotas=" + clientQuotas +
-            ", producerIdsImage=" + producerIds +
-            ", acls=" + acls +
-            ", scram=" + scram +
-            ")";
+        return new MetadataImageNode(this).stringify();
     }
 }

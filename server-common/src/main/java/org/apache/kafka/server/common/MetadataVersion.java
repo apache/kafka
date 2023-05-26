@@ -365,6 +365,20 @@ public enum MetadataVersion {
         }
     }
 
+    public short groupMetadataValueVersion() {
+        if (this.isLessThan(IBP_0_10_1_IV0)) {
+            return 0;
+        } else if (this.isLessThan(IBP_2_1_IV0)) {
+            return 1;
+        } else if (this.isLessThan(IBP_2_3_IV0)) {
+            return 2;
+        } else {
+            // Serialize with the highest supported non-flexible version
+            // until a tagged field is introduced or the version is bumped.
+            return 3;
+        }
+    }
+
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
     static {
         {

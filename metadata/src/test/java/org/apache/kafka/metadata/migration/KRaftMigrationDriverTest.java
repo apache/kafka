@@ -46,7 +46,6 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
@@ -161,11 +160,6 @@ public class KRaftMigrationDriverTest {
 
         @Override
         public void clear() {
-
-        }
-
-        @Override
-        public void setMetadataVersion(MetadataVersion metadataVersion) {
 
         }
     }

@@ -147,7 +147,9 @@ allprojects {
           // be explicit about the Netty dependency version instead of relying on the version set by
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
-          libs.nettyTransportNativeEpoll
+          libs.nettyTransportNativeEpoll,
+	  // be explicit about the reload4j version instead of relying on the transitive versions
+	  libs.log4j
         )
       }
     }

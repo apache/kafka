@@ -26,7 +26,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -68,7 +67,7 @@ import java.util.function.Supplier;
  *     to ensure correct behavior (e.g. acks, auto.offset.reset).
  * </p>
  */
-public class KafkaOffsetBackingStore implements OffsetBackingStore {
+public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaOffsetBackingStore.class);
 
     /**
@@ -100,7 +99,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                         topicAdmin,
                         consumedCallback,
                         Time.SYSTEM,
-                        initialize(topic, newTopicDescription(topic, config))
+                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM)
                 );
             }
         };
@@ -132,7 +131,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                         topicAdmin,
                         consumedCallback,
                         Time.SYSTEM,
-                        initialize(topic, newTopicDescription(topic, config))
+                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM)
                 );
             }
         };
@@ -221,16 +220,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         }
         NewTopic topicDescription = newTopicDescription(topic, config);
 
-        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier);
-    }
-
-    // Visible for testing
-    KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps,
-                                                              Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
-        java.util.function.Consumer<TopicAdmin> createTopics = initialize(topic, topicDescription);
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
+        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier, config, Time.SYSTEM);
     }
 
     protected NewTopic newTopicDescription(final String topic, final WorkerConfig config) {
@@ -243,20 +233,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                 .partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG))
                 .replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
-    }
-
-    protected java.util.function.Consumer<TopicAdmin> initialize(final String topic, final NewTopic topicDescription) {
-        return admin -> {
-            log.debug("Creating admin client to manage Connect internal offset topic");
-            // Create the topic if it doesn't exist
-            Set<String> newTopics = admin.createTopics(topicDescription);
-            if (!newTopics.contains(topic)) {
-                // It already existed, so check that the topic cleanup policy is compact only and not delete
-                log.debug("Using admin client to check cleanup policy for '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                        DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "source connector offsets");
-            }
-        };
     }
 
     @Override
@@ -354,6 +330,16 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             data.put(key, ByteBuffer.wrap(record.value()));
         }
     };
+
+    @Override
+    protected String getTopicConfig() {
+        return DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG;
+    }
+
+    @Override
+    protected String getTopicPurpose() {
+        return "source connector offsets";
+    }
 
     private static class SetCallbackFuture implements org.apache.kafka.clients.producer.Callback, Future<Void> {
         private int numLeft;

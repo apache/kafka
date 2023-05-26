@@ -629,9 +629,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 completionHandler.accept(null);
                 return;
             }
-            if (delta.featuresDelta() != null) {
-                propagator.setMetadataVersion(image.features().metadataVersion());
-            }
 
             if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
