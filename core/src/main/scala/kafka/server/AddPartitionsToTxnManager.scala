@@ -24,7 +24,9 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartiti
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
+import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 
 object AddPartitionsToTxnManager {
@@ -33,7 +35,8 @@ object AddPartitionsToTxnManager {
 
 
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
-                                  val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback])
+                                  val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
+                                  val earliestAdditionMs: Long)
 
 
 class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time: Time)
@@ -42,13 +45,18 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
   private val inflightNodes = mutable.HashSet[Node]()
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
 
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  val verificationFailureRate = metricsGroup.newMeter("VerificationFailureRate", "failures", TimeUnit.SECONDS)
+  val verificationTimeMs = metricsGroup.newHistogram("VerificationTimeMs")
+
   def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
     nodesToTransactions.synchronized {
       // Check if we have already have either node or individual transaction. Add the Node if it isn't there.
       val existingNodeAndTransactionData = nodesToTransactions.getOrElseUpdate(node,
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
-          mutable.Map[String, AddPartitionsToTxnManager.AppendCallback]()))
+          mutable.Map[String, AddPartitionsToTxnManager.AppendCallback](),
+          time.milliseconds()))
 
       val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
@@ -85,12 +93,14 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
         topicPartitionsToError.put(new TopicPartition(topic.name, partition), error)
       }
     }
+    verificationFailureRate.mark(topicPartitionsToError.size)
     topicPartitionsToError.toMap
   }
 
   private class AddPartitionsToTxnHandler(node: Node, transactionDataAndCallbacks: TransactionDataAndCallbacks) extends RequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       // Note: Synchronization is not needed on inflightNodes since it is always accessed from this thread.
+      verificationTimeMs.update(time.milliseconds() - transactionDataAndCallbacks.earliestAdditionMs)
       inflightNodes.remove(node)
       if (response.authenticationException != null) {
         error(s"AddPartitionsToTxnRequest failed for node ${response.destination} with an " +
@@ -143,6 +153,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
                 }
               }
             }
+            verificationFailureRate.mark(unverified.size)
             val callback = transactionDataAndCallbacks.callbacks(transactionResult.transactionalId)
             callback(unverified.toMap)
           }
