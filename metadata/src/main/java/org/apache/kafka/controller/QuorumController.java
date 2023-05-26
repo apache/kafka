@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -104,6 +105,7 @@ import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
+import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -160,7 +162,17 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
+    /**
+     * The maximum records that the controller will write in a single batch.
+     */
     private final static int MAX_RECORDS_PER_BATCH = 10000;
+
+    /**
+     * The maximum records any user-initiated operation is allowed to generate.
+     *
+     * For now, this is set to the maximum records in a single batch.
+     */
+    final static int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
 
     /**
      * A builder class which creates the QuorumController.
@@ -457,9 +469,14 @@ public final class QuorumController implements Controller {
         long endProcessingTime = time.nanoseconds();
         long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
         long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
-        if (exception instanceof ApiException) {
+        if ((exception instanceof ApiException) ||
+                (exception instanceof BoundedListTooLongException)) {
             log.info("{}: failed with {} in {} us. Reason: {}", name,
                 exception.getClass().getSimpleName(), deltaUs, exception.getMessage());
+            if (exception instanceof BoundedListTooLongException) {
+                exception = new PolicyViolationException("Unable to perform excessively large " +
+                        "batch operation.");
+            }
             return exception;
         }
         if (isActiveController()) {
@@ -2205,7 +2222,8 @@ public final class QuorumController implements Controller {
         }
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
-            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(context, topics);
+            final ControllerResult<List<CreatePartitionsTopicResult>> result =
+                    replicationControl.createPartitions(context, topics);
             if (validateOnly) {
                 log.debug("Validate-only CreatePartitions result(s): {}", result.response());
                 return result.withoutRecords();
