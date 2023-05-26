@@ -37,7 +37,9 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
@@ -70,7 +72,8 @@ public class StandaloneHerder extends AbstractHerder {
     private final AtomicLong requestSeqNum = new AtomicLong();
     private final ScheduledExecutorService requestExecutorService;
 
-    private ClusterConfigState configState;
+    // Visible for testing
+    ClusterConfigState configState;
 
     public StandaloneHerder(Worker worker, String kafkaClusterId,
                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
@@ -368,6 +371,22 @@ public class StandaloneHerder extends AbstractHerder {
     public synchronized void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
         log.trace("Fetching offsets for connector: {}", connName);
         super.connectorOffsets(connName, cb);
+    }
+
+    @Override
+    public synchronized void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
+        if (!configState.contains(connName)) {
+            cb.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+            return;
+        }
+
+        if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
+            cb.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be altered. " +
+                    "This can be done for the specified connector by issuing a PUT request to the /connectors/" + connName + "/stop endpoint"), null);
+            return;
+        }
+
+        worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, cb);
     }
 
     private void startConnector(String connName, Callback<TargetState> onStart) {
