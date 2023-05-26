@@ -417,16 +417,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    private static boolean isParentClassloader(ClassLoader loader, ClassLoader parent) {
-        while (loader != null) {
-            if (loader == parent) {
-                return true;
-            }
-            loader = loader.getParent();
-        }
-        return false;
-    }
-
     private static <T>  String versionFor(T pluginImpl) {
         try {
             if (pluginImpl instanceof Versioned) {
