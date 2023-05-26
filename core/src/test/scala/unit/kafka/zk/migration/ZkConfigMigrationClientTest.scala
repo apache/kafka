@@ -88,7 +88,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
     migrationState = migrationClient.configClient().deleteConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), migrationState)
-    assertEquals(1, zkClient.getEntityConfigs(ConfigType.Broker, "1").size())
+    assertEquals(0, zkClient.getEntityConfigs(ConfigType.Broker, "1").size())
   }
 
   @Test

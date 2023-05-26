@@ -195,10 +195,14 @@ public class KRaftMigrationZkWriter {
     }
 
     void handleConfigsSnapshot(ConfigurationsImage configsImage) {
-        Set<ConfigResource> newResources = new HashSet<>(configsImage.resourceData().keySet())
-            .stream()
-            .filter(resource -> resource.type() == ConfigResource.Type.BROKER || resource.type() == ConfigResource.Type.TOPIC)
-            .collect(Collectors.toSet());
+        Set<ConfigResource> newResources = new HashSet<>();
+        configsImage.resourceData().keySet().forEach(resource -> {
+            if (EnumSet.of(ConfigResource.Type.BROKER, ConfigResource.Type.TOPIC).contains(resource.type())) {
+                newResources.add(resource);
+            } else {
+                throw new RuntimeException("Unknown config resource type " + resource.type());
+            }
+        });
         Set<ConfigResource> resourcesToUpdate = new HashSet<>();
         BiConsumer<ConfigResource, Map<String, String>> processConfigsForResource = (ConfigResource resource, Map<String, String> configs) -> {
             newResources.remove(resource);
