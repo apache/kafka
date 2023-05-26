@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -162,14 +163,16 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  */
 public final class QuorumController implements Controller {
     /**
-     * The maximum records any user-initiated operation is allowed to generate.
-     */
-    final static int MAX_RECORDS_PER_USER_OP = 10000;
-
-    /**
      * The maximum records that the controller will write in a single batch.
      */
     private final static int MAX_RECORDS_PER_BATCH = 10000;
+
+    /**
+     * The maximum records any user-initiated operation is allowed to generate.
+     *
+     * For now, this is set to the maximum records in a single batch.
+     */
+    final static int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
 
     /**
      * A builder class which creates the QuorumController.
@@ -471,7 +474,8 @@ public final class QuorumController implements Controller {
             log.info("{}: failed with {} in {} us. Reason: {}", name,
                 exception.getClass().getSimpleName(), deltaUs, exception.getMessage());
             if (exception instanceof BoundedListTooLongException) {
-                exception = new UnknownServerException(exception.getMessage());
+                exception = new PolicyViolationException("Unable to perform excessively large " +
+                        "batch operation.");
             }
             return exception;
         }

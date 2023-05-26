@@ -26,7 +26,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.UnknownServerException
+import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
@@ -1096,7 +1096,9 @@ class KRaftClusterTest {
         val executionException = assertThrows(classOf[ExecutionException],
             () => admin.createTopics(newTopics).all().get())
         assertNotNull(executionException.getCause)
-        assertEquals(classOf[UnknownServerException], executionException.getCause.getClass)
+        assertEquals(classOf[PolicyViolationException], executionException.getCause.getClass)
+        assertEquals("Unable to perform excessively large batch operation.",
+          executionException.getCause.getMessage)
       } finally {
         admin.close()
       }
