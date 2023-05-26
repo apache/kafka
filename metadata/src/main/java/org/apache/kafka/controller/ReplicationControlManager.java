@@ -147,6 +147,7 @@ public class ReplicationControlManager {
         private LogContext logContext = null;
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
+        private int maxNumPartitions = QuorumController.MAX_RECORDS_PER_BATCH - 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
@@ -170,6 +171,11 @@ public class ReplicationControlManager {
 
         Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
+            return this;
+        }
+
+        public Builder setMaxNumPartitions(int maxNumPartitions) {
+            this.maxNumPartitions = maxNumPartitions;
             return this;
         }
 
@@ -213,6 +219,7 @@ public class ReplicationControlManager {
                 logContext,
                 defaultReplicationFactor,
                 defaultNumPartitions,
+                maxNumPartitions,
                 maxElectionsPerImbalance,
                 configurationControl,
                 clusterControl,
@@ -275,6 +282,11 @@ public class ReplicationControlManager {
      * not specify a number of partitions.
      */
     private final int defaultNumPartitions;
+
+    /**
+     * The maximum number of partitions that a topic can be created with
+     */
+    private final int maxNumPartitions;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -353,6 +365,7 @@ public class ReplicationControlManager {
         LogContext logContext,
         short defaultReplicationFactor,
         int defaultNumPartitions,
+        int maxNumPartitions,
         int maxElectionsPerImbalance,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
@@ -363,6 +376,7 @@ public class ReplicationControlManager {
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
+        this.maxNumPartitions = maxNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
@@ -661,6 +675,9 @@ public class ReplicationControlManager {
         } else if (topic.numPartitions() < -1 || topic.numPartitions() == 0) {
             return new ApiError(Errors.INVALID_PARTITIONS,
                 "Number of partitions was set to an invalid non-positive value.");
+        } else if (topic.numPartitions() > maxNumPartitions) {
+            return new ApiError(Errors.INVALID_PARTITIONS,
+                    "Number of partitions cannot exceed " + maxNumPartitions);
         } else {
             int numPartitions = topic.numPartitions() == -1 ?
                 defaultNumPartitions : topic.numPartitions();
@@ -1534,6 +1551,10 @@ public class ReplicationControlManager {
                 " would not be an increase.");
         }
         int additional = topic.count() - topicInfo.parts.size();
+        if (additional > (maxNumPartitions + 1)) {
+            throw new InvalidPartitionsException("The number of additional partitions cannot exceed " +
+                    (maxNumPartitions + 1));
+        }
         if (topic.assignments() != null) {
             if (topic.assignments().size() != additional) {
                 throw new InvalidReplicaAssignmentException("Attempted to add " + additional +

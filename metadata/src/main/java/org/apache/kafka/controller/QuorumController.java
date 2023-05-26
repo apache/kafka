@@ -160,7 +160,7 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
-    private final static int MAX_RECORDS_PER_BATCH = 10000;
+    final static int MAX_RECORDS_PER_BATCH = 10000;
 
     /**
      * A builder class which creates the QuorumController.
@@ -1858,6 +1858,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
+            setMaxNumPartitions(maxRecordsPerBatch - 1).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).

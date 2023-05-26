@@ -521,6 +521,17 @@ public class ReplicationControlManagerTest {
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
                 setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse4, result4.response());
+
+        CreateTopicsRequestData request5 = new CreateTopicsRequestData();
+        request5.topics().add(new CreatableTopic().setName("foo5").
+                setNumPartitions(10000).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result5 =
+                replicationControl.createTopics(requestContext, request5, Collections.singleton("foo5"));
+        CreateTopicsResponseData expectedResponse5 = new CreateTopicsResponseData();
+        expectedResponse5.topics().add(new CreatableTopicResult().setName("foo5").
+                setErrorCode(INVALID_PARTITIONS.code()).
+                setErrorMessage("Number of partitions cannot exceed 9999"));
+        assertEquals(expectedResponse5, result5.response());
     }
 
     @Test
@@ -1182,6 +1193,8 @@ public class ReplicationControlManagerTest {
             setNumPartitions(3).setReplicationFactor((short) 2));
         request.topics().add(new CreatableTopic().setName("bar").
             setNumPartitions(4).setReplicationFactor((short) 2));
+        request.topics().add(new CreatableTopic().setName("bar10000").
+            setNumPartitions(1).setReplicationFactor((short) 2));
         request.topics().add(new CreatableTopic().setName("quux").
             setNumPartitions(2).setReplicationFactor((short) 2));
         request.topics().add(new CreatableTopic().setName("foo2").
@@ -1190,13 +1203,15 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1);
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(requestContext, request, new HashSet<>(Arrays.asList("foo", "bar", "quux", "foo2")));
+            createTopics(requestContext, request, new HashSet<>(Arrays.asList("foo", "bar", "bar10000", "quux", "foo2")));
         ctx.replay(createTopicResult.records());
         List<CreatePartitionsTopic> topics = new ArrayList<>();
         topics.add(new CreatePartitionsTopic().
             setName("foo").setCount(5).setAssignments(null));
         topics.add(new CreatePartitionsTopic().
             setName("bar").setCount(3).setAssignments(null));
+        topics.add(new CreatePartitionsTopic().
+            setName("bar10000").setCount(10002).setAssignments(null));
         topics.add(new CreatePartitionsTopic().
             setName("baz").setCount(3).setAssignments(null));
         topics.add(new CreatePartitionsTopic().
@@ -1211,6 +1226,10 @@ public class ReplicationControlManagerTest {
                 setName("bar").
                 setErrorCode(INVALID_PARTITIONS.code()).
                 setErrorMessage("The topic bar currently has 4 partition(s); 3 would not be an increase."),
+            new CreatePartitionsTopicResult().
+                setName("bar10000").
+                setErrorCode(INVALID_PARTITIONS.code()).
+                setErrorMessage("The number of additional partitions cannot exceed 10000"),
             new CreatePartitionsTopicResult().
                 setName("baz").
                 setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
