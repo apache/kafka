@@ -44,6 +44,7 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @param key                  The key to associate the value to
      * @param value                The value; can be null
      * @param windowStartTimestamp The timestamp of the beginning of the window to put the key/value into
+     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if the given key is {@code null}
      */
     void put(K key, V value, long windowStartTimestamp);

@@ -37,6 +37,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -61,15 +62,16 @@ public class Plugins {
 
     // VisibleForTesting
     Plugins(Map<String, String> props, ClassLoader parent) {
-        List<String> pluginLocations = WorkerConfig.pluginLocations(props);
+        String pluginPath = WorkerConfig.pluginPath(props);
+        List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = newDelegatingClassLoader(pluginLocations, parent);
         delegatingLoader.initLoaders();
     }
 
     // VisibleForTesting
-    protected DelegatingClassLoader newDelegatingClassLoader(final List<String> paths, ClassLoader parent) {
+    protected DelegatingClassLoader newDelegatingClassLoader(final List<Path> pluginLocations, ClassLoader parent) {
         return AccessController.doPrivileged(
-                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(paths, parent)
+                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(pluginLocations, parent)
         );
     }
 

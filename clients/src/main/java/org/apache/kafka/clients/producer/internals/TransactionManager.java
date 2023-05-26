@@ -23,29 +23,28 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.errors.InvalidPidMappingException;
-import org.apache.kafka.common.errors.InvalidProducerEpochException;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.UnknownProducerIdException;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
-import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
@@ -68,6 +67,7 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -155,7 +155,7 @@ public class TransactionManager {
         private boolean isTransitionValid(State source, State target) {
             switch (target) {
                 case UNINITIALIZED:
-                    return source == READY;
+                    return source == READY || source == ABORTABLE_ERROR;
                 case INITIALIZING:
                     return source == UNINITIALIZED || source == ABORTING_TRANSACTION;
                 case READY:
@@ -167,7 +167,8 @@ public class TransactionManager {
                 case ABORTING_TRANSACTION:
                     return source == IN_TRANSACTION || source == ABORTABLE_ERROR;
                 case ABORTABLE_ERROR:
-                    return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR;
+                    return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR
+                            || source == INITIALIZING;
                 case FATAL_ERROR:
                 default:
                     // We can transition to FATAL_ERROR unconditionally.
@@ -607,6 +608,14 @@ public class TransactionManager {
         removeInFlightBatch(batch);
     }
 
+    public synchronized void transitionToUninitialized(RuntimeException exception) {
+        transitionTo(State.UNINITIALIZED);
+        if (pendingTransition != null) {
+            pendingTransition.result.fail(exception);
+        }
+        lastError = null;
+    }
+
     public synchronized void maybeTransitionToErrorState(RuntimeException exception) {
         if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
@@ -812,6 +821,11 @@ public class TransactionManager {
             request.fatalError(e);
     }
 
+    synchronized void failPendingRequests(RuntimeException exception) {
+        pendingRequests.forEach(handler ->
+                handler.abortableError(exception));
+    }
+
     synchronized void close() {
         KafkaException shutdownException = new KafkaException("The producer closed forcefully");
         pendingRequests.forEach(handler ->
@@ -996,20 +1010,21 @@ public class TransactionManager {
     }
 
     private void maybeFailWithError() {
-        if (hasError()) {
-            // for ProducerFencedException, do not wrap it as a KafkaException
-            // but create a new instance without the call trace since it was not thrown because of the current call
-            if (lastError instanceof ProducerFencedException) {
-                throw new ProducerFencedException("Producer with transactionalId '" + transactionalId
+        if (!hasError()) {
+            return;
+        }
+        // for ProducerFencedException, do not wrap it as a KafkaException
+        // but create a new instance without the call trace since it was not thrown because of the current call
+        if (lastError instanceof ProducerFencedException) {
+            throw new ProducerFencedException("Producer with transactionalId '" + transactionalId
                     + "' and " + producerIdAndEpoch + " has been fenced by another producer " +
                     "with the same transactionalId");
-            } else if (lastError instanceof InvalidProducerEpochException) {
-                throw new InvalidProducerEpochException("Producer with transactionalId '" + transactionalId
-                    + "' and " + producerIdAndEpoch + " attempted to produce with an old epoch");
-            } else {
-                throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
-            }
         }
+        if (lastError instanceof InvalidProducerEpochException) {
+            throw new InvalidProducerEpochException("Producer with transactionalId '" + transactionalId
+                    + "' and " + producerIdAndEpoch + " attempted to produce with an old epoch");
+        }
+        throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
     }
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
@@ -1294,7 +1309,9 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED ||
                     error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
-                fatalError(error.exception());
+                log.info("Abortable authorization error: {}.  Transition the producer state to {}", error.message(), State.ABORTABLE_ERROR);
+                lastError = error.exception();
+                abortableError(error.exception());
             } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
                 // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
                 // just treat it the same as PRODUCE_FENCED.

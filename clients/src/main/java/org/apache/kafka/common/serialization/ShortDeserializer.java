@@ -17,9 +17,13 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
 
 public class ShortDeserializer implements Deserializer<Short> {
 
+    @Override
     public Short deserialize(String topic, byte[] data) {
         if (data == null)
             return null;
@@ -33,5 +37,17 @@ public class ShortDeserializer implements Deserializer<Short> {
             value |= b & 0xFF;
         }
         return value;
+    }
+
+    @Override
+    public Short deserialize(String topic, Headers headers, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+
+        if (data.remaining() != 2) {
+            throw new SerializationException("Size of data received by ShortDeserializer is not 2");
+        }
+        return data.getShort(data.position());
     }
 }

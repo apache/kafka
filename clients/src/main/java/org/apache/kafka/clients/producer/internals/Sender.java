@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.metrics.Sensor;
@@ -300,12 +301,17 @@ public class Sender implements Runnable {
             try {
                 transactionManager.maybeResolveSequences();
 
+                RuntimeException lastError = transactionManager.lastError();
+
                 // do not continue sending if the transaction manager is in a failed state
                 if (transactionManager.hasFatalError()) {
-                    RuntimeException lastError = transactionManager.lastError();
                     if (lastError != null)
                         maybeAbortBatches(lastError);
                     client.poll(retryBackoffMs, time.milliseconds());
+                    return;
+                }
+
+                if (transactionManager.hasAbortableError() && shouldHandleAuthorizationError(lastError)) {
                     return;
                 }
 
@@ -326,6 +332,20 @@ public class Sender implements Runnable {
         long currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs);
         client.poll(pollTimeout, currentTimeMs);
+    }
+
+    // We handle {@code TransactionalIdAuthorizationException} and {@code ClusterAuthorizationException} by first
+    // failing the inflight requests, then transition the state to UNINITIALIZED so that the user doesn't need to
+    // instantiate the producer again.
+    private boolean shouldHandleAuthorizationError(RuntimeException exception) {
+        if (exception instanceof TransactionalIdAuthorizationException ||
+                        exception instanceof ClusterAuthorizationException) {
+            transactionManager.failPendingRequests(new AuthenticationException(exception));
+            maybeAbortBatches(exception);
+            transactionManager.transitionToUninitialized(exception);
+            return true;
+        }
+        return false;
     }
 
     private long sendProducerData(long now) {

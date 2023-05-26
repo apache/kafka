@@ -21,7 +21,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -64,7 +63,7 @@ public class DelegatingClassLoaderTest {
         pluginDir.newFile("invalid.jar");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
         classLoader.initLoaders();
@@ -76,7 +75,7 @@ public class DelegatingClassLoaderTest {
         pluginDir.newFile("my-plugin/invalid.jar");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
         classLoader.initLoaders();
@@ -85,7 +84,7 @@ public class DelegatingClassLoaderTest {
     @Test
     public void testLoadingNoPlugins() {
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
         classLoader.initLoaders();
@@ -96,7 +95,7 @@ public class DelegatingClassLoaderTest {
         pluginDir.newFolder("my-plugin");
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
         classLoader.initLoaders();
@@ -109,13 +108,12 @@ public class DelegatingClassLoaderTest {
         pluginDir.newFile("my-plugin/invalid.jar");
         Path pluginPath = this.pluginDir.getRoot().toPath();
 
-        for (String sourceJar : TestPlugins.pluginPath()) {
-            Path source = new File(sourceJar).toPath();
+        for (Path source : TestPlugins.pluginPath()) {
             Files.copy(source, pluginPath.resolve(source.getFileName()));
         }
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().getAbsolutePath()),
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
         classLoader.initLoaders();

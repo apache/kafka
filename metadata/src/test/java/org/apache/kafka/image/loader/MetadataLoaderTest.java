@@ -250,7 +250,7 @@ public class MetadataLoaderTest {
                         )
                     )
                 );
-                loader.handleSnapshot(snapshotReader);
+                loader.handleLoadSnapshot(snapshotReader);
             }
             loader.waitForAllEventsToBeHandled();
             if (sameObject) {
@@ -291,7 +291,7 @@ public class MetadataLoaderTest {
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))));
             assertFalse(snapshotReader.closed);
-            loader.handleSnapshot(snapshotReader);
+            loader.handleLoadSnapshot(snapshotReader);
             loader.waitForAllEventsToBeHandled();
             assertTrue(snapshotReader.closed);
             publishers.get(0).firstPublish.get(1, TimeUnit.MINUTES);
@@ -355,7 +355,7 @@ public class MetadataLoaderTest {
         if (loader.time() instanceof MockTime) {
             snapshotReader.setTime((MockTime) loader.time());
         }
-        loader.handleSnapshot(snapshotReader);
+        loader.handleLoadSnapshot(snapshotReader);
         loader.waitForAllEventsToBeHandled();
     }
 
@@ -469,7 +469,7 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
                 build()) {
             loader.installPublishers(publishers).get();
-            loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+            loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(200, 100, 4000), asList(
                     asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
@@ -539,7 +539,7 @@ public class MetadataLoaderTest {
         MetadataLoader loader,
         long offset
     ) throws Exception {
-        loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+        loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(offset, 100, 4000), asList(
                         asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
@@ -549,5 +549,53 @@ public class MetadataLoaderTest {
                                 setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
                 )));
         loader.waitForAllEventsToBeHandled();
+    }
+
+    private void loadTestSnapshot2(
+        MetadataLoader loader,
+        long offset
+    ) throws Exception {
+        loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
+                new MetadataProvenance(offset, 100, 4000), asList(
+                        asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                                setName(MetadataVersion.FEATURE_NAME).
+                                setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0)),
+                        asList(new ApiMessageAndVersion(new TopicRecord().
+                                setName("bar").
+                                setTopicId(Uuid.fromString("VcL2Mw-cT4aL6XV9VujzoQ")), (short) 0))
+                )));
+        loader.waitForAllEventsToBeHandled();
+    }
+
+    /**
+     * Test that loading a snapshot clears the previous state.
+     */
+    @Test
+    public void testReloadSnapshot() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
+        List<MockPublisher> publishers = asList(new MockPublisher("a"));
+        try (MetadataLoader loader = new MetadataLoader.Builder().
+                setFaultHandler(faultHandler).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
+                build()) {
+            loadTestSnapshot(loader, 100);
+            loader.installPublishers(publishers).get();
+            loader.waitForAllEventsToBeHandled();
+            assertTrue(publishers.get(0).firstPublish.isDone());
+            assertTrue(publishers.get(0).latestDelta.image().isEmpty());
+            assertEquals(100L, publishers.get(0).latestImage.provenance().lastContainedOffset());
+
+            loadTestSnapshot(loader, 200);
+            assertEquals(200L, loader.lastAppliedOffset());
+            assertFalse(publishers.get(0).latestDelta.image().isEmpty());
+
+            loadTestSnapshot2(loader, 400);
+            assertEquals(400L, loader.lastAppliedOffset());
+
+            // Make sure the topic in the initial snapshot was overwritten by loading the new snapshot.
+            assertFalse(publishers.get(0).latestImage.topics().topicsByName().containsKey("foo"));
+            assertTrue(publishers.get(0).latestImage.topics().topicsByName().containsKey("bar"));
+        }
+        faultHandler.maybeRethrowFirstException();
     }
 }

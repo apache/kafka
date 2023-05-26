@@ -47,10 +47,6 @@ public class DefaultTopicFilter implements TopicFilter {
         excludePattern = config.excludePattern();
     }
 
-    @Override
-    public void close() {
-    }
-
     private boolean included(String topic) {
         return includePattern != null && includePattern.matcher(topic).matches();
     }

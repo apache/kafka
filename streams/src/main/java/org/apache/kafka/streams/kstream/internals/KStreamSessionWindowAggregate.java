@@ -379,5 +379,10 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 store.fetchSession(key.key(), key.window().start(), key.window().end()),
                 key.window().end());
         }
+
+        @Override
+        public boolean isVersioned() {
+            return false;
+        }
     }
 }

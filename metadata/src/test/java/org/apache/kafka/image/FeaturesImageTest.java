@@ -21,17 +21,21 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -46,7 +50,7 @@ public class FeaturesImageTest {
         map1.put("foo", (short) 2);
         map1.put("bar", (short) 1);
         map1.put("baz", (short) 8);
-        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latest());
+        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latest(), ZkMigrationState.NONE);
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -64,7 +68,7 @@ public class FeaturesImageTest {
 
         Map<String, Short> map2 = new HashMap<>();
         map2.put("foo", (short) 3);
-        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latest());
+        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latest(), ZkMigrationState.NONE);
     }
 
     @Test
@@ -89,10 +93,21 @@ public class FeaturesImageTest {
 
     private void testToImageAndBack(FeaturesImage image) throws Throwable {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
         FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
         RecordTestUtils.replayAll(delta, writer.records());
         FeaturesImage nextImage = delta.apply();
         assertEquals(image, nextImage);
+    }
+
+    @Test
+    public void testEmpty() {
+        assertTrue(FeaturesImage.EMPTY.isEmpty());
+        assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
+            FeaturesImage.EMPTY.metadataVersion(), FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
+        assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
+            MetadataVersion.IBP_3_3_IV0, FeaturesImage.EMPTY.zkMigrationState()).isEmpty());
+        assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
+            FeaturesImage.EMPTY.metadataVersion(), ZkMigrationState.MIGRATION).isEmpty());
     }
 }

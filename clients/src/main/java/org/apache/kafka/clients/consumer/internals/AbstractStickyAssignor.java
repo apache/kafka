@@ -127,7 +127,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                           Map<String, Subscription> subscriptions,
                                           Map<String, List<TopicPartition>> consumerToOwnedPartitions,
                                           Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
-        Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
         boolean isAllSubscriptionsEqual = true;
 
         Set<String> subscribedTopics = new HashSet<>();
@@ -137,8 +136,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Map<TopicPartition, String> allPreviousPartitionsToOwner = new HashMap<>();
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
-            String consumer = subscriptionEntry.getKey();
-            Subscription subscription = subscriptionEntry.getValue();
+            final String consumer = subscriptionEntry.getKey();
+            final Subscription subscription = subscriptionEntry.getValue();
 
             // initialize the subscribed topics set if this is the first subscription
             if (subscribedTopics.isEmpty()) {
@@ -149,47 +148,57 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
 
             MemberData memberData = memberData(subscription);
+            final int memberGeneration = memberData.generation.orElse(DEFAULT_GENERATION);
+            maxGeneration = Math.max(maxGeneration, memberGeneration);
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
 
-            // Only consider this consumer's owned partitions as valid if it is a member of the current highest
-            // generation, or it's generation is not present but we have not seen any known generation so far
-            if (memberData.generation.isPresent() && memberData.generation.get() >= maxGeneration
-                || !memberData.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
+            // the member has a valid generation, so we can consider its owned partitions if it has the highest
+            // generation amongst
+            for (final TopicPartition tp : memberData.partitions) {
+                if (allTopics.contains(tp.topic())) {
+                    String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
+                    if (otherConsumer == null) {
+                        // this partition is not owned by other consumer in the same generation
+                        ownedPartitions.add(tp);
+                    } else {
+                        final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
-                // If the current member's generation is higher, all the previously owned partitions are invalid
-                if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
-                    allPreviousPartitionsToOwner.clear();
-                    partitionsWithMultiplePreviousOwners.clear();
-                    for (String droppedOutConsumer : membersOfCurrentHighestGeneration) {
-                        consumerToOwnedPartitions.get(droppedOutConsumer).clear();
-                    }
-
-                    membersOfCurrentHighestGeneration.clear();
-                    maxGeneration = memberData.generation.get();
-                }
-
-                membersOfCurrentHighestGeneration.add(consumer);
-                for (final TopicPartition tp : memberData.partitions) {
-                    // filter out any topics that no longer exist or aren't part of the current subscription
-                    if (allTopics.contains(tp.topic())) {
-                        String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
-                        if (otherConsumer == null) {
-                            // this partition is not owned by other consumer in the same generation
-                            ownedPartitions.add(tp);
-                        } else {
+                        if (memberGeneration == otherMemberGeneration) {
+                            // if two members of the same generation own the same partition, revoke the partition
                             log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
-                                + "same generation {}, this will be invalidated and removed from their previous assignment.",
-                                     consumer, otherConsumer, tp, maxGeneration);
-                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                                            + "same generation {}, this will be invalidated and removed from their previous assignment.",
+                                    consumer, otherConsumer, tp, memberGeneration);
                             partitionsWithMultiplePreviousOwners.add(tp);
+                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
+                        } else if (memberGeneration > otherMemberGeneration) {
+                            // move partition from the member with an older generation to the member with the newer generation
+                            ownedPartitions.add(tp);
+                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            allPreviousPartitionsToOwner.put(tp, consumer);
+                            log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
+                                            "TopicPartition {} in different generations. The topic partition wil be " +
+                                            "assigned to the member with the higher generation {}.",
+                                    consumer, memberGeneration,
+                                    otherConsumer, otherMemberGeneration,
+                                    tp,
+                                    memberGeneration);
+                        } else {
+                            // let the other member continue to own the topic partition
+                            log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
+                                            "TopicPartition {} in different generations. The topic partition wil be " +
+                                            "assigned to the member with the higher generation {}.",
+                                    consumer, memberGeneration,
+                                    otherConsumer, otherMemberGeneration,
+                                    tp,
+                                    otherMemberGeneration);
                         }
                     }
                 }
             }
         }
-
         return isAllSubscriptionsEqual;
     }
 

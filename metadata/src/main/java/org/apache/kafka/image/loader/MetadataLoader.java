@@ -278,13 +278,16 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         log.debug("InitializeNewPublishers: setting up snapshot image for new publisher(s): {}",
                 uninitializedPublisherNames());
         long startNs = time.nanoseconds();
+        // We base this delta off of the empty image, reflecting the fact that these publishers
+        // haven't seen anything previously.
         MetadataDelta delta = new MetadataDelta.Builder().
-                setImage(image).
+                setImage(MetadataImage.EMPTY).
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder().
                 setMetadataVersion(image.features().metadataVersion()).
                 build());
+        // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
                 image.provenance(),
                 time.nanoseconds() - startNs);
@@ -412,14 +415,14 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     }
 
     @Override
-    public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+    public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
             try {
                 MetadataDelta delta = new MetadataDelta.Builder().
                         setImage(image).
                         build();
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
-                log.info("handleSnapshot: generated a metadata delta from a snapshot at offset {} " +
+                log.info("handleLoadSnapshot: generated a metadata delta from a snapshot at offset {} " +
                         "in {} us.", manifest.provenance().lastContainedOffset(),
                         NANOSECONDS.toMicros(manifest.elapsedNs()));
                 try {
@@ -429,10 +432,10 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                             "snapshot at offset " + reader.lastContainedLogOffset(), e);
                     return;
                 }
-                if (stillNeedToCatchUp("handleSnapshot", manifest.provenance().lastContainedOffset())) {
+                if (stillNeedToCatchUp("handleLoadSnapshot", manifest.provenance().lastContainedOffset())) {
                     return;
                 }
-                log.info("handleSnapshot: publishing new snapshot image with provenance {}.", image.provenance());
+                log.info("handleLoadSnapshot: publishing new snapshot image with provenance {}.", image.provenance());
                 for (MetadataPublisher publisher : publishers.values()) {
                     try {
                         publisher.onMetadataUpdate(delta, image, manifest);
@@ -449,7 +452,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.
-                faultHandler.handleFault("Unhandled fault in MetadataLoader#handleSnapshot. " +
+                faultHandler.handleFault("Unhandled fault in MetadataLoader#handleLoadSnapshot. " +
                         "Snapshot offset was " + reader.lastContainedLogOffset(), e);
             } finally {
                 reader.close();
@@ -484,6 +487,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 snapshotIndex++;
             }
         }
+        delta.finishSnapshot();
         MetadataProvenance provenance = new MetadataProvenance(reader.lastContainedLogOffset(),
                 reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp());
         return new SnapshotManifest(provenance,

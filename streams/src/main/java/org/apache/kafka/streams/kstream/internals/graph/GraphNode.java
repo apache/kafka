@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 
+import java.util.Optional;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
@@ -34,6 +35,10 @@ public abstract class GraphNode {
     private boolean mergeNode;
     private Integer buildPriority;
     private boolean hasWrittenToTopology = false;
+    // whether the output of this node is versioned. if empty, the output of this node is not
+    // explicitly materialized (as either a versioned or an unversioned store) and therefore
+    // whether the output is to be considered versioned or not depends on its parent(s)
+    private Optional<Boolean> outputVersioned = Optional.empty();
 
     public GraphNode(final String nodeName) {
         this.nodeName = nodeName;
@@ -125,6 +130,14 @@ public abstract class GraphNode {
 
     public void setHasWrittenToTopology(final boolean hasWrittenToTopology) {
         this.hasWrittenToTopology = hasWrittenToTopology;
+    }
+
+    public Optional<Boolean> isOutputVersioned() {
+        return outputVersioned;
+    }
+
+    public void setOutputVersioned(final boolean outputVersioned) {
+        this.outputVersioned = Optional.of(outputVersioned);
     }
 
     @Override

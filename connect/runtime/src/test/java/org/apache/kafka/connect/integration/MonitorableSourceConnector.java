@@ -67,6 +67,9 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     public static final String TRANSACTION_BOUNDARIES_NULL = "null";
     public static final String TRANSACTION_BOUNDARIES_FAIL = "fail";
 
+    // Boolean valued configuration that determines whether MonitorableSourceConnector::alterOffsets should return true or false
+    public static final String ALTER_OFFSETS_RESULT = "alter.offsets.result";
+
     private String connectorName;
     private ConnectorHandle connectorHandle;
     private Map<String, String> commonConfigs;
@@ -104,6 +107,9 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     public void stop() {
         log.info("Stopped {} connector {}", this.getClass().getSimpleName(), connectorName);
         connectorHandle.recordConnectorStop();
+        if (Boolean.parseBoolean(commonConfigs.getOrDefault("connector.stop.inject.error", "false"))) {
+            throw new RuntimeException("Injecting errors during connector stop");
+        }
     }
 
     @Override
@@ -142,6 +148,11 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             case TRANSACTION_BOUNDARIES_UNSUPPORTED:
                 return ConnectorTransactionBoundaries.UNSUPPORTED;
         }
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        return Boolean.parseBoolean(connectorConfig.get(ALTER_OFFSETS_RESULT));
     }
 
     public static String taskId(String connectorName, int taskId) {

@@ -48,10 +48,6 @@ public class DefaultGroupFilter implements GroupFilter {
         excludePattern = config.excludePattern();
     }
 
-    @Override
-    public void close() {
-    }
-
     private boolean included(String group) {
         return includePattern != null && includePattern.matcher(group).matches();
     }

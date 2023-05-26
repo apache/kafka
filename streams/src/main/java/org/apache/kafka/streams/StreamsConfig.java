@@ -399,6 +399,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_33 = "3.3";
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.4.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_34 = "3.4";
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -625,18 +631,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
 
-    /** {@code partition.autoscaling.enabled} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String PARTITION_AUTOSCALING_ENABLED_CONFIG = "partition.autoscaling.enabled";
-    private static final String PARTITION_AUTOSCALING_ENABLED_DOC = "Enable autoscaling the partitions of internal topics which are managed by Streams."
-        + " If an internal topic's partition count depends on an upstream input topic (or topics), then expanding the number of partitions on the input "
-        + "topic(s) will result in the internal topic(s) automatically being expanded to match.";
-
-    /** {@code partition.autoscaling.timeout.ms} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG = "partition.autoscaling.timeout.ms";
-    private static final String PARTITION_AUTOSCALING_TIMEOUT_MS_DOC = "The maximum amount of time in milliseconds that Streams will attempt to retry autoscaling of internal topic partitions.";
-
     /** {@code poll.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String POLL_MS_CONFIG = "poll.ms";
@@ -749,7 +743,7 @@ public class StreamsConfig extends AbstractConfig {
         UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
         UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
         UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
-        UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\" (for upgrading from the corresponding old version).";
+        UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -1008,17 +1002,6 @@ public class StreamsConfig extends AbstractConfig {
                     true,
                     Importance.LOW,
                     CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
-            .define(PARTITION_AUTOSCALING_ENABLED_CONFIG,
-                    Type.BOOLEAN,
-                    false,
-                    Importance.LOW,
-                    PARTITION_AUTOSCALING_ENABLED_DOC)
-            .define(PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG,
-                    Type.LONG,
-                    15 * 60 * 1000L,
-                    atLeast(0),
-                    Importance.LOW,
-                    PARTITION_AUTOSCALING_TIMEOUT_MS_DOC)
             .define(POLL_MS_CONFIG,
                     Type.LONG,
                     100L,
@@ -1104,7 +1087,8 @@ public class StreamsConfig extends AbstractConfig {
                        UPGRADE_FROM_30,
                        UPGRADE_FROM_31,
                        UPGRADE_FROM_32,
-                       UPGRADE_FROM_33),
+                       UPGRADE_FROM_33,
+                       UPGRADE_FROM_34),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOWED_INNER_CLASS_SERDE,
@@ -1556,8 +1540,6 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         consumerProps.put(ACCEPTABLE_RECOVERY_LAG_CONFIG, getLong(ACCEPTABLE_RECOVERY_LAG_CONFIG));
         consumerProps.put(MAX_WARMUP_REPLICAS_CONFIG, getInt(MAX_WARMUP_REPLICAS_CONFIG));
-        consumerProps.put(PARTITION_AUTOSCALING_ENABLED_CONFIG, getBoolean(PARTITION_AUTOSCALING_ENABLED_CONFIG));
-        consumerProps.put(PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG, getLong(PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG));
         consumerProps.put(PROBING_REBALANCE_INTERVAL_MS_CONFIG, getLong(PROBING_REBALANCE_INTERVAL_MS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
