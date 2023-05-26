@@ -1,0 +1,57 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.connect.runtime.isolation;
+
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
+
+import java.util.SortedSet;
+
+public class ServiceLoaderScanner extends PluginScanner {
+    @Override
+    protected PluginScanResult scanPlugins(PluginSource source) {
+        ClassLoader loader = source.loader();
+        return new PluginScanResult(
+                getServiceLoaderPluginDesc(SinkConnector.class, loader),
+                getServiceLoaderPluginDesc(SourceConnector.class, loader),
+                getServiceLoaderPluginDesc(Converter.class, loader),
+                getServiceLoaderPluginDesc(HeaderConverter.class, loader),
+                getTransformationPluginDesc(loader),
+                getPredicatePluginDesc(loader),
+                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
+                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
+                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
+        );
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader) {
+        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Predicate.class, loader);
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader) {
+        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(Transformation.class, loader);
+    }
+}
