@@ -14,17 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.errors;
 
-import javax.ws.rs.core.Response;
+package org.apache.kafka.server.mutable;
 
-public class BadRequestException extends ConnectRestException {
+/**
+ * An exception that is thrown when the BoundedList cannot add any more elements.
+ */
+public class BoundedListTooLongException extends RuntimeException {
+    private final static long serialVersionUID = 1L;
 
-    public BadRequestException(String message) {
-        super(Response.Status.BAD_REQUEST, message);
+    public BoundedListTooLongException(String message) {
+        super(message);
     }
 
-    public BadRequestException(String message, Throwable throwable) {
-        super(Response.Status.BAD_REQUEST, message, throwable);
+    public BoundedListTooLongException(String message, Throwable t) {
+        super(message, t);
     }
 }

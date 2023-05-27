@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -39,12 +38,14 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineObject;
 import org.slf4j.Logger;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class FeatureControlManager {
@@ -147,7 +148,8 @@ public class FeatureControlManager {
         boolean validateOnly
     ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), brokerFeatures, records));

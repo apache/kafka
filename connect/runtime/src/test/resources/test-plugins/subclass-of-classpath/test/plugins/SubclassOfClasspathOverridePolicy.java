@@ -14,17 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.errors;
 
-import javax.ws.rs.core.Response;
+package test.plugins;
 
-public class BadRequestException extends ConnectRestException {
+import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.converters.ByteArrayConverter;
 
-    public BadRequestException(String message) {
-        super(Response.Status.BAD_REQUEST, message);
-    }
-
-    public BadRequestException(String message, Throwable throwable) {
-        super(Response.Status.BAD_REQUEST, message, throwable);
-    }
+/**
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>Subclasses a non-API class from the classpath which is discovered by serviceloading
+ */
+public class SubclassOfClasspathOverridePolicy extends AllConnectorClientConfigOverridePolicy {
 }

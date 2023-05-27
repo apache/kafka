@@ -23,6 +23,7 @@ import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
 import org.apache.kafka.clients.admin.ScramMechanism
+import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
@@ -35,7 +36,7 @@ import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import java.{lang, util}
 import java.util.Properties
-import java.util.function.BiConsumer
+import java.util.function.{BiConsumer, Consumer}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -145,6 +146,28 @@ class ZkConfigMigrationClient(
     }
   }
 
+  override def iterateTopicConfigs(configConsumer: BiConsumer[String, util.Map[String, String]]): Unit = {
+    val topicEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Topic)
+    topicEntities.foreach { topic =>
+      readTopicConfigs(topic, props => configConsumer.accept(topic, props))
+    }
+  }
+
+  override def readTopicConfigs(topicName: String, configConsumer: Consumer[util.Map[String, String]]): Unit = {
+    val topicResource = fromZkEntityName(topicName)
+    val props = zkClient.getEntityConfigs(ConfigType.Topic, topicResource)
+    val decodedProps = props.asScala.map { case (key, value) =>
+      if (DynamicBrokerConfig.isPasswordConfig(key))
+        key -> passwordEncoder.decode(value).value
+      else
+        key -> value
+    }.toMap.asJava
+
+    logAndRethrow(this, s"Error in topic config consumer. Topic was $topicResource.") {
+      configConsumer.accept(decodedProps)
+    }
+  }
+
   override def writeConfigs(
     configResource: ConfigResource,
     configMap: util.Map[String, String],
@@ -159,7 +182,12 @@ class ZkConfigMigrationClient(
     val configName = toZkEntityName(configResource.name())
     if (configType.isDefined) {
       val props = new Properties()
-      configMap.forEach { case (key, value) => props.put(key, value) }
+      configMap.forEach { case (key, value) =>
+        if (DynamicBrokerConfig.isPasswordConfig(key)) {
+          props.put(key, passwordEncoder.encode(new Password(value)))
+        } else
+          props.put(key, value)
+      }
       tryWriteEntityConfig(configType.get, configName, props, create = false, state) match {
         case Some(newState) =>
           newState

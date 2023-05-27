@@ -21,6 +21,7 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map.Entry;
@@ -30,6 +31,9 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -53,8 +57,11 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -75,7 +82,7 @@ public class PluginsTest {
         Map<String, String> pluginProps = new HashMap<>();
 
         // Set up the plugins with some test plugins to test isolation
-        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, String.join(",", TestPlugins.pluginPath()));
+        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, TestPlugins.pluginPathJoined());
         plugins = new Plugins(pluginProps);
         props = new HashMap<>(pluginProps);
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
@@ -432,11 +439,35 @@ public class PluginsTest {
                 "2.0.0", "1.0.0");
     }
 
+    @Test
+    public void subclassedReflectivePluginShouldNotAppearIsolated() {
+        Set<PluginDesc<Converter>> converters = plugins.converters()
+                .stream()
+                .filter(pluginDesc -> ByteArrayConverter.class.equals(pluginDesc.pluginClass()))
+                .collect(Collectors.toSet());
+        assertFalse("Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_CONVERTER + " as plugin", converters.isEmpty());
+        for (PluginDesc<Converter> byteArrayConverter : converters) {
+            assertEquals("classpath", byteArrayConverter.location());
+        }
+    }
+
+    @Test
+    public void subclassedServiceLoadedPluginShouldNotAppearIsolated() {
+        Set<PluginDesc<ConnectorClientConfigOverridePolicy>> overridePolicies = plugins.connectorClientConfigPolicies()
+                .stream()
+                .filter(pluginDesc -> AllConnectorClientConfigOverridePolicy.class.equals(pluginDesc.pluginClass()))
+                .collect(Collectors.toSet());
+        assertFalse("Could not find superclass of " + TestPlugin.SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY + " as plugin", overridePolicies.isEmpty());
+        for (PluginDesc<ConnectorClientConfigOverridePolicy> allOverridePolicy : overridePolicies) {
+            assertEquals("classpath", allOverridePolicy.location());
+        }
+    }
+
     private void assertClassLoaderReadsVersionFromResource(
             TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws MalformedURLException {
         URL[] systemPath = TestPlugins.pluginPath(parentResource)
                 .stream()
-                .map(File::new)
+                .map(Path::toFile)
                 .map(File::toURI)
                 .map(uri -> {
                     try {
@@ -452,7 +483,7 @@ public class PluginsTest {
         // to simulate the situation where jars exist on both system classpath and plugin path.
         Map<String, String> pluginProps = Collections.singletonMap(
                 WorkerConfig.PLUGIN_PATH_CONFIG,
-                String.join(",", TestPlugins.pluginPath(childResource))
+                TestPlugins.pluginPathJoined(childResource)
         );
         plugins = new Plugins(pluginProps, parent);
 
