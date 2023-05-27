@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -64,6 +65,7 @@ public class KRaftMigrationZkWriter {
     private static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
     private static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
     private static final String UPDATE_TOPIC_CONFIG = "UpdateTopicConfig";
+    private static final String DELETE_TOPIC_CONFIG = "DeleteTopicConfig";
     private static final String UPDATE_CLIENT_QUOTA = "UpdateClientQuota";
     private static final String UPDATE_ACL = "UpdateAcl";
     private static final String DELETE_ACL = "DeleteAcl";
@@ -218,7 +220,15 @@ public class KRaftMigrationZkWriter {
         });
     }
 
-    void handleConfigsSnapshot(ConfigurationsImage configsImage) {
+    private String brokerOrTopicOpType(ConfigResource resource, String brokerOp, String topicOp) {
+        if (resource.type().equals(ConfigResource.Type.BROKER)) {
+            return brokerOp;
+        } else {
+            return topicOp;
+        }
+    }
+
+    void handleConfigsSnapshot(ConfigurationsImage configsImage, KRaftMigrationOperationConsumer operationConsumer) {
         Set<ConfigResource> newResources = new HashSet<>();
         configsImage.resourceData().keySet().forEach(resource -> {
             if (EnumSet.of(ConfigResource.Type.BROKER, ConfigResource.Type.TOPIC).contains(resource.type())) {
@@ -248,7 +258,8 @@ public class KRaftMigrationZkWriter {
         newResources.forEach(resource -> {
             Map<String, String> props = configsImage.configMapForResource(resource);
             if (!props.isEmpty()) {
-                operationConsumer.accept("Create configs for " + resource.type().name() + " " + resource.name(),
+                String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
+                operationConsumer.accept(opType, "Create configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
         });
@@ -256,10 +267,12 @@ public class KRaftMigrationZkWriter {
         resourcesToUpdate.forEach(resource -> {
             Map<String, String> props = configsImage.configMapForResource(resource);
             if (props.isEmpty()) {
-                operationConsumer.accept("Delete configs for " + resource.type().name() + " " + resource.name(),
+                String opType = brokerOrTopicOpType(resource, DELETE_BROKER_CONFIG, DELETE_TOPIC_CONFIG);
+                operationConsumer.accept(opType, "Delete configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState));
             } else {
-                operationConsumer.accept("Update configs for " + resource.type().name() + " " + resource.name(),
+                String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
+                operationConsumer.accept(opType, "Update configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
         });
