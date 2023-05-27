@@ -175,10 +175,10 @@ public class MetadataQuorumCommand {
                                                        boolean humanReadable) {
         return infos.map(info -> {
             String lastFetchTimestamp = !info.lastFetchTimestamp().isPresent() ? "-1" :
-                humanReadable ? format("%d ms ago", delayMs(info.lastFetchTimestamp().getAsLong(), "last fetch")) :
+                humanReadable ? format("%d ms ago", relativeTimeMs(info.lastFetchTimestamp().getAsLong(), "last fetch")) :
                     valueOf(info.lastFetchTimestamp().getAsLong());
             String lastCaughtUpTimestamp = !info.lastCaughtUpTimestamp().isPresent() ? "-1" :
-                humanReadable ? format("%d ms ago", delayMs(info.lastCaughtUpTimestamp().getAsLong(), "last caught up")) :
+                humanReadable ? format("%d ms ago", relativeTimeMs(info.lastCaughtUpTimestamp().getAsLong(), "last caught up")) :
                     valueOf(info.lastCaughtUpTimestamp().getAsLong());
             return Stream.of(
                 info.replicaId(),
@@ -191,12 +191,13 @@ public class MetadataQuorumCommand {
         }).collect(Collectors.toList());
     }
 
-    /* test */ static long delayMs(long timestampMs, String desc) {
+    // visible for testing
+    static long relativeTimeMs(long timestampMs, String desc) {
         Instant lastTimestamp = Instant.ofEpochMilli(timestampMs);
         Instant now = Instant.now();
         if (!(lastTimestamp.isAfter(Instant.EPOCH) && lastTimestamp.isBefore(now))) {
             throw new KafkaException(
-                format("Error while computing delay, possible drift in system clock.%n" +
+                format("Error while computing relative time, possible drift in system clock.%n" +
                     "Current timestamp is %d, %s timestamp is %d", now.toEpochMilli(), desc, timestampMs)
             );
         }

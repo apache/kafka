@@ -52,13 +52,13 @@ public class MetadataQuorumCommandErrorTest {
     }
 
     @Test
-    public void testDelayMs() {
+    public void testRelativeTimeMs() {
         long nowMs = Instant.now().toEpochMilli();
-        assertTrue(MetadataQuorumCommand.delayMs(nowMs, "test") >= 0);
+        assertTrue(MetadataQuorumCommand.relativeTimeMs(nowMs, "test") >= 0);
         long invalidEpochMs = Instant.EPOCH.minus(1, ChronoUnit.DAYS).toEpochMilli();
-        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.delayMs(invalidEpochMs, "test"));
+        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(invalidEpochMs, "test"));
         long futureTimestampMs = Instant.now().plus(1, ChronoUnit.DAYS).toEpochMilli();
-        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.delayMs(futureTimestampMs, "test"));
+        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(futureTimestampMs, "test"));
     }
 
 }
