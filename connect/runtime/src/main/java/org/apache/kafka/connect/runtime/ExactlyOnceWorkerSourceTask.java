@@ -251,19 +251,17 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         }
     }
 
+    @Override
+    protected void updateOffset(Map<String, Object> partition, Map<String, Object> offset) {
+        offsetWriter.offset(partition, offset);
+    }
+
     private void commitTransaction() {
         log.debug("{} Committing offsets", this);
 
+        updateOffsets();
         long started = time.milliseconds();
 
-        Optional<Map<Map<String, Object>, Map<String, Object>>> mayBeUpdatedOffsets = task.updateOffsets(offsetWriter);
-        if (mayBeUpdatedOffsets.isPresent() && !mayBeUpdatedOffsets.get().isEmpty()) {
-            Map<Map<String, Object>, Map<String, Object>> updatedOffsets = mayBeUpdatedOffsets.get();
-            for (Map.Entry<Map<String, Object>, Map<String, Object>> offset : updatedOffsets.entrySet()) {
-                SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(offset.getKey(), offset.getValue());
-                submittedRecord.ack();
-            }
-        }
         AtomicReference<Throwable> flushError = new AtomicReference<>();
         boolean shouldFlush = false;
         try {

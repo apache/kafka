@@ -178,7 +178,8 @@ public abstract class SourceTask implements Task {
      * hook to update the offsets for any source partition which isn't part of the offsets about to be committed or update
      * the offsets for any source partition. If any source partition is dropped, then it has no effect on the offsets committed.
      * The offsets passed as input per partition would be of the latest SourceRecord amongst all the records accumulated for it.
-     * @param offsets the offsets that are about to be committed. Since there could be multiple SourceRecords
+     * @param offsets the offsets that are about to be committed. Could be empty, never null.
+     *                Since there could be multiple SourceRecords
      *                Note that this could mean different things based upon the mode:
      *                At Least Once Mode: The offsets that are about to be committed based on the previous poll
      *                EOS: The offsets about to be committed based on the transaction boundary.

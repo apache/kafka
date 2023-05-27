@@ -72,13 +72,7 @@ import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -104,6 +98,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 
 @PowerMockIgnore({"javax.management.*",
                   "org.apache.log4j.*"})
@@ -290,6 +286,9 @@ public class WorkerSourceTaskTest {
         offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall();
         expectOffsetFlush(true);
+
+        sourceTask.updateOffsets(workerTask.polledSourceOffsets);
+        EasyMock.expectLastCall().andReturn(Optional.of(workerTask.polledSourceOffsets));
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();

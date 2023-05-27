@@ -222,6 +222,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(sourceTask, MockitoUtils.anyTimes()).poll();
         verify(sourceTask, MockitoUtils.anyTimes()).commit();
         verify(sourceTask, MockitoUtils.anyTimes()).commitRecord(any(), any());
+        verify(sourceTask, MockitoUtils.anyTimes()).updateOffsets(any());
 
         verify(offsetWriter, MockitoUtils.anyTimes()).offset(PARTITION, OFFSET);
         verify(offsetWriter, MockitoUtils.anyTimes()).beginFlush();

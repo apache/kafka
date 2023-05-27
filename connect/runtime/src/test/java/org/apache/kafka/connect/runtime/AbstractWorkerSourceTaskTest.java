@@ -814,6 +814,10 @@ public class AbstractWorkerSourceTaskTest {
             @Override
             protected void finalOffsetCommit(boolean failed) {
             }
+
+            @Override
+            protected void updateOffset(Map<String, Object> partition, Map<String, Object> offset) {
+            }
         };
     }
 }

@@ -58,10 +58,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -177,6 +174,9 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     protected abstract void finalOffsetCommit(boolean failed);
 
 
+    // TODO add java doc
+    protected abstract void updateOffset(Map<String, Object> partition, Map<String, Object> offset);
+
     protected final WorkerConfig workerConfig;
     protected final WorkerSourceTaskContext sourceTaskContext;
     protected final ConnectorOffsetBackingStore offsetStore;
@@ -198,7 +198,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     // Visible for testing
     List<SourceRecord> toSend;
-    Map<Map<String, Object>, Map<String, Object>> sourceOffsets;
+    Map<Map<String, Object>, Map<String, Object>> polledSourceOffsets = new HashMap<>();
     protected Map<String, String> taskConfig;
     protected boolean started = false;
     private volatile boolean producerClosed = false;
@@ -352,7 +352,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                     toSend = poll();
                     if (toSend != null) {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
-                        getPolledOffsets();
                     }
                 }
                 if (toSend == null) {
@@ -381,19 +380,13 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         finalOffsetCommit(false);
     }
 
-    @SuppressWarnings("unchecked")
-    private void getPolledOffsets() {
-        for (SourceRecord record : toSend) {
-            sourceOffsets.put((Map<String, Object>) record.sourcePartition(), (Map<String, Object>) record.sourceOffset());
-        }
-    }
-
     /**
      * Try to send a batch of records. If a send fails and is retriable, this saves the remainder of the batch so it can
      * be retried after backing off. If a send fails and is not retriable, this will throw a ConnectException.
      * @return true if all messages were sent, false if some need to be retried
      */
     // Visible for testing
+    @SuppressWarnings("unchecked")
     boolean sendRecords() {
         int processed = 0;
         recordBatch(toSend.size());
@@ -459,6 +452,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                 producerSendFailed(true, producerRecord, preTransformRecord, e);
             }
             processed++;
+            polledSourceOffsets.put((Map<String, Object>) record.sourcePartition(), (Map<String, Object>) record.sourceOffset());
             recordDispatched(preTransformRecord);
         }
         toSend = null;
@@ -474,6 +468,19 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             // Do nothing. Let the framework poll whenever it's ready.
             return null;
         }
+    }
+
+    protected void updateOffsets() {
+        Optional<Map<Map<String, Object>, Map<String, Object>>> mayBeUpdatedOffsets = task.updateOffsets(polledSourceOffsets);
+        if (mayBeUpdatedOffsets.isPresent() && !mayBeUpdatedOffsets.get().isEmpty()) {
+            Map<Map<String, Object>, Map<String, Object>> updatedOffsets = mayBeUpdatedOffsets.get();
+            for (Map.Entry<Map<String, Object>, Map<String, Object>> offset : updatedOffsets.entrySet()) {
+                updateOffset(offset.getKey(), offset.getValue());
+            }
+        }
+        // It should be safe to clear it here as the partition-offset values returned by the tasks have been
+        // stored in underneath buffers for offsets.
+        polledSourceOffsets.clear();
     }
 
     /**
