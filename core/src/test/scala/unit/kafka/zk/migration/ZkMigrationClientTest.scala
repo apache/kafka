@@ -254,12 +254,13 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
       .map {_.message() }
       .filter(message => MetadataRecordType.fromId(message.apiKey()).equals(MetadataRecordType.CONFIG_RECORD))
       .map { _.asInstanceOf[ConfigRecord] }
-      .toSeq
+      .map { record => record.name() -> record.value()}
+      .toMap
     assertEquals(2, configs.size)
-    assertEquals(TopicConfig.FLUSH_MS_CONFIG, configs.head.name())
-    assertEquals("60000", configs.head.value())
-    assertEquals(TopicConfig.RETENTION_MS_CONFIG, configs.last.name())
-    assertEquals("300000", configs.last.value())
+    assertTrue(configs.contains(TopicConfig.FLUSH_MS_CONFIG))
+    assertEquals("60000", configs(TopicConfig.FLUSH_MS_CONFIG))
+    assertTrue(configs.contains(TopicConfig.RETENTION_MS_CONFIG))
+    assertEquals("300000", configs(TopicConfig.RETENTION_MS_CONFIG))
   }
 
   @Test
