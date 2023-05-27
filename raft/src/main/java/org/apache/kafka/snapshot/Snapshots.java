@@ -158,13 +158,13 @@ public final class Snapshots {
 
     public static long lastContainedLogTimestamp(RawSnapshotReader reader) {
         try (RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
-                 RecordsSnapshotReader.of(
-                     reader,
-                     new IdentitySerde(),
-                     new BufferSupplier.GrowableBufferSupplier(),
-                     KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-                     true
-                 )
+             RecordsSnapshotReader.of(
+                 reader,
+                 new IdentitySerde(),
+                 new BufferSupplier.GrowableBufferSupplier(),
+                 KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+                 true
+             )
         ) {
             return recordsSnapshotReader.lastContainedLogTimestamp();
         }
