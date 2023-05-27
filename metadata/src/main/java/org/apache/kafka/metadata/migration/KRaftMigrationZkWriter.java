@@ -98,7 +98,8 @@ public class KRaftMigrationZkWriter {
 
     /**
      * Handle a snapshot of the topic metadata. This requires scanning through all the topics and partitions
-     * in ZooKeeper to determine what has changed.
+     * in ZooKeeper to determine what has changed. Topic configs are not handled here since they exist in the
+     * ConfigurationsImage.
      */
     void handleTopicsSnapshot(TopicsImage topicsImage) {
         Map<Uuid, String> deletedTopics = new HashMap<>();
@@ -194,23 +195,48 @@ public class KRaftMigrationZkWriter {
     }
 
     void handleConfigsSnapshot(ConfigurationsImage configsImage) {
-        Set<ConfigResource> brokersToUpdate = new HashSet<>();
+        Set<ConfigResource> newResources = new HashSet<>();
+        configsImage.resourceData().keySet().forEach(resource -> {
+            if (EnumSet.of(ConfigResource.Type.BROKER, ConfigResource.Type.TOPIC).contains(resource.type())) {
+                newResources.add(resource);
+            } else {
+                throw new RuntimeException("Unknown config resource type " + resource.type());
+            }
+        });
+        Set<ConfigResource> resourcesToUpdate = new HashSet<>();
+        BiConsumer<ConfigResource, Map<String, String>> processConfigsForResource = (ConfigResource resource, Map<String, String> configs) -> {
+            newResources.remove(resource);
+            Map<String, String> kraftProps = configsImage.configMapForResource(resource);
+            if (!kraftProps.equals(configs)) {
+                resourcesToUpdate.add(resource);
+            }
+        };
+
         migrationClient.configClient().iterateBrokerConfigs((broker, configs) -> {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, broker);
-            Map<String, String> kraftProps = configsImage.configMapForResource(brokerResource);
-            if (!kraftProps.equals(configs)) {
-                brokersToUpdate.add(brokerResource);
+            processConfigsForResource.accept(brokerResource, configs);
+        });
+        migrationClient.configClient().iterateTopicConfigs((topic, configs) -> {
+            ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            processConfigsForResource.accept(topicResource, configs);
+        });
+
+        newResources.forEach(resource -> {
+            Map<String, String> props = configsImage.configMapForResource(resource);
+            if (!props.isEmpty()) {
+                operationConsumer.accept("Create configs for " + resource.type().name() + " " + resource.name(),
+                    migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
         });
 
-        brokersToUpdate.forEach(brokerResource -> {
-            Map<String, String> props = configsImage.configMapForResource(brokerResource);
+        resourcesToUpdate.forEach(resource -> {
+            Map<String, String> props = configsImage.configMapForResource(resource);
             if (props.isEmpty()) {
-                operationConsumer.accept("Delete configs for broker " + brokerResource.name(), migrationState ->
-                    migrationClient.configClient().deleteConfigs(brokerResource, migrationState));
+                operationConsumer.accept("Delete configs for " + resource.type().name() + " " + resource.name(),
+                    migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState));
             } else {
-                operationConsumer.accept("Update configs for broker " + brokerResource.name(), migrationState ->
-                    migrationClient.configClient().writeConfigs(brokerResource, props, migrationState));
+                operationConsumer.accept("Update configs for " + resource.type().name() + " " + resource.name(),
+                    migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
         });
     }
