@@ -29,6 +29,7 @@ import java.util.function.Consumer;
 public final class ImageWriterOptions {
     public static class Builder {
         private MetadataVersion metadataVersion;
+        private MetadataVersion orgMetadataVersion;
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
@@ -45,6 +46,7 @@ public final class ImageWriterOptions {
             if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
                 // When writing an image, all versions less than 3.3-IV0 are treated as 3.0-IV1.
                 // This is because those versions don't support FeatureLevelRecord.
+                setOrgMetadataVersion(metadataVersion);
                 setRawMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION);
             } else {
                 setRawMetadataVersion(metadataVersion);
@@ -58,6 +60,11 @@ public final class ImageWriterOptions {
             return this;
         }
 
+        public Builder setOrgMetadataVersion(MetadataVersion orgMetadataVersion) {
+            this.orgMetadataVersion = orgMetadataVersion;
+            return this;
+        }
+
         public MetadataVersion metadataVersion() {
             return metadataVersion;
         }
@@ -68,7 +75,11 @@ public final class ImageWriterOptions {
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler);
+            if (orgMetadataVersion == null) {
+                return new ImageWriterOptions(metadataVersion, lossHandler);
+            } else {
+                return new ImageWriterOptions(orgMetadataVersion, lossHandler);
+            }
         }
     }
 
