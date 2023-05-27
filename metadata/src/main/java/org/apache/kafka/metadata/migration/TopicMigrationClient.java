@@ -24,22 +24,17 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 public interface TopicMigrationClient {
 
     enum TopicVisitorInterest {
         TOPICS,
-        PARTITIONS,
-        CONFIGS
+        PARTITIONS
     }
 
     interface TopicVisitor {
         void visitTopic(String topicName, Uuid topicId, Map<Integer, List<Integer>> assignments);
         default void visitPartition(TopicIdPartition topicIdPartition, PartitionRegistration partitionRegistration) {
-
-        }
-        default void visitConfigs(String topicName, Properties topicProps) {
 
         }
     }
