@@ -104,7 +104,7 @@ public class MetadataQuorumCommand {
                     handleDescribeReplication(admin, humanReadable);
                 } else if (namespace.getBoolean("status")) {
                     if (namespace.getBoolean("human_readable")) {
-                        throw new TerseException("The option -hr/--human-readable is only supported along with --replication");
+                        throw new TerseException("The option --human-readable is only supported along with --replication");
                     }
                     handleDescribeStatus(admin);
                 } else {
