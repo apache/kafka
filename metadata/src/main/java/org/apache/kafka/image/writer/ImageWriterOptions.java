@@ -75,23 +75,22 @@ public final class ImageWriterOptions {
         }
 
         public ImageWriterOptions build() {
-            if (orgMetadataVersion == null) {
-                return new ImageWriterOptions(metadataVersion, lossHandler);
-            } else {
-                return new ImageWriterOptions(orgMetadataVersion, lossHandler);
-            }
+            return new ImageWriterOptions(metadataVersion, lossHandler, orgMetadataVersion);
         }
     }
 
     private final MetadataVersion metadataVersion;
+    private final MetadataVersion orgMetadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
-        Consumer<UnwritableMetadataException> lossHandler
+        Consumer<UnwritableMetadataException> lossHandler,
+        MetadataVersion orgMetadataVersion
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
+        this.orgMetadataVersion = orgMetadataVersion;
     }
 
     public MetadataVersion metadataVersion() {
@@ -99,7 +98,11 @@ public final class ImageWriterOptions {
     }
 
     public void handleLoss(String loss) {
-        lossHandler.accept(new UnwritableMetadataException(metadataVersion, loss));
+        if (orgMetadataVersion != null) {
+            lossHandler.accept(new UnwritableMetadataException(orgMetadataVersion, loss));
+        } else {
+            lossHandler.accept(new UnwritableMetadataException(metadataVersion, loss));
+        }
     }
 }
 
