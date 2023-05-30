@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.util.Scheduler;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -430,11 +431,19 @@ public class ProducerStateManager {
      * Take a snapshot at the current end offset if one does not already exist.
      */
     public void takeSnapshot() throws IOException {
+        takeSnapshot(null);
+    }
+
+    /**
+     * Take a snapshot at the current end offset if one does not already exist.
+     * Flush the snapshot asynchronously if scheduler != null
+     */
+    public void takeSnapshot(Scheduler scheduler) throws IOException {
         // If not a new offset, then it is not worth taking another snapshot
         if (lastMapOffset > lastSnapOffset) {
             SnapshotFile snapshotFile = new SnapshotFile(LogFileUtils.producerSnapshotFile(logDir, lastMapOffset));
             long start = time.hiResClockMs();
-            writeSnapshot(snapshotFile.file(), producers);
+            writeSnapshot(snapshotFile.file(), producers, scheduler);
             log.info("Wrote producer snapshot at offset {} with {} producer ids in {} ms.", lastMapOffset,
                     producers.size(), time.hiResClockMs() - start);
 
@@ -649,7 +658,7 @@ public class ProducerStateManager {
         }
     }
 
-    private static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries) throws IOException {
+    private static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, Scheduler scheduler) throws IOException {
         Struct struct = new Struct(PID_SNAPSHOT_MAP_SCHEMA);
         struct.set(VERSION_FIELD, PRODUCER_SNAPSHOT_VERSION);
         struct.set(CRC_FIELD, 0L); // we'll fill this after writing the entries
@@ -679,9 +688,21 @@ public class ProducerStateManager {
         long crc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.limit() - PRODUCER_ENTRIES_OFFSET);
         ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
 
-        try (FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            fileChannel.write(buffer);
+        FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        fileChannel.write(buffer);
+        if (scheduler != null) {
+            scheduler.scheduleOnce("flush-snapshot", () -> closeSnapshotFile(fileChannel));
+        } else {
+            closeSnapshotFile(fileChannel);
+        }
+    }
+
+    private static void closeSnapshotFile(FileChannel fileChannel) {
+        try {
             fileChannel.force(true);
+            fileChannel.close();
+        } catch (IOException e) {
+            // ignore?
         }
     }
 
