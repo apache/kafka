@@ -81,6 +81,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -98,7 +100,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 
 @PowerMockIgnore({"javax.management.*",
@@ -280,15 +281,16 @@ public class WorkerSourceTaskTest {
         statusListener.onPause(taskId);
         EasyMock.expectLastCall();
 
+        // Multiple calls expected.
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).anyTimes();
+
         sourceTask.stop();
         EasyMock.expectLastCall();
 
         offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall();
         expectOffsetFlush(true);
-
-        sourceTask.updateOffsets(workerTask.polledSourceOffsets);
-        EasyMock.expectLastCall().andReturn(Optional.of(workerTask.polledSourceOffsets));
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -328,6 +330,9 @@ public class WorkerSourceTaskTest {
 
         expectTopicCreation(TOPIC);
 
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).anyTimes();
+
         sourceTask.stop();
         EasyMock.expectLastCall();
 
@@ -356,6 +361,146 @@ public class WorkerSourceTaskTest {
     }
 
     @Test
+    public void testUpdateOffsetsDuringEmptyPoll() throws Exception{
+        // Test that the task handles an empty list of records
+        createWorkerTask();
+
+        expectCleanStartup();
+
+        // poll returns no data
+        final CountDownLatch pollLatch = expectEmptyPolls(5, new AtomicInteger());
+
+        // First 3 calls returns no offsets
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).times(3);
+
+        // updateOffsets.
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.of(mkMap(mkEntry(PARTITION, OFFSET))));
+
+        // no offsets updated
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).times(2);
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        expectClose();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
+        workerTask.stop();
+        assertTrue(workerTask.awaitStop(1000));
+
+        assertPollMetrics(0);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testUpdateOffsetsDuringCleanStop() throws Exception{
+        // Test that the task handles an empty list of records
+        createWorkerTask();
+
+        expectCleanStartup();
+
+        // poll returns no data
+        final CountDownLatch pollLatch = expectEmptyPolls(5, new AtomicInteger());
+
+        // updateOffsets returns no data during poll
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).times(5);
+
+        // updateOffsets updates offsets at the end
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.of(mkMap(mkEntry(PARTITION, OFFSET))));
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        expectClose();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
+        workerTask.stop();
+        assertTrue(workerTask.awaitStop(1000));
+
+        assertPollMetrics(0);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testUpdateOffsetsDuringPollFailure() throws Exception {
+        createWorkerTask();
+
+        expectCleanStartup();
+
+        final CountDownLatch pollLatch = new CountDownLatch(1);
+        final RuntimeException exception = new RuntimeException();
+        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
+            pollLatch.countDown();
+            throw exception;
+        });
+
+        statusListener.onFailure(taskId, exception);
+        EasyMock.expectLastCall();
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+
+        // Once from beginIteration and second from final catch block during failure
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty());
+
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.of(mkMap(mkEntry(PARTITION, OFFSET))));
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        expectClose();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
+        //Failure in poll should trigger automatic stop of the task
+        assertTrue(workerTask.awaitStop(1000));
+        assertShouldSkipCommit();
+
+        taskFuture.get();
+        assertPollMetrics(0);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testFailureInPoll() throws Exception {
         createWorkerTask();
 
@@ -373,6 +518,11 @@ public class WorkerSourceTaskTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
+
+        // 2 calls expected. Once from beginIteration and second from final catch block
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).times(2);
+
         expectEmptyOffsetFlush();
 
         expectClose();
@@ -407,6 +557,10 @@ public class WorkerSourceTaskTest {
             assertTrue(awaitLatch(workerCancelLatch));
             throw exception;
         });
+
+        // Only 1 call from beginIteration. The call from finalOffsetsCommit is skipped due to task cancellation.
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty());
 
         offsetReader.close();
         PowerMock.expectLastCall();
@@ -453,6 +607,10 @@ public class WorkerSourceTaskTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
+        // calls from beginIteration and finalOffsetCommit
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).times(2);
+
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -486,6 +644,10 @@ public class WorkerSourceTaskTest {
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectEmptyPolls(1, new AtomicInteger());
         expectEmptyOffsetFlush();
+
+        // Multiple calls from beginIteration
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).anyTimes();
 
         sourceTask.stop();
         EasyMock.expectLastCall();
@@ -522,6 +684,10 @@ public class WorkerSourceTaskTest {
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
+
+        // Calls from beginIteration and finalOffsetCommit
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                        .andReturn(Optional.empty()).times(2);
 
         offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall().atLeastOnce();
@@ -568,6 +734,10 @@ public class WorkerSourceTaskTest {
         PowerMock.expectLastCall().atLeastOnce();
 
         expectTopicCreation(TOPIC);
+
+        // Calls from beginIteration and finalOffsetCommit
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .andReturn(Optional.empty()).times(2);
 
         sourceTask.stop();
         EasyMock.expectLastCall();
@@ -716,6 +886,7 @@ public class WorkerSourceTaskTest {
         offsetWriter.offset(PARTITION, offset2);
         PowerMock.expectLastCall();
 
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets)).andReturn(Optional.empty());
         PowerMock.replayAll();
 
         //Send records and then commit offsets and verify both were committed and no exception
@@ -760,6 +931,9 @@ public class WorkerSourceTaskTest {
         EasyMock.expectLastCall();
 
         expectClose();
+
+        // Called once from finalOffsetCommit
+        EasyMock.expect(sourceTask.updateOffsets(workerTask.polledSourceOffsets)).andReturn(Optional.empty());
 
         PowerMock.replayAll();
 

@@ -198,6 +198,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     // Visible for testing
     List<SourceRecord> toSend;
+
+    // Visible for testing
     Map<Map<String, Object>, Map<String, Object>> polledSourceOffsets = new HashMap<>();
     protected Map<String, String> taskConfig;
     protected boolean started = false;

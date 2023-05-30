@@ -67,13 +67,7 @@ import org.mockito.stubbing.OngoingStubbing;
 import org.mockito.verification.VerificationMode;
 
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -86,6 +80,8 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -557,6 +553,41 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         // task commits for each empty poll, plus the final commit
         verifyTransactions(pollCount() + 1, 0);
+
+        verifyPreflight();
+        verifyStartup();
+        verifyCleanShutdown();
+        assertPollMetrics(0);
+    }
+
+    @Test
+    public void testUpdateOffsetsPollBasedCommit() throws Exception {
+        // Test that the task handles an empty list of records
+        createWorkerTask();
+
+        // Make sure the task returns empty batches from poll before we start polling it
+        pollRecords.set(Collections.emptyList());
+
+        when(offsetWriter.beginFlush()).thenReturn(false);
+
+        startTaskThread();
+
+        awaitEmptyPolls(10);
+
+        for (int count = 0; count < 5; count++) {
+            when(sourceTask.updateOffsets(workerTask.polledSourceOffsets)).thenReturn(Optional.empty());
+        }
+        when(sourceTask.updateOffsets(workerTask.polledSourceOffsets))
+                .thenAnswer(emptyPollOffset -> Optional.of(mkMap(mkEntry(PARTITION, OFFSET))));
+
+        for (int count = 0; count < 4; count++) {
+            when(sourceTask.updateOffsets(workerTask.polledSourceOffsets)).thenReturn(Optional.empty());
+        }
+
+        awaitShutdown();
+
+        // task commits for each empty poll, plus the final commit
+        verifyTransactions(pollCount() + 1, 1);
 
         verifyPreflight();
         verifyStartup();
