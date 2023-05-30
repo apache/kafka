@@ -1126,7 +1126,6 @@ class KRaftClusterTest {
         val latch = controller.controller.asInstanceOf[QuorumController].pause()
         Thread.sleep(1001)
         latch.countDown()
-        controller.controller.asInstanceOf[QuorumController].pause().countDown()
         assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
         assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
           "Expected timedOutHeartbeats to be greater than 0.");

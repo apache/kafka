@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.controller.errors.ControllerExceptions.isNormalTimeoutException;
+import static org.apache.kafka.controller.errors.ControllerExceptions.isTimeoutException;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,53 +32,34 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class ControllerExceptionsTest {
     @Test
-    public void testTimeoutExceptionIsNormalTimeoutException() {
-        assertTrue(isNormalTimeoutException(
-                new TimeoutException()));
+    public void testTimeoutExceptionIsTimeoutException() {
+        assertTrue(isTimeoutException(new TimeoutException()));
     }
 
     @Test
-    public void testWrappedTimeoutExceptionIsNormalTimeoutException() {
-        assertTrue(isNormalTimeoutException(
-                new ExecutionException("execution exception",
-                        new TimeoutException())));
+    public void testWrappedTimeoutExceptionIsTimeoutException() {
+        assertTrue(isTimeoutException(
+            new ExecutionException("execution exception",
+                new TimeoutException())));
     }
 
     @Test
-    public void testShutdownTimeoutExceptionIsNotNormalTimeoutException() {
-        assertFalse(isNormalTimeoutException(
-                new TimeoutException("The controller is shutting down.")));
+    public void testRuntimeExceptionIsNotTimeoutException() {
+        assertFalse(isTimeoutException(new RuntimeException()));
     }
 
     @Test
-    public void testWrappedShutdownTimeoutExceptionIsNotNormalTimeoutException() {
-        assertFalse(isNormalTimeoutException(
-                new ExecutionException(
-                        new TimeoutException("The controller is shutting down."))));
+    public void testWrappedRuntimeExceptionIsNotTimeoutException() {
+        assertFalse(isTimeoutException(new ExecutionException(new RuntimeException())));
     }
 
     @Test
-    public void testRuntimeExceptionIsNotNormalTimeoutException() {
-        assertFalse(isNormalTimeoutException(
-                new RuntimeException()));
+    public void testTopicExistsExceptionIsNotTimeoutException() {
+        assertFalse(isTimeoutException(new TopicExistsException("Topic exists.")));
     }
 
     @Test
-    public void testWrappedRuntimeExceptionIsNotNormalTimeoutException() {
-        assertFalse(isNormalTimeoutException(
-                new ExecutionException(
-                        new RuntimeException())));
-    }
-
-    @Test
-    public void testTopicExistsExceptionIsNotNormalTimeoutException() {
-        assertFalse(isNormalTimeoutException(
-                new TopicExistsException("Topic exists.")));
-    }
-
-    @Test
-    public void testExecutionExceptionIsNotNormalTimeoutException() {
-        assertFalse(isNormalTimeoutException(
-                new ExecutionException(null)));
+    public void testExecutionExceptionWithNullCauseIsNotTimeoutException() {
+        assertFalse(isTimeoutException(new ExecutionException(null)));
     }
 }
