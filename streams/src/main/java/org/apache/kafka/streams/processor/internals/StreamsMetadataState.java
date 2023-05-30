@@ -314,11 +314,10 @@ public class StreamsMetadataState {
                                final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap,
                                final Map<TopicPartition, PartitionInfo> topicPartitionInfo) {
         this.partitionsByTopic = new HashMap<>();
-        for (final Map.Entry<TopicPartition, PartitionInfo> entry: topicPartitionInfo.entrySet()) {
-            this.partitionsByTopic
-                    .computeIfAbsent(entry.getKey().topic(), topic -> new ArrayList<>())
-                    .add(entry.getValue());
-        }
+        topicPartitionInfo.entrySet().forEach(entry -> this.partitionsByTopic
+                .computeIfAbsent(entry.getKey().topic(), topic -> new ArrayList<>())
+                .add(entry.getValue())
+        );
 
         rebuildMetadata(activePartitionHostMap, standbyPartitionHostMap);
     }
@@ -564,7 +563,7 @@ public class StreamsMetadataState {
     }
 
     private boolean isInitialized() {
-        return partitionsByTopic != null && !partitionsByTopic.keySet().isEmpty() && localMetadata.get() != null;
+        return partitionsByTopic != null && !partitionsByTopic.isEmpty() && localMetadata.get() != null;
     }
 
     public String getStoreForChangelogTopic(final String topicName) {
