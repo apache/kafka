@@ -110,11 +110,6 @@ public class LogManagerBuilder {
         return this;
     }
 
-    public LogManagerBuilder setMaxProducerIdExpirationMs(int maxProducerIdExpirationMs) {
-        this.producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, false);
-        return this;
-    }
-
     public LogManagerBuilder setProducerStateManagerConfig(int maxProducerIdExpirationMs, boolean transactionVerificationEnabled) {
         this.producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, transactionVerificationEnabled);
         return this;

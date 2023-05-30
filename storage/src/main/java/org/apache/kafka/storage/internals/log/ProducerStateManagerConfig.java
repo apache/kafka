@@ -22,8 +22,8 @@ import java.util.Set;
 public class ProducerStateManagerConfig {
     public static final String PRODUCER_ID_EXPIRATION_MS = "producer.id.expiration.ms";
     public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton(PRODUCER_ID_EXPIRATION_MS);
-    private volatile int producerIdExpirationMs;
 
+    private volatile int producerIdExpirationMs;
     private volatile boolean transactionVerificationEnabled;
 
     public ProducerStateManagerConfig(int producerIdExpirationMs, boolean transactionVerificationEnabled) {
