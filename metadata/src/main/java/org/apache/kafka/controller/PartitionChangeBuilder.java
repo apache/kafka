@@ -220,13 +220,15 @@ public class PartitionChangeBuilder {
     private void tryElection(PartitionChangeRecord record) {
         ElectionResult electionResult = electLeader();
         if (electionResult.node != partition.leader) {
-            log.debug(
-                "Setting new leader for topicId {}, partition {} to {} using {} election",
-                topicId,
-                partitionId,
-                electionResult.node,
-                electionResult.unclean ? "an unclean" : "a clean"
-            );
+            if (log.isTraceEnabled()) {
+                log.trace(
+                    "Setting new leader for topicId {}, partition {} to {} using {} election",
+                    topicId,
+                    partitionId,
+                    electionResult.node,
+                    electionResult.unclean ? "an unclean" : "a clean"
+                );
+            }
             record.setLeader(electionResult.node);
             if (electionResult.unclean) {
                 // If the election was unclean, we have to forcibly set the ISR to just the
@@ -239,7 +241,9 @@ public class PartitionChangeBuilder {
                 }
             }
         } else {
-            log.debug("Failed to find a new leader with current state: {}", this);
+            if (log.isTraceEnabled()) {
+                log.trace("Failed to find a new leader with current state: {}", this);
+            }
         }
     }
 
