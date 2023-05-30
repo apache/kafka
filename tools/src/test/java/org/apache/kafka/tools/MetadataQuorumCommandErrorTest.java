@@ -16,9 +16,15 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.KafkaException;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MetadataQuorumCommandErrorTest {
 
@@ -43,6 +49,16 @@ public class MetadataQuorumCommandErrorTest {
         assertEquals("Only one of --status or --replication should be specified with describe sub-command",
             ToolsTestUtils.captureStandardErr(() ->
                 MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092", "describe", "--status", "--replication")));
+    }
+
+    @Test
+    public void testRelativeTimeMs() {
+        long nowMs = Instant.now().toEpochMilli();
+        assertTrue(MetadataQuorumCommand.relativeTimeMs(nowMs, "test") >= 0);
+        long invalidEpochMs = Instant.EPOCH.minus(1, ChronoUnit.DAYS).toEpochMilli();
+        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(invalidEpochMs, "test"));
+        long futureTimestampMs = Instant.now().plus(1, ChronoUnit.DAYS).toEpochMilli();
+        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(futureTimestampMs, "test"));
     }
 
 }

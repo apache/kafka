@@ -38,9 +38,13 @@ broker_upgrade_versions = [str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
                            str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
-metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-fk_join_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(LATEST_2_8), 
-                    str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3)]
+metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
+                       str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(LATEST_2_8),
+                       str(LATEST_3_0)]
+# upgrading from version (2.4...3.0) is broken and only fixed later in 3.1
+# we cannot test two bounce rolling upgrade because we know it's broken
+# instead we add version 2.4...3.0 to the `metadata_2_versions` upgrade list
+fk_join_versions = [str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3)]
 
 """
 After each release one should first check that the released version has been uploaded to 

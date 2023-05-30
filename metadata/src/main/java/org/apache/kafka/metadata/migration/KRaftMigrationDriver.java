@@ -154,7 +154,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         String maybeDone = migrationLeadershipState.zkMigrationComplete() ? "done" : "not done";
         log.info("Recovered migration state {}. ZK migration is {}.", migrationLeadershipState, maybeDone);
 
-        // Once we've recovered the migration state from ZK, install this class as a metadata published
+        // Once we've recovered the migration state from ZK, install this class as a metadata publisher
         // by calling the initialZkLoadHandler.
         initialZkLoadHandler.accept(this);
 
@@ -629,9 +629,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 completionHandler.accept(null);
                 return;
             }
-            if (delta.featuresDelta() != null) {
-                propagator.setMetadataVersion(image.features().metadataVersion());
-            }
 
             if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
@@ -639,7 +636,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             if (isSnapshot) {
-                zkMetadataWriter.handleSnapshot(image);
+                zkMetadataWriter.handleLoadSnapshot(image);
             } else {
                 zkMetadataWriter.handleDelta(prevImage, image, delta);
             }

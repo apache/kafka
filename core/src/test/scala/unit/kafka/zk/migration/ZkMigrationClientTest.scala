@@ -17,14 +17,15 @@
 package kafka.zk.migration
 
 import kafka.api.LeaderAndIsr
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.coordinator.transaction.ProducerIdManager
-import kafka.zk.migration.ZkMigrationTestHarness
-import org.apache.kafka.common.config.TopicConfig
+import kafka.server.{ConfigType, KafkaConfig}
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, ProducerIdsRecord}
+import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, PartitionRecord, ProducerIdsRecord, TopicRecord}
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
@@ -252,11 +253,115 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
       .map {_.message() }
       .filter(message => MetadataRecordType.fromId(message.apiKey()).equals(MetadataRecordType.CONFIG_RECORD))
       .map { _.asInstanceOf[ConfigRecord] }
-      .toSeq
+      .map { record => record.name() -> record.value()}
+      .toMap
     assertEquals(2, configs.size)
-    assertEquals(TopicConfig.FLUSH_MS_CONFIG, configs.head.name())
-    assertEquals("60000", configs.head.value())
-    assertEquals(TopicConfig.RETENTION_MS_CONFIG, configs.last.name())
-    assertEquals("300000", configs.last.value())
+    assertTrue(configs.contains(TopicConfig.FLUSH_MS_CONFIG))
+    assertEquals("60000", configs(TopicConfig.FLUSH_MS_CONFIG))
+    assertTrue(configs.contains(TopicConfig.RETENTION_MS_CONFIG))
+    assertEquals("300000", configs(TopicConfig.RETENTION_MS_CONFIG))
+  }
+
+  @Test
+  def testTopicAndBrokerConfigsMigrationWithSnapshots(): Unit = {
+    val kraftWriter = new KRaftMigrationZkWriter(migrationClient, (_, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+
+    // Add add some topics and broker configs and create new image.
+    val topicName = "testTopic"
+    val partition = 0
+    val tp = new TopicPartition(topicName, partition)
+    val leaderPartition = 1
+    val leaderEpoch = 100
+    val partitionEpoch = 10
+    val brokerId = "1"
+    val replicas = List(1, 2, 3).map(int2Integer).asJava
+    val topicId = Uuid.randomUuid()
+    val props = new Properties()
+    props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
+    props.put(KafkaConfig.SslKeystorePasswordProp, SECRET) // sensitive config
+
+    //    // Leave Zk in an incomplete state.
+    //    zkClient.createTopicAssignment(topicName, Some(topicId), Map(tp -> Seq(1)))
+
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    delta.replay(new TopicRecord()
+      .setTopicId(topicId)
+      .setName(topicName)
+    )
+    delta.replay(new PartitionRecord()
+      .setTopicId(topicId)
+      .setIsr(replicas)
+      .setLeader(leaderPartition)
+      .setReplicas(replicas)
+      .setAddingReplicas(List.empty.asJava)
+      .setRemovingReplicas(List.empty.asJava)
+      .setLeaderEpoch(leaderEpoch)
+      .setPartitionEpoch(partitionEpoch)
+      .setPartitionId(partition)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+    )
+    // Use same props for the broker and topic.
+    props.asScala.foreach { case (key, value) =>
+      delta.replay(new ConfigRecord()
+        .setName(key)
+        .setValue(value)
+        .setResourceName(topicName)
+        .setResourceType(ConfigResource.Type.TOPIC.id())
+      )
+      delta.replay(new ConfigRecord()
+        .setName(key)
+        .setValue(value)
+        .setResourceName(brokerId)
+        .setResourceType(ConfigResource.Type.BROKER.id())
+      )
+    }
+    val image = delta.apply(MetadataProvenance.EMPTY)
+
+    // Handle migration using the generated snapshot.
+    kraftWriter.handleLoadSnapshot(image)
+
+    // Verify topic state.
+    val topicIdReplicaAssignment =
+      zkClient.getReplicaAssignmentAndTopicIdForTopics(Set(topicName))
+    assertEquals(1, topicIdReplicaAssignment.size)
+    topicIdReplicaAssignment.foreach { assignment =>
+      assertEquals(topicName, assignment.topic)
+      assertEquals(Some(topicId), assignment.topicId)
+      assertEquals(Map(tp -> ReplicaAssignment(replicas.asScala.map(Integer2int).toSeq)),
+        assignment.assignment)
+    }
+
+    // Verify the topic partition states.
+    val topicPartitionState = zkClient.getTopicPartitionState(tp)
+    assertTrue(topicPartitionState.isDefined)
+    topicPartitionState.foreach { state =>
+      assertEquals(leaderPartition, state.leaderAndIsr.leader)
+      assertEquals(leaderEpoch, state.leaderAndIsr.leaderEpoch)
+      assertEquals(LeaderRecoveryState.RECOVERED, state.leaderAndIsr.leaderRecoveryState)
+      assertEquals(replicas.asScala.map(Integer2int).toList, state.leaderAndIsr.isr)
+    }
+
+    // Verify the broker and topic configs (including sensitive configs).
+    val brokerProps = zkClient.getEntityConfigs(ConfigType.Broker, brokerId)
+    val topicProps = zkClient.getEntityConfigs(ConfigType.Topic, topicName)
+    assertEquals(2, brokerProps.size())
+
+    brokerProps.asScala.foreach { case (key, value) =>
+      if (key == KafkaConfig.SslKeystorePasswordProp) {
+        assertEquals(SECRET, encoder.decode(value).value)
+      } else {
+        assertEquals(props.getProperty(key), value)
+      }
+    }
+
+    topicProps.asScala.foreach { case (key, value) =>
+      if (key == KafkaConfig.SslKeystorePasswordProp) {
+        assertEquals(SECRET, encoder.decode(value).value)
+      } else {
+        assertEquals(props.getProperty(key), value)
+      }
+    }
   }
 }
