@@ -89,7 +89,6 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
-import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
