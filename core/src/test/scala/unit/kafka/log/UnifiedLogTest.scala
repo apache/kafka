@@ -3667,6 +3667,113 @@ class UnifiedLogTest {
     listener.verify(expectedHighWatermark = 4)
   }
 
+  @Test
+  def testTransactionIsOngoing(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val sequence = 3
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertEquals(null, log.verificationState(producerId))
+
+    val idempotentRecords = MemoryRecords.withIdempotentRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+
+    log.appendAsLeader(idempotentRecords, leaderEpoch = 0)
+    assertFalse(log.hasOngoingTransaction(producerId))
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence + 2,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+
+    val verificationState = log.transactionNeedsVerifying(producerId)
+    assertTrue(verificationState != null)
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationState = verificationState)
+    assertTrue(log.hasOngoingTransaction(producerId))
+    assertEquals(verificationState, log.verificationState(producerId))
+
+    // A subsequent transactionNeedsVerifying will be empty since we are already verified.
+    assertEquals(null, log.transactionNeedsVerifying(producerId))
+
+    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+
+    log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertEquals(null, log.verificationState(producerId))
+
+    // A new transactionNeedsVerifying will not be empty, as we need to verify the next transaction.
+    val newVerificationState = log.transactionNeedsVerifying(producerId)
+    assertTrue(newVerificationState != null)
+    assertNotEquals(verificationState, newVerificationState)
+  }
+
+  @Test
+  def testEmptyTransactionStillClearsVerificationState(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+
+    val verificationState = log.transactionNeedsVerifying(producerId)
+    assertTrue(verificationState != null)
+
+    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+
+    log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertEquals(null, log.verificationState(producerId))
+  }
+
+  @Test
+  def testAllowNonZeroSequenceOnFirstAppendNonZeroEpoch(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val sequence = 3
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    assertFalse(log.hasOngoingTransaction(producerId))
+    assertEquals(null, log.verificationState(producerId))
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+
+    val verificationState = log.transactionNeedsVerifying(producerId)
+    // Append should not throw error.
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationState = verificationState)
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,

@@ -40,7 +40,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -579,9 +579,29 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     result
   }
 
+  /**
+   * Maybe create and return the verification state for the given producer ID if the transaction is not ongoing. Otherwise return null.
+   */
+  def transactionNeedsVerifying(producerId: Long): Object = lock synchronized {
+    if (hasOngoingTransaction(producerId))
+      null
+    else
+      verificationState(producerId, true)
+  }
+
+  /**
+   * Maybe create the VerificationStateEntry for the given producer ID -- if an entry is present, return its verification state, otherwise, return null.
+   */
+  def verificationState(producerId: Long, createIfAbsent: Boolean = false): Object = lock synchronized {
+    val entry = producerStateManager.verificationStateEntry(producerId, createIfAbsent)
+    if (entry != null) entry.verificationState else null
+  }
+
+  /**
+   * Return true if the given producer ID has a transaction ongoing.
+   */
   def hasOngoingTransaction(producerId: Long): Boolean = lock synchronized {
-    val entry = producerStateManager.activeProducers.get(producerId)
-    entry != null && entry.currentTxnFirstOffset.isPresent
+    producerStateManager.activeProducers.getOrDefault(producerId, ProducerStateEntry.empty(producerId)).currentTxnFirstOffset.isPresent
   }
 
   /**
@@ -664,9 +684,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
-                     requestLocal: RequestLocal = RequestLocal.NoCaching): LogAppendInfo = {
+                     requestLocal: RequestLocal = RequestLocal.NoCaching,
+                     verificationState: Object = null): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
-    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), ignoreRecordSize = false)
+    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationState, ignoreRecordSize = false)
   }
 
   /**
@@ -683,6 +704,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       requestLocal = None,
+      verificationState = null,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
@@ -711,6 +733,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
+                     verificationState: Object,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
@@ -835,7 +858,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // now that we have valid records, offsets assigned, and timestamps updated, we need to
           // validate the idempotent/transactional state of the producers and collect some metadata
           val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(
-            logOffsetMetadata, validRecords, origin)
+            logOffsetMetadata, validRecords, origin, verificationState)
 
           maybeDuplicate match {
             case Some(duplicate) =>
@@ -963,7 +986,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
                                               records: MemoryRecords,
-                                              origin: AppendOrigin):
+                                              origin: AppendOrigin,
+                                              requestVerificationState: Object):
   (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
@@ -980,6 +1004,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (duplicateBatch.isPresent) {
             return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
+
+          // Verify that if the record is transactional & the append origin is client, that we either have an ongoing transaction or verified transaction state.
+          if (batch.isTransactional && producerStateManager.producerStateManagerConfig().transactionVerificationEnabled())
+            if (!hasOngoingTransaction(batch.producerId) && (requestVerificationState != verificationState(batch.producerId) || requestVerificationState == null))
+              throw new InvalidRecordException("Record was not part of an ongoing transaction")
         }
 
         // We cache offset metadata for the start of each transaction. This allows us to
@@ -1875,7 +1904,10 @@ object UnifiedLog extends Logging {
                               origin: AppendOrigin): Option[CompletedTxn] = {
     val producerId = batch.producerId
     val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, origin))
-    appendInfo.append(batch, firstOffsetMetadata.asJava).asScala
+    val completedTxn = appendInfo.append(batch, firstOffsetMetadata.asJava).asScala
+    // Whether we wrote a control marker or a data batch, we can remove verification state since either the transaction is complete or we have a first offset.
+    producerStateManager.clearVerificationStateEntry(producerId)
+    completedTxn
   }
 
   /**

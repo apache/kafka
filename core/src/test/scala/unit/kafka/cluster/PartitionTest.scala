@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{AlterPartitionResponse, FetchRequest, ListOffsetsRequest, RequestHeader}
 import org.apache.kafka.common.utils.SystemTime
-import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
+import org.apache.kafka.common.{InvalidRecordException, IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -3246,7 +3246,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testHasOngoingTransaction(): Unit = {
+  def testTransactionNeedsVerifying(): Unit = {
     val controllerEpoch = 0
     val leaderEpoch = 5
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
@@ -3264,7 +3264,6 @@ class PartitionTest extends AbstractPartitionTest {
       .setReplicas(replicas)
       .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
-    assertFalse(partition.hasOngoingTransaction(producerId))
 
     val idempotentRecords = createIdempotentRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -3273,17 +3272,35 @@ class PartitionTest extends AbstractPartitionTest {
       baseOffset = 0L,
       producerId = producerId)
     partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
-    assertFalse(partition.hasOngoingTransaction(producerId))
 
-    val transactionRecords = createTransactionalRecords(List(
+    def transactionRecords() = createTransactionalRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L,
       baseSequence = 3,
       producerId = producerId)
-    partition.appendRecordsToLeader(transactionRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
-    assertTrue(partition.hasOngoingTransaction(producerId))
+
+    // When verification state is empty, we should not be able to append.
+    assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
+
+    // Before appendRecordsToLeader is called, ReplicaManager will call transactionNeedsVerifying. We should get a non-null verification object.
+    val verificationState = partition.transactionNeedsVerifying(producerId)
+    assertTrue(verificationState != null)
+
+    // With the wrong verification state, append should fail.
+    assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(),
+      origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, Optional.of(new Object)))
+
+    // We should return the same verification object when we still need to verify. Append should proceed.
+    val verificationState2 = partition.transactionNeedsVerifying(producerId)
+    assertEquals(verificationState, verificationState2)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationState)
+
+    // We should no longer need a verification object. Future appends without verification state will also succeed.
+    val verificationState3 = partition.transactionNeedsVerifying(producerId)
+    assertEquals(null, verificationState3)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
   }
 
   private def makeLeader(

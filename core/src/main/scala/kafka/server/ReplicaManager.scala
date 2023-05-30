@@ -671,6 +671,7 @@ class ReplicaManager(val config: KafkaConfig,
       val sTime = time.milliseconds
       
       val transactionalProducerIds = mutable.HashSet[Long]()
+      var verificationState: Object = null
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) =
         if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
           (entriesPerPartition, Map.empty)
@@ -680,9 +681,11 @@ class ReplicaManager(val config: KafkaConfig,
             val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
             transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
             if (transactionalBatches.nonEmpty) {
-              getPartitionOrException(topicPartition).hasOngoingTransaction(transactionalBatches.head.producerId)
+              // We return verification state if the partition needs to be verified. If no state is present, no need to verify.
+              verificationState = getPartitionOrException(topicPartition).transactionNeedsVerifying(records.firstBatch.producerId)
+              verificationState == null
             } else {
-              // If there is no producer ID in the batches, no need to verify.
+              // If there is no producer ID or transactional records in the batches, no need to verify.
               true
             }
           }
@@ -702,7 +705,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
         
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-          origin, verifiedEntries, requiredAcks, requestLocal)
+          origin, verifiedEntries, requiredAcks, requestLocal, verificationState)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
         
         val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
@@ -1073,7 +1076,8 @@ class ReplicaManager(val config: KafkaConfig,
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short,
-                               requestLocal: RequestLocal): Map[TopicPartition, LogAppendResult] = {
+                               requestLocal: RequestLocal,
+                               verificationState: Object): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
@@ -1099,7 +1103,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
-          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal)
+          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal, verificationState)
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate

@@ -575,8 +575,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def hasOngoingTransaction(producerId: Long): Boolean = {
-    leaderLogIfLocal.exists(leaderLog => leaderLog.hasOngoingTransaction(producerId))
+  // Returns a verification state object if we need to verify. Otherwise return null.
+  def transactionNeedsVerifying(producerId: Long): Object = {
+    leaderLogIfLocal match {
+      case Some(leaderLog) => leaderLog.transactionNeedsVerifying(producerId)
+      case None => null
+    }
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition
@@ -1268,7 +1272,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal): LogAppendInfo = {
+                            requestLocal: RequestLocal, verificationState: Object = null): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1282,7 +1286,7 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion, requestLocal)
+            interBrokerProtocolVersion, requestLocal, verificationState)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
