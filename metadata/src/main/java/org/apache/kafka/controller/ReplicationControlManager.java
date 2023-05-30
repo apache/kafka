@@ -91,6 +91,7 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -130,6 +131,7 @@ import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.PartitionReassignmentReplicas.isReassignmentInProgress;
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -523,7 +525,7 @@ public class ReplicationControlManager {
         Set<String> describable
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
         // Check the topic names.
         validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
@@ -858,7 +860,8 @@ public class ReplicationControlManager {
 
     ControllerResult<Map<Uuid, ApiError>> deleteTopics(ControllerRequestContext context, Collection<Uuid> ids) {
         Map<Uuid, ApiError> results = new HashMap<>(ids.size());
-        List<ApiMessageAndVersion> records = new ArrayList<>(ids.size());
+        List<ApiMessageAndVersion> records =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP, ids.size());
         for (Uuid id : ids) {
             try {
                 deleteTopic(context, id, records);
@@ -1282,7 +1285,7 @@ public class ReplicationControlManager {
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
         ElectionType electionType = electionType(request.electionType());
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         ElectLeadersResponseData response = new ElectLeadersResponseData();
         if (request.topicPartitions() == null) {
             // If topicPartitions is null, we try to elect a new leader for every partition.  There
@@ -1422,7 +1425,7 @@ public class ReplicationControlManager {
             throw new BrokerIdNotRegisteredException("Broker ID " + brokerId +
                 " is not currently registered");
         }
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         handleBrokerUnregistered(brokerId, registration.epoch(), records);
         return ControllerResult.of(records, null);
     }
@@ -1494,8 +1497,8 @@ public class ReplicationControlManager {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics
     ) {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        List<CreatePartitionsTopicResult> results = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (CreatePartitionsTopic topic : topics) {
             ApiError apiError = ApiError.NONE;
             try {
@@ -1734,7 +1737,7 @@ public class ReplicationControlManager {
 
     ControllerResult<AlterPartitionReassignmentsResponseData>
             alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         AlterPartitionReassignmentsResponseData result =
                 new AlterPartitionReassignmentsResponseData().setErrorMessage(null);
         int successfulAlterations = 0, totalAlterations = 0;

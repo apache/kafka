@@ -94,6 +94,7 @@
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="org.apache.kafka.server.fault" />
         <allow pkg="org.apache.kafka.server.metrics" />
+        <allow pkg="org.apache.kafka.server.mutable" />
         <allow pkg="org.apache.kafka.server.policy"/>
         <allow pkg="org.apache.kafka.server.util"/>
         <allow pkg="org.apache.kafka.snapshot" />

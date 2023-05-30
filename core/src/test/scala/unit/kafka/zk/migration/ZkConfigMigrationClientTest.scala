@@ -33,6 +33,7 @@ import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
+import java.util
 import java.util.Properties
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -67,6 +68,23 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
         assertEquals(props.getProperty(name), value)
       }
     })
+
+    // Update the sensitive config value from the config client and check that the value
+    // persisted in Zookeeper is encrypted.
+    val newProps = new util.HashMap[String, String]()
+    newProps.put(KafkaConfig.DefaultReplicationFactorProp, "2") // normal config
+    newProps.put(KafkaConfig.SslKeystorePasswordProp, NEW_SECRET) // sensitive config
+    migrationState = migrationClient.configClient().writeConfigs(
+      new ConfigResource(ConfigResource.Type.BROKER, "1"), newProps, migrationState)
+    val actualPropsInZk = zkClient.getEntityConfigs(ConfigType.Broker, "1")
+    assertEquals(2, actualPropsInZk.size())
+    actualPropsInZk.forEach { case (key, value) =>
+      if (key == KafkaConfig.SslKeystorePasswordProp) {
+        assertEquals(NEW_SECRET, encoder.decode(value.toString).value)
+      } else {
+        assertEquals(newProps.get(key), value)
+      }
+    }
 
     migrationState = migrationClient.configClient().deleteConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), migrationState)
