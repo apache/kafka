@@ -2028,8 +2028,11 @@ public final class QuorumController implements Controller {
         if (lastCommittedOffset == -1) {
             return CompletableFuture.completedFuture(new FinalizedControllerFeatures(Collections.emptyMap(), -1));
         }
+        // It's possible for a standby controller to receiving ApiVersionRequest and we do not have any timeline snapshot
+        // in a standby controller, in this case we use Long.MAX_VALUE.
+        long epoch = isActive() ? lastCommittedOffset : Long.MAX_VALUE;
         return appendReadEvent("getFinalizedFeatures", context.deadlineNs(),
-            () -> featureControl.finalizedFeatures(lastCommittedOffset));
+            () -> featureControl.finalizedFeatures(epoch));
     }
 
     @Override
