@@ -49,6 +49,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -586,8 +587,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
-    private KRaftMigrationOperationConsumer countingOperationConsumer(
-        Map<String, Integer> dualWriteCounts
+    static KRaftMigrationOperationConsumer countingOperationConsumer(
+        Map<String, Integer> dualWriteCounts,
+        BiConsumer<String, KRaftMigrationOperation> operationConsumer
     ) {
         return (opType, logMsg, operation) -> {
             dualWriteCounts.compute(opType, (key, value) -> {
@@ -597,7 +599,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     return value + 1;
                 }
             });
-            applyMigrationOperation(logMsg, operation);
+            operationConsumer.accept(logMsg, operation);
         };
     }
 
@@ -608,7 +610,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (migrationState == MigrationDriverState.SYNC_KRAFT_TO_ZK) {
                 log.info("Performing a full metadata sync from KRaft to ZK.");
                 Map<String, Integer> dualWriteCounts = new HashMap<>();
-                zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(dualWriteCounts));
+                zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
                 log.info("Made the following ZK writes when reconciling with KRaft state: {}", dualWriteCounts);
                 transitionTo(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             }
@@ -678,9 +681,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
             Map<String, Integer> dualWriteCounts = new HashMap<>();
             if (isSnapshot) {
-                zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(dualWriteCounts));
+                zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
             } else {
-                zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(dualWriteCounts));
+                zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
+                    dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
             }
             if (dualWriteCounts.isEmpty()) {
                 log.trace("Did not make any ZK writes when handling KRaft {}", isSnapshot ? "snapshot" : "delta");

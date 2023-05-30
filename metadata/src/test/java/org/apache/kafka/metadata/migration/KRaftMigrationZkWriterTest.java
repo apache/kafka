@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KRaftMigrationZkWriterTest {
     /**
-     * Test that KRaftMigrationZkWriter will generate the correct data in ZooKeeper
+     * If ZK is empty, ensure that the writer will sync all metadata from the MetadataImage to ZK
      */
     @Test
     public void testReconcileSnapshotEmptyZk() {
@@ -75,16 +75,8 @@ public class KRaftMigrationZkWriterTest {
         );
 
         Map<String, Integer> opCounts = new HashMap<>();
-        KRaftMigrationOperationConsumer consumer = (opType, logMsg, operation) -> {
-            opCounts.compute(opType, (__, value) -> {
-                if (value == null) {
-                    return 1;
-                } else {
-                    return value + 1;
-                }
-            });
-            operation.apply(ZkMigrationLeadershipState.EMPTY);
-        };
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleSnapshot(image, consumer);
         assertEquals(2, opCounts.remove("CreateTopic"));
         assertEquals(2, opCounts.remove("UpdateBrokerConfig"));
@@ -101,10 +93,11 @@ public class KRaftMigrationZkWriterTest {
         assertEquals(4, aclClient.updatedResources.size());
     }
 
+    /**
+     * Only return one of two topics in the ZK topic iterator, ensure that the topic client creates the missing topic
+     */
     @Test
     public void testReconcileSnapshotTopics() {
-
-        // These test clients don't return any data in their iterates, so this simulates an empty ZK
         CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
             @Override
             public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
@@ -119,39 +112,32 @@ public class KRaftMigrationZkWriterTest {
         CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
         CapturingAclMigrationClient aclClient = new CapturingAclMigrationClient();
         CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
-                .setBrokersInZk(0)
-                .setTopicMigrationClient(topicClient)
-                .setConfigMigrationClient(configClient)
-                .setAclMigrationClient(aclClient)
-                .build();
+            .setBrokersInZk(0)
+            .setTopicMigrationClient(topicClient)
+            .setConfigMigrationClient(configClient)
+            .setAclMigrationClient(aclClient)
+            .build();
 
         KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
 
         MetadataImage image = new MetadataImage(
-                MetadataProvenance.EMPTY,
-                FeaturesImage.EMPTY,        // Features are not used in ZK mode, so we don't migrate or dual-write them
-                ClusterImage.EMPTY,         // Broker registrations are not dual-written
-                TopicsImageTest.IMAGE1,
-                ConfigurationsImage.EMPTY,
-                ClientQuotasImage.EMPTY,
-                ProducerIdsImage.EMPTY,
-                AclsImage.EMPTY,
-                ScramImage.EMPTY
+            MetadataProvenance.EMPTY,
+            FeaturesImage.EMPTY,
+            ClusterImage.EMPTY,
+            TopicsImageTest.IMAGE1,     // Two topics, foo and bar
+            ConfigurationsImage.EMPTY,
+            ClientQuotasImage.EMPTY,
+            ProducerIdsImage.EMPTY,
+            AclsImage.EMPTY,
+            ScramImage.EMPTY
         );
 
         Map<String, Integer> opCounts = new HashMap<>();
-        KRaftMigrationOperationConsumer consumer = (opType, logMsg, operation) -> {
-            opCounts.compute(opType, (__, value) -> {
-                if (value == null) {
-                    return 1;
-                } else {
-                    return value + 1;
-                }
-            });
-            operation.apply(ZkMigrationLeadershipState.EMPTY);
-        };
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleSnapshot(image, consumer);
         assertEquals(1, opCounts.remove("CreateTopic"));
         assertEquals(0, opCounts.size());
+        assertEquals("bar", topicClient.createdTopics.get(0));
     }
 }

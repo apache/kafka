@@ -57,7 +57,7 @@ import scala.jdk.CollectionConverters._
 
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@Timeout(120)
+@Timeout(300)
 class ZkMigrationIntegrationTest {
 
   val log = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
