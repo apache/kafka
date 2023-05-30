@@ -18,15 +18,19 @@ package kafka.zk.migration
 
 import kafka.server.{ConfigType, KafkaConfig, ZkAdminManager}
 import kafka.zk.{AdminZkClient, ZkMigrationClient}
+import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.metadata.ConfigRecord
+import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.image.{ClientQuotasDelta, ClientQuotasImage}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.RecordTestUtils
+import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.util.MockRandom
@@ -38,6 +42,12 @@ import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
 class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
+  def randomBuffer(random: MockRandom, length: Int): Array[Byte] = {
+    val buf = new Array[Byte](length)
+    random.nextBytes(buf)
+    buf
+  }
+
   @Test
   def testMigrationBrokerConfigs(): Unit = {
     val brokers = new java.util.ArrayList[Integer]()
@@ -217,12 +227,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
   def testScram(): Unit = {
     val random = new MockRandom()
 
-    def randomBuffer(random: MockRandom, length: Int): Array[Byte] = {
-      val buf = new Array[Byte](length)
-      random.nextBytes(buf)
-      buf
-    }
-
     val scramCredential = new ScramCredential(
       randomBuffer(random, 1024),
       randomBuffer(random, 1024),
@@ -240,5 +244,45 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(0, brokers.size())
     assertEquals(1, batches.size())
     assertEquals(1, batches.get(0).size)
+  }
+
+  @Test
+  def testScramChangesInSnapshot(): Unit = {
+    val random = new MockRandom()
+
+    // Create SCRAM records in Zookeeper.
+    val aliceScramCredential = new ScramCredential(
+      randomBuffer(random, 1024),
+      randomBuffer(random, 1024),
+      randomBuffer(random, 1024),
+      4096)
+
+    val props = new Properties()
+    props.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(aliceScramCredential))
+    adminZkClient.changeConfigs(ConfigType.User, "alice", props)
+
+    // Create a new SCRAM credential
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    val scramCredentialRecord = new UserScramCredentialRecord()
+      .setName("george")
+      .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
+      .setSalt(randomBuffer(random, 1024))
+      .setStoredKey(randomBuffer(random, 1024))
+      .setServerKey(randomBuffer(random, 1024))
+      .setIterations(8192)
+    delta.replay(scramCredentialRecord)
+
+    // Add record for george but not for alice.
+    val image = delta.apply(MetadataProvenance.EMPTY)
+
+    // load snapshot to Zookeeper.
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient,
+      (_, operation) => { migrationState = operation.apply(migrationState) })
+    kraftMigrationZkWriter.handleLoadSnapshot(image)
+
+    val georgeProps = zkClient.getEntityConfigs(ConfigType.User, "george")
+    assertEquals(1, georgeProps.size())
+    val aliceProps = zkClient.getEntityConfigs(ConfigType.User, "alice")
+    assertEquals(0, aliceProps.size())
   }
 }
