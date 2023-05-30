@@ -120,7 +120,8 @@ class LogLoaderTest {
         brokerTopicStats = new BrokerTopicStats(),
         logDirFailureChannel = logDirFailureChannel,
         time = time,
-        keepPartitionMetadataFile = config.usesTopicId) {
+        keepPartitionMetadataFile = config.usesTopicId,
+        remoteStorageSystemEnable = config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
 
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
                              logStartOffsets: Map[TopicPartition, Long], defaultConfig: LogConfig,
