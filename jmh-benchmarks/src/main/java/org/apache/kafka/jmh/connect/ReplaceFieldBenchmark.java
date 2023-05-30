@@ -22,6 +22,7 @@ import org.apache.kafka.connect.transforms.ReplaceField;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
@@ -56,7 +57,7 @@ public class ReplaceFieldBenchmark {
     private ReplaceField<SourceRecord> replaceFieldSmt;
     private SourceRecord record;
 
-    @Setup
+    @Setup(Level.Trial)
     public void setup() {
         this.replaceFieldSmt = new ReplaceField.Value<>();
         Map<String, String> replaceFieldConfigs = new HashMap<>();
