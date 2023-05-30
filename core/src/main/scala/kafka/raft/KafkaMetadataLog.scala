@@ -26,7 +26,6 @@ import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
-import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals
@@ -41,7 +40,6 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   val log: UnifiedLog,
-  recordSerde: RecordSerde[_],
   time: Time,
   scheduler: Scheduler,
   // Access to this object needs to be synchronized because it is used by the snapshotting thread to notify the
@@ -549,7 +547,6 @@ object KafkaMetadataLog extends Logging {
     topicPartition: TopicPartition,
     topicId: Uuid,
     dataDir: File,
-    recordSerde: RecordSerde[_],
     time: Time,
     scheduler: Scheduler,
     config: MetadataLogConfig
@@ -599,7 +596,6 @@ object KafkaMetadataLog extends Logging {
 
     val metadataLog = new KafkaMetadataLog(
       log,
-      recordSerde,
       time,
       scheduler,
       recoverSnapshots(log),

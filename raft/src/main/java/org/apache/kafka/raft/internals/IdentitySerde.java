@@ -24,6 +24,8 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 import java.nio.ByteBuffer;
 
 public class IdentitySerde implements RecordSerde<ByteBuffer> {
+    public static final IdentitySerde INSTANCE = new IdentitySerde();
+
     @Override
     public int recordSize(final ByteBuffer data, final ObjectSerializationCache serializationCache) {
         return data.remaining();

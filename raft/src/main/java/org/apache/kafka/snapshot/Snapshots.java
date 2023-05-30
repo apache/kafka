@@ -160,7 +160,7 @@ public final class Snapshots {
         try (RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
              RecordsSnapshotReader.of(
                  reader,
-                 new IdentitySerde(),
+                 IdentitySerde.INSTANCE,
                  new BufferSupplier.GrowableBufferSupplier(),
                  KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
                  true
