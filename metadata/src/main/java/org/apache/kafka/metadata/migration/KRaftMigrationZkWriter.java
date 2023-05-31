@@ -44,6 +44,7 @@ import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
+import org.apache.kafka.server.common.ProducerIdsBlock;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -351,9 +352,9 @@ public class KRaftMigrationZkWriter {
             // No producer IDs have been allocated, nothing to dual-write
             return;
         }
-        Optional<Long> zkProducerId = migrationClient.readProducerId();
+        Optional<ProducerIdsBlock> zkProducerId = migrationClient.readProducerId();
         if (zkProducerId.isPresent()) {
-            if (zkProducerId.get() != image.nextProducerId()) {
+            if (zkProducerId.get().nextBlockFirstId() != image.nextProducerId()) {
                 operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
                     migrationClient.writeProducerId(image.nextProducerId(), migrationState));
             }

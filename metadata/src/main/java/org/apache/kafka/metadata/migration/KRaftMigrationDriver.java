@@ -40,11 +40,11 @@ import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -153,8 +153,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     private void recoverMigrationStateFromZK() {
         applyMigrationOperation("Recovering migration state from ZK", zkMigrationClient::getOrCreateMigrationRecoveryState);
-        String maybeDone = migrationLeadershipState.zkMigrationComplete() ? "done" : "not done";
-        log.info("ZK migration is {}.", maybeDone);
+        String maybeDone = migrationLeadershipState.initialZkMigrationComplete() ? "done" : "not done";
+        log.info("Initial migration of ZK metadata is {}.", maybeDone);
 
         // Once we've recovered the migration state from ZK, install this class as a metadata publisher
         // by calling the initialZkLoadHandler.
@@ -485,7 +485,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         }
                         break;
                     case MIGRATION:
-                        if (!migrationLeadershipState.zkMigrationComplete()) {
+                        if (!migrationLeadershipState.initialZkMigrationComplete()) {
                             log.error("KRaft controller indicates an active migration, but the ZK state does not.");
                             transitionTo(MigrationDriverState.INACTIVE);
                         } else {
@@ -511,7 +511,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                     log.debug("Unable to claim leadership, will retry until we learn of a different KRaft leader");
                 } else {
-                    if (!migrationLeadershipState.zkMigrationComplete()) {
+                    if (!migrationLeadershipState.initialZkMigrationComplete()) {
                         transitionTo(MigrationDriverState.ZK_MIGRATION);
                     } else {
                         transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
@@ -578,7 +578,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 ZkMigrationLeadershipState newState = migrationLeadershipState.withKRaftMetadataOffsetAndEpoch(
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch());
-                applyMigrationOperation("Finished migrating ZK data to KRaft", state -> zkMigrationClient.setMigrationRecoveryState(newState));
+                applyMigrationOperation("Finished initial migration of ZK metadata to KRaft", state -> zkMigrationClient.setMigrationRecoveryState(newState));
+                // Even though we just migrated everything, we still pass through the SYNC_KRAFT_TO_ZK state. This
+                // accomplishes two things: ensuring we have consistent metadata state between KRaft and ZK, and
+                // exercising the snapshot handling code in KRaftMigrationZkWriter.
                 transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();
@@ -609,7 +612,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         public void run() throws Exception {
             if (migrationState == MigrationDriverState.SYNC_KRAFT_TO_ZK) {
                 log.info("Performing a full metadata sync from KRaft to ZK.");
-                Map<String, Integer> dualWriteCounts = new HashMap<>();
+                Map<String, Integer> dualWriteCounts = new TreeMap<>();
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
                     dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
                 log.info("Made the following ZK writes when reconciling with KRaft state: {}", dualWriteCounts);
@@ -679,7 +682,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 return;
             }
 
-            Map<String, Integer> dualWriteCounts = new HashMap<>();
+            Map<String, Integer> dualWriteCounts = new TreeMap<>();
             if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
                     dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));

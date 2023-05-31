@@ -18,6 +18,7 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ProducerIdsBlock;
 
 import java.util.Collections;
 import java.util.List;
@@ -131,7 +132,7 @@ class CapturingMigrationClient implements MigrationClient {
     }
 
     @Override
-    public Optional<Long> readProducerId() {
+    public Optional<ProducerIdsBlock> readProducerId() {
         return Optional.empty();
     }
 

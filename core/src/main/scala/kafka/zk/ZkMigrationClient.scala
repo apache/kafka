@@ -304,12 +304,9 @@ class ZkMigrationClient(
     new util.HashSet[Integer](zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava)
   }
 
-  override def readProducerId(): util.Optional[java.lang.Long] = {
+  override def readProducerId(): util.Optional[ProducerIdsBlock] = {
     val (dataOpt, _) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
-    dataOpt
-      .map(ProducerIdBlockZNode.parseProducerIdBlockData(_).firstProducerId())
-      .map(java.lang.Long.valueOf)
-      .asJava
+    dataOpt.map(ProducerIdBlockZNode.parseProducerIdBlockData).asJava
   }
 
   override def writeProducerId(
