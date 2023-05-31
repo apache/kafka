@@ -62,10 +62,12 @@ public class DefaultBackgroundThreadTest {
     private MockTime time;
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
+    private SubscriptionState subscriptionState;
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor applicationEventProcessor;
     private CoordinatorRequestManager coordinatorManager;
+    private ListOffsetsRequestManager listOffsetsRequestManager;
     private ErrorEventHandler errorEventHandler;
     private int requestTimeoutMs = 500;
     private GroupState groupState;
@@ -77,10 +79,12 @@ public class DefaultBackgroundThreadTest {
         this.time = new MockTime(0);
         this.metadata = mock(ConsumerMetadata.class);
         this.networkClient = mock(NetworkClientDelegate.class);
+        this.subscriptionState = mock(SubscriptionState.class);
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.coordinatorManager = mock(CoordinatorRequestManager.class);
+        this.listOffsetsRequestManager = mock(ListOffsetsRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
                 100,
@@ -183,7 +187,10 @@ public class DefaultBackgroundThreadTest {
     }
 
     private RequestManagers mockRequestManagers() {
-        return new RequestManagers(Optional.of(coordinatorManager), Optional.of(commitManager));
+        return new RequestManagers(
+                listOffsetsRequestManager,
+                Optional.of(coordinatorManager),
+                Optional.of(commitManager));
     }
 
     private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
@@ -212,11 +219,13 @@ public class DefaultBackgroundThreadTest {
                 backgroundEventsQueue,
                 this.metadata,
                 this.networkClient,
+                this.subscriptionState,
                 this.groupState,
                 this.errorEventHandler,
                 applicationEventProcessor,
                 this.coordinatorManager,
-                this.commitManager);
+                this.commitManager,
+                this.listOffsetsRequestManager);
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {

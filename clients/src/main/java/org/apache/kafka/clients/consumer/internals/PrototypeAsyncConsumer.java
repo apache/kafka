@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
@@ -44,6 +45,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -67,7 +69,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.Utils.createLogContext;
@@ -377,22 +381,36 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
+        return beginningOffsets(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
-        throw new KafkaException("method not implemented");
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timeout);
     }
 
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
+        return endOffsets(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
-        throw new KafkaException("method not implemented");
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timeout);
+    }
+
+    private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
+                                                           long timestamp,
+                                                           Duration timeout) {
+        requireNonNull(partitions, "Partitions cannot be null");
+        if (partitions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        final ListOffsetsApplicationEvent listOffsetsEvent = new ListOffsetsApplicationEvent(
+                partitions.stream().collect(Collectors.toSet()),
+                timestamp,
+                false);
+        return eventHandler.addAndGet(listOffsetsEvent, timeout);
     }
 
     @Override

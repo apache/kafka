@@ -25,6 +25,7 @@ public abstract class ApplicationEvent {
 
     public enum Type {
         NOOP, COMMIT, POLL, FETCH, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, UNSUBSCRIBE,
+        LIST_OFFSETS,
     }
 
     protected final Type type;

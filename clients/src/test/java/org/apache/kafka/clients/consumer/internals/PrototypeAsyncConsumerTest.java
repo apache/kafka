@@ -23,8 +23,10 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -49,6 +51,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -56,6 +59,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,8 +81,6 @@ public class PrototypeAsyncConsumerTest {
     private SubscriptionState subscriptions;
     private EventHandler eventHandler;
     private Metrics metrics;
-    private ClusterResourceListeners clusterResourceListeners;
-
     private String groupId = "group.id";
     private String clientId = "client-1";
     private ConsumerConfig config;
@@ -91,7 +93,6 @@ public class PrototypeAsyncConsumerTest {
         this.subscriptions = mock(SubscriptionState.class);
         this.eventHandler = mock(DefaultEventHandler.class);
         this.metrics = new Metrics(time);
-        this.clusterResourceListeners = new ClusterResourceListeners();
     }
 
     @AfterEach
@@ -202,6 +203,43 @@ public class PrototypeAsyncConsumerTest {
     public void testAssignOnEmptyTopicInPartition() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
+    }
+
+    @Test
+    public void testBeginningOffsetsFailsIfNullPartitions() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(NullPointerException.class, () -> consumer.beginningOffsets(null,
+                Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testBeginningOffsets() {
+        Map<TopicPartition, Long> expectedPartitionOffsets = mockTopicPartitionOffset().entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
+        Set<TopicPartition> partitions = expectedPartitionOffsets.keySet();
+        when(eventHandler.addAndGet(any(), any())).thenReturn(expectedPartitionOffsets);
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        Map<TopicPartition, Long> result =
+                assertDoesNotThrow(() -> consumer.beginningOffsets(partitions,
+                        Duration.ofMillis(1)));
+        assertEquals(expectedPartitionOffsets, result);
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Duration.class));
+    }
+
+    @Test
+    public void testBeginningOffsetsThrowsKafkaExceptionForUnderlyingExecutionFailure() {
+        Set<TopicPartition> partitions = mockTopicPartitionOffset().keySet();
+        Throwable eventProcessingFailure = new KafkaException("Unexpected failure " +
+                "processing List Offsets event");
+        when(eventHandler.addAndGet(any(), any())).thenThrow(eventProcessingFailure);
+
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        Throwable consumerError = assertThrows(KafkaException.class,
+                () -> consumer.beginningOffsets(partitions,
+                Duration.ofMillis(1)));
+        assertEquals(eventProcessingFailure, consumerError);
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Duration.class));
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

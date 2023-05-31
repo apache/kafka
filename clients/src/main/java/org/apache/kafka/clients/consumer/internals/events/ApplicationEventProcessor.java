@@ -55,6 +55,8 @@ public class ApplicationEventProcessor {
                 return process((MetadataUpdateApplicationEvent) event);
             case UNSUBSCRIBE:
                 return process((UnsubscribeApplicationEvent) event);
+            case LIST_OFFSETS:
+                return process((ListOffsetsApplicationEvent) event);
         }
         return false;
     }
@@ -121,6 +123,19 @@ public class ApplicationEventProcessor {
                 this.coordinator.onLeavePrepare();
                 this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
          */
+        return true;
+    }
+
+    private boolean process(final ListOffsetsApplicationEvent event) {
+        requestManagers.listOffsetsRequestManager.fetchOffsets(event.partitions, event.timestamp,
+                        event.requireTimestamps)
+                .whenComplete((result, error) -> {
+                    if (error != null) {
+                        event.future().completeExceptionally(error);
+                        return;
+                    }
+                    event.future().complete(result);
+                });
         return true;
     }
 }
