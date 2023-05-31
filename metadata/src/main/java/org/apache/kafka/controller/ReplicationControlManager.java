@@ -763,10 +763,15 @@ public class ReplicationControlManager {
         List<Integer> isr
     ) throws Exception {
         return new PartitionRegistration.Builder().
-            setReplicas(Replicas.toArray(assignment)).setIsr(Replicas.toArray(isr)).
-            setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
-            setLeader(isr.get(0)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-            setLeaderEpoch(0).setPartitionEpoch(0).build();
+            setReplicas(Replicas.toArray(assignment)).
+            setIsr(Replicas.toArray(isr)).
+            setRemovingReplicas(Replicas.NONE).
+            setAddingReplicas(Replicas.NONE).
+            setLeader(isr.get(0)).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(0).
+            setPartitionEpoch(0).
+            build();
     }
 
     private ApiError maybeCheckCreateTopicPolicy(Supplier<CreateTopicPolicy.RequestMetadata> supplier) {
