@@ -156,16 +156,16 @@ public class KRaftMigrationZkWriter {
             });
 
         // Check for any partition changes in existing topics.
-        for (Uuid topicId : topicsInZk) {
+        topicsInZk.forEach(topicId -> {
             TopicImage topic = topicsImage.getTopic(topicId);
-            Set<Integer> topicPartitionsInZk = partitionsInZk.getOrDefault(topicId, new HashSet<>());
+            Set<Integer> topicPartitionsInZk = partitionsInZk.computeIfAbsent(topicId, __ -> new HashSet<>());
             if (!topicPartitionsInZk.equals(topic.partitions().keySet())) {
                 Map<Integer, PartitionRegistration> newTopicPartitions = new HashMap<>(topic.partitions());
                 topicPartitionsInZk.forEach(newTopicPartitions::remove);
                 newPartitions.put(topicId, newTopicPartitions);
                 changedTopics.add(topicId);
             }
-        }
+        });
 
         newTopics.forEach(topicId -> {
             TopicImage topic = topicsImage.getTopic(topicId);
@@ -247,16 +247,13 @@ public class KRaftMigrationZkWriter {
                     operationConsumer.accept(
                         "Create new partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().createTopicPartitions(
-                            Collections.singletonMap(topicDelta.name(), topicDelta.partitionChanges()),
+                            Collections.singletonMap(topicDelta.name(), newPartitions),
                             migrationState));
-                    changedPartitions = changedPartitions
-                        .entrySet()
-                        .stream()
-                        .filter(entry -> !newPartitions.containsKey(entry.getKey()))
-                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    newPartitions.keySet().forEach(changedPartitions::remove);
                 }
                 if (!changedPartitions.isEmpty()) {
-                    Map<Integer, PartitionRegistration> finalChangedPartitions = changedPartitions;
+                    // Need a final for the lambda
+                    final Map<Integer, PartitionRegistration> finalChangedPartitions = changedPartitions;
                     operationConsumer.accept(
                         "Updating Partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().updateTopicPartitions(
