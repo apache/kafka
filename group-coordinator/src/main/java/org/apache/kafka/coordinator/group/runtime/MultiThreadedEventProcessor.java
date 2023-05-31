@@ -48,7 +48,8 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     private final List<EventProcessorThread> threads;
 
     /**
-     * The lock for protecting access to the resources.
+     * The lock for protecting access to the resources during the
+     * shutting down.
      */
     private final ReentrantLock lock;
 
@@ -85,7 +86,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      * The event processor thread. The thread pulls events from the
      * accumulator and runs them.
      */
-    class EventProcessorThread extends Thread {
+    private class EventProcessorThread extends Thread {
         private final Logger log;
 
         EventProcessorThread(
@@ -139,19 +140,17 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 log.error("Exiting with exception.", t);
             }
 
-            log.info("Shutting down. Draining the remaining events.");
-
             // The accumulator is drained and all the pending events are rejected
             // when the event processor is shutdown.
             if (shuttingDown) {
+                log.info("Shutting down. Draining the remaining events.");
                 try {
                     drainEvents();
                 } catch (Throwable t) {
                     log.error("Draining threw exception.", t);
                 }
+                log.info("Shutdown completed");
             }
-
-            log.info("Shutdown completed");
         }
     }
 
@@ -159,19 +158,11 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      * Enqueues a new {{@link CoordinatorEvent}}.
      *
      * @param event The event.
-     * @throws RejectedExecutionException If the event processor. is closed.
+     * @throws RejectedExecutionException If the event processor is closed.
      */
     @Override
     public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
-        lock.lock();
-        try {
-            if (shuttingDown)
-                throw new RejectedExecutionException("EventProcessor is closed.");
-
-            accumulator.add(event);
-        } finally {
-            lock.unlock();
-        }
+        accumulator.add(event);
     }
 
     /**
@@ -186,8 +177,11 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
             }
 
             log.info("Shutting down event processor.");
-            shuttingDown = true;
+            // The accumulator must be closed first to ensure that new events are
+            // rejected before threads are notified to shutdown and start to drain
+            // the accumulator.
             accumulator.close();
+            shuttingDown = true;
         } finally {
             lock.unlock();
         }

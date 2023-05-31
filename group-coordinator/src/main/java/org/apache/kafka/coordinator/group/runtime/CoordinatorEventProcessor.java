@@ -26,7 +26,7 @@ public interface CoordinatorEventProcessor extends AutoCloseable {
      * Enqueues a new {{@link CoordinatorEvent}}.
      *
      * @param event The event.
-     * @throws RejectedExecutionException If the event processor. is closed.
+     * @throws RejectedExecutionException If the event processor is closed.
      */
     void enqueue(CoordinatorEvent event) throws RejectedExecutionException;
 }

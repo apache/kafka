@@ -143,7 +143,7 @@ public class MultiThreadedEventProcessorTest {
         try (MultiThreadedEventProcessor eventProcessor = new MultiThreadedEventProcessor(
             new LogContext(),
             "event-processor-",
-            1
+            1 // Use a single thread to block event in the processor.
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
             CountDownLatch latch = new CountDownLatch(1);
@@ -183,6 +183,10 @@ public class MultiThreadedEventProcessorTest {
 
             // Initiate the shutting down.
             eventProcessor.beginShutdown();
+
+            // Enqueuing a new event is rejected.
+            assertThrows(RejectedExecutionException.class,
+                () -> eventProcessor.enqueue(blockingEvent));
 
             // Release the blocking event to unblock
             // the thread.
