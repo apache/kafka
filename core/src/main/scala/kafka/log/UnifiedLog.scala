@@ -1429,7 +1429,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean,
                                 reason: SegmentDeletionReason): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      highWatermark >= nextSegmentOpt.map(_.baseOffset).getOrElse(localLog.logEndOffset) &&
+      val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(localLog.logEndOffset)
+
+      // Check not to delete segments which are not yet copied to tiered storage
+      val isSegmentTieredToRemoteStorage =
+        if (remoteLogEnabled()) upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage
+        else true
+
+      isSegmentTieredToRemoteStorage &&
+        highWatermark >= upperBoundOffset &&
         predicate(segment, nextSegmentOpt)
     }
     lock synchronized {
