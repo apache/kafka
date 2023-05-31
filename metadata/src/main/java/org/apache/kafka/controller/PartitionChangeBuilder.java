@@ -221,10 +221,10 @@ public class PartitionChangeBuilder {
         ElectionResult electionResult = electLeader();
         if (electionResult.node != partition.leader) {
             // generating log messages for partition elections can get expensive on large clusters,
-            // so only log clean elections at TRACE level;
-            // log unclean elections at WARN level since doing so can lead to data loss.
+            // so only log clean elections at TRACE level; log unclean elections at INFO level
+            // to ensure the message is emitted since an unclean election can lead to data loss.
             if (electionResult.unclean) {
-                log.warn(
+                log.info(
                     "Setting new leader for topicId {}, partition {} to {} using an unclean election",
                     topicId,
                     partitionId,
