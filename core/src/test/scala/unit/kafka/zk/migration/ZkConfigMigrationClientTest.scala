@@ -22,6 +22,8 @@ import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.metadata.ClientQuotaRecord
+import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata.ConfigRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.quota.ClientQuotaEntity
@@ -250,6 +252,10 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
   def testScramChangesInSnapshot(): Unit = {
     val random = new MockRandom()
 
+    val props = new Properties()
+    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
+    adminZkClient.changeConfigs(ConfigType.User, "user1", props)
+
     // Create SCRAM records in Zookeeper.
     val aliceScramCredential = new ScramCredential(
       randomBuffer(random, 1024),
@@ -257,12 +263,22 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       randomBuffer(random, 1024),
       4096)
 
-    val props = new Properties()
-    props.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(aliceScramCredential))
-    adminZkClient.changeConfigs(ConfigType.User, "alice", props)
+    val alicePropsInit = new Properties()
+    alicePropsInit.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(aliceScramCredential))
+    adminZkClient.changeConfigs(ConfigType.User, "alice", alicePropsInit)
 
-    // Create a new SCRAM credential
     val delta = new MetadataDelta(MetadataImage.EMPTY)
+
+    // Create a new Quota for user2
+    val entityData = new EntityData().setEntityType("user").setEntityName("user2")
+    val clientQuotaRecord = new ClientQuotaRecord()
+      .setEntity(List(entityData).asJava)
+      .setKey("request_percentage")
+      .setValue(58.58)
+      .setRemove(false)
+    delta.replay(clientQuotaRecord)
+
+    // Create a new SCRAM credential got george
     val scramCredentialRecord = new UserScramCredentialRecord()
       .setName("george")
       .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -272,13 +288,19 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       .setIterations(8192)
     delta.replay(scramCredentialRecord)
 
-    // Add record for george but not for alice.
+    // Add Quota record for user2 but not user1
+    // Add SCRAM record for george but not for alice.
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
     val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient,
       (_, operation) => { migrationState = operation.apply(migrationState) })
     kraftMigrationZkWriter.handleLoadSnapshot(image)
+
+    val user1Props = zkClient.getEntityConfigs(ConfigType.User, "user1")
+    assertEquals(0, user1Props.size())
+    val user2Props = zkClient.getEntityConfigs(ConfigType.User, "user2")
+    assertEquals(1, user2Props.size())
 
     val georgeProps = zkClient.getEntityConfigs(ConfigType.User, "george")
     assertEquals(1, georgeProps.size())
