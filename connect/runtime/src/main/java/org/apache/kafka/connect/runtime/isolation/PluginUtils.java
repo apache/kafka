@@ -36,8 +36,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -354,21 +356,6 @@ public class PluginUtils {
         }
     }
 
-    /**
-     * Verify whether a given plugin's alias matches another alias in a collection of plugins.
-     *
-     * @param alias the plugin descriptor to test for alias matching.
-     * @param aliases the collection of plugins to test against.
-     * @param <U> the plugin type.
-     * @return false if a match was found in the collection, otherwise true.
-     */
-    public static <U> boolean isAliasUnique(
-            PluginDesc<U> alias,
-            Map<String, String> aliases
-    ) {
-        return !aliases.containsKey(simpleName(alias)) && !aliases.containsKey(prunedName(alias));
-    }
-
     private static String prunePluginName(PluginDesc<?> plugin, String suffix) {
         String simple = plugin.pluginClass().getSimpleName();
         int pos = simple.lastIndexOf(suffix);
@@ -379,17 +366,22 @@ public class PluginUtils {
     }
 
     public static Map<String, String> computeAliases(PluginScanResult scanResult) {
-        Map<String, String> aliases = new HashMap<>();
+        Map<String, Set<String>> aliasCollisions = new HashMap<>();
         scanResult.forEach(pluginDesc -> {
-            // Use explicit null to recognize aliases which produce a collision
-            String alias = isAliasUnique(pluginDesc, aliases) ? pluginDesc.className() : null;
-            aliases.put(simpleName(pluginDesc), alias);
-            aliases.put(prunedName(pluginDesc), alias);
+            aliasCollisions.computeIfAbsent(simpleName(pluginDesc), ignored -> new HashSet<>()).add(pluginDesc.className());
+            aliasCollisions.computeIfAbsent(prunedName(pluginDesc), ignored -> new HashSet<>()).add(pluginDesc.className());
         });
-        return aliases.entrySet()
-                .stream()
-                .filter(entry -> entry.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<String, String> aliases = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : aliasCollisions.entrySet()) {
+            String alias = entry.getKey();
+            Set<String> classNames = entry.getValue();
+            if (classNames.size() == 1) {
+                aliases.put(alias, classNames.stream().findAny().get());
+            } else {
+                log.warn("Ambiguous alias '{}' refers to multiple distinct plugins {}: ignoring", alias, classNames);
+            }
+        }
+        return aliases;
     }
 
     private static class DirectoryEntry {
