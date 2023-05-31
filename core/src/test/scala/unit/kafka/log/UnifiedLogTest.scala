@@ -3668,7 +3668,7 @@ class UnifiedLogTest {
   }
 
   @Test
-  def testTransactionIsOngoing(): Unit = {
+  def testTransactionIsOngoingAndVerificationState(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3688,8 +3688,14 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
+    val verificationState = log.transactionNeedsVerifying(producerId)
+    assertTrue(verificationState != null)
+
     log.appendAsLeader(idempotentRecords, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
+
+    // Since we wrote idempotent records, we keep verification state.
+    assertEquals(verificationState, log.verificationState(producerId))
 
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
@@ -3700,11 +3706,10 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationState = log.transactionNeedsVerifying(producerId)
-    assertTrue(verificationState != null)
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationState = verificationState)
     assertTrue(log.hasOngoingTransaction(producerId))
-    assertEquals(verificationState, log.verificationState(producerId))
+    // Verification state should be cleared now.
+    assertEquals(null, log.verificationState(producerId))
 
     // A subsequent transactionNeedsVerifying will be empty since we are already verified.
     assertEquals(null, log.transactionNeedsVerifying(producerId))

@@ -1906,7 +1906,8 @@ object UnifiedLog extends Logging {
     val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, origin))
     val completedTxn = appendInfo.append(batch, firstOffsetMetadata.asJava).asScala
     // Whether we wrote a control marker or a data batch, we can remove verification state since either the transaction is complete or we have a first offset.
-    producerStateManager.clearVerificationStateEntry(producerId)
+    if (batch.isTransactional)
+      producerStateManager.clearVerificationStateEntry(producerId)
     completedTxn
   }
 
