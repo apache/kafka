@@ -1421,6 +1421,13 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, reply);
     }
 
+    /**
+     * Process a broker heartbeat which has been sitting on the queue for too long, and has
+     * expired. With default settings, this would happen after 1 second. We process expired
+     * heartbeats by updating the lastSeenNs of the broker, so that the broker won't get fenced
+     * incorrectly. However, we don't perform any state changes that we normally would, such as
+     * unfencing a fenced broker, etc.
+     */
     void processExpiredBrokerHeartbeat(BrokerHeartbeatRequestData request) {
         int brokerId = request.brokerId();
         clusterControl.checkBrokerEpoch(brokerId, request.brokerEpoch());
