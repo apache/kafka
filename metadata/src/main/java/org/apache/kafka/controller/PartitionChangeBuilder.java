@@ -224,19 +224,11 @@ public class PartitionChangeBuilder {
             // so only log clean elections at TRACE level; log unclean elections at INFO level
             // to ensure the message is emitted since an unclean election can lead to data loss.
             if (electionResult.unclean) {
-                log.info(
-                    "Setting new leader for topicId {}, partition {} to {} using an unclean election",
-                    topicId,
-                    partitionId,
-                    electionResult.node
-                );
-            } else if (log.isTraceEnabled()) {
-                log.trace(
-                    "Setting new leader for topicId {}, partition {} to {} using a clean election",
-                    topicId,
-                    partitionId,
-                    electionResult.node
-                );
+                log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election",
+                    topicId, partitionId, electionResult.node);
+            } else {
+                log.trace("Setting new leader for topicId {}, partition {} to {} using a clean election",
+                    topicId, partitionId, electionResult.node);
             }
             record.setLeader(electionResult.node);
             if (electionResult.unclean) {
@@ -250,9 +242,7 @@ public class PartitionChangeBuilder {
                 }
             }
         } else {
-            if (log.isTraceEnabled()) {
-                log.trace("Failed to find a new leader with current state: {}", this);
-            }
+            log.trace("Failed to find a new leader with current state: {}", this);
         }
     }
 
