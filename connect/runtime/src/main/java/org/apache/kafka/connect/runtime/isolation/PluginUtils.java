@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Connect plugin utility methods.
@@ -365,7 +366,6 @@ public class PluginUtils {
             PluginDesc<U> alias,
             Map<String, String> aliases
     ) {
-        // TODO: Mark alias collision and disable ambiguous aliases completely.
         return !aliases.containsKey(simpleName(alias)) && !aliases.containsKey(prunedName(alias));
     }
 
@@ -381,16 +381,15 @@ public class PluginUtils {
     public static Map<String, String> computeAliases(PluginScanResult scanResult) {
         Map<String, String> aliases = new HashMap<>();
         scanResult.forEach(pluginDesc -> {
-            if (isAliasUnique(pluginDesc, aliases)) {
-                String simple = simpleName(pluginDesc);
-                String pruned = prunedName(pluginDesc);
-                aliases.put(simple, pluginDesc.className());
-                if (!simple.equals(pruned)) {
-                    aliases.put(pruned, pluginDesc.className());
-                }
-            }
+            // Use explicit null to recognize aliases which produce a collision
+            String alias = isAliasUnique(pluginDesc, aliases) ? pluginDesc.className() : null;
+            aliases.put(simpleName(pluginDesc), alias);
+            aliases.put(prunedName(pluginDesc), alias);
         });
-        return aliases;
+        return aliases.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private static class DirectoryEntry {
