@@ -44,19 +44,44 @@ public class MultiThreadedEventProcessorTest {
         private final int key;
         private final CompletableFuture<T> future;
         private final Supplier<T> supplier;
+        private final boolean block;
+        private final CountDownLatch latch;
+        private final CountDownLatch executed;
 
         FutureEvent(
             int key,
             Supplier<T> supplier
         ) {
+            this(key, supplier, false);
+        }
+
+        FutureEvent(
+            int key,
+            Supplier<T> supplier,
+            boolean block
+        ) {
             this.key = key;
             this.future = new CompletableFuture<>();
             this.supplier = supplier;
+            this.block = block;
+            this.latch = new CountDownLatch(1);
+            this.executed = new CountDownLatch(1);
         }
 
         @Override
         public void run() {
-            future.complete(supplier.get());
+            T result = supplier.get();
+            executed.countDown();
+
+            if (block) {
+                try {
+                    latch.await();
+                } catch (InterruptedException ex) {
+                    // ignore
+                }
+            }
+
+            future.complete(result);
         }
 
         @Override
@@ -71,6 +96,14 @@ public class MultiThreadedEventProcessorTest {
 
         public CompletableFuture<T> future() {
             return future;
+        }
+
+        public void release() {
+            latch.countDown();
+        }
+
+        public boolean awaitExecution(long timeout, TimeUnit unit) throws InterruptedException {
+            return executed.await(timeout, unit);
         }
 
         @Override
@@ -125,6 +158,89 @@ public class MultiThreadedEventProcessorTest {
     }
 
     @Test
+    public void testProcessingGuarantees() throws Exception {
+        try (CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
+            new LogContext(),
+            "event-processor-",
+            2
+        )) {
+            AtomicInteger numEventsExecuted = new AtomicInteger(0);
+
+            List<FutureEvent<Integer>> events = Arrays.asList(
+                new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true), // Event 0
+                new FutureEvent<>(1, numEventsExecuted::incrementAndGet, true), // Event 1
+                new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true), // Event 2
+                new FutureEvent<>(1, numEventsExecuted::incrementAndGet, true), // Event 3
+                new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true), // Event 4
+                new FutureEvent<>(1, numEventsExecuted::incrementAndGet, true)  // Event 5
+            );
+
+            events.forEach(eventProcessor::enqueue);
+
+            // Events 0 and 1 are executed.
+            assertTrue(events.get(0).awaitExecution(5, TimeUnit.SECONDS));
+            assertTrue(events.get(1).awaitExecution(5, TimeUnit.SECONDS));
+
+            // Release event 0.
+            events.get(0).release();
+
+            // Event 0 is completed.
+            int result = events.get(0).future.get(5, TimeUnit.SECONDS);
+            assertTrue(result == 1 || result == 2, "Expected 1 or 2 but was " + result);
+
+            // Event 2 is executed.
+            assertTrue(events.get(2).awaitExecution(5, TimeUnit.SECONDS));
+
+            // Release event 2.
+            events.get(2).release();
+
+            // Event 2 is completed.
+            assertEquals(3, events.get(2).future.get(5, TimeUnit.SECONDS));
+
+            // Event 4 is executed.
+            assertTrue(events.get(4).awaitExecution(5, TimeUnit.SECONDS));
+
+            // Release event 1.
+            events.get(1).release();
+
+            // Event 1 is completed.
+            result = events.get(1).future.get(5, TimeUnit.SECONDS);
+            assertTrue(result == 1 || result == 2, "Expected 1 or 2 but was " + result);
+
+            // Event 3 is executed.
+            assertTrue(events.get(3).awaitExecution(5, TimeUnit.SECONDS));
+
+            // Release event 4.
+            events.get(4).release();
+
+            // Event 4 is completed.
+            assertEquals(4, events.get(4).future.get(5, TimeUnit.SECONDS));
+
+            // Release event 3.
+            events.get(3).release();
+
+            // Event 3 is completed.
+            assertEquals(5, events.get(3).future.get(5, TimeUnit.SECONDS));
+
+            // Event 5 is executed.
+            assertTrue(events.get(5).awaitExecution(5, TimeUnit.SECONDS));
+
+            // Release event 5.
+            events.get(5).release();
+
+            // Event 5 is completed.
+            assertEquals(6, events.get(5).future.get(5, TimeUnit.SECONDS));
+
+            events.forEach(event -> {
+                assertTrue(event.future.isDone());
+                assertFalse(event.future.isCompletedExceptionally());
+            });
+
+            assertEquals(events.size(), numEventsExecuted.get());
+        }
+    }
+
+    @Test
     public void testEventsAreRejectedWhenClosed() throws Exception {
         CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
             new LogContext(),
@@ -146,18 +262,9 @@ public class MultiThreadedEventProcessorTest {
             1 // Use a single thread to block event in the processor.
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
-            CountDownLatch latch = new CountDownLatch(1);
 
             // Special event which blocks until the latch is released.
-            FutureEvent<Integer> blockingEvent = new FutureEvent<>(0, () -> {
-                numEventsExecuted.incrementAndGet();
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    // Ignore.
-                }
-                return 0;
-            });
+            FutureEvent<Integer> blockingEvent = new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true);
 
             List<FutureEvent<Integer>> events = Arrays.asList(
                 new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
@@ -188,9 +295,8 @@ public class MultiThreadedEventProcessorTest {
             assertThrows(RejectedExecutionException.class,
                 () -> eventProcessor.enqueue(blockingEvent));
 
-            // Release the blocking event to unblock
-            // the thread.
-            latch.countDown();
+            // Release the blocking event to unblock the thread.
+            blockingEvent.release();
 
             // The blocking event should be completed.
             blockingEvent.future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
