@@ -48,7 +48,6 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
       throw new IllegalArgumentException("Must specify at least TOPICS in topic visitor interests.")
     }
     val topics = zkClient.getAllTopicsInCluster()
-    val topicConfigs = zkClient.getEntitiesConfigs(ConfigType.Topic, topics)
     val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
     replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(topic, topicIdOpt, partitionAssignments) =>
       val topicAssignment = partitionAssignments.map { case (partition, assignment) =>
@@ -89,12 +88,6 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
           logAndRethrow(this, s"Error in partition consumer. TopicPartition was $topicPartition.") {
             visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(record))
           }
-        }
-      }
-      if (interests.contains(TopicVisitorInterest.CONFIGS)) {
-        val props = topicConfigs(topic)
-        logAndRethrow(this, s"Error in topic config consumer. Topic was $topic.") {
-          visitor.visitConfigs(topic, props)
         }
       }
     }

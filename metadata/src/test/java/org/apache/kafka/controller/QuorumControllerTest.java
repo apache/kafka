@@ -350,6 +350,7 @@ public class QuorumControllerTest {
         }
     }
 
+    @Test
     public void testBalancePartitionLeaders() throws Throwable {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3);
         List<Integer> brokersToKeepUnfenced = Arrays.asList(1, 2);

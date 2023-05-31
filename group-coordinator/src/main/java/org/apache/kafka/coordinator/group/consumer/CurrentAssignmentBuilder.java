@@ -172,7 +172,7 @@ public class CurrentAssignmentBuilder {
     public ConsumerGroupMember build() {
         // A new target assignment has been installed, we need to restart
         // the reconciliation loop from the beginning.
-        if (targetAssignmentEpoch != member.nextMemberEpoch()) {
+        if (targetAssignmentEpoch != member.targetMemberEpoch()) {
             return transitionToNewTargetAssignmentState();
         }
 
@@ -258,7 +258,7 @@ public class CurrentAssignmentBuilder {
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(newPartitionsPendingRevocation)
                 .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
-                .setNextMemberEpoch(targetAssignmentEpoch)
+                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
         } else {
             if (!newPartitionsPendingAssignment.isEmpty()) {
@@ -277,7 +277,7 @@ public class CurrentAssignmentBuilder {
                 .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
                 .setPreviousMemberEpoch(member.memberEpoch())
                 .setMemberEpoch(targetAssignmentEpoch)
-                .setNextMemberEpoch(targetAssignmentEpoch)
+                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
         }
     }
@@ -311,7 +311,7 @@ public class CurrentAssignmentBuilder {
                 .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
                 .setPreviousMemberEpoch(member.memberEpoch())
                 .setMemberEpoch(targetAssignmentEpoch)
-                .setNextMemberEpoch(targetAssignmentEpoch)
+                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
         } else {
             return member;
@@ -340,7 +340,7 @@ public class CurrentAssignmentBuilder {
                 .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
                 .setPreviousMemberEpoch(member.memberEpoch())
                 .setMemberEpoch(targetAssignmentEpoch)
-                .setNextMemberEpoch(targetAssignmentEpoch)
+                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
         } else {
             return member;

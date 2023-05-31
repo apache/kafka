@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.image.node.ConfigurationsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 
@@ -26,7 +27,6 @@ import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 
 /**
@@ -96,8 +96,6 @@ public final class ConfigurationsImage {
 
     @Override
     public String toString() {
-        return "ConfigurationsImage(data=" + data.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new ConfigurationsImageNode(this).stringify();
     }
 }
