@@ -2063,7 +2063,7 @@ public class TaskManagerTest {
 
         // `handleAssignment`
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
-                .thenReturn(asList(corruptedTask, nonCorruptedTask));
+            .thenReturn(asList(corruptedTask, nonCorruptedTask));
         expect(standbyTaskCreator.createTasks(anyObject()))
             .andStubReturn(Collections.emptySet());
         expectRestoreToBeCompleted(consumer);
@@ -2105,7 +2105,7 @@ public class TaskManagerTest {
 
         // `handleAssignment`
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
-                .thenReturn(asList(corruptedTask, nonRunningNonCorruptedTask));
+            .thenReturn(asList(corruptedTask, nonRunningNonCorruptedTask));
         expect(standbyTaskCreator.createTasks(anyObject()))
             .andStubReturn(Collections.emptySet());
         expect(consumer.assignment()).andReturn(taskId00Partitions);
@@ -2141,7 +2141,7 @@ public class TaskManagerTest {
         // handleAssignment
         expect(standbyTaskCreator.createTasks(eq(taskId00Assignment))).andStubReturn(singleton(corruptedStandby));
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId01Assignment)))
-                .thenReturn(singleton(runningNonCorruptedActive));
+            .thenReturn(singleton(runningNonCorruptedActive));
 
         expectRestoreToBeCompleted(consumer);
 
@@ -2182,7 +2182,7 @@ public class TaskManagerTest {
         assignment.putAll(taskId00Assignment);
         assignment.putAll(taskId01Assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
-                .thenReturn(asList(corruptedActive, uncorruptedActive));
+            .thenReturn(asList(corruptedActive, uncorruptedActive));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
 
         expectRestoreToBeCompleted(consumer);
@@ -2235,7 +2235,7 @@ public class TaskManagerTest {
         assignment.putAll(taskId00Assignment);
         assignment.putAll(taskId01Assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
-                .thenReturn(asList(corruptedActive, uncorruptedActive));
+            .thenReturn(asList(corruptedActive, uncorruptedActive));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
 
         expectRestoreToBeCompleted(consumer);
@@ -2312,7 +2312,7 @@ public class TaskManagerTest {
         assignment.putAll(taskId00Assignment);
         assignment.putAll(taskId01Assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
-                .thenReturn(asList(corruptedActiveTask, uncorruptedActiveTask));
+            .thenReturn(asList(corruptedActiveTask, uncorruptedActiveTask));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
 
         expectRestoreToBeCompleted(consumer);
@@ -2395,7 +2395,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
-                .thenReturn(asList(revokedActiveTask, unrevokedActiveTaskWithCommitNeeded, unrevokedActiveTaskWithoutCommitNeeded));
+            .thenReturn(asList(revokedActiveTask, unrevokedActiveTaskWithCommitNeeded, unrevokedActiveTaskWithoutCommitNeeded));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
         expectLastCall();
         consumer.commitSync(expectedCommittedOffsets);
@@ -2459,7 +2459,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
-                .thenReturn(asList(revokedActiveTask, unrevokedActiveTask, unrevokedActiveTaskWithoutCommitNeeded));
+            .thenReturn(asList(revokedActiveTask, unrevokedActiveTask, unrevokedActiveTaskWithoutCommitNeeded));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
@@ -2727,7 +2727,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
-                .thenReturn(asList(task00, task01, task02));
+            .thenReturn(asList(task00, task01, task02));
 
         when(activeTaskCreator.threadProducer()).thenReturn(producer);
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
@@ -2798,7 +2798,7 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
-                .thenReturn(asList(task00, task01, task02));
+            .thenReturn(asList(task00, task01, task02));
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
             .andReturn(singletonList(task10));
         consumer.commitSync(expectedCommittedOffsets);
@@ -2986,7 +2986,7 @@ public class TaskManagerTest {
         };
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
-                .thenReturn(asList(task00, task01, task02, task03));
+            .thenReturn(asList(task00, task01, task02, task03));
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
         replay(standbyTaskCreator);
 
@@ -3055,7 +3055,7 @@ public class TaskManagerTest {
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment))).thenReturn(singletonList(task00));
         doThrow(new RuntimeException("whatever"))
-                .when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(Mockito.eq(taskId00));
+            .when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
         replay(standbyTaskCreator);
 
@@ -3084,7 +3084,7 @@ public class TaskManagerTest {
         assertThat(exception.getCause().getMessage(), is("whatever"));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(Mockito.eq(taskId00));
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
         Mockito.verify(activeTaskCreator).closeThreadProducerIfNeeded();
     }
@@ -3104,7 +3104,6 @@ public class TaskManagerTest {
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment))).thenReturn(singletonList(task00));
         doThrow(new RuntimeException("whatever")).when(activeTaskCreator).closeThreadProducerIfNeeded();
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
         replay(standbyTaskCreator);
 
@@ -3134,7 +3133,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(Mockito.eq(taskId00));
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
 
     @Test
@@ -3381,7 +3380,7 @@ public class TaskManagerTest {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
-                .thenReturn(singletonList(task00));
+            .thenReturn(singletonList(task00));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
         replay(standbyTaskCreator, consumer);
 
@@ -3436,7 +3435,7 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
-                .thenReturn(singletonList(task00));
+            .thenReturn(singletonList(task00));
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
             .andStubReturn(singletonList(task01));
         consumer.commitSync(offsets);
@@ -3480,7 +3479,7 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
-                .thenReturn(Arrays.asList(task00, task01, task02));
+            .thenReturn(Arrays.asList(task00, task01, task02));
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
             .andStubReturn(Arrays.asList(task03, task04, task05));
 
@@ -3538,7 +3537,7 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00, taskId01);
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
-                .thenReturn(singletonList(task00));
+            .thenReturn(singletonList(task00));
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
             .andStubReturn(singletonList(task01));
 
@@ -3587,8 +3586,7 @@ public class TaskManagerTest {
     public void shouldCommitViaProducerIfEosAlphaEnabled() {
         final StreamsProducer producer = EasyMock.mock(StreamsProducer.class);
         when(activeTaskCreator.streamsProducerForTask(any(TaskId.class)))
-                .thenReturn(producer)
-                .thenReturn(producer);
+            .thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
@@ -3826,7 +3824,7 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
-                .thenReturn(asList(task00, task01, task02, task03));
+            .thenReturn(asList(task00, task01, task02, task03));
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
             .andStubReturn(singletonList(task04));
         consumer.commitSync(expectedCommittedOffsets);
@@ -3870,7 +3868,7 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
-                .thenReturn(Arrays.asList(task00, task01));
+            .thenReturn(Arrays.asList(task00, task01));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
         replay(standbyTaskCreator, consumer);
 
@@ -4009,7 +4007,7 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
-                .thenReturn(singletonList(task00));
+            .thenReturn(singletonList(task00));
         expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
         replay(standbyTaskCreator, consumer);
 
@@ -4396,10 +4394,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, tasks, false);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.streamsProducerForTask(any(TaskId.class)))
-                .thenReturn(producer)
-                .thenReturn(producer)
-                .thenReturn(producer);
+        when(activeTaskCreator.streamsProducerForTask(any(TaskId.class))).thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
@@ -4441,9 +4436,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.threadProducer())
-                .thenReturn(producer)
-                .thenReturn(producer);
+        when(activeTaskCreator.threadProducer()).thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
@@ -4584,7 +4577,7 @@ public class TaskManagerTest {
         when(activeTask.inputPartitions()).thenReturn(taskId00Partitions);
         expect(standbyTaskCreator.createTasks(eq(taskId00Assignment))).andReturn(singletonList(standbyTask));
         when(activeTaskCreator.createActiveTaskFromStandby(Mockito.eq(standbyTask), Mockito.eq(taskId00Partitions), any()))
-                .thenReturn(activeTask);
+            .thenReturn(activeTask);
         expect(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
 
         replay(standbyTaskCreator, consumer);
