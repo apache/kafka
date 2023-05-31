@@ -57,7 +57,7 @@ public class MetadataQuorumCommandErrorTest {
         assertTrue(MetadataQuorumCommand.relativeTimeMs(validEpochMs, "test") >= 0);
         long nowMs = Instant.now().toEpochMilli();
         assertTrue(MetadataQuorumCommand.relativeTimeMs(nowMs, "test") >= 0);
-        long invalidEpochMs = Instant.EPOCH.minusSeconds(86400).toEpochMilli();
+        long invalidEpochMs = Instant.EPOCH.minus(1, ChronoUnit.DAYS).toEpochMilli();
         assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(invalidEpochMs, "test"));
         long futureEpochMs = Instant.now().plus(1, ChronoUnit.DAYS).toEpochMilli();
         assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(futureEpochMs, "test"));
