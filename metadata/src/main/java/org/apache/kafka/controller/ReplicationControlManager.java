@@ -639,9 +639,23 @@ public class ReplicationControlManager {
                         "All brokers specified in the manual partition assignment for " +
                         "partition " + assignment.partitionIndex() + " are fenced or in controlled shutdown.");
                 }
-                newParts.put(assignment.partitionIndex(), new PartitionRegistration(
-                    Replicas.toArray(assignment.brokerIds()), Replicas.toArray(isr),
-                    Replicas.NONE, Replicas.NONE, isr.get(0), LeaderRecoveryState.RECOVERED, 0, 0));
+                PartitionRegistration partitionRegistration;
+                try {
+                    partitionRegistration = new PartitionRegistration.Builder().
+                        setReplicas(Replicas.toArray(assignment.brokerIds())).
+                        setIsr(Replicas.toArray(isr)).
+                        setRemovingReplicas(Replicas.NONE).
+                        setAddingReplicas(Replicas.NONE).
+                        setLeader(isr.get(0)).
+                        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                        setLeaderEpoch(0).
+                        setPartitionEpoch(0).
+                        build();
+                } catch (Exception e) {
+                    log.error("Failed to create partition registration.", e);
+                    return new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Failed to create partition registration: " + e.getMessage());
+                }
+                newParts.put(assignment.partitionIndex(), partitionRegistration);
             }
             for (int i = 0; i < newParts.size(); i++) {
                 if (!newParts.containsKey(i)) {
@@ -687,16 +701,23 @@ public class ReplicationControlManager {
                             "Unable to replicate the partition " + replicationFactor +
                                 " time(s): All brokers are currently fenced or in controlled shutdown.");
                     }
-                    newParts.put(partitionId,
-                        new PartitionRegistration(
-                            Replicas.toArray(replicas),
-                            Replicas.toArray(isr),
-                            Replicas.NONE,
-                            Replicas.NONE,
-                            isr.get(0),
-                            LeaderRecoveryState.RECOVERED,
-                            0,
-                            0));
+                    PartitionRegistration partitionRegistration;
+                    try {
+                        partitionRegistration = new PartitionRegistration.Builder().
+                            setReplicas(Replicas.toArray(replicas)).
+                            setIsr(Replicas.toArray(isr)).
+                            setRemovingReplicas(Replicas.NONE).
+                            setAddingReplicas(Replicas.NONE).
+                            setLeader(isr.get(0)).
+                            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                            setLeaderEpoch(0).
+                            setPartitionEpoch(0).
+                            build();
+                    } catch (Exception e) {
+                        log.error("Failed to create partition registration.", e);
+                        return new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Failed to create partition registration: " + e.getMessage());
+                    }
+                    newParts.put(partitionId, partitionRegistration);
                 }
             } catch (InvalidReplicationFactorException e) {
                 return new ApiError(Errors.INVALID_REPLICATION_FACTOR,

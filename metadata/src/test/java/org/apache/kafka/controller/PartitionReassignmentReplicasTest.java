@@ -131,47 +131,51 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
-    public void testIsReassignmentInProgress() {
+    public void testIsReassignmentInProgress() throws Exception {
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
-            new PartitionRegistration(
-                new int[]{0, 1, 3, 2},
-                new int[]{0, 1, 3, 2},
-                new int[]{2},
-                new int[]{3},
-                0,
-                LeaderRecoveryState.RECOVERED,
-                0,
-                0)));
+            new PartitionRegistration.Builder().
+                setReplicas(new int[]{0, 1, 3, 2}).
+                setIsr(new int[]{0, 1, 3, 2}).
+                setRemovingReplicas(new int[]{2}).
+                setAddingReplicas(new int[]{3}).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0).
+                build()));
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
-            new PartitionRegistration(
-                new int[]{0, 1, 3, 2},
-                new int[]{0, 1, 3, 2},
-                new int[]{2},
-                Replicas.NONE,
-                0,
-                LeaderRecoveryState.RECOVERED,
-                0,
-                0)));
+            new PartitionRegistration.Builder().
+                setReplicas(new int[]{0, 1, 3, 2}).
+                setIsr(new int[]{0, 1, 3, 2}).
+                setRemovingReplicas(new int[]{2}).
+                setAddingReplicas(Replicas.NONE).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0).
+                build()));
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
-            new PartitionRegistration(
-                new int[]{0, 1, 2, 3},
-                new int[]{0, 1, 2, 3},
-                Replicas.NONE,
-                new int[]{3},
-                0,
-                LeaderRecoveryState.RECOVERED,
-                0,
-                0)));
+            new PartitionRegistration.Builder().
+                setReplicas(new int[]{0, 1, 3, 2}).
+                setIsr(new int[]{0, 1, 3, 2}).
+                setRemovingReplicas(Replicas.NONE).
+                setAddingReplicas(new int[]{3}).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0).
+                build()));
         assertFalse(PartitionReassignmentReplicas.isReassignmentInProgress(
-            new PartitionRegistration(
-                new int[]{0, 1, 2},
-                new int[]{0, 1, 2},
-                Replicas.NONE,
-                Replicas.NONE,
-                0,
-                LeaderRecoveryState.RECOVERED,
-                0,
-                0)));
+            new PartitionRegistration.Builder().
+                setReplicas(new int[]{0, 1, 2}).
+                setIsr(new int[]{0, 1, 2}).
+                setRemovingReplicas(Replicas.NONE).
+                setAddingReplicas(Replicas.NONE).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0).
+                build()));
     }
 
     @Test

@@ -464,16 +464,16 @@ class ReplicaManagerConcurrencyTest {
     leaderEpoch: Int = 0,
     partitionEpoch: Int = 0
   ): PartitionRegistration = {
-    new PartitionRegistration(
-      replicaIds.toArray,
-      isr.toArray,
-      Array.empty[Int],
-      Array.empty[Int],
-      leader,
-      leaderRecoveryState,
-      leaderEpoch,
-      partitionEpoch
-    )
+    new PartitionRegistration.Builder().
+      setReplicas(replicaIds.toArray).
+      setIsr(isr.toArray).
+      setRemovingReplicas(Array.empty[Int]).
+      setAddingReplicas(Array.empty[Int]).
+      setLeader(leader).
+      setLeaderRecoveryState(leaderRecoveryState).
+      setLeaderEpoch(leaderEpoch).
+      setPartitionEpoch(partitionEpoch).
+      build();
   }
 
   private def defaultBrokerEpoch(brokerId: Int): Long = {

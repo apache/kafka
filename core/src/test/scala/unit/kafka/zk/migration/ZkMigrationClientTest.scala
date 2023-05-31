@@ -78,8 +78,8 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(0, migrationState.migrationZkVersion())
 
     val partitions = Map(
-      0 -> new PartitionRegistration(Array(0, 1, 2), Array(1, 2), Array(), Array(), 1, LeaderRecoveryState.RECOVERED, 6, -1),
-      1 -> new PartitionRegistration(Array(1, 2, 3), Array(3), Array(), Array(), 3, LeaderRecoveryState.RECOVERED, 7, -1)
+      0 -> new PartitionRegistration.Builder().setReplicas(Array(0, 1, 2)).setIsr(Array(1, 2)).setRemovingReplicas(Array()).setAddingReplicas(Array()).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(6).setPartitionEpoch(-1).build(),
+      1 -> new PartitionRegistration.Builder().setReplicas(Array(1, 2, 3)).setIsr(Array(3)).setRemovingReplicas(Array()).setAddingReplicas(Array()).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(7).setPartitionEpoch(-1).build()
     ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
     migrationState = migrationClient.topicClient().updateTopicPartitions(Map("test" -> partitions).asJava, migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
@@ -105,8 +105,8 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(0, migrationState.migrationZkVersion())
 
     val partitions = Map(
-      0 -> new PartitionRegistration(Array(0, 1, 2), Array(0, 1, 2), Array(), Array(), 0, LeaderRecoveryState.RECOVERED, 0, -1),
-      1 -> new PartitionRegistration(Array(1, 2, 3), Array(1, 2, 3), Array(), Array(), 1, LeaderRecoveryState.RECOVERED, 0, -1)
+      0 -> new PartitionRegistration.Builder().setReplicas(Array(0, 1, 2)).setIsr(Array(0, 1, 2)).setRemovingReplicas(Array()).setAddingReplicas(Array()).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(-1).build(),
+      1 -> new PartitionRegistration.Builder().setReplicas(Array(1, 2, 3)).setIsr(Array(1, 2, 3)).setRemovingReplicas(Array()).setAddingReplicas(Array()).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(-1).build()
     ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
     migrationState = migrationClient.topicClient().createTopic("test", Uuid.randomUuid(), partitions, migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
@@ -128,8 +128,8 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(0, migrationState.migrationZkVersion())
 
     val partitions = Map(
-      0 -> new PartitionRegistration(Array(0, 1, 2), Array(0, 1, 2), Array(), Array(), 0, LeaderRecoveryState.RECOVERED, 0, -1),
-      1 -> new PartitionRegistration(Array(1, 2, 3), Array(1, 2, 3), Array(), Array(), 1, LeaderRecoveryState.RECOVERED, 0, -1)
+      0 -> new PartitionRegistration.Builder().setReplicas(Array(0, 1, 2)).setIsr(Array(0, 1, 2)).setRemovingReplicas(Array()).setAddingReplicas(Array()).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(-1).build(),
+      1 -> new PartitionRegistration.Builder().setReplicas(Array(1, 2, 3)).setIsr(Array(1, 2, 3)).setRemovingReplicas(Array()).setAddingReplicas(Array()).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(-1).build()
     ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
     val topicId = Uuid.randomUuid()
     migrationState = migrationClient.topicClient().createTopic("test", topicId, partitions, migrationState)
