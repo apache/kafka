@@ -641,12 +641,7 @@ public class ReplicationControlManager {
                 }
                 PartitionRegistration partitionRegistration;
                 try {
-                    partitionRegistration = new PartitionRegistration.Builder().
-                        setReplicas(Replicas.toArray(assignment.brokerIds())).
-                        setIsr(Replicas.toArray(isr)).setRemovingReplicas(Replicas.NONE).
-                        setAddingReplicas(Replicas.NONE).setLeader(isr.get(0)).
-                        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-                        setLeaderEpoch(0).setPartitionEpoch(0).build();
+                    partitionRegistration = buildPartitionRegistration(assignment.brokerIds(), isr);
                 } catch (Exception e) {
                     log.error("Failed to create partition registration.", e);
                     return new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Failed to create partition registration: " + e.getMessage());
@@ -699,16 +694,7 @@ public class ReplicationControlManager {
                     }
                     PartitionRegistration partitionRegistration;
                     try {
-                        partitionRegistration = new PartitionRegistration.Builder().
-                            setReplicas(Replicas.toArray(replicas)).
-                            setIsr(Replicas.toArray(isr)).
-                            setRemovingReplicas(Replicas.NONE).
-                            setAddingReplicas(Replicas.NONE).
-                            setLeader(isr.get(0)).
-                            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-                            setLeaderEpoch(0).
-                            setPartitionEpoch(0).
-                            build();
+                        partitionRegistration = buildPartitionRegistration(replicas, isr);
                     } catch (Exception e) {
                         log.error("Failed to create partition registration.", e);
                         return new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Failed to create partition registration: " + e.getMessage());
@@ -770,6 +756,17 @@ public class ReplicationControlManager {
             records.add(info.toRecord(topicId, partitionIndex));
         }
         return ApiError.NONE;
+    }
+
+    private static PartitionRegistration buildPartitionRegistration(
+        List<Integer> assignment,
+        List<Integer> isr
+    ) throws Exception {
+        return new PartitionRegistration.Builder().
+            setReplicas(Replicas.toArray(assignment)).setIsr(Replicas.toArray(isr)).
+            setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
+            setLeader(isr.get(0)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(0).setPartitionEpoch(0).build();
     }
 
     private ApiError maybeCheckCreateTopicPolicy(Supplier<CreateTopicPolicy.RequestMetadata> supplier) {
