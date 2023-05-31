@@ -36,12 +36,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.BiFunction;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Connect plugin utility methods.
