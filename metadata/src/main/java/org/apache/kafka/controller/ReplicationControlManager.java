@@ -1427,7 +1427,8 @@ public class ReplicationControlManager {
         clusterControl.heartbeatManager().touch(brokerId,
                 clusterControl.brokerRegistrations().get(brokerId).fenced(),
                 request.currentMetadataOffset());
-        log.error("processExpiredBrokerHeartbeat: timed out heartbeat from broker {}.", brokerId);
+        log.error("processExpiredBrokerHeartbeat: controller event queue overloaded. Timed out " +
+                "heartbeat from broker {}.", brokerId);
     }
 
     public ControllerResult<Void> unregisterBroker(int brokerId) {
