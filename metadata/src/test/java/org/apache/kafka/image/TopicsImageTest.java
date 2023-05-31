@@ -58,13 +58,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TopicsImageTest {
     public static final TopicsImage IMAGE1;
 
-    public static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    static TopicsDelta DELTA1;
+    static final TopicsDelta DELTA1;
 
-    static TopicsImage IMAGE2;
+    static final TopicsImage IMAGE2;
 
-    static List<TopicImage> TOPIC_IMAGES1;
+    static final List<TopicImage> TOPIC_IMAGES1;
 
     private static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
