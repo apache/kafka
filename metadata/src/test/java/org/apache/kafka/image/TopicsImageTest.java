@@ -111,7 +111,7 @@ public class TopicsImageTest {
                     new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
                         setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
 
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
@@ -141,7 +141,7 @@ public class TopicsImageTest {
         DELTA1 = new TopicsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        List<TopicImage> topics2 = null;
+        List<TopicImage> topics2;
         try {
             topics2 = Arrays.asList(
                 newTopicImage("bar", BAR_UUID,
@@ -151,7 +151,7 @@ public class TopicsImageTest {
                     new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
                         setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build()));
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
