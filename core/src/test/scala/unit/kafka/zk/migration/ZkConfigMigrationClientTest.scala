@@ -249,7 +249,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
   }
 
   @Test
-  def testScramChangesInSnapshot(): Unit = {
+  def testScramAndQuotaChangesInSnapshot(): Unit = {
     val random = new MockRandom()
 
     val props = new Properties()
@@ -278,7 +278,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       .setRemove(false)
     delta.replay(clientQuotaRecord)
 
-    // Create a new SCRAM credential got george
+    // Create a new SCRAM credential for george
     val scramCredentialRecord = new UserScramCredentialRecord()
       .setName("george")
       .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -288,8 +288,8 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       .setIterations(8192)
     delta.replay(scramCredentialRecord)
 
-    // Add Quota record for user2 but not user1
-    // Add SCRAM record for george but not for alice.
+    // Add Quota record for user2 but not user1 to delete user1
+    // Add SCRAM record for george but not for alice to delete alice
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
