@@ -122,7 +122,7 @@ versions += [
   scalaJava8Compat : "1.0.2",
   scoverage: "1.9.3",
   slf4j: "1.7.36",
-  snappy: "1.1.9.1",
+  snappy: "1.1.10.0",
   spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",
