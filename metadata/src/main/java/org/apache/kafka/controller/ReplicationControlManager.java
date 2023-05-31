@@ -643,14 +643,10 @@ public class ReplicationControlManager {
                 try {
                     partitionRegistration = new PartitionRegistration.Builder().
                         setReplicas(Replicas.toArray(assignment.brokerIds())).
-                        setIsr(Replicas.toArray(isr)).
-                        setRemovingReplicas(Replicas.NONE).
-                        setAddingReplicas(Replicas.NONE).
-                        setLeader(isr.get(0)).
+                        setIsr(Replicas.toArray(isr)).setRemovingReplicas(Replicas.NONE).
+                        setAddingReplicas(Replicas.NONE).setLeader(isr.get(0)).
                         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-                        setLeaderEpoch(0).
-                        setPartitionEpoch(0).
-                        build();
+                        setLeaderEpoch(0).setPartitionEpoch(0).build();
                 } catch (Exception e) {
                     log.error("Failed to create partition registration.", e);
                     return new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Failed to create partition registration: " + e.getMessage());
