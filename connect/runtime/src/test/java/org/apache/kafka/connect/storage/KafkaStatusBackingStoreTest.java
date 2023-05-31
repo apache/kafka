@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.config.ConfigException;
@@ -47,18 +46,20 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 public class KafkaStatusBackingStoreTest {
@@ -363,24 +364,22 @@ public class KafkaStatusBackingStoreTest {
         String clientIdBase = "test-client-id-";
         Supplier<TopicAdmin> topicAdminSupplier = () -> mock(TopicAdmin.class);
 
-        Map<String, Object> capturedProducerProps = new HashMap<>();
-        Map<String, Object> capturedConsumerProps = new HashMap<>();
+        ArgumentCaptor<Map<String, Object>> capturedProducerProps = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> capturedConsumerProps = ArgumentCaptor.forClass(Map.class);
 
-        store = new KafkaStatusBackingStore(new MockTime(), converter, topicAdminSupplier, clientIdBase) {
-            @Override
-            protected KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps, Map<String, Object> consumerProps, org.apache.kafka.connect.util.Callback<ConsumerRecord<String, byte[]>> consumedCallback, NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
-                capturedProducerProps.putAll(producerProps);
-                capturedConsumerProps.putAll(consumerProps);
-                return kafkaBasedLog;
-            }
-        };
+        store = spy(new KafkaStatusBackingStore(new MockTime(), converter, topicAdminSupplier, clientIdBase));
+        KafkaBasedLog<String, byte[]> kafkaLog = mock(KafkaBasedLog.class);
+        doReturn(kafkaLog).when(store).createKafkaBasedLog(any(), capturedProducerProps.capture(),
+                capturedConsumerProps.capture(), any(),
+                any(), any(), any(), any());
+
 
         when(workerConfig.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG)).thenReturn("connect-statuses");
         store.configure(workerConfig);
 
         final String expectedClientId = clientIdBase + "statuses";
-        assertEquals(expectedClientId, capturedProducerProps.get(CLIENT_ID_CONFIG));
-        assertEquals(expectedClientId, capturedConsumerProps.get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
     }
 
     private static ConsumerRecord<String, byte[]> consumerRecord(long offset, String key, byte[] value) {

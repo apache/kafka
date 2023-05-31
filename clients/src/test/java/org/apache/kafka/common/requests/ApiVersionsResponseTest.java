@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -49,7 +50,7 @@ public class ApiVersionsResponseTest {
     @ParameterizedTest
     @EnumSource(ApiMessageType.ListenerType.class)
     public void shouldHaveCorrectDefaultApiVersionsResponse(ApiMessageType.ListenerType scope) {
-        ApiVersionsResponse defaultResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
+        ApiVersionsResponse defaultResponse = TestUtils.defaultApiVersionsResponse(scope);
         assertEquals(ApiKeys.apisForListener(scope).size(), defaultResponse.data().apiKeys().size(),
             "API versions for all API keys must be maintained.");
 

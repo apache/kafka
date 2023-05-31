@@ -158,7 +158,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
 
     static Map<String, Object> sourceConsumerConfig(Map<String, ?> props) {
         Map<String, Object> result = new HashMap<>();
-        result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX));
+        result.putAll(Utils.entriesWithPrefix(props, SOURCE_CLUSTER_PREFIX));
         result.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         result.putAll(Utils.entriesWithPrefix(props, CONSUMER_CLIENT_PREFIX));
         result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));

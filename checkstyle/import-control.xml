@@ -221,14 +221,18 @@
 
   <subpackage name="coordinator">
     <subpackage name="group">
+      <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.metadata" />
+      <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.image"/>
       <allow pkg="org.apache.kafka.server.common"/>
       <allow pkg="org.apache.kafka.server.util"/>
+      <allow pkg="org.apache.kafka.timeline"/>
     </subpackage>
   </subpackage>
 
@@ -274,7 +278,10 @@
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.shell"/>
+    <allow pkg="org.apache.kafka.image"/>
+    <allow pkg="org.apache.kafka.image.loader"/>
     <allow pkg="org.apache.kafka.snapshot"/>
     <allow pkg="org.jline"/>
     <allow pkg="scala.compat"/>
@@ -543,6 +550,7 @@
         <allow class="javax.ws.rs.core.Response" />
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
+        <allow pkg="org.eclipse.jetty.client"/>
       </subpackage>
     </subpackage>
 

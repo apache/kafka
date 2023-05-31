@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
@@ -1072,6 +1073,35 @@ class KRaftClusterTest {
         admin.close()
       }
       assertFoobarValue(123)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testOverlyLargeCreateTopics(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val newTopics = new util.ArrayList[NewTopic]()
+        for (i <- 0 to 10000) {
+          newTopics.add(new NewTopic("foo" + i, 100000, 1.toShort))
+        }
+        val executionException = assertThrows(classOf[ExecutionException],
+            () => admin.createTopics(newTopics).all().get())
+        assertNotNull(executionException.getCause)
+        assertEquals(classOf[PolicyViolationException], executionException.getCause.getClass)
+        assertEquals("Unable to perform excessively large batch operation.",
+          executionException.getCause.getMessage)
+      } finally {
+        admin.close()
+      }
     } finally {
       cluster.close()
     }

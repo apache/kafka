@@ -523,4 +523,11 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
     </Match>
 
+    <Match>
+        <Class name="org.apache.kafka.jmh.util.ByteUtilsBenchmark$BaseBenchmarkState" />
+        <!-- Suppress warning because JMH code is used to instantiate Random() once per Trial. This is done to ensure
+             that all benchmarks run with same seed for Random. -->
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+
 </FindBugsFilter>

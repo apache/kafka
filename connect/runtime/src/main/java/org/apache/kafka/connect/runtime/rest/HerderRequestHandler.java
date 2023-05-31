@@ -78,14 +78,14 @@ public class HerderRequestHandler {
      * request to the indicated target.
      */
     public <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
-                                                    String path,
-                                                    String method,
-                                                    HttpHeaders headers,
-                                                    Map<String, String> queryParameters,
-                                                    Object body,
-                                                    TypeReference<U> resultType,
-                                                    Translator<T, U> translator,
-                                                    Boolean forward) throws Throwable {
+                                             String path,
+                                             String method,
+                                             HttpHeaders headers,
+                                             Map<String, String> queryParameters,
+                                             Object body,
+                                             TypeReference<U> resultType,
+                                             Translator<T, U> translator,
+                                             Boolean forward) throws Throwable {
         try {
             return completeRequest(cb);
         } catch (RequestTargetException e) {
@@ -111,6 +111,8 @@ public class HerderRequestHandler {
                 log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
                 return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
             } else {
+                log.error("Request '{} {}' failed because it couldn't find the target Connect worker within two hops (between workers).",
+                        method, path);
                 // we should find the right target for the query within two hops, so if
                 // we don't, it probably means that a rebalance has taken place.
                 throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
@@ -127,13 +129,8 @@ public class HerderRequestHandler {
         return completeOrForwardRequest(cb, path, method, headers, null, body, resultType, translator, forward);
     }
 
-    public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
-                                                 TypeReference<T> resultType, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward);
-    }
-
     public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers,
-                                                 Object body, Boolean forward) throws Throwable {
+                                          Object body, Boolean forward) throws Throwable {
         return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<>(), forward);
     }
 

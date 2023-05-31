@@ -2166,7 +2166,7 @@ public class InternalTopologyBuilder {
         return !subscriptionUpdates.isEmpty();
     }
 
-    synchronized void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
+    synchronized void addSubscribedTopicsFromAssignment(final Set<TopicPartition> partitions, final String logPrefix) {
         if (usesPatternSubscription()) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
