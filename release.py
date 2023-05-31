@@ -685,7 +685,7 @@ print("Next, we need to get the Maven artifacts we published into the staging re
 # TODO: Can we get this closed via a REST API since we already need to collect credentials for this repo?
 print("Go to https://repository.apache.org/#stagingRepositories and hit 'Close' for the new repository that was created by uploading artifacts.")
 print("There will be more than one repository entries created, please close all of them.")
-print("There's a known issue that the repository close will be failed: KAFKA-15033.")
+print("In some cases, you may get errors on some repositories while closing them, see KAFKA-15033.")
 print("If this is not the first RC, you need to 'Drop' the previous artifacts.")
 print("Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/")
 if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
@@ -700,7 +700,7 @@ cmd("Deleting git branches %s" % release_version, "git branch -D %s" % release_v
 
 
 email_contents = """
-To: dev@kafka.apache.org, users@kafka.apache.org
+To: dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
 Subject: [VOTE] %(release_version)s RC%(rc)s
 
 Hello Kafka users, developers and client-developers,
