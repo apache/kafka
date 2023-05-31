@@ -253,6 +253,30 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     }
   }
 
+  override def deleteTopicPartitions(
+    topicPartitions: util.Map[String, util.Set[Integer]],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = {
+    val requests = topicPartitions.asScala.flatMap { case (topicName, partitionIds) =>
+      partitionIds.asScala.map { partitionId =>
+        val topicPartition = new TopicPartition(topicName, partitionId)
+        val path = TopicPartitionZNode.path(topicPartition)
+        DeleteRequest(path, ZkVersion.MatchAnyVersion)
+      }
+    }
+    if (requests.isEmpty) {
+      state
+    } else {
+      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state)
+      val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+      if (resultCodes.forall { case (_, code) => code.equals(Code.OK) }) {
+        state.withMigrationZkVersion(migrationZkVersion)
+      } else {
+        throw new MigrationClientException(s"Failed to delete partition states: $topicPartitions. ZK transaction had results $resultCodes")
+      }
+    }
+  }
+
   private def createTopicPartition(
     topicPartition: TopicPartition
   ): CreateRequest = wrapZkException {

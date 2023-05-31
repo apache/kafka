@@ -24,6 +24,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public interface TopicMigrationClient {
 
@@ -67,6 +68,11 @@ public interface TopicMigrationClient {
 
     ZkMigrationLeadershipState updateTopicPartitions(
         Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState deleteTopicPartitions(
+        Map<String, Set<Integer>> topicPartitions,
         ZkMigrationLeadershipState state
     );
 }

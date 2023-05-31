@@ -107,6 +107,7 @@ public class KRaftMigrationZkWriter {
         Set<Uuid> newTopics = new HashSet<>(topicsImage.topicsById().keySet());
         Set<Uuid> changedTopics = new HashSet<>();
         Map<Uuid, Set<Integer>> partitionsInZk = new HashMap<>();
+        Map<String, Set<Integer>> extraneousPartitionsInZk = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> changedPartitions = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> newPartitions = new HashMap<>();
 
@@ -131,7 +132,7 @@ public class KRaftMigrationZkWriter {
                 public void visitPartition(TopicIdPartition topicIdPartition, PartitionRegistration partitionRegistration) {
                     TopicImage topic = topicsImage.getTopic(topicIdPartition.topicId());
                     if (topic == null) {
-                        return; // topic deleted in KRaft
+                        return; // The topic was deleted in KRaft. Handled by deletedTopics
                     }
 
                     // If there is failure in previous Zk writes, We could end up with Zookeeper
@@ -143,14 +144,16 @@ public class KRaftMigrationZkWriter {
 
                     // Check if the KRaft partition state changed
                     PartitionRegistration kraftPartition = topic.partitions().get(topicIdPartition.partition());
-                    if (!kraftPartition.equals(partitionRegistration)) {
-                        changedPartitions.computeIfAbsent(topicIdPartition.topicId(), __ -> new HashMap<>())
-                            .put(topicIdPartition.partition(), kraftPartition);
-                    }
+                    if (kraftPartition != null) {
+                        if (!kraftPartition.equals(partitionRegistration)) {
+                            changedPartitions.computeIfAbsent(topicIdPartition.topicId(), __ -> new HashMap<>())
+                                .put(topicIdPartition.partition(), kraftPartition);
+                        }
 
-                    // Check if partition assignment has changed. This will need topic update.
-                    if (!kraftPartition.hasSameAssignment(partitionRegistration)) {
-                        changedTopics.add(topic.id());
+                        // Check if partition assignment has changed. This will need topic update.
+                        if (!kraftPartition.hasSameAssignment(partitionRegistration)) {
+                            changedTopics.add(topic.id());
+                        }
                     }
                 }
             });
@@ -161,8 +164,15 @@ public class KRaftMigrationZkWriter {
             Set<Integer> topicPartitionsInZk = partitionsInZk.computeIfAbsent(topicId, __ -> new HashSet<>());
             if (!topicPartitionsInZk.equals(topic.partitions().keySet())) {
                 Map<Integer, PartitionRegistration> newTopicPartitions = new HashMap<>(topic.partitions());
+                // Compute KRaft partitions that are not in ZK
                 topicPartitionsInZk.forEach(newTopicPartitions::remove);
                 newPartitions.put(topicId, newTopicPartitions);
+
+                // Compute ZK partitions that are not in KRaft
+                topicPartitionsInZk.removeAll(topic.partitions().keySet());
+                if (!topicPartitionsInZk.isEmpty()) {
+                    extraneousPartitionsInZk.put(topic.name(), topicPartitionsInZk);
+                }
                 changedTopics.add(topicId);
             }
         });
@@ -210,6 +220,14 @@ public class KRaftMigrationZkWriter {
                 "Updating Partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
+                    migrationState));
+        });
+
+        extraneousPartitionsInZk.forEach((topicName, partitions) -> {
+            operationConsumer.accept(
+                "Deleting extraneous Partitions " + partitions + " for Topic " + topicName,
+                migrationState -> migrationClient.topicClient().deleteTopicPartitions(
+                    Collections.singletonMap(topicName, partitions),
                     migrationState));
         });
     }
