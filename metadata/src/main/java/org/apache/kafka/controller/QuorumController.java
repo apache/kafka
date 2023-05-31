@@ -78,6 +78,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -2133,7 +2134,12 @@ public final class QuorumController implements Controller {
                     }
                 }
             },
-            EnumSet.of(RUNS_IN_PREMIGRATION));
+            EnumSet.of(RUNS_IN_PREMIGRATION)).whenComplete((__, t) -> {
+                if (ControllerExceptions.isTimeoutException(t)) {
+                    replicationControl.processExpiredBrokerHeartbeat(request);
+                    controllerMetrics.incrementTimedOutHeartbeats();
+                }
+            });
     }
 
     @Override
@@ -2286,7 +2292,7 @@ public final class QuorumController implements Controller {
     }
 
     // VisibleForTesting
-    CountDownLatch pause() {
+    public CountDownLatch pause() {
         final CountDownLatch latch = new CountDownLatch(1);
         appendControlEvent("pause", () -> {
             try {
