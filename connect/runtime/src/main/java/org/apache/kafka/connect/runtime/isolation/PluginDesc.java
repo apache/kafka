@@ -89,10 +89,6 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         return loader;
     }
 
-    public boolean isolated() {
-        return loader instanceof PluginClassLoader;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -117,7 +113,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         int nameComp = name.compareTo(other.name);
         int versionComp = encodedVersion.compareTo(other.encodedVersion);
         // isolated plugins appear after classpath plugins when they have identical versions.
-        int isolatedComp = Boolean.compare(other.isolated(), isolated());
+        int isolatedComp = Boolean.compare(other.loader instanceof PluginClassLoader, loader instanceof PluginClassLoader);
         return nameComp != 0 ? nameComp : (versionComp != 0 ? versionComp : isolatedComp);
     }
 }

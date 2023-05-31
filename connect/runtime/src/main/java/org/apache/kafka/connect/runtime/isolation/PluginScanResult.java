@@ -44,7 +44,7 @@ public class PluginScanResult {
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
 
-    private final List<SortedSet<?>> allPlugins;
+    private final List<SortedSet<? extends PluginDesc<?>>> allPlugins;
 
     public PluginScanResult(
             SortedSet<PluginDesc<SinkConnector>> sinkConnectors,
@@ -88,9 +88,9 @@ public class PluginScanResult {
         );
     }
 
-    private static <T, R extends Comparable<R>> SortedSet<R> merge(List<T> results, Function<T, SortedSet<R>> accessor) {
+    private static <R extends Comparable<R>> SortedSet<R> merge(List<PluginScanResult> results, Function<PluginScanResult, SortedSet<R>> accessor) {
         SortedSet<R> merged = new TreeSet<>();
-        for (T element : results) {
+        for (PluginScanResult element : results) {
             merged.addAll(accessor.apply(element));
         }
         return merged;
@@ -133,21 +133,7 @@ public class PluginScanResult {
     }
 
     public void forEach(Consumer<PluginDesc<?>> consumer) {
-        forEach(sinkConnectors(), consumer);
-        forEach(sourceConnectors(), consumer);
-        forEach(converters(), consumer);
-        forEach(headerConverters(), consumer);
-        forEach(transformations(), consumer);
-        forEach(predicates(), consumer);
-        forEach(configProviders(), consumer);
-        forEach(restExtensions(), consumer);
-        forEach(connectorClientConfigPolicies(), consumer);
-    }
-
-    private static <T> void forEach(SortedSet<PluginDesc<T>> set, Consumer<PluginDesc<?>> consumer) {
-        for (PluginDesc<T> plugin : set) {
-            consumer.accept(plugin);
-        }
+        allPlugins.forEach(plugins -> plugins.forEach(consumer));
     }
 
     public boolean isEmpty() {
