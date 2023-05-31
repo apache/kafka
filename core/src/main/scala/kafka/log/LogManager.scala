@@ -1403,7 +1403,7 @@ object LogManager {
       time = time,
       keepPartitionMetadataFile = keepPartitionMetadataFile,
       interBrokerProtocolVersion = config.interBrokerProtocolVersion,
-      remoteStorageSystemEnable = config.getBoolean(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP))
+      remoteStorageSystemEnable = config.remoteLogManagerConfig.enableRemoteStorageSystem())
   }
 
 }
