@@ -77,7 +77,7 @@ public class PartitionChangeBuilderTest {
         );
     }
 
-    private static PartitionRegistration FOO = null;
+    private static final PartitionRegistration FOO;
 
     static {
         try {
@@ -92,7 +92,7 @@ public class PartitionChangeBuilderTest {
                 setPartitionEpoch(200).
                 build();
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
@@ -102,14 +102,14 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, true);
     }
 
-    private static PartitionRegistration BAR = null;
+    private static final PartitionRegistration BAR;
 
     static {
         try {
             BAR = new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {4}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
@@ -119,14 +119,14 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, true);
     }
 
-    private static PartitionRegistration BAZ = null;
+    private static final PartitionRegistration BAZ;
 
     static {
         try {
             BAZ = new PartitionRegistration.Builder().setReplicas(new int[] {2, 1, 3}).setIsr(new int[] {1, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
                 setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
@@ -136,14 +136,14 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true, true);
     }
 
-    private static PartitionRegistration OFFLINE = null;
+    private static final PartitionRegistration OFFLINE;
 
     static {
         try {
             OFFLINE = new PartitionRegistration.Builder().setReplicas(new int[] {2, 1, 3}).setIsr(new int[] {3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
                 setLeader(-1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
