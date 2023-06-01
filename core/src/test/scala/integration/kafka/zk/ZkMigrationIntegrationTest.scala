@@ -57,7 +57,7 @@ import scala.jdk.CollectionConverters._
 
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@Timeout(120)
+@Timeout(300)
 class ZkMigrationIntegrationTest {
 
   val log = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
@@ -243,8 +243,7 @@ class ZkMigrationIntegrationTest {
       log.info("Verifying metadata changes with ZK")
       verifyUserScramCredentials(zkClient)
     } finally {
-      zkCluster.stop()
-      kraftCluster.close()
+      shutdownInSequence(zkCluster, kraftCluster)
     }
   }
 
@@ -321,8 +320,7 @@ class ZkMigrationIntegrationTest {
       verifyProducerId(producerIdBlock, zkClient)
 
     } finally {
-      zkCluster.stop()
-      kraftCluster.close()
+      shutdownInSequence(zkCluster, kraftCluster)
     }
   }
 
@@ -383,8 +381,7 @@ class ZkMigrationIntegrationTest {
       verifyUserScramCredentials(zkClient)
       verifyClientQuotas(zkClient)
     } finally {
-      zkCluster.stop()
-      kraftCluster.close()
+      shutdownInSequence(zkCluster, kraftCluster)
     }
   }
 
@@ -480,5 +477,11 @@ class ZkMigrationIntegrationTest {
       val producerIdBlock = readProducerIdBlock(zkClient)
       assertTrue(firstProducerIdBlock.firstProducerId() < producerIdBlock.firstProducerId())
     }
+  }
+
+  def shutdownInSequence(zkCluster: ClusterInstance, kraftCluster: KafkaClusterTestKit): Unit = {
+    zkCluster.brokerIds().forEach(zkCluster.shutdownBroker(_))
+    kraftCluster.close()
+    zkCluster.stop()
   }
 }

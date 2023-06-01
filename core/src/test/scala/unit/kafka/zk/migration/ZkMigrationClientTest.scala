@@ -264,9 +264,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testTopicAndBrokerConfigsMigrationWithSnapshots(): Unit = {
-    val kraftWriter = new KRaftMigrationZkWriter(migrationClient, (_, operation) => {
-      migrationState = operation.apply(migrationState)
-    })
+    val kraftWriter = new KRaftMigrationZkWriter(migrationClient)
 
     // Add add some topics and broker configs and create new image.
     val topicName = "testTopic"
@@ -320,7 +318,9 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // Handle migration using the generated snapshot.
-    kraftWriter.handleLoadSnapshot(image)
+    kraftWriter.handleSnapshot(image, (_, _, operation) => {
+      migrationState = operation(migrationState)
+    })
 
     // Verify topic state.
     val topicIdReplicaAssignment =

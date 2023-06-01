@@ -39,9 +39,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class AclsImageTest {
-    final static AclsImage IMAGE1;
+    public final static AclsImage IMAGE1;
 
-    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
 
     final static AclsDelta DELTA1;
 
