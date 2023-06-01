@@ -195,6 +195,8 @@ public class KRaftMigrationZkWriterTest {
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleSnapshot(image, consumer);
         assertEquals(1, opCounts.remove("CreateTopic"));
+        assertEquals(1, opCounts.remove("UpdatePartition"));
+        assertEquals(1, opCounts.remove("UpdateTopic"));
         assertEquals(0, opCounts.size());
         assertEquals("bar", topicClient.createdTopics.get(0));
     }
