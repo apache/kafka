@@ -21,6 +21,7 @@ package org.apache.kafka.coordinator.group.runtime;
  * coordinator runtime.
  */
 public interface CoordinatorEvent extends EventAccumulator.Event<Integer> {
+
     /**
      * Runs the event.
      */

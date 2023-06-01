@@ -22,6 +22,7 @@ import java.util.concurrent.RejectedExecutionException;
  * A {{@link CoordinatorEvent}} processor.
  */
 public interface CoordinatorEventProcessor extends AutoCloseable {
+
     /**
      * Enqueues a new {{@link CoordinatorEvent}}.
      *
