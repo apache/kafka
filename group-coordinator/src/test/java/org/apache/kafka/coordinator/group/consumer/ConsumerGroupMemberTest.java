@@ -42,7 +42,7 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -71,7 +71,7 @@ public class ConsumerGroupMemberTest {
         assertEquals("member-id", member.memberId());
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(11, member.nextMemberEpoch());
+        assertEquals(11, member.targetMemberEpoch());
         assertEquals("instance-id", member.instanceId());
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
@@ -105,7 +105,7 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -134,7 +134,7 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -172,7 +172,7 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -299,7 +299,7 @@ public class ConsumerGroupMemberTest {
 
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(11, member.nextMemberEpoch());
+        assertEquals(11, member.targetMemberEpoch());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
         assertEquals(mkAssignment(mkTopicAssignment(topicId3, 6, 7, 8)), member.partitionsPendingAssignment());

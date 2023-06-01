@@ -206,7 +206,7 @@ public class RemoteLogManager implements Closeable {
 
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
         return AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
-            private String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
+            private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
 
             public RemoteLogMetadataManager run() {
                 if (classPath != null && !classPath.trim().isEmpty()) {
@@ -274,7 +274,7 @@ public class RemoteLogManager implements Closeable {
         Map<TopicIdPartition, Integer> leaderPartitionsWithLeaderEpoch = filterPartitions(partitionsBecomeLeader)
                 .collect(Collectors.toMap(
                         partition -> new TopicIdPartition(topicIds.get(partition.topic()), partition.topicPartition()),
-                        partition -> partition.getLeaderEpoch()));
+                        Partition::getLeaderEpoch));
         Set<TopicIdPartition> leaderPartitions = leaderPartitionsWithLeaderEpoch.keySet();
 
         Set<TopicIdPartition> followerPartitions = filterPartitions(partitionsBecomeFollower)
@@ -289,7 +289,7 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
-                    doHandleLeaderOrFollowerPartitions(topicIdPartition, rlmTask -> rlmTask.convertToFollower()));
+                    doHandleLeaderOrFollowerPartitions(topicIdPartition, RLMTask::convertToFollower));
 
             leaderPartitionsWithLeaderEpoch.forEach((topicIdPartition, leaderEpoch) ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition,
@@ -506,7 +506,7 @@ public class RemoteLogManager implements Closeable {
                     long fromOffset = Math.max(copiedOffset + 1, log.logStartOffset());
                     ArrayList<LogSegment> sortedSegments = new ArrayList<>(JavaConverters.asJavaCollection(log.logSegments(fromOffset, toOffset)));
                     sortedSegments.sort(Comparator.comparingLong(LogSegment::baseOffset));
-                    List<Long> sortedBaseOffsets = sortedSegments.stream().map(x -> x.baseOffset()).collect(Collectors.toList());
+                    List<Long> sortedBaseOffsets = sortedSegments.stream().map(LogSegment::baseOffset).collect(Collectors.toList());
                     int activeSegIndex = Collections.binarySearch(sortedBaseOffsets, activeSegBaseOffset);
 
                     // sortedSegments becomes empty list when fromOffset and toOffset are same, and activeSegIndex becomes -1
@@ -791,7 +791,7 @@ public class RemoteLogManager implements Closeable {
     }
 
     private RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
-        RecordBatch nextBatch = null;
+        RecordBatch nextBatch;
         // Look for the batch which has the desired offset
         // We will always have a batch in that segment as it is a non-compacted topic.
         do {
@@ -819,7 +819,6 @@ public class RemoteLogManager implements Closeable {
 
     /**
      * Submit a remote log read task.
-     *
      * This method returns immediately. The read operation is executed in a thread pool.
      * The callback will be called when the task is done.
      *
@@ -837,7 +836,7 @@ public class RemoteLogManager implements Closeable {
                     // set this upfront when it is getting initialized instead of doing it after scheduling.
                     convertToLeaderOrFollower.accept(task);
                     LOGGER.info("Created a new task: {} and getting scheduled", task);
-                    ScheduledFuture future = rlmScheduledThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+                    ScheduledFuture<?> future = rlmScheduledThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
                     return new RLMTaskWithFuture(task, future);
                 }
         );
@@ -936,7 +935,7 @@ public class RemoteLogManager implements Closeable {
             return threadPool;
         }
 
-        public ScheduledFuture scheduleWithFixedDelay(Runnable runnable, long initialDelay, long delay, TimeUnit timeUnit) {
+        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable runnable, long initialDelay, long delay, TimeUnit timeUnit) {
             LOGGER.info("Scheduling runnable {} with initial delay: {}, fixed delay: {}", runnable, initialDelay, delay);
             return scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit);
         }
