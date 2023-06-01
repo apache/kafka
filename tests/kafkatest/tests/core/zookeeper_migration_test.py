@@ -336,7 +336,7 @@ class TestMigration(ProduceConsumeValidateTest):
                 try:
                     # Shouldn't have to wait too long to see this log message after startup
                     monitor.wait_until(
-                        "Finished migrating ZK data to KRaft",
+                        "Finished initial migration of ZK metadata to KRaft",
                         timeout_sec=10.0, backoff_sec=.25,
                         err_msg=""
                     )
