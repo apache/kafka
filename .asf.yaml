@@ -25,8 +25,8 @@ notifications:
 # https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-JenkinsPRwhitelisting
 jenkins:
   github_whitelist:
-    - vcrfxia
     - gharris1727
+    - vcrfxia
     - divijvaidya
     - lucasbru
     - yashmayya
@@ -40,8 +40,8 @@ jenkins:
 # https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-AssigningexternalcollaboratorswiththetriageroleonGitHub
 github:
   collaborators:
-    - vcrfxia
     - gharris1727
+    - vcrfxia
     - divijvaidya
     - lucasbru
     - yashmayya
