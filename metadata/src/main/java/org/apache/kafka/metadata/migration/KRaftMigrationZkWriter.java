@@ -65,7 +65,7 @@ public class KRaftMigrationZkWriter {
     static final String UPDATE_PRODUCER_ID = "UpdateProducerId";
     static final String CREATE_TOPIC = "CreateTopic";
     static final String DELETE_TOPIC = "DeleteTopic";
-    static final String UPDATE_PARTITON = "UpdatePartition";
+    static final String UPDATE_PARTITION = "UpdatePartition";
     static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
     static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
     static final String UPDATE_TOPIC_CONFIG = "UpdateTopicConfig";
@@ -182,7 +182,7 @@ public class KRaftMigrationZkWriter {
         changedPartitions.forEach((topicId, paritionMap) -> {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
-                UPDATE_PARTITON,
+                UPDATE_PARTITION,
                 "Updating Partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), paritionMap),
@@ -213,7 +213,7 @@ public class KRaftMigrationZkWriter {
                         migrationState));
             } else {
                 operationConsumer.accept(
-                    UPDATE_PARTITON,
+                    UPDATE_PARTITION,
                     "Updating Partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                     migrationState -> migrationClient.topicClient().updateTopicPartitions(
                         Collections.singletonMap(topicDelta.name(), topicDelta.partitionChanges()),

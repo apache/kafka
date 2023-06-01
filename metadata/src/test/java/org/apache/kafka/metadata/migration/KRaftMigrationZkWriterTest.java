@@ -18,6 +18,7 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.AclsImageTest;
 import org.apache.kafka.image.ClientQuotasImage;
@@ -28,10 +29,12 @@ import org.apache.kafka.image.ConfigurationsImageTest;
 import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.ProducerIdsDelta;
 import org.apache.kafka.image.ProducerIdsImage;
 import org.apache.kafka.image.ProducerIdsImageTest;
 import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.TopicsImageTest;
+import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -304,5 +307,81 @@ public class KRaftMigrationZkWriterTest {
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         assertThrows(RuntimeException.class, () -> writer.handleConfigsSnapshot(image, consumer),
             "Should throw due to invalid resource in image");
+    }
+
+    @Test
+    public void testProducerIdSnapshot() {
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(0)
+            .build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        migrationClient.setReadProducerId(new ProducerIdsBlock(0, 100L, 1000));
+
+        {
+            // No change
+            ProducerIdsImage image = new ProducerIdsImage(1100);
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                    (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleProducerIdSnapshot(image, consumer);
+            assertEquals(0, opCounts.size());
+        }
+
+        {
+            // KRaft differs from ZK
+            ProducerIdsImage image = new ProducerIdsImage(2000);
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                    (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleProducerIdSnapshot(image, consumer);
+            assertEquals(1, opCounts.size());
+            assertEquals(2000, migrationClient.capturedProducerId);
+        }
+
+        {
+            // "Empty" state in ZK (shouldn't really happen, but good to check)
+            ProducerIdsImage image = new ProducerIdsImage(2000);
+            migrationClient.setReadProducerId(ProducerIdsBlock.EMPTY);
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleProducerIdSnapshot(image, consumer);
+            assertEquals(1, opCounts.size());
+            assertEquals(2000, migrationClient.capturedProducerId);
+        }
+
+        {
+            // No state in ZK
+            ProducerIdsImage image = new ProducerIdsImage(2000);
+            migrationClient.setReadProducerId(null);
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                    (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleProducerIdSnapshot(image, consumer);
+            assertEquals(1, opCounts.size());
+            assertEquals(2000, migrationClient.capturedProducerId);
+        }
+    }
+
+    @Test
+    public void testProducerIdDelta() {
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(0)
+            .build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        migrationClient.setReadProducerId(new ProducerIdsBlock(0, 100L, 1000));
+
+        // No change
+        ProducerIdsDelta delta = new ProducerIdsDelta(ProducerIdsImage.EMPTY);
+        delta.replay(new ProducerIdsRecord().setBrokerId(0).setBrokerEpoch(20).setNextProducerId(2000));
+
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        writer.handleProducerIdDelta(delta, consumer);
+        assertEquals(1, opCounts.size());
+        assertEquals(2000, migrationClient.capturedProducerId);
     }
 }
