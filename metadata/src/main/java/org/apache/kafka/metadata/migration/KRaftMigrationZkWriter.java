@@ -62,17 +62,17 @@ import java.util.stream.Collectors;
 
 public class KRaftMigrationZkWriter {
 
-    private static final String UPDATE_PRODUCER_ID = "UpdateProducerId";
-    private static final String CREATE_TOPIC = "CreateTopic";
-    private static final String DELETE_TOPIC = "DeleteTopic";
-    private static final String UPDATE_PARTITON = "UpdatePartition";
-    private static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
-    private static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
-    private static final String UPDATE_TOPIC_CONFIG = "UpdateTopicConfig";
-    private static final String DELETE_TOPIC_CONFIG = "DeleteTopicConfig";
-    private static final String UPDATE_CLIENT_QUOTA = "UpdateClientQuota";
-    private static final String UPDATE_ACL = "UpdateAcl";
-    private static final String DELETE_ACL = "DeleteAcl";
+    static final String UPDATE_PRODUCER_ID = "UpdateProducerId";
+    static final String CREATE_TOPIC = "CreateTopic";
+    static final String DELETE_TOPIC = "DeleteTopic";
+    static final String UPDATE_PARTITON = "UpdatePartition";
+    static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
+    static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
+    static final String UPDATE_TOPIC_CONFIG = "UpdateTopicConfig";
+    static final String DELETE_TOPIC_CONFIG = "DeleteTopicConfig";
+    static final String UPDATE_CLIENT_QUOTA = "UpdateClientQuota";
+    static final String UPDATE_ACL = "UpdateAcl";
+    static final String DELETE_ACL = "DeleteAcl";
 
 
     private final MigrationClient migrationClient;
@@ -381,12 +381,13 @@ public class KRaftMigrationZkWriter {
     void handleConfigsDelta(ConfigurationsImage configsImage, ConfigurationsDelta configsDelta, KRaftMigrationOperationConsumer operationConsumer) {
         Set<ConfigResource> updatedResources = configsDelta.changes().keySet();
         updatedResources.forEach(configResource -> {
+            String opType = brokerOrTopicOpType(configResource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
             Map<String, String> props = configsImage.configMapForResource(configResource);
             if (props.isEmpty()) {
-                operationConsumer.accept("DeleteConfig", "Delete configs for " + configResource, migrationState ->
+                operationConsumer.accept(opType, "Delete configs for " + configResource, migrationState ->
                     migrationClient.configClient().deleteConfigs(configResource, migrationState));
             } else {
-                operationConsumer.accept("UpdateConfig", "Update configs for " + configResource, migrationState ->
+                operationConsumer.accept(opType, "Update configs for " + configResource, migrationState ->
                     migrationClient.configClient().writeConfigs(configResource, props, migrationState));
             }
         });

@@ -17,10 +17,12 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.AclsImageTest;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.image.ConfigurationsImage;
 import org.apache.kafka.image.ConfigurationsImageTest;
 import org.apache.kafka.image.FeaturesImage;
@@ -33,12 +35,20 @@ import org.apache.kafka.image.TopicsImageTest;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
+import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.DELETE_BROKER_CONFIG;
+import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.DELETE_TOPIC_CONFIG;
+import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.UPDATE_BROKER_CONFIG;
+import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.UPDATE_TOPIC_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -139,5 +149,160 @@ public class KRaftMigrationZkWriterTest {
         assertEquals(1, opCounts.remove("CreateTopic"));
         assertEquals(0, opCounts.size());
         assertEquals("bar", topicClient.createdTopics.get(0));
+    }
+
+    @Test
+    public void testBrokerConfigDelta() {
+        CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(0)
+            .setConfigMigrationClient(configClient)
+            .build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.BROKER.id()).setResourceName("b0").setName("foo").setValue("bar"));
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.BROKER.id()).setResourceName("b0").setName("spam").setValue(null));
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.TOPIC.id()).setResourceName("topic-0").setName("foo").setValue("bar"));
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.TOPIC.id()).setResourceName("topic-1").setName("foo").setValue(null));
+
+        ConfigurationsImage image = delta.apply();
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        writer.handleConfigsDelta(image, delta, consumer);
+        assertEquals(
+            Collections.singletonMap("foo", "bar"),
+            configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, "b0"))
+        );
+        assertEquals(
+            Collections.singletonMap("foo", "bar"),
+            configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, "topic-0"))
+        );
+        assertTrue(
+            configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, "topic-1"))
+        );
+    }
+
+    @Test
+    public void testBrokerConfigSnapshot() {
+        CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient();
+        CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient() {
+            @Override
+            public void iterateBrokerConfigs(BiConsumer<String, Map<String, String>> configConsumer) {
+                Map<String, String> b0 = new HashMap<>();
+                b0.put("foo", "bar");
+                b0.put("spam", "eggs");
+                configConsumer.accept("0", b0);
+                configConsumer.accept("1", Collections.singletonMap("foo", "bar"));
+                configConsumer.accept("3", Collections.singletonMap("foo", "bar"));
+            }
+        };
+        CapturingAclMigrationClient aclClient = new CapturingAclMigrationClient();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+                .setBrokersInZk(0)
+                .setTopicMigrationClient(topicClient)
+                .setConfigMigrationClient(configClient)
+                .setAclMigrationClient(aclClient)
+                .build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.BROKER.id()).setResourceName("0").setName("foo").setValue("bar"));
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.BROKER.id()).setResourceName("1").setName("foo").setValue("bar"));
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.BROKER.id()).setResourceName("2").setName("foo").setValue("bar"));
+
+        ConfigurationsImage image = delta.apply();
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        writer.handleConfigsSnapshot(image, consumer);
+
+        assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.BROKER, "3")),
+            "Broker 3 is not in the ConfigurationsImage, it should get deleted");
+
+        assertEquals(
+            Collections.singletonMap("foo", "bar"),
+            configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, "0")),
+            "Broker 0 only has foo=bar in image, should overwrite the ZK config");
+
+        assertFalse(configClient.writtenConfigs.containsKey(new ConfigResource(ConfigResource.Type.BROKER, "1")),
+            "Broker 1 config is the same in image, so no write should happen");
+
+        assertEquals(
+            Collections.singletonMap("foo", "bar"),
+            configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, "2")),
+            "Broker 2 not present in ZK, should see an update");
+
+        assertEquals(2, opCounts.get(UPDATE_BROKER_CONFIG));
+        assertEquals(1, opCounts.get(DELETE_BROKER_CONFIG));
+    }
+
+    @Test
+    public void testTopicConfigSnapshot() {
+        CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient();
+        CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient() {
+            @Override
+            public void iterateTopicConfigs(BiConsumer<String, Map<String, String>> configConsumer) {
+                Map<String, String> topic0 = new HashMap<>();
+                topic0.put("foo", "bar");
+                topic0.put("spam", "eggs");
+                configConsumer.accept("topic-0", topic0);
+                configConsumer.accept("topic-1", Collections.singletonMap("foo", "bar"));
+                configConsumer.accept("topic-3", Collections.singletonMap("foo", "bar"));
+            }
+        };
+        CapturingAclMigrationClient aclClient = new CapturingAclMigrationClient();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(0)
+            .setTopicMigrationClient(topicClient)
+            .setConfigMigrationClient(configClient)
+            .setAclMigrationClient(aclClient)
+            .build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.TOPIC.id()).setResourceName("topic-0").setName("foo").setValue("bar"));
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.TOPIC.id()).setResourceName("topic-1").setName("foo").setValue("bar"));
+        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.TOPIC.id()).setResourceName("topic-2").setName("foo").setValue("bar"));
+
+        ConfigurationsImage image = delta.apply();
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        writer.handleConfigsSnapshot(image, consumer);
+
+        assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, "topic-3")),
+                "Topic topic-3 is not in the ConfigurationsImage, it should get deleted");
+
+        assertEquals(
+                Collections.singletonMap("foo", "bar"),
+                configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, "topic-0")),
+                "Topic topic-0 only has foo=bar in image, should overwrite the ZK config");
+
+        assertFalse(configClient.writtenConfigs.containsKey(new ConfigResource(ConfigResource.Type.TOPIC, "topic-1")),
+                "Topic topic-1 config is the same in image, so no write should happen");
+
+        assertEquals(
+                Collections.singletonMap("foo", "bar"),
+                configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, "topic-2")),
+                "Topic topic-2 not present in ZK, should see an update");
+
+        assertEquals(2, opCounts.get(UPDATE_TOPIC_CONFIG));
+        assertEquals(1, opCounts.get(DELETE_TOPIC_CONFIG));
+    }
+
+    @Test
+    public void testInvalidConfigSnapshot() {
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder().build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
+        delta.replay(new ConfigRecord().setResourceType((byte) 99).setResourceName("resource").setName("foo").setValue("bar"));
+
+        ConfigurationsImage image = delta.apply();
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        assertThrows(RuntimeException.class, () -> writer.handleConfigsSnapshot(image, consumer),
+            "Should throw due to invalid resource in image");
     }
 }
