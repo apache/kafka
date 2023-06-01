@@ -77,24 +77,16 @@ public class PartitionChangeBuilderTest {
         );
     }
 
-    private static final PartitionRegistration FOO;
-
-    static {
-        try {
-            FOO = new PartitionRegistration.Builder().
-                setReplicas(new int[] {2, 1, 3}).
-                setIsr(new int[] {2, 1, 3}).
-                setRemovingReplicas(Replicas.NONE).
-                setAddingReplicas(Replicas.NONE).
-                setLeader(1).
-                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-                setLeaderEpoch(100).
-                setPartitionEpoch(200).
-                build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private static final PartitionRegistration FOO = new PartitionRegistration.Builder().
+        setReplicas(new int[] {2, 1, 3}).
+        setIsr(new int[] {2, 1, 3}).
+        setRemovingReplicas(Replicas.NONE).
+        setAddingReplicas(Replicas.NONE).
+        setLeader(1).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
@@ -102,16 +94,16 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, true);
     }
 
-    private static final PartitionRegistration BAR;
-
-    static {
-        try {
-            BAR = new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {4}).
-                setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private static final PartitionRegistration BAR = new PartitionRegistration.Builder().
+        setReplicas(new int[] {1, 2, 3, 4}).
+        setIsr(new int[] {1, 2, 3}).
+        setRemovingReplicas(new int[] {1}).
+        setAddingReplicas(new int[] {4}).
+        setLeader(1).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
@@ -119,16 +111,16 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, true);
     }
 
-    private static final PartitionRegistration BAZ;
-
-    static {
-        try {
-            BAZ = new PartitionRegistration.Builder().setReplicas(new int[] {2, 1, 3}).setIsr(new int[] {1, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
-                setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private static final PartitionRegistration BAZ = new PartitionRegistration.Builder().
+        setReplicas(new int[] {2, 1, 3}).
+        setIsr(new int[] {1, 3}).
+        setRemovingReplicas(Replicas.NONE).
+        setAddingReplicas(Replicas.NONE).
+        setLeader(3).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
 
@@ -136,16 +128,16 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true, true);
     }
 
-    private static final PartitionRegistration OFFLINE;
-
-    static {
-        try {
-            OFFLINE = new PartitionRegistration.Builder().setReplicas(new int[] {2, 1, 3}).setIsr(new int[] {3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
-                setLeader(-1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private static final PartitionRegistration OFFLINE = new PartitionRegistration.Builder().
+        setReplicas(new int[] {2, 1, 3}).
+        setIsr(new int[] {3}).
+        setRemovingReplicas(Replicas.NONE).
+        setAddingReplicas(Replicas.NONE).
+        setLeader(-1).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
@@ -364,7 +356,7 @@ public class PartitionChangeBuilderTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported) throws Exception {
+    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported) {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
@@ -426,7 +418,7 @@ public class PartitionChangeBuilderTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported) throws Exception {
+    void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported) {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         PartitionRegistration registration = new PartitionRegistration.Builder().
@@ -479,7 +471,7 @@ public class PartitionChangeBuilderTest {
     }
 
     @Test
-    public void testStoppedLeaderIsDemotedAfterReassignmentCompletesEvenIfNoNewEligibleLeaders() throws Exception {
+    public void testStoppedLeaderIsDemotedAfterReassignmentCompletesEvenIfNoNewEligibleLeaders() {
         // Set up PartitionRegistration as if there's an ongoing reassignment from [0, 1] to [2, 3]
         int[] replicas = new int[] {2, 3, 0, 1};
         // The ISR starts off with the old replicas

@@ -639,13 +639,7 @@ public class ReplicationControlManager {
                         "All brokers specified in the manual partition assignment for " +
                         "partition " + assignment.partitionIndex() + " are fenced or in controlled shutdown.");
                 }
-                PartitionRegistration partitionRegistration;
-                try {
-                    partitionRegistration = buildPartitionRegistration(assignment.brokerIds(), isr);
-                } catch (Exception e) {
-                    log.error("Failed to create partition registration.", e);
-                    return new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Failed to create partition registration: " + e.getMessage());
-                }
+                PartitionRegistration partitionRegistration = buildPartitionRegistration(assignment.brokerIds(), isr);
                 newParts.put(assignment.partitionIndex(), partitionRegistration);
             }
             for (int i = 0; i < newParts.size(); i++) {
@@ -692,13 +686,7 @@ public class ReplicationControlManager {
                             "Unable to replicate the partition " + replicationFactor +
                                 " time(s): All brokers are currently fenced or in controlled shutdown.");
                     }
-                    PartitionRegistration partitionRegistration;
-                    try {
-                        partitionRegistration = buildPartitionRegistration(replicas, isr);
-                    } catch (Exception e) {
-                        log.error("Failed to create partition registration.", e);
-                        return new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Failed to create partition registration: " + e.getMessage());
-                    }
+                    PartitionRegistration partitionRegistration = buildPartitionRegistration(replicas, isr);
                     newParts.put(partitionId, partitionRegistration);
                 }
             } catch (InvalidReplicationFactorException e) {
@@ -759,14 +747,12 @@ public class ReplicationControlManager {
     }
 
     private static PartitionRegistration buildPartitionRegistration(
-        List<Integer> assignment,
+        List<Integer> replicas,
         List<Integer> isr
-    ) throws Exception {
+    ) {
         return new PartitionRegistration.Builder().
-            setReplicas(Replicas.toArray(assignment)).
+            setReplicas(Replicas.toArray(replicas)).
             setIsr(Replicas.toArray(isr)).
-            setRemovingReplicas(Replicas.NONE).
-            setAddingReplicas(Replicas.NONE).
             setLeader(isr.get(0)).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(0).

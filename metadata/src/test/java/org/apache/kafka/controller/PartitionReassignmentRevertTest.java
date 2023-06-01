@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(40)
 public class PartitionReassignmentRevertTest {
     @Test
-    public void testNoneAddedOrRemoved() throws Exception {
+    public void testNoneAddedOrRemoved() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
                 setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
@@ -44,7 +44,7 @@ public class PartitionReassignmentRevertTest {
     }
 
     @Test
-    public void testSomeRemoving() throws Exception {
+    public void testSomeRemoving() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
             setRemovingReplicas(new int[]{2, 1}).setAddingReplicas(Replicas.NONE).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
@@ -55,7 +55,7 @@ public class PartitionReassignmentRevertTest {
     }
 
     @Test
-    public void testSomeAdding() throws Exception {
+    public void testSomeAdding() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5, 2}).
             setRemovingReplicas(Replicas.NONE).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
@@ -66,7 +66,7 @@ public class PartitionReassignmentRevertTest {
     }
 
     @Test
-    public void testSomeRemovingAndAdding() throws Exception {
+    public void testSomeRemovingAndAdding() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5, 2}).
             setRemovingReplicas(new int[]{2}).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
@@ -77,7 +77,7 @@ public class PartitionReassignmentRevertTest {
     }
 
     @Test
-    public void testIsrSpecialCase() throws Exception {
+    public void testIsrSpecialCase() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5}).
             setRemovingReplicas(new int[]{2}).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();

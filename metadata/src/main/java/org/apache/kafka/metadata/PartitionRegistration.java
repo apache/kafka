@@ -40,8 +40,8 @@ public class PartitionRegistration {
     static public class Builder {
         private int[] replicas;
         private int[] isr;
-        private int[] removingReplicas = new int[0];
-        private int[] addingReplicas = new int[0];
+        private int[] removingReplicas = Replicas.NONE;
+        private int[] addingReplicas = Replicas.NONE;
         private Integer leader;
         private LeaderRecoveryState leaderRecoveryState;
         private Integer leaderEpoch;
@@ -87,7 +87,7 @@ public class PartitionRegistration {
             return this;
         }
 
-        public PartitionRegistration build() throws Exception {
+        public PartitionRegistration build() {
             if (replicas == null) {
                 throw new IllegalStateException("You must set replicas.");
             } else if (isr == null) {
