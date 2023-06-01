@@ -493,7 +493,8 @@ public class PartitionChangeBuilderTest {
             setLeader(leader).
             setLeaderRecoveryState(leaderRecoveryState).
             setLeaderEpoch(leaderEpoch).
-            setPartitionEpoch(partitionEpoch).build();
+            setPartitionEpoch(partitionEpoch).
+            build();
 
         Uuid topicId = Uuid.randomUuid();
         // Always return false for valid leader. This is so none of the new replicas are valid leaders. This is so we

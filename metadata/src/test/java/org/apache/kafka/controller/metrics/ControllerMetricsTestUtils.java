@@ -74,8 +74,6 @@ public class ControllerMetricsTestUtils {
         return new PartitionRegistration.Builder().
             setReplicas(new int[] {0, 1, 2}).
             setIsr(new int[] {0, 1, 2}).
-            setRemovingReplicas(new int[] {}).
-            setAddingReplicas(new int[] {}).
             setLeader(leader).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(100).

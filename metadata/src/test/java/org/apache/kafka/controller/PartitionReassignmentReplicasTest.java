@@ -131,7 +131,7 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
-    public void testIsReassignmentInProgress() throws Exception {
+    public void testIsReassignmentInProgress() {
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).

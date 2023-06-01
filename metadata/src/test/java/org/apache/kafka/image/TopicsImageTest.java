@@ -137,8 +137,7 @@ public class TopicsImageTest {
         DELTA1 = new TopicsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        List<TopicImage> topics2;
-        topics2 = Arrays.asList(
+        List<TopicImage> topics2 = Arrays.asList(
             newTopicImage("bar", BAR_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
                     setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(346).build()),
@@ -166,8 +165,6 @@ public class TopicsImageTest {
         return new PartitionRegistration.Builder().
             setReplicas(replicas).
             setIsr(replicas).
-            setRemovingReplicas(Replicas.NONE).
-            setAddingReplicas(Replicas.NONE).
             setLeader(replicas[0]).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(1).

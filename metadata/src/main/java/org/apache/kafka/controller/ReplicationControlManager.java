@@ -639,8 +639,10 @@ public class ReplicationControlManager {
                         "All brokers specified in the manual partition assignment for " +
                         "partition " + assignment.partitionIndex() + " are fenced or in controlled shutdown.");
                 }
-                PartitionRegistration partitionRegistration = buildPartitionRegistration(assignment.brokerIds(), isr);
-                newParts.put(assignment.partitionIndex(), partitionRegistration);
+                newParts.put(
+                    assignment.partitionIndex(),
+                    buildPartitionRegistration(assignment.brokerIds(), isr)
+                );
             }
             for (int i = 0; i < newParts.size(); i++) {
                 if (!newParts.containsKey(i)) {
@@ -686,8 +688,10 @@ public class ReplicationControlManager {
                             "Unable to replicate the partition " + replicationFactor +
                                 " time(s): All brokers are currently fenced or in controlled shutdown.");
                     }
-                    PartitionRegistration partitionRegistration = buildPartitionRegistration(replicas, isr);
-                    newParts.put(partitionId, partitionRegistration);
+                    newParts.put(
+                        partitionId,
+                        buildPartitionRegistration(replicas, isr)
+                    );
                 }
             } catch (InvalidReplicationFactorException e) {
                 return new ApiError(Errors.INVALID_REPLICATION_FACTOR,

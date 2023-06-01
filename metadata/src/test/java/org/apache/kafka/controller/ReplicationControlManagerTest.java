@@ -1391,7 +1391,8 @@ public class ReplicationControlManagerTest {
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
                 setLeaderEpoch(0).
-                setPartitionEpoch(0).build(),
+                setPartitionEpoch(0).
+                build(),
             replicationControl.getPartition(
                 ((TopicRecord) result.records().get(0).message()).topicId(), 1));
     }
@@ -1578,7 +1579,8 @@ public class ReplicationControlManagerTest {
                 setLeader(1).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
                 setLeaderEpoch(1).
-                setPartitionEpoch(1).build(),
+                setPartitionEpoch(1).
+                build(),
             replication.getPartition(fooId, 0));
 
         AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData()
@@ -1721,7 +1723,8 @@ public class ReplicationControlManagerTest {
                 setLeader(1).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
                 setLeaderEpoch(0).
-                setPartitionEpoch(0).build(),
+                setPartitionEpoch(0).
+                build(),
             replication.getPartition(fooId, 0));
 
         ctx.inControlledShutdownBrokers(3);
