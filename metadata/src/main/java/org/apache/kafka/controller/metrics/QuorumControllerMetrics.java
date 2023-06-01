@@ -60,6 +60,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
+    private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
@@ -148,6 +149,18 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public long lastAppliedRecordTimestamp() {
         return lastAppliedRecordTimestamp.get();
+    }
+
+    public void incrementTimedOutHeartbeats() {
+        timedOutHeartbeats.addAndGet(1);
+    }
+
+    public void setTimedOutHeartbeats(long heartbeats) {
+        timedOutHeartbeats.set(heartbeats);
+    }
+
+    public long timedOutHeartbeats() {
+        return timedOutHeartbeats.get();
     }
 
     @Override

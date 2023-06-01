@@ -616,7 +616,7 @@ class LogSegmentTest {
       topicPartition,
       logDir,
       5 * 60 * 1000,
-      new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+      new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
       new MockTime()
     )
   }
