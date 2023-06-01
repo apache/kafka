@@ -814,10 +814,8 @@ public class RemoteLogManager implements Closeable {
                 return isSegmentDeleted;
             }
 
-            // There are two cases:
-            // 1) When there are offline partitions and a new replica with empty disk is brought as leader, then the
-            //    leader-epoch gets bumped but the log-start-offset gets truncated back to 0.
-            // 2) To remove the unreferenced segments.
+            // It removes the segments beyond the current leader's earliest epoch. Those segments are considered as
+            // unreferenced because they are not part of the current leader epoch lineage.
             private boolean deleteLogSegmentsDueToLeaderEpochCacheTruncation(EpochEntry earliestEpochEntry, RemoteLogSegmentMetadata metadata) throws RemoteStorageException, ExecutionException, InterruptedException {
                 boolean isSegmentDeleted = deleteRemoteLogSegment(metadata, x ->
                         x.segmentLeaderEpochs().keySet().stream().allMatch(epoch -> epoch < earliestEpochEntry.epoch));
