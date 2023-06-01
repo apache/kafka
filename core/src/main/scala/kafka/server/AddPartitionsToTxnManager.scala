@@ -57,12 +57,12 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       // 2. Incoming data has the same epoch -- return NETWORK_EXCEPTION for existing data, since the client is likely retrying and we want another retriable exception
       // 3. Incoming data has a lower epoch -- return INVALID_PRODUCER_EPOCH for the incoming data since it is fenced, do not add incoming data to verify
       if (existingTransactionData != null) {
-        if (existingTransactionData.producerEpoch() <= transactionData.producerEpoch()) {
-          val error = if (existingTransactionData.producerEpoch() < transactionData.producerEpoch())
+        if (existingTransactionData.producerEpoch <= transactionData.producerEpoch) {
+          val error = if (existingTransactionData.producerEpoch < transactionData.producerEpoch)
             Errors.INVALID_PRODUCER_EPOCH
           else
             Errors.NETWORK_EXCEPTION
-          val oldCallback = existingNodeAndTransactionData.callbacks(transactionData.transactionalId())
+          val oldCallback = existingNodeAndTransactionData.callbacks(transactionData.transactionalId)
           existingNodeAndTransactionData.transactionData.remove(transactionData)
           oldCallback(topicPartitionsToError(existingTransactionData, error))
         } else {
@@ -73,16 +73,16 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       }
 
       existingNodeAndTransactionData.transactionData.add(transactionData)
-      existingNodeAndTransactionData.callbacks.put(transactionData.transactionalId(), callback)
+      existingNodeAndTransactionData.callbacks.put(transactionData.transactionalId, callback)
       wakeup()
     }
   }
 
   private def topicPartitionsToError(transactionData: AddPartitionsToTxnTransaction, error: Errors): Map[TopicPartition, Errors] = {
     val topicPartitionsToError = mutable.Map[TopicPartition, Errors]()
-    transactionData.topics().forEach { topic =>
-      topic.partitions().forEach { partition =>
-        topicPartitionsToError.put(new TopicPartition(topic.name(), partition), error)
+    transactionData.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        topicPartitionsToError.put(new TopicPartition(topic.name, partition), error)
       }
     }
     topicPartitionsToError.toMap
@@ -92,58 +92,58 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     override def onComplete(response: ClientResponse): Unit = {
       // Note: Synchronization is not needed on inflightNodes since it is always accessed from this thread.
       inflightNodes.remove(node)
-      if (response.authenticationException() != null) {
-        error(s"AddPartitionsToTxnRequest failed for node ${response.destination()} with an " +
+      if (response.authenticationException != null) {
+        error(s"AddPartitionsToTxnRequest failed for node ${response.destination} with an " +
           "authentication exception.", response.authenticationException)
         transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-          callback(buildErrorMap(txnId, Errors.forException(response.authenticationException()).code()))
+          callback(buildErrorMap(txnId, Errors.forException(response.authenticationException).code))
         }
       } else if (response.versionMismatch != null) {
         // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it.
         // In this case, skip verification.
-        warn(s"AddPartitionsToTxnRequest failed for node ${response.destination()} with invalid version exception. This suggests verification is not supported." +
+        warn(s"AddPartitionsToTxnRequest failed for node ${response.destination} with invalid version exception. This suggests verification is not supported." +
           s"Continuing handling the produce request.")
         transactionDataAndCallbacks.callbacks.values.foreach(_(Map.empty))
-      } else if (response.wasDisconnected() || response.wasTimedOut()) {
-        warn(s"AddPartitionsToTxnRequest failed for node ${response.destination()} with a network exception.")
+      } else if (response.wasDisconnected || response.wasTimedOut) {
+        warn(s"AddPartitionsToTxnRequest failed for node ${response.destination} with a network exception.")
         transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-          callback(buildErrorMap(txnId, Errors.NETWORK_EXCEPTION.code()))
+          callback(buildErrorMap(txnId, Errors.NETWORK_EXCEPTION.code))
         }
       } else {
         val addPartitionsToTxnResponseData = response.responseBody.asInstanceOf[AddPartitionsToTxnResponse].data
         if (addPartitionsToTxnResponseData.errorCode != 0) {
-          error(s"AddPartitionsToTxnRequest for node ${response.destination()} returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
+          error(s"AddPartitionsToTxnRequest for node ${response.destination} returned with error ${Errors.forCode(addPartitionsToTxnResponseData.errorCode)}.")
           // The client should not be exposed to CLUSTER_AUTHORIZATION_FAILED so modify the error to signify the verification did not complete.
           // Older clients return with INVALID_RECORD and newer ones can return with INVALID_TXN_STATE.
-          val finalError = if (addPartitionsToTxnResponseData.errorCode() == Errors.CLUSTER_AUTHORIZATION_FAILED.code)
+          val finalError = if (addPartitionsToTxnResponseData.errorCode == Errors.CLUSTER_AUTHORIZATION_FAILED.code)
             Errors.INVALID_RECORD.code
           else
-            addPartitionsToTxnResponseData.errorCode()
+            addPartitionsToTxnResponseData.errorCode
 
           transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
             callback(buildErrorMap(txnId, finalError))
           }
         } else {
-          addPartitionsToTxnResponseData.resultsByTransaction().forEach { transactionResult =>
+          addPartitionsToTxnResponseData.resultsByTransaction.forEach { transactionResult =>
             val unverified = mutable.Map[TopicPartition, Errors]()
-            transactionResult.topicResults().forEach { topicResult =>
-              topicResult.resultsByPartition().forEach { partitionResult =>
-                val tp = new TopicPartition(topicResult.name(), partitionResult.partitionIndex())
-                if (partitionResult.partitionErrorCode() != Errors.NONE.code()) {
+            transactionResult.topicResults.forEach { topicResult =>
+              topicResult.resultsByPartition.forEach { partitionResult =>
+                val tp = new TopicPartition(topicResult.name, partitionResult.partitionIndex)
+                if (partitionResult.partitionErrorCode != Errors.NONE.code) {
                   // Producers expect to handle INVALID_PRODUCER_EPOCH in this scenario.
                   val code =
-                    if (partitionResult.partitionErrorCode() == Errors.PRODUCER_FENCED.code)
+                    if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
                     // Older clients return INVALID_RECORD
-                    else if (partitionResult.partitionErrorCode() == Errors.INVALID_TXN_STATE.code)
+                    else if (partitionResult.partitionErrorCode == Errors.INVALID_TXN_STATE.code)
                       Errors.INVALID_RECORD.code
                     else
-                      partitionResult.partitionErrorCode()
+                      partitionResult.partitionErrorCode
                   unverified.put(tp, Errors.forCode(code))
                 }
               }
             }
-            val callback = transactionDataAndCallbacks.callbacks(transactionResult.transactionalId())
+            val callback = transactionDataAndCallbacks.callbacks(transactionResult.transactionalId)
             callback(unverified.toMap)
           }
         }
