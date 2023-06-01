@@ -603,7 +603,7 @@ object KafkaMetadataLog extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       time = time,
       maxTransactionTimeoutMs = Int.MaxValue,
-      producerStateManagerConfig = new ProducerStateManagerConfig(Int.MaxValue),
+      producerStateManagerConfig = new ProducerStateManagerConfig(Int.MaxValue, false),
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,

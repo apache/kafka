@@ -50,6 +50,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -258,6 +259,27 @@ public class KRaftMigrationZkWriter {
     void handleClientQuotasSnapshot(ClientQuotasImage clientQuotasImage, ScramImage scramImage) {
         Set<ClientQuotaEntity> changedNonUserEntities = new HashSet<>();
         Set<String> changedUsers = new HashSet<>();
+
+        if (clientQuotasImage != null) {
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : clientQuotasImage.entities().entrySet()) {
+                ClientQuotaEntity entity = entry.getKey();
+                if (entity.entries().containsKey(ClientQuotaEntity.USER) &&
+                    !entity.entries().containsKey(ClientQuotaEntity.CLIENT_ID)) {
+                    // Track regular user entities separately
+                    // There should only be 1 entry in the list of type ClientQuotaEntity.USER
+                    changedUsers.add(entity.entries().get(ClientQuotaEntity.USER));
+                } else {
+                    changedNonUserEntities.add(entity);
+                }
+            }
+        }
+        if (scramImage != null) {
+            for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : scramImage.mechanisms().entrySet()) {
+                for (Entry<String, ScramCredentialData> userEntry : mechanismEntry.getValue().entrySet()) {
+                    changedUsers.add(userEntry.getKey());
+                }
+            }
+        }
         migrationClient.configClient().iterateClientQuotas(new ConfigMigrationClient.ClientQuotaVisitor() {
             @Override
             public void visitClientQuota(List<ClientQuotaRecord.EntityData> entityDataList, Map<String, Double> quotas) {
@@ -293,12 +315,12 @@ public class KRaftMigrationZkWriter {
 
         changedUsers.forEach(userName -> {
             ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
-            Map<String, Double> quotaMap = clientQuotasImage.entities().get(entity).quotaMap();
+            Map<String, Double> quotaMap = clientQuotasImage.entities().
+                getOrDefault(entity, ClientQuotaImage.EMPTY).quotaMap();
             Map<String, String> scramMap = getScramCredentialStringsForUser(scramImage, userName);
             operationConsumer.accept("Update scram credentials for " + userName, migrationState ->
                 migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, scramMap, migrationState));
         });
-
 
     }
 

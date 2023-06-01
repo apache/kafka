@@ -661,7 +661,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                         throw new DataException("Mismatching schema.");
                     ObjectNode obj = JSON_NODE_FACTORY.objectNode();
                     for (Field field : schema.fields()) {
-                        obj.set(field.name(), convertToJson(field.schema(), struct.get(field)));
+                        obj.set(field.name(), convertToJson(field.schema(), struct.getWithoutDefault(field.name())));
                     }
                     return obj;
                 }
