@@ -34,10 +34,9 @@ public class RocksDBTimeOrderedKeyValueSegmentedBytesStore extends AbstractRocks
     RocksDBTimeOrderedKeyValueSegmentedBytesStore(final String name,
                                                   final String metricsScope,
                                                   final long retention,
-                                                  final long segmentInterval,
-                                                  final boolean withIndex) {
+                                                  final long segmentInterval) {
         super(name, metricsScope, retention, segmentInterval, new TimeFirstWindowKeySchema(),
-            Optional.ofNullable(withIndex ? new KeyFirstWindowKeySchema() : null));
+            Optional.ofNullable(null));
     }
 
     @Override

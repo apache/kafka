@@ -19,14 +19,11 @@ package org.apache.kafka.streams.state.internals;
 public class RocksDbTimeOrderedKeyValueBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
-    private final boolean withIndex;
 
     public RocksDbTimeOrderedKeyValueBytesStoreSupplier(final String name,
-                                                        final long retentionPeriod,
-                                                        final boolean withIndex) {
+                                                        final long retentionPeriod) {
         this.name = name + "-buffer";
         this.retentionPeriod = retentionPeriod;
-        this.withIndex = withIndex;
     }
 
     public String name() {
@@ -38,13 +35,12 @@ public class RocksDbTimeOrderedKeyValueBytesStoreSupplier {
             name,
             metricsScope(),
             retentionPeriod,
-            Math.max(retentionPeriod / 2, 60_000L),
-            withIndex
+            Math.max(retentionPeriod / 2, 60_000L)
         );
     }
 
     public String metricsScope() {
-        return "rocksdb-session";
+        return "rocksdb-buffer";
     }
 
 }
