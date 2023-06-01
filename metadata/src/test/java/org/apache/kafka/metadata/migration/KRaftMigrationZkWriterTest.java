@@ -63,8 +63,8 @@ public class KRaftMigrationZkWriterTest {
                 // Skip partition 1, visit 3 (the extra one)
                 IntStream.of(0, 2, 3).forEach(partitionId -> {
                     visitor.visitPartition(
-                            new TopicIdPartition(TopicsImageTest.FOO_UUID, new TopicPartition("foo", partitionId)),
-                            TopicsImageTest.IMAGE1.getPartition(TopicsImageTest.FOO_UUID, partitionId)
+                        new TopicIdPartition(TopicsImageTest.FOO_UUID, new TopicPartition("foo", partitionId)),
+                        TopicsImageTest.IMAGE1.getPartition(TopicsImageTest.FOO_UUID, partitionId)
                     );
                 });
 
@@ -74,28 +74,28 @@ public class KRaftMigrationZkWriterTest {
         CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
         CapturingAclMigrationClient aclClient = new CapturingAclMigrationClient();
         CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
-                .setBrokersInZk(0)
-                .setTopicMigrationClient(topicClient)
-                .setConfigMigrationClient(configClient)
-                .build();
+            .setBrokersInZk(0)
+            .setTopicMigrationClient(topicClient)
+            .setConfigMigrationClient(configClient)
+            .build();
 
-        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient, (opLog, operation) -> {
-            operation.apply(ZkMigrationLeadershipState.EMPTY);
-        });
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
 
         MetadataImage image = new MetadataImage(
-                MetadataProvenance.EMPTY,
-                FeaturesImage.EMPTY,
-                ClusterImage.EMPTY,
-                TopicsImageTest.IMAGE1,     // This includes "foo" with 3 partitions
-                ConfigurationsImage.EMPTY,
-                ClientQuotasImage.EMPTY,
-                ProducerIdsImage.EMPTY,
-                AclsImage.EMPTY,
-                ScramImage.EMPTY
+            MetadataProvenance.EMPTY,
+            FeaturesImage.EMPTY,
+            ClusterImage.EMPTY,
+            TopicsImageTest.IMAGE1,     // This includes "foo" with 3 partitions
+            ConfigurationsImage.EMPTY,
+            ClientQuotasImage.EMPTY,
+            ProducerIdsImage.EMPTY,
+            AclsImage.EMPTY,
+            ScramImage.EMPTY
         );
 
-        writer.handleSnapshot(image);
+        writer.handleSnapshot(image, (opType, opLog, operation) -> {
+            operation.apply(ZkMigrationLeadershipState.EMPTY);
+        });
         assertEquals(topicClient.updatedTopics.get("foo").size(), 3);
         assertEquals(topicClient.deletedTopicPartitions.get("foo"), Collections.singleton(3));
         assertEquals(topicClient.updatedTopicPartitions.get("foo"), Collections.singleton(1));

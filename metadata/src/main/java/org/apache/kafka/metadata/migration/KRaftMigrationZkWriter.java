@@ -64,6 +64,7 @@ public class KRaftMigrationZkWriter {
 
     private static final String UPDATE_PRODUCER_ID = "UpdateProducerId";
     private static final String CREATE_TOPIC = "CreateTopic";
+    private static final String UPDATE_TOPIC = "UpdateTopic";
     private static final String DELETE_TOPIC = "DeleteTopic";
     private static final String UPDATE_PARTITON = "UpdatePartition";
     private static final String DELETE_PARTITION = "DeletePartition";
@@ -208,6 +209,7 @@ public class KRaftMigrationZkWriter {
         changedTopics.forEach(topicId -> {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
+                UPDATE_TOPIC,
                 "Changed Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopic(topic.name(), topicId, topic.partitions(), migrationState)
             );
@@ -282,6 +284,7 @@ public class KRaftMigrationZkWriter {
             } else {
                 if (topicDelta.hasPartitionsWithAssignmentChanges())
                     operationConsumer.accept(
+                        UPDATE_TOPIC,
                         "Updating Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().updateTopic(
                             topicDelta.name(),
@@ -292,6 +295,7 @@ public class KRaftMigrationZkWriter {
                 Map<Integer, PartitionRegistration> changedPartitions = topicDelta.partitionChanges();
                 if (!newPartitions.isEmpty()) {
                     operationConsumer.accept(
+                        UPDATE_PARTITON,
                         "Create new partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().createTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), newPartitions),
@@ -302,6 +306,7 @@ public class KRaftMigrationZkWriter {
                     // Need a final for the lambda
                     final Map<Integer, PartitionRegistration> finalChangedPartitions = changedPartitions;
                     operationConsumer.accept(
+                        UPDATE_PARTITON,
                         "Updating Partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().updateTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), finalChangedPartitions),
