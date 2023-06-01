@@ -40,8 +40,8 @@ public class PartitionRegistration {
     static public class Builder {
         private int[] replicas;
         private int[] isr;
-        private int[] removingReplicas;
-        private int[] addingReplicas;
+        private int[] removingReplicas = new int[0];
+        private int[] addingReplicas = new int[0];
         private Integer leader;
         private LeaderRecoveryState leaderRecoveryState;
         private Integer leaderEpoch;
@@ -143,7 +143,7 @@ public class PartitionRegistration {
             record.partitionEpoch());
     }
 
-    protected PartitionRegistration(int[] replicas, int[] isr, int[] removingReplicas,
+    private PartitionRegistration(int[] replicas, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch) {
         this.replicas = replicas;

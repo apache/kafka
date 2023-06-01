@@ -148,24 +148,6 @@ public class PartitionRegistrationTest {
     }
 
     @Test
-    public void testBuilderThrowsIllegalStateExceptionWhenMissingRemovingReplicas() {
-        PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
-            setReplicas(new int[]{0}).
-            setIsr(new int[]{0});
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
-        assertEquals("You must set removing replicas.", exception.getMessage());
-    }
-
-    @Test
-    public void testBuilderThrowsIllegalStateExceptionWhenMissingAddingReplicas() {
-        PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
-            setReplicas(new int[]{0}).
-            setIsr(new int[]{0}).setRemovingReplicas(new int[]{0});
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
-        assertEquals("You must set adding replicas.", exception.getMessage());
-    }
-
-    @Test
     public void testBuilderThrowsIllegalStateExceptionWhenMissingLeader() {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
             setReplicas(new int[]{0}).
@@ -218,18 +200,37 @@ public class PartitionRegistrationTest {
     @Test
     public void testBuilderSuccess() throws Exception {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
-            setReplicas(new int[]{0}).
-            setIsr(new int[]{0}).
+            setReplicas(new int[]{0, 1}).
+            setIsr(new int[]{0, 1}).
             setRemovingReplicas(new int[]{0}).
-            setAddingReplicas(new int[]{0}).
+            setAddingReplicas(new int[]{1}).
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(0).
             setPartitionEpoch(0);
         PartitionRegistration partitionRegistration = builder.build();
-        assertEquals(new PartitionRegistration(
-                new int[]{0}, new int[]{0}, new int[]{0}, new int[]{0}, 0, LeaderRecoveryState.RECOVERED, 0, 0),
-            partitionRegistration);
+        assertEquals(Replicas.toList(new int[]{0, 1}), Replicas.toList(partitionRegistration.replicas));
+        assertEquals(Replicas.toList(new int[]{0, 1}), Replicas.toList(partitionRegistration.isr));
+        assertEquals(Replicas.toList(new int[]{0}), Replicas.toList(partitionRegistration.removingReplicas));
+        assertEquals(Replicas.toList(new int[]{1}), Replicas.toList(partitionRegistration.addingReplicas));
+        assertEquals(0, partitionRegistration.leader);
+        assertEquals(LeaderRecoveryState.RECOVERED, partitionRegistration.leaderRecoveryState);
+        assertEquals(0, partitionRegistration.leaderEpoch);
+        assertEquals(0, partitionRegistration.partitionEpoch);
+    }
+
+    @Test
+    public void testBuilderSetsDefaultAddingAndRemovingReplicas() throws Exception {
+        PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
+            setReplicas(new int[]{0, 1}).
+            setIsr(new int[]{0, 1}).
+            setLeader(0).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(0).
+            setPartitionEpoch(0);
+        PartitionRegistration partitionRegistration = builder.build();
+        assertEquals(Replicas.toList(new int[]{}), Replicas.toList(partitionRegistration.removingReplicas));
+        assertEquals(Replicas.toList(new int[]{}), Replicas.toList(partitionRegistration.addingReplicas));
     }
 
     @Property
