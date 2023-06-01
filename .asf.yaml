@@ -34,7 +34,7 @@ jenkins:
     - vamossagar12
     - clolov
     - fvaleri
-    - akhileshchg
+    - andymg3
 
 # This list allows you to triage pull requests. It can have a maximum of 10 people.
 # https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-AssigningexternalcollaboratorswiththetriageroleonGitHub
@@ -49,4 +49,4 @@ github:
     - vamossagar12
     - clolov
     - fvaleri
-    - akhileshchg
+    - andymg3
