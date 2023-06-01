@@ -28,7 +28,6 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
@@ -101,11 +100,11 @@ public class TopicsImageTest {
         TOPIC_IMAGES1 = Arrays.asList(
             newTopicImage("foo", FOO_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
-                    setIsr(new int[] {2, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build(),
+                    setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build(),
                 new PartitionRegistration.Builder().setReplicas(new int[] {3, 4, 5}).
-                    setIsr(new int[] {3, 4, 5}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build(),
+                    setIsr(new int[] {3, 4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build(),
                 new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
-                    setIsr(new int[] {2, 4, 5}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(10).setPartitionEpoch(84).build()),
+                    setIsr(new int[] {2, 4, 5}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(10).setPartitionEpoch(84).build()),
             newTopicImage("bar", BAR_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
                     setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));

@@ -23,7 +23,6 @@ import java.util.Optional;
 
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -148,7 +147,6 @@ public class PartitionReassignmentReplicasTest {
                 setReplicas(new int[]{0, 1, 3, 2}).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setRemovingReplicas(new int[]{2}).
-                setAddingReplicas(Replicas.NONE).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
                 setLeaderEpoch(0).
@@ -158,7 +156,6 @@ public class PartitionReassignmentReplicasTest {
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).
                 setIsr(new int[]{0, 1, 3, 2}).
-                setRemovingReplicas(Replicas.NONE).
                 setAddingReplicas(new int[]{3}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -169,8 +166,6 @@ public class PartitionReassignmentReplicasTest {
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 2}).
                 setIsr(new int[]{0, 1, 2}).
-                setRemovingReplicas(Replicas.NONE).
-                setAddingReplicas(Replicas.NONE).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
                 setLeaderEpoch(0).

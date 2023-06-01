@@ -467,8 +467,6 @@ class ReplicaManagerConcurrencyTest {
     new PartitionRegistration.Builder().
       setReplicas(replicaIds.toArray).
       setIsr(isr.toArray).
-      setRemovingReplicas(Array.empty[Int]).
-      setAddingReplicas(Array.empty[Int]).
       setLeader(leader).
       setLeaderRecoveryState(leaderRecoveryState).
       setLeaderEpoch(leaderEpoch).

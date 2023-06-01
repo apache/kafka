@@ -54,11 +54,11 @@ public class PartitionRegistrationTest {
     @Test
     public void testPartitionControlInfoMergeAndDiff() {
         PartitionRegistration a = new PartitionRegistration.Builder().
-            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1, 2}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build();
+            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1, 2}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build();
         PartitionRegistration b = new PartitionRegistration.Builder().
-            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(1).build();
+            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{3}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(1).build();
         PartitionRegistration c = new PartitionRegistration.Builder().
-            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build();
+            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build();
         assertEquals(b, a.merge(new PartitionChangeRecord().
             setLeader(3).setIsr(Arrays.asList(3))));
         assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
@@ -70,7 +70,7 @@ public class PartitionRegistrationTest {
     @Test
     public void testRecordRoundTrip() {
         PartitionRegistration registrationA = new PartitionRegistration.Builder().
-            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1, 2}).setRemovingReplicas(new int[]{1}).setAddingReplicas(Replicas.NONE).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build();
+            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1, 2}).setRemovingReplicas(new int[]{1}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build();
         Uuid topicId = Uuid.fromString("OGdAI5nxT_m-ds3rJMqPLA");
         int partitionId = 4;
         ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId);
@@ -82,9 +82,9 @@ public class PartitionRegistrationTest {
     @Test
     public void testToLeaderAndIsrPartitionState() {
         PartitionRegistration a = new PartitionRegistration.Builder().
-            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1, 2}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(123).setPartitionEpoch(456).build();
+            setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1, 2}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(123).setPartitionEpoch(456).build();
         PartitionRegistration b = new PartitionRegistration.Builder().
-            setReplicas(new int[]{2, 3, 4}).setIsr(new int[]{2, 3, 4}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(234).setPartitionEpoch(567).build();
+            setReplicas(new int[]{2, 3, 4}).setIsr(new int[]{2, 3, 4}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(234).setPartitionEpoch(567).build();
         assertEquals(new LeaderAndIsrPartitionState().
                 setTopicName("foo").
                 setPartitionIndex(1).
@@ -116,7 +116,7 @@ public class PartitionRegistrationTest {
     @Test
     public void testMergePartitionChangeRecordWithReassignmentData() {
         PartitionRegistration partition0 = new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).
-            setIsr(new int[] {1, 2, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
+            setIsr(new int[] {1, 2, 3}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionRegistration partition1 = partition0.merge(new PartitionChangeRecord().
             setRemovingReplicas(Collections.singletonList(3)).
             setAddingReplicas(Collections.singletonList(4)).
@@ -129,7 +129,7 @@ public class PartitionRegistrationTest {
             setAddingReplicas(Collections.emptyList()).
             setReplicas(Arrays.asList(1, 2, 4)));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).
-            setIsr(new int[] {1, 2, 4}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(202).build(), partition2);
+            setIsr(new int[] {1, 2, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(202).build(), partition2);
     }
 
     @Test
@@ -250,23 +250,23 @@ public class PartitionRegistrationTest {
     @Provide
     Arbitrary<PartitionRegistration> uniqueSamples() {
         return Arbitraries.of(
-            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
+            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build(),
-            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
+            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(101).setPartitionEpoch(200).build(),
-            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
+            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(201).build(),
-            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
+            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).
                 setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build(),
-            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).
+            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING).setLeaderEpoch(100).setPartitionEpoch(200).build(),
             new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 5, 6}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {4, 5, 6}).setAddingReplicas(new int[] {1, 2, 3}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build(),
             new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 5, 6}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {1, 2, 3}).setAddingReplicas(new int[] {4, 5, 6}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build(),
-            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 5, 6}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {1, 2, 3}).setAddingReplicas(Replicas.NONE).
+            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 5, 6}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {1, 2, 3}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build(),
-            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 5, 6}).setIsr(new int[] {1, 2, 3}).setRemovingReplicas(Replicas.NONE).setAddingReplicas(new int[] {4, 5, 6}).
+            new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 5, 6}).setIsr(new int[] {1, 2, 3}).setAddingReplicas(new int[] {4, 5, 6}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build()
         );
     }

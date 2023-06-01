@@ -80,8 +80,6 @@ public class PartitionChangeBuilderTest {
     private static final PartitionRegistration FOO = new PartitionRegistration.Builder().
         setReplicas(new int[] {2, 1, 3}).
         setIsr(new int[] {2, 1, 3}).
-        setRemovingReplicas(Replicas.NONE).
-        setAddingReplicas(Replicas.NONE).
         setLeader(1).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
         setLeaderEpoch(100).
@@ -114,8 +112,6 @@ public class PartitionChangeBuilderTest {
     private static final PartitionRegistration BAZ = new PartitionRegistration.Builder().
         setReplicas(new int[] {2, 1, 3}).
         setIsr(new int[] {1, 3}).
-        setRemovingReplicas(Replicas.NONE).
-        setAddingReplicas(Replicas.NONE).
         setLeader(3).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
         setLeaderEpoch(100).
@@ -131,8 +127,6 @@ public class PartitionChangeBuilderTest {
     private static final PartitionRegistration OFFLINE = new PartitionRegistration.Builder().
         setReplicas(new int[] {2, 1, 3}).
         setIsr(new int[] {3}).
-        setRemovingReplicas(Replicas.NONE).
-        setAddingReplicas(Replicas.NONE).
         setLeader(-1).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
         setLeaderEpoch(100).
@@ -363,8 +357,6 @@ public class PartitionChangeBuilderTest {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
             setIsr(new int[] {leaderId}).
-            setRemovingReplicas(Replicas.NONE).
-            setAddingReplicas(Replicas.NONE).
             setLeader(leaderId).
             setLeaderRecoveryState(recoveryState).
             setLeaderEpoch(100).
@@ -424,8 +416,6 @@ public class PartitionChangeBuilderTest {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
             setIsr(new int[] {leaderId + 1, leaderId + 2}).
-            setRemovingReplicas(Replicas.NONE).
-            setAddingReplicas(Replicas.NONE).
             setLeader(NO_LEADER).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(100).

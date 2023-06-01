@@ -163,8 +163,6 @@ class BrokerMetadataPublisherTest {
       Int.box(partitionId) -> new PartitionRegistration.Builder().
         setReplicas(replicas.toArray).
         setIsr(replicas.toArray).
-        setRemovingReplicas(Array.empty[Int]).
-        setAddingReplicas(Array.empty[Int]).
         setLeader(replicas.head).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
         setLeaderEpoch(0).

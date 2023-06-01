@@ -21,7 +21,6 @@ import java.util.Arrays;
 
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -36,7 +35,7 @@ public class PartitionReassignmentRevertTest {
     public void testNoneAddedOrRemoved() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
-                setRemovingReplicas(Replicas.NONE).setAddingReplicas(Replicas.NONE).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
+            setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(3, 2), revert.isr());
@@ -47,7 +46,7 @@ public class PartitionReassignmentRevertTest {
     public void testSomeRemoving() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
-            setRemovingReplicas(new int[]{2, 1}).setAddingReplicas(Replicas.NONE).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
+            setRemovingReplicas(new int[]{2, 1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(3, 2), revert.isr());
@@ -58,7 +57,7 @@ public class PartitionReassignmentRevertTest {
     public void testSomeAdding() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5, 2}).
-            setRemovingReplicas(Replicas.NONE).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
+            setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(2), revert.isr());
