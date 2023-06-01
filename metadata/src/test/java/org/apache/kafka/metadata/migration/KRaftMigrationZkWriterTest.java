@@ -16,9 +16,19 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.image.AclsDelta;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.AclsImageTest;
 import org.apache.kafka.image.ClientQuotasImage;
@@ -43,6 +53,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.DELETE_BROKER_CONFIG;
@@ -383,5 +394,69 @@ public class KRaftMigrationZkWriterTest {
         writer.handleProducerIdDelta(delta, consumer);
         assertEquals(1, opCounts.size());
         assertEquals(2000, migrationClient.capturedProducerId);
+    }
+
+    @Test
+    public void testAclSnapshot() {
+        ResourcePattern resource1 = new ResourcePattern(ResourceType.TOPIC, "foo-" + Uuid.randomUuid(), PatternType.LITERAL);
+        ResourcePattern resource2 = new ResourcePattern(ResourceType.TOPIC, "bar-" + Uuid.randomUuid(), PatternType.LITERAL);
+        ResourcePattern resource3 = new ResourcePattern(ResourceType.TOPIC, "baz-" + Uuid.randomUuid(), PatternType.LITERAL);
+
+        KafkaPrincipal principal1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
+        KafkaPrincipal principal2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob");
+        AccessControlEntry acl1Resource1 = new AccessControlEntry(principal1.toString(), "*", AclOperation.WRITE, AclPermissionType.ALLOW);
+        AccessControlEntry acl1Resource2 = new AccessControlEntry(principal2.toString(), "*", AclOperation.READ, AclPermissionType.ALLOW);
+
+        CapturingAclMigrationClient aclClient = new CapturingAclMigrationClient() {
+            @Override
+            public void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer) {
+                aclConsumer.accept(resource1, Collections.singleton(acl1Resource1));
+                aclConsumer.accept(resource2, Collections.singleton(acl1Resource2));
+            }
+        };
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setAclMigrationClient(aclClient)
+            .build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        // Create an ACL for a new resource.
+        AclsDelta delta = new AclsDelta(AclsImage.EMPTY);
+        AccessControlEntryRecord acl1Resource3 = new AccessControlEntryRecord()
+            .setId(Uuid.randomUuid())
+            .setHost("192.168.10.1")
+            .setOperation(AclOperation.READ.code())
+            .setPrincipal("*")
+            .setPermissionType(AclPermissionType.ALLOW.code())
+            .setPatternType(resource3.patternType().code())
+            .setResourceName(resource3.name())
+            .setResourceType(resource3.resourceType().code());
+        // The equivalent ACE
+        AccessControlEntry ace1Resource3 = new AccessControlEntry("*", "192.168.10.1", AclOperation.READ, AclPermissionType.ALLOW);
+        delta.replay(acl1Resource3);
+
+        // Change an ACL for existing resource.
+        AccessControlEntryRecord acl2Resource1 = new AccessControlEntryRecord()
+            .setId(Uuid.randomUuid())
+            .setHost("192.168.15.1")
+            .setOperation(AclOperation.WRITE.code())
+            .setPrincipal(principal1.toString())
+            .setPermissionType(AclPermissionType.ALLOW.code())
+            .setPatternType(resource1.patternType().code())
+            .setResourceName(resource1.name())
+            .setResourceType(resource1.resourceType().code());
+        // The equivalent ACE
+        AccessControlEntry ace1Resource1 = new AccessControlEntry(principal1.toString(), "192.168.15.1", AclOperation.WRITE, AclPermissionType.ALLOW);
+        delta.replay(acl2Resource1);
+
+        // Do not add anything for resource 2 in the delta.
+        AclsImage image = delta.apply();
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        writer.handleAclsSnapshot(image, consumer);
+
+        assertTrue(aclClient.deletedResources.contains(resource2));
+        assertEquals(Collections.singleton(ace1Resource1), aclClient.updatedResources.get(resource1));
+        assertEquals(Collections.singleton(ace1Resource3), aclClient.updatedResources.get(resource3));
     }
 }
