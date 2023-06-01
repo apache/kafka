@@ -53,7 +53,9 @@ import java.util.stream.IntStream;
 public class ReplaceFieldBenchmark {
 
     @Param({"100", "1000", "10000"})
-    private int fieldCount;
+    private int valueFieldCount;
+    @Param({"1", "100", "10000"})
+    private int includeExcludeFieldCount;
     private ReplaceField<SourceRecord> replaceFieldSmt;
     private SourceRecord record;
 
@@ -62,13 +64,13 @@ public class ReplaceFieldBenchmark {
         this.replaceFieldSmt = new ReplaceField.Value<>();
         Map<String, String> replaceFieldConfigs = new HashMap<>();
         replaceFieldConfigs.put("exclude",
-                IntStream.range(0, fieldCount).filter(x -> (x & 1) == 0).mapToObj(x -> "Field-" + x).collect(Collectors.joining(",")));
+                IntStream.range(0, 2 * includeExcludeFieldCount).filter(x -> (x & 1) == 0).mapToObj(x -> "Field-" + x).collect(Collectors.joining(",")));
         replaceFieldConfigs.put("include",
-                IntStream.range(0, fieldCount).filter(x -> (x & 1) == 1).mapToObj(x -> "Field-" + x).collect(Collectors.joining(",")));
+                IntStream.range(0, 2 * includeExcludeFieldCount).filter(x -> (x & 1) == 1).mapToObj(x -> "Field-" + x).collect(Collectors.joining(",")));
         replaceFieldSmt.configure(replaceFieldConfigs);
 
         Map<String, Object> value = new HashMap<>();
-        IntStream.range(0, fieldCount).forEach(x -> value.put("Field-" + x, new Object()));
+        IntStream.range(0, valueFieldCount).forEach(x -> value.put("Field-" + x, new Object()));
         this.record = new SourceRecord(null, null, null, null, null, value);
     }
 
