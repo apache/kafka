@@ -977,6 +977,30 @@ public final class Utils {
     }
 
     /**
+     * Flushes dirty file to guarantee crash consistency.
+     *
+     * @throws IOException if flushing the file fails.
+     */
+    public static void flushFile(Path path) throws IOException {
+        if (path != null) {
+            try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
+                fileChannel.force(true);
+            }
+        }
+    }
+
+    /**
+     * Flushes dirty file quietly, logs warning when exception happens.
+     */
+    public static void flushFileQuietly(Path path, String name) {
+        try {
+            flushFile(path);
+        } catch (IOException e) {
+            log.warn("Failed to flush {} at path {} with exception {}", name, path, e);
+        }
+    }
+
+    /**
      * Closes all the provided closeables.
      * @throws IOException if any of the close methods throws an IOException.
      *         The first IOException is thrown with subsequent exceptions

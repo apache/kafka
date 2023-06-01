@@ -24,10 +24,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Crc32C;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.*;
 import org.apache.kafka.server.util.Scheduler;
 import org.slf4j.Logger;
 
@@ -688,21 +685,14 @@ public class ProducerStateManager {
         long crc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.limit() - PRODUCER_ENTRIES_OFFSET);
         ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
 
-        FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        fileChannel.write(buffer);
-        if (scheduler != null) {
-            scheduler.scheduleOnce("flush-snapshot", () -> closeSnapshotFile(fileChannel));
-        } else {
-            closeSnapshotFile(fileChannel);
+        try (FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            fileChannel.write(buffer);
         }
-    }
 
-    private static void closeSnapshotFile(FileChannel fileChannel) {
-        try {
-            fileChannel.force(true);
-            fileChannel.close();
-        } catch (IOException e) {
-            // ignore?
+        if (scheduler != null) {
+            scheduler.scheduleOnce("flush-producer-snapshot", () -> Utils.flushFileQuietly(file.toPath(), "producer-snapshot"));
+        } else {
+            Utils.flushFileQuietly(file.toPath(), "producer-snapshot");
         }
     }
 
