@@ -16,6 +16,7 @@
  */
 package kafka.log
 
+import kafka.common.LogSegmentOffsetOverflowException
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
@@ -27,6 +28,8 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{BatchMetadata, EpochEntry, LogConfig, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.io.File
 import java.util
@@ -63,6 +66,31 @@ class LogSegmentTest {
   def teardown(): Unit = {
     segments.foreach(_.close())
     Utils.delete(logDir)
+  }
+
+  /**
+   * LogSegmentOffsetOverflowException should be thrown while appending the logs if:
+   * 1. largestOffset - baseOffset < 0
+   * 2. largestOffset - baseOffset > Integer.MAX_VALUE
+   */
+  @ParameterizedTest
+  @CsvSource(Array(
+    "0, -2147483648",
+    "0, 2147483648",
+    "1, 0",
+    "100, 10",
+    "2147483648, 0",
+    "-2147483648, 0",
+    "2147483648,4294967296"
+  ))
+  def testAppendForLogSegmentOffsetOverflowException(baseOffset: Long, largestOffset: Long): Unit = {
+    val seg = createSegment(baseOffset)
+    val currentTime = Time.SYSTEM.milliseconds()
+    val shallowOffsetOfMaxTimestamp = largestOffset
+    val memoryRecords = records(0, "hello")
+    assertThrows(classOf[LogSegmentOffsetOverflowException], () => {
+      seg.append(largestOffset, currentTime, shallowOffsetOfMaxTimestamp, memoryRecords)
+    })
   }
 
   /**
