@@ -62,6 +62,12 @@ class PartitionWriterImpl[T](
   time: Time
 ) extends PartitionWriter[T] {
 
+  /**
+   * Register a PartitionWriter.Listener.
+   *
+   * @param tp       The partition to register the listener to.
+   * @param listener The listener.
+   */
   override def registerListener(
     tp: TopicPartition,
     listener: PartitionWriter.Listener
@@ -69,6 +75,12 @@ class PartitionWriterImpl[T](
     replicaManager.maybeAddListener(tp, new ListenerAdaptor(listener))
   }
 
+  /**
+   * Deregister a PartitionWriter.Listener.
+   *
+   * @param tp       The partition to deregister the listener from.
+   * @param listener The listener.
+   */
   override def deregisterListener(
     tp: TopicPartition,
     listener: PartitionWriter.Listener
@@ -76,13 +88,20 @@ class PartitionWriterImpl[T](
     replicaManager.removeListener(tp, new ListenerAdaptor(listener))
   }
 
+  /**
+   * Write records to the partitions. Records are written in one batch so
+   * atomicity is guaranteed.
+   *
+   * @param tp      The partition to write records to.
+   * @param records The list of records. The records are written in a single batch.
+   * @return The log end offset right after the written records.
+   * @throws KafkaException Any KafkaException caught during the write operation.
+   */
   override def append(
     tp: TopicPartition,
     records: util.List[T]
   ): Long = {
-    if (records.isEmpty) {
-      throw new IllegalStateException("records must be non-empty.")
-    }
+    if (records.isEmpty) throw new IllegalStateException("records must be non-empty.")
 
     replicaManager.getLogConfig(tp) match {
       case Some(logConfig) =>
@@ -103,17 +122,13 @@ class PartitionWriterImpl[T](
           val keyBytes = serializer.serializeKey(record)
           val valueBytes = serializer.serializeValue(record)
 
-          if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, valueBytes, EMPTY_HEADERS)) {
-            recordsBuilder.append(
-              currentTimeMs,
-              keyBytes,
-              valueBytes,
-              EMPTY_HEADERS
-            )
-          } else {
-            throw new RecordTooLargeException(s"Message batch size is ${recordsBuilder.estimatedSizeInBytes()} bytes " +
-              s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
-          }
+          if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, valueBytes, EMPTY_HEADERS)) recordsBuilder.append(
+            currentTimeMs,
+            keyBytes,
+            valueBytes,
+            EMPTY_HEADERS
+          ) else throw new RecordTooLargeException(s"Message batch size is ${recordsBuilder.estimatedSizeInBytes()} bytes " +
+            s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
         }
 
         val appendResults = replicaManager.appendToLocalLog(

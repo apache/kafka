@@ -201,7 +201,7 @@ class PartitionWriterImplTest {
   }
 
   @Test
-  def testInexistentPartition(): Unit = {
+  def testNonexistentPartition(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
     val partitionRecordWriter = new PartitionWriterImpl(
