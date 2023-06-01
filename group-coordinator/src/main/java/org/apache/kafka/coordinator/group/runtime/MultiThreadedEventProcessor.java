@@ -22,7 +22,6 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -48,12 +47,6 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     private final List<EventProcessorThread> threads;
 
     /**
-     * The lock for protecting access to the resources during the
-     * shutting down.
-     */
-    private final ReentrantLock lock;
-
-    /**
      * A boolean indicated whether the event processor is shutting down.
      */
     private volatile boolean shuttingDown;
@@ -72,7 +65,6 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     ) {
         this.log = logContext.logger(MultiThreadedEventProcessor.class);
         this.shuttingDown = false;
-        this.lock = new ReentrantLock();
         this.accumulator = new EventAccumulator<>();
         this.threads = IntStream.range(0, numThreads).mapToObj(threadId ->
             new EventProcessorThread(
@@ -168,23 +160,18 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     /**
      * Begins the shutdown of the event processor.
      */
-    public void beginShutdown() {
-        lock.lock();
-        try {
-            if (shuttingDown) {
-                log.debug("Event processor is already shutting down.");
-                return;
-            }
-
-            log.info("Shutting down event processor.");
-            // The accumulator must be closed first to ensure that new events are
-            // rejected before threads are notified to shutdown and start to drain
-            // the accumulator.
-            accumulator.close();
-            shuttingDown = true;
-        } finally {
-            lock.unlock();
+    public synchronized void beginShutdown() {
+        if (shuttingDown) {
+            log.debug("Event processor is already shutting down.");
+            return;
         }
+
+        log.info("Shutting down event processor.");
+        // The accumulator must be closed first to ensure that new events are
+        // rejected before threads are notified to shutdown and start to drain
+        // the accumulator.
+        accumulator.close();
+        shuttingDown = true;
     }
 
     /**
@@ -192,15 +179,10 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      */
     @Override
     public void close() throws InterruptedException {
-        lock.lock();
-        try {
-            beginShutdown();
-            for (Thread t : threads) {
-                t.join();
-            }
-            log.info("Event processor closed.");
-        } finally {
-            lock.unlock();
+        beginShutdown();
+        for (Thread t : threads) {
+            t.join();
         }
+        log.info("Event processor closed.");
     }
 }
