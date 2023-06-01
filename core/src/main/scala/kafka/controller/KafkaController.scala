@@ -709,8 +709,10 @@ class KafkaController(val config: KafkaConfig, //KafkaConfig 类实例，里面�
     unregisterBrokerModificationsHandler(deadBrokers)
   }
 
+  //onBrokerUpdate 就是向集群所有 Broker 发送更新元数据信息请求，把变更信息广播出去。
   private def onBrokerUpdate(updatedBrokerId: Int): Unit = {
     info(s"Broker info update callback for $updatedBrokerId")
+    // 给集群所有Broker发送UpdateMetadataRequest，让她它们去更新元数据
     sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
   }
 
@@ -1782,13 +1784,24 @@ class KafkaController(val config: KafkaConfig, //KafkaConfig 类实例，里面�
     }
   }
 
+  /**
+   * 和管理集群成员类似，Controller 也是通过 ZooKeeper 监听器的方式来应对 Broker 的变化。这个监听器就是 BrokerModificationsHandler。
+   * 一旦 Broker 的信息发生变更，该监听器的 handleDataChange 方法就会被调用，向事件队列写入 BrokerModifications 事件。
+   * 该方法首先获取 ZooKeeper 上最权威的 Broker 数据，将其与元数据缓存上的数据进行比对。
+   * 如果发现两者不一致，就会更新元数据缓存，同时调用 onBrokerUpdate 方法执行更新逻辑。
+   * @param brokerId
+   */
   private def processBrokerModification(brokerId: Int): Unit = {
+    // 第1步：获取目标Broker的详细数据，
+    // 包括每套监听器配置的主机名、端口号以及所使用的安全协议等
     if (!isActive) return
     val newMetadataOpt = zkClient.getBroker(brokerId)
+    // 第2步：从元数据缓存中获得目标Broker的详细数据
     val oldMetadataOpt = controllerContext.liveOrShuttingDownBroker(brokerId)
     if (newMetadataOpt.nonEmpty && oldMetadataOpt.nonEmpty) {
       val oldMetadata = oldMetadataOpt.get
       val newMetadata = newMetadataOpt.get
+      // 第3步：如果两者不相等，说明Broker数据发生了变更，那么，更新元数据缓存，以及执行onBrokerUpdate方法处理Broker更新的逻辑
       if (newMetadata.endPoints != oldMetadata.endPoints || !oldMetadata.features.equals(newMetadata.features)) {
         info(s"Updated broker metadata: $oldMetadata -> $newMetadata")
         controllerContext.updateBrokerMetadata(oldMetadata, newMetadata)
@@ -1799,17 +1812,24 @@ class KafkaController(val config: KafkaConfig, //KafkaConfig 类实例，里面�
 
   private def processTopicChange(): Unit = {
     if (!isActive) return // 如果Controller已经关闭，直接返回
+    // 第1步：从ZooKeeper中获取所有主题
     val topics = zkClient.getAllTopicsInCluster(true) // 从ZooKeeper中获取当前所有主题列表
+    // 第2步：与元数据缓存比对，找出新增主题列表与已删除主题列表
     val newTopics = topics -- controllerContext.allTopics // 找出当前元数据中不存在、ZooKeeper中存在的主题，视为新增主题
     val deletedTopics = controllerContext.allTopics.diff(topics) // 找出当前元数据中存在、ZooKeeper中不存在的主题，视为已删除主题
+    // 第3步：使用ZooKeeper中的主题列表更新元数据缓存
     controllerContext.setAllTopics(topics) // 更新Controller元数据
 
+    // 第4步：为新增主题注册分区变更监听器
+    // 分区变更监听器是监听主题分区变更的
     // 为新增主题和已删除主题执行后续处理操作
     registerPartitionModificationsHandlers(newTopics.toSeq)
+    // 第5步：从ZooKeeper中获取新增主题的副本分配情况
     val addedPartitionReplicaAssignment = zkClient.getReplicaAssignmentAndTopicIdForTopics(newTopics)
+    // 第6步：清除元数据缓存中属于已删除主题的缓存项
     deletedTopics.foreach(controllerContext.removeTopic)
     processTopicIds(addedPartitionReplicaAssignment)
-
+    // 第7步：为新增主题更新元数据缓存中的副本分配条目
     addedPartitionReplicaAssignment.foreach { case TopicIdReplicaAssignment(_, _, newAssignments) =>
       newAssignments.foreach { case (topicAndPartition, newReplicaAssignment) =>
         controllerContext.updatePartitionFullReplicaAssignment(topicAndPartition, newReplicaAssignment)
@@ -1817,6 +1837,8 @@ class KafkaController(val config: KafkaConfig, //KafkaConfig 类实例，里面�
     }
     info(s"New topics: [$newTopics], deleted topics: [$deletedTopics], new partition replica assignment " +
       s"[$addedPartitionReplicaAssignment]")
+    // 第8步：调整新增主题所有分区以及所属所有副本的运行状态为“上线”状态
+    // 涉及到了使用分区管理器和副本管理器来调整分区和副本状态。
     if (addedPartitionReplicaAssignment.nonEmpty) {
       val partitionAssignments = addedPartitionReplicaAssignment
         .map { case TopicIdReplicaAssignment(_, _, partitionsReplicas) => partitionsReplicas.keySet }
@@ -1902,16 +1924,28 @@ class KafkaController(val config: KafkaConfig, //KafkaConfig 类实例，里面�
     }
   }
 
+  /**
+   * 首先，代码从 ZooKeeper 的 /admin/delete_topics 下获取子节点列表，即待删除主题列表。
+   * 之后，比对元数据缓存中的主题列表，获知压根不存在的主题列表。如果确实有不存在的主题，删除 /admin/delete_topics 下对应的子节点就行了。
+   * 同时，代码会更新待删除主题列表，将这些不存在的主题剔除掉。
+   * 接着，代码会检查 Broker 端参数 delete.topic.enable 的值。如果该参数为 false，即不允许删除主题，
+   * 代码就会清除 ZooKeeper 下的对应子节点，不会做其他操作。
+   * 反之，代码会遍历待删除主题列表，将那些正在执行分区迁移的主题暂时设置成“不可删除”状态。
+   * 最后，把剩下可以删除的主题交由 TopicDeletionManager，由它执行真正的删除逻辑。
+   */
   private def processTopicDeletion(): Unit = {
     if (!isActive) return
+    // 从ZooKeeper中获取待删除主题列表
     var topicsToBeDeleted = zkClient.getTopicDeletions.toSet
     debug(s"Delete topics listener fired for topics ${topicsToBeDeleted.mkString(",")} to be deleted")
+    // 找出不存在的主题列表
     val nonExistentTopics = topicsToBeDeleted -- controllerContext.allTopics
     if (nonExistentTopics.nonEmpty) {
       warn(s"Ignoring request to delete non-existing topics ${nonExistentTopics.mkString(",")}")
       zkClient.deleteTopicDeletions(nonExistentTopics.toSeq, controllerContext.epochZkVersion)
     }
     topicsToBeDeleted --= nonExistentTopics
+    // 如果delete.topic.enable参数设置成true
     if (config.deleteTopicEnable) {
       if (topicsToBeDeleted.nonEmpty) {
         info(s"Starting topic deletion for topics ${topicsToBeDeleted.mkString(",")}")
@@ -1924,11 +1958,13 @@ class KafkaController(val config: KafkaConfig, //KafkaConfig 类实例，里面�
               reason = "topic reassignment in progress")
         }
         // add topic to deletion list
+        // 将待删除主题插入到删除等待集合交由TopicDeletionManager处理
         topicDeletionManager.enqueueTopicsForDeletion(topicsToBeDeleted)
       }
-    } else {
+    } else {// 不允许删除主题
       // If delete topic is disabled remove entries under zookeeper path : /admin/delete_topics
       info(s"Removing $topicsToBeDeleted since delete topic is disabled")
+      // 清除ZooKeeper下/admin/delete_topics下的子节点
       zkClient.deleteTopicDeletions(topicsToBeDeleted.toSeq, controllerContext.epochZkVersion)
     }
   }
@@ -2828,9 +2864,15 @@ class BrokerModificationsHandler(eventManager: ControllerEventManager, brokerId:
   }
 }
 
+/**
+ * 代码中的 TopicsZNode.path 就是 ZooKeeper 下 /brokers/topics 节点。
+ * 一旦该节点下新增了主题信息，该监听器的 handleChildChange 就会被触发，Controller 通过 ControllerEventManager 对象，向事件队列写入 TopicChange 事件。
+ * @param eventManager
+ */
 class TopicChangeHandler(eventManager: ControllerEventManager) extends ZNodeChildChangeHandler {
+  // ZooKeeper节点：/brokers/topics
   override val path: String = TopicsZNode.path
-
+  // 向事件队列写入TopicChange事件
   override def handleChildChange(): Unit = eventManager.put(TopicChange)
 }
 
@@ -2850,9 +2892,20 @@ class PartitionModificationsHandler(eventManager: ControllerEventManager, topic:
   override def handleDataChange(): Unit = eventManager.put(PartitionModifications(topic))
 }
 
-class TopicDeletionHandler(eventManager: ControllerEventManager) extends ZNodeChildChangeHandler {
-  override val path: String = DeleteTopicsZNode.path
 
+/**
+ * 删除主题也依赖 ZooKeeper 监听器完成
+ * DeleteTopicsZNode.path 指的是 /admin/delete_topics 节点。目前，无论是 kafka-topics 脚本，还是 AdminClient，
+ * 删除主题都是在 /admin/delete_topics 节点下创建名为待删除主题名的子节点。
+ * 比如，如果要删除 test-topic 主题，那么，Kafka 的删除命令仅仅是在 ZooKeeper 上创建 /admin/delete_topics/test-topic 节点。
+ * 一旦监听到该节点被创建，TopicDeletionHandler 的 handleChildChange 方法就会被触发，Controller 会向事件队列写入 TopicDeletion 事件。
+ *
+ * @param eventManager
+ */
+class TopicDeletionHandler(eventManager: ControllerEventManager) extends ZNodeChildChangeHandler {
+  // ZooKeeper节点：/admin/delete_topics
+  override val path: String = DeleteTopicsZNode.path
+  // 向事件队列写入TopicDeletion事件
   override def handleChildChange(): Unit = eventManager.put(TopicDeletion)
 }
 
