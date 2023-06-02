@@ -32,7 +32,7 @@ import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, mutable}
-
+//负责定义 Kafka 分区状态、合法的状态转换，以及管理状态之间的转换。
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
    * Invoked on successful controller election.

@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException.Code
 import scala.collection.{Seq, mutable}
 
+//负责定义 Kafka 副本状态、合法的状态转换，以及管理状态之间的转换。
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
    * Invoked on successful controller election.
