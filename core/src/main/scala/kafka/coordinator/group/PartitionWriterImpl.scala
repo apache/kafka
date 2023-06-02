@@ -17,12 +17,13 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{ReplicaManager, RequestLocal}
+import kafka.server.ReplicaManager
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, TimestampType}
 import org.apache.kafka.common.record.Record.EMPTY_HEADERS
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
 import org.apache.kafka.storage.internals.log.AppendOrigin
@@ -131,26 +132,22 @@ class PartitionWriterImpl[T](
             s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
         }
 
-        val appendResults = replicaManager.appendToLocalLog(
+        var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
+        replicaManager.appendRecords(
+          timeout = 0L,
+          requiredAcks = 1,
           internalTopicsAllowed = true,
           origin = AppendOrigin.COORDINATOR,
           entriesPerPartition = Map(tp -> recordsBuilder.build()),
-          requiredAcks = 1,
-          requestLocal = RequestLocal.NoCaching
+          responseCallback = results => appendResults = results,
+          actionQueueAdd = item => item() // Immediately complete the action queue item.
         )
 
         val partitionResult = appendResults.getOrElse(tp,
-          throw new IllegalStateException("Append status %s should only have one partition %s"
-            .format(appendResults, tp)))
-
-        // Complete delayed operations.
-        replicaManager.maybeCompletePurgatories(
-          tp,
-          partitionResult.info.leaderHwChange
-        )
+          throw new IllegalStateException(s"Append status $appendResults should only have one partition $tp"))
 
         // Required offset.
-        partitionResult.info.lastOffset + 1
+        partitionResult.lastOffset + 1
 
       case None =>
         throw Errors.NOT_LEADER_OR_FOLLOWER.exception()

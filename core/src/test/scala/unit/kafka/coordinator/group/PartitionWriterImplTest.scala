@@ -16,22 +16,25 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.{LogAppendResult, ReplicaManager, RequestLocal}
+import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{NotLeaderOrFollowerException, RecordTooLargeException}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordConversionStats}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LeaderHwChange, LogAppendInfo, LogConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.nio.charset.Charset
-import java.util.{Collections, Optional, OptionalInt, Properties}
+import java.util.{Collections, Properties}
+import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
 class StringKeyValueSerializer extends PartitionWriter.Serializer[(String, String)] {
@@ -95,31 +98,35 @@ class PartitionWriterImplTest {
 
     val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    when(replicaManager.appendToLocalLog(
+    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+
+    when(replicaManager.appendRecords(
+      ArgumentMatchers.eq(0L),
+      ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
-      ArgumentMatchers.eq(1),
-      ArgumentMatchers.eq(RequestLocal.NoCaching)
-    )).thenReturn(Map(tp -> LogAppendResult(new LogAppendInfo(
-      Optional.empty(),
-      10,
-      OptionalInt.empty(),
-      RecordBatch.NO_TIMESTAMP,
-      -1L,
-      RecordBatch.NO_TIMESTAMP,
-      -1L,
-      RecordConversionStats.EMPTY,
-      CompressionType.NONE,
-      CompressionType.NONE,
-      -1,
-      -1,
-      false,
-      -1L,
-      Collections.emptyList(),
-      "",
-      LeaderHwChange.INCREASED
-    ))))
+      callbackCapture.capture(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()
+    )).thenAnswer( _ => {
+      callbackCapture.getValue.apply(Map(
+        tp -> new PartitionResponse(
+          Errors.NONE,
+          5,
+          10,
+          RecordBatch.NO_TIMESTAMP,
+          -1,
+          Collections.emptyList(),
+          ""
+        )
+      ))
+    })
 
     val records = List(
       ("k0", "v0"),
@@ -131,11 +138,6 @@ class PartitionWriterImplTest {
       tp,
       records.asJava
     ))
-
-    verify(replicaManager).maybeCompletePurgatories(
-      tp,
-      LeaderHwChange.INCREASED
-    )
 
     val batch = recordsCapture.getValue.getOrElse(tp,
       throw new AssertionError(s"No records for $tp"))
