@@ -144,7 +144,7 @@ class CoordinatorPartitionWriter[T](
         )
 
         val partitionResult = appendResults.getOrElse(tp,
-          throw new IllegalStateException(s"Append status $appendResults should only have one partition $tp"))
+          throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
         // Required offset.
         partitionResult.lastOffset + 1
