@@ -53,6 +53,8 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
+// When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
+// See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
   activation: "1.1.1",
   apacheda: "1.0.2",
@@ -122,7 +124,7 @@ versions += [
   scalaJava8Compat : "1.0.2",
   scoverage: "1.9.3",
   slf4j: "1.7.36",
-  snappy: "1.1.9.1",
+  snappy: "1.1.10.0",
   spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",

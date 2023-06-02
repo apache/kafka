@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ProducerIdsImageTest {
-    final static ProducerIdsImage IMAGE1;
+    public final static ProducerIdsImage IMAGE1;
 
     final static List<ApiMessageAndVersion> DELTA1_RECORDS;
 

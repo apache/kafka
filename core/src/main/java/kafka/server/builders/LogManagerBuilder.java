@@ -46,7 +46,7 @@ public class LogManagerBuilder {
     private long flushStartOffsetCheckpointMs = 10000L;
     private long retentionCheckMs = 1000L;
     private int maxTransactionTimeoutMs = 15 * 60 * 1000;
-    private ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(60000);
+    private ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(60000, false);
     private int producerIdExpirationCheckIntervalMs = 600000;
     private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latest();
     private Scheduler scheduler = null;
@@ -110,8 +110,8 @@ public class LogManagerBuilder {
         return this;
     }
 
-    public LogManagerBuilder setMaxProducerIdExpirationMs(int maxProducerIdExpirationMs) {
-        this.producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs);
+    public LogManagerBuilder setProducerStateManagerConfig(int maxProducerIdExpirationMs, boolean transactionVerificationEnabled) {
+        this.producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, transactionVerificationEnabled);
         return this;
     }
 

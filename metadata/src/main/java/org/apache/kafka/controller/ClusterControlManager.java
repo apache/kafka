@@ -74,7 +74,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * brokers being fenced or unfenced, and broker feature versions.
  */
 public class ClusterControlManager {
-    final static long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(18, TimeUnit.SECONDS);
+    final static long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(9, TimeUnit.SECONDS);
 
     static class Builder {
         private LogContext logContext = null;
@@ -236,6 +236,9 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
+    /**
+     * True if migration from ZK is enabled.
+     */
     private final boolean zkMigrationEnabled;
 
     private ClusterControlManager(
