@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -279,30 +280,47 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             throw new IllegalStateException("At least one non-null offset store must be provided");
         }
 
+        boolean containsTombstones = values.entrySet()
+                .stream()
+                .anyMatch(offset -> offset.getValue() == null);
+
         return primaryStore.set(values, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
                 if (primaryWriteError != null) {
                     log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
+                    try (LoggingContext context = loggingContext()) {
+                        callback.onCompletion(primaryWriteError, ignored);
+                    }
                 } else {
                     try {
                         // Invoke OffsetBackingStore::set but ignore the resulting future; we don't block on writes to this
-                        // backing store.
+                        // backing store. The only exception to this is when a batch consisting of tombstone records fails
+                        // to be written to secondary store and has been successfully written to the primary store. In this case
+                        // an error would be propagated back as in such cases, a deleted source partition
+                        // would be reported as present because the 2 stores are not in sync.
                         secondaryStore.set(values, (secondaryWriteError, ignored2) -> {
                             try (LoggingContext context = loggingContext()) {
-                                if (secondaryWriteError != null) {
+                                if (secondaryWriteError != null && containsTombstones) {
+                                    log.warn("Failed to write offsets with tombstone records to secondary backing store", secondaryWriteError);
+                                    callback.onCompletion(secondaryWriteError, ignored);
+                                    return;
+                                } else if (secondaryWriteError != null) {
                                     log.warn("Failed to write offsets to secondary backing store", secondaryWriteError);
                                 } else {
                                     log.debug("Successfully flushed offsets to secondary backing store");
                                 }
+                                //primaryWriteError is null at this point, and we don't care about secondaryWriteError
+                                callback.onCompletion(null, ignored);
                             }
                         });
                     } catch (Exception e) {
                         log.warn("Failed to write offsets to secondary backing store", e);
                     }
                 }
-            }
-            try (LoggingContext context = loggingContext()) {
-                callback.onCompletion(primaryWriteError, ignored);
+            } else {
+                try (LoggingContext context = loggingContext()) {
+                    callback.onCompletion(primaryWriteError, ignored);
+                }
             }
         });
     }
