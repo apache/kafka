@@ -39,6 +39,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
@@ -524,15 +525,16 @@ public class PluginUtilsTest {
                 Collections.emptySortedSet()
         );
         Map<String, String> aliases = PluginUtils.computeAliases(result);
-        assertFalse(aliases.containsKey("Mock"));
-        assertEquals(MockSinkConnector.class.getName(), aliases.get("MockSinkConnector"));
-        assertEquals(MockSinkConnector.class.getName(), aliases.get("MockSink"));
-        assertEquals(MockSourceConnector.class.getName(), aliases.get("MockSourceConnector"));
-        assertEquals(MockSourceConnector.class.getName(), aliases.get("MockSource"));
-        assertEquals(CollidingConverter.class.getName(), aliases.get("CollidingConverter"));
-        assertEquals(CollidingConverter.class.getName(), aliases.get("Colliding"));
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("MockSinkConnector", MockSinkConnector.class.getName());
+        expectedAliases.put("MockSink", MockSinkConnector.class.getName());
+        expectedAliases.put("MockSourceConnector", MockSourceConnector.class.getName());
+        expectedAliases.put("MockSource", MockSourceConnector.class.getName());
+        expectedAliases.put("CollidingConverter", CollidingConverter.class.getName());
+        expectedAliases.put("Colliding", CollidingConverter.class.getName());
+        assertEquals(expectedAliases, actualAliases);
     }
-
 
     @Test
     public void testMultiVersionAlias() {
@@ -552,9 +554,11 @@ public class PluginUtilsTest {
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet()
         );
-        Map<String, String> aliases = PluginUtils.computeAliases(result);
-        assertEquals(MockSinkConnector.class.getName(), aliases.get("MockSinkConnector"));
-        assertEquals(MockSinkConnector.class.getName(), aliases.get("MockSink"));
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("MockSinkConnector", MockSinkConnector.class.getName());
+        expectedAliases.put("MockSink", MockSinkConnector.class.getName());
+        assertEquals(expectedAliases, actualAliases);
     }
 
     @Test
@@ -574,10 +578,11 @@ public class PluginUtilsTest {
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet()
         );
-        Map<String, String> aliases = PluginUtils.computeAliases(result);
-        assertEquals(CollidingConverter.class.getName(), aliases.get("CollidingConverter"));
-        assertEquals(CollidingHeaderConverter.class.getName(), aliases.get("CollidingHeaderConverter"));
-        assertFalse(aliases.containsKey("Colliding"));
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("CollidingConverter", CollidingConverter.class.getName());
+        expectedAliases.put("CollidingHeaderConverter", CollidingHeaderConverter.class.getName());
+        assertEquals(expectedAliases, actualAliases);
     }
 
     @SuppressWarnings("unchecked")
@@ -598,9 +603,10 @@ public class PluginUtilsTest {
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet()
         );
-        Map<String, String> aliases = PluginUtils.computeAliases(result);
-        assertEquals(CollidingConverter.class.getName(), aliases.get("CollidingConverter"));
-        assertFalse(aliases.containsKey("Colliding"));
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("CollidingConverter", CollidingConverter.class.getName());
+        assertEquals(expectedAliases, actualAliases);
     }
 
     public static class CollidingConverter implements Converter {

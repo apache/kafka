@@ -375,7 +375,7 @@ public class PluginUtils {
             if (classNames.size() == 1) {
                 aliases.put(alias, classNames.stream().findAny().get());
             } else {
-                log.warn("Ambiguous alias '{}' refers to multiple distinct plugins {}: ignoring", alias, classNames);
+                log.warn("Ignoring ambiguous alias '{}' since it refers to multiple distinct plugins {}", alias, classNames);
             }
         }
         return aliases;
