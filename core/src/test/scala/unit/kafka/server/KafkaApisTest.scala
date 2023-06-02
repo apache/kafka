@@ -2310,6 +2310,7 @@ class KafkaApisTest {
         any(),
         any(),
         any(),
+        any(),
         any())
       ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
@@ -2378,7 +2379,8 @@ class KafkaApisTest {
         any(),
         any(),
         ArgumentMatchers.eq(transactionalId),
-        ArgumentMatchers.eq(Some(transactionCoordinatorPartition)))
+        ArgumentMatchers.eq(Some(transactionCoordinatorPartition)),
+        any())
     }
   }
 
@@ -2504,6 +2506,7 @@ class KafkaApisTest {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
+      any(),
       any(),
       any())
     ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
@@ -2637,6 +2640,7 @@ class KafkaApisTest {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any(),
+      any(),
       any())
     ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
@@ -2670,6 +2674,7 @@ class KafkaApisTest {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
+      any(),
       any(),
       any())
   }
