@@ -130,7 +130,7 @@ public class ZkMigrationLeadershipState {
         return zkControllerEpochZkVersion;
     }
 
-    public boolean zkMigrationComplete() {
+    public boolean initialZkMigrationComplete() {
         return kraftMetadataOffset > 0;
     }
 
@@ -149,7 +149,7 @@ public class ZkMigrationLeadershipState {
             return
                 this.kraftControllerId != other.kraftControllerId ||
                 this.kraftControllerEpoch != other.kraftControllerEpoch ||
-                (!other.zkMigrationComplete() && this.zkMigrationComplete());
+                (!other.initialZkMigrationComplete() && this.initialZkMigrationComplete());
         }
     }
 
