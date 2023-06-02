@@ -151,9 +151,10 @@ public class ControllerExceptionsTest {
 
     @Test
     public void testRejectedExecutionExceptionToExternalException() {
-        assertExceptionsMatch(new TimeoutException("The controller is shutting down."),
-            toExternalException(new RejectedExecutionException("The event queue is shutting down"),
-                () -> OptionalInt.empty()));
+        assertExceptionsMatch(new TimeoutException("The controller is shutting down.",
+            new RejectedExecutionException("The event queue is shutting down")),
+                toExternalException(new RejectedExecutionException("The event queue is shutting down"),
+                    () -> OptionalInt.empty()));
     }
 
     @Test

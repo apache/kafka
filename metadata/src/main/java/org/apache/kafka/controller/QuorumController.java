@@ -444,10 +444,9 @@ public final class QuorumController implements Controller {
             // reading uncommitted data.
             return lastCommittedOffset;
         } else {
-            // Standby controllers never have uncommitted data in memory. Therefore, we return
-            // Long.MAX_VALUE, a special value which means "always read the latest from every
-            // data structure."
-            return Long.MAX_VALUE;
+            // Standby controllers never have uncommitted data in memory. Therefore, we always
+            // read the latest from every data structure.
+            return SnapshotRegistry.LATEST_EPOCH;
         }
     }
 
