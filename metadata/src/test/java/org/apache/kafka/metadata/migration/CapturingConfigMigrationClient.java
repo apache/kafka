@@ -20,6 +20,7 @@ package org.apache.kafka.metadata.migration;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,10 +30,12 @@ import java.util.function.Consumer;
 public class CapturingConfigMigrationClient implements ConfigMigrationClient {
     public List<ConfigResource> deletedResources = new ArrayList<>();
     public LinkedHashMap<ConfigResource, Map<String, String>> writtenConfigs = new LinkedHashMap<>();
+    public LinkedHashMap<Map<String, String>, Map<String, Object>> writtenQuotas = new LinkedHashMap<>();
 
     public void reset() {
         deletedResources.clear();
         writtenConfigs.clear();
+        writtenQuotas.clear();
     }
 
     @Override
@@ -62,8 +65,12 @@ public class CapturingConfigMigrationClient implements ConfigMigrationClient {
     }
 
     @Override
-    public ZkMigrationLeadershipState writeClientQuotas(Map<String, String> clientQuotaEntity, Map<String, Double> quotas, Map<String, String> scram, ZkMigrationLeadershipState state) {
-        return null;
+    public ZkMigrationLeadershipState writeClientQuotas(Map<String, String> entity, Map<String, Double> quotas, Map<String, String> scram, ZkMigrationLeadershipState state) {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(quotas);
+        props.putAll(scram);
+        writtenQuotas.put(entity, props);
+        return state;
     }
 
 

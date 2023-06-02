@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclOperation;
@@ -24,18 +25,22 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.image.AclsDelta;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.AclsImageTest;
+import org.apache.kafka.image.ClientQuotasDelta;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClientQuotasImageTest;
 import org.apache.kafka.image.ClusterImage;
@@ -48,6 +53,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.ProducerIdsDelta;
 import org.apache.kafka.image.ProducerIdsImage;
 import org.apache.kafka.image.ProducerIdsImageTest;
+import org.apache.kafka.image.ScramDelta;
 import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.ScramImageTest;
 import org.apache.kafka.image.TopicsDelta;
@@ -56,6 +62,7 @@ import org.apache.kafka.image.TopicsImageTest;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ProducerIdsBlock;
+import org.apache.kafka.server.util.MockRandom;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -539,7 +546,7 @@ public class KRaftMigrationZkWriterTest {
 
         Map<String, Integer> opCounts = new HashMap<>();
         KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
-                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleProducerIdDelta(delta, consumer);
         assertEquals(1, opCounts.size());
         assertEquals(2000, migrationClient.capturedProducerId);
@@ -601,11 +608,127 @@ public class KRaftMigrationZkWriterTest {
         AclsImage image = delta.apply();
         Map<String, Integer> opCounts = new HashMap<>();
         KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
-                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleAclsSnapshot(image, consumer);
 
         assertTrue(aclClient.deletedResources.contains(resource2));
         assertEquals(Collections.singleton(ace1Resource1), aclClient.updatedResources.get(resource1));
         assertEquals(Collections.singleton(ace1Resource3), aclClient.updatedResources.get(resource3));
+    }
+
+
+    byte[] randomBuffer(MockRandom random, int length) {
+        byte[] buf = new byte[length];
+        random.nextBytes(buf);
+        return buf;
+    }
+
+    @Test
+    public void testClientQuotasSnapshot() {
+        List<ClientQuotaRecord.EntityData> entityData = Collections.singletonList(
+            new ClientQuotaRecord.EntityData()
+                .setEntityType("user").setEntityName("user2"));
+        MockRandom random = new MockRandom();
+        ScramCredential credential = new ScramCredential(
+            randomBuffer(random, 1024),
+            randomBuffer(random, 1024),
+            randomBuffer(random, 1024),
+            8192);
+
+        CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient() {
+            @Override
+            public void iterateClientQuotas(ClientQuotaVisitor visitor) {
+                visitor.visitClientQuota(entityData, Collections.singletonMap("request_percentage", 58.58));
+                visitor.visitScramCredential("alice", ScramMechanism.SCRAM_SHA_256, credential);
+            }
+        };
+
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setConfigMigrationClient(configClient)
+            .build();
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+
+        ClientQuotasDelta clientQuotasDelta = new ClientQuotasDelta(ClientQuotasImage.EMPTY);
+        clientQuotasDelta.replay(new ClientQuotaRecord()
+            .setEntity(entityData)
+            .setKey("request_percentage")
+            .setValue(58.58)
+            .setRemove(false));
+        ClientQuotasImage clientQuotasImage = clientQuotasDelta.apply();
+
+        ScramDelta scramDelta = new ScramDelta(ScramImage.EMPTY);
+        scramDelta.replay(new UserScramCredentialRecord()
+            .setName("george")
+            .setMechanism(ScramMechanism.SCRAM_SHA_256.type())
+            .setSalt(credential.salt())
+            .setStoredKey(credential.storedKey())
+            .setServerKey(credential.serverKey())
+            .setIterations(credential.iterations()));
+        ScramImage scramImage = scramDelta.apply();
+
+        // Empty image, should remove things from ZK (write an empty map)
+        writer.handleClientQuotasSnapshot(ClientQuotasImage.EMPTY, ScramImage.EMPTY, consumer);
+        assertEquals(2, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(0, opCounts.size());
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "user2")));
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
+
+        // With only client quota image, should write user2 and clear alice
+        configClient.reset();
+        writer.handleClientQuotasSnapshot(clientQuotasImage, ScramImage.EMPTY, consumer);
+        assertEquals(2, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(0, opCounts.size());
+
+        assertEquals(
+            Collections.singletonMap("request_percentage", 58.58),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "user2")));
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
+
+        // With only scram image, should update george, clear alice, and clear user2
+        configClient.reset();
+        writer.handleClientQuotasSnapshot(ClientQuotasImage.EMPTY, scramImage, consumer);
+        assertEquals(3, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(0, opCounts.size());
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "user2")));
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
+
+        assertTrue(
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "george")).containsKey("SCRAM-SHA-256"));
+
+        // With both images, should write user2 and george and clear alice
+        configClient.reset();
+        writer.handleClientQuotasSnapshot(clientQuotasImage, scramImage, consumer);
+        assertEquals(3, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(0, opCounts.size());
+
+        assertEquals(
+            Collections.singletonMap("request_percentage", 58.58),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "user2")));
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
+
+        assertTrue(
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "george")).containsKey("SCRAM-SHA-256"));
     }
 }
