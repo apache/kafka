@@ -21,7 +21,10 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Interface to implement a coordinator loader.
+ * Interface to implement a coordinator loader. A loader reads records
+ * from a partition and replays them to the coordinator.
+ *
+ * @param <U> The type of the record.
  */
 interface CoordinatorLoader<U> {
 
@@ -30,10 +33,10 @@ interface CoordinatorLoader<U> {
      * and applying them to the Replayable object.
      *
      * @param tp            The TopicPartition to read from.
-     * @param replayable    The object to apply records to.
+     * @param coordinator   The object to apply records to.
      */
     CompletableFuture<Void> load(
         TopicPartition tp,
-        Replayable<U> replayable
+        CoordinatorPlayback<U> coordinator
     );
 }

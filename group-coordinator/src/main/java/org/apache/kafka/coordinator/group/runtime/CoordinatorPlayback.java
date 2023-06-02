@@ -17,9 +17,15 @@
 package org.apache.kafka.coordinator.group.runtime;
 
 /**
- * The Replayable interface.
+ * The CoordinatorPlayback interface. This interface is used to replay
+ * records to the coordinator in order to update its state. This is
+ * also used to rebuild a coordinator state from scratch by replaying
+ * all records stored in the partition.
+ *
+ * @param <U> The type of the record.
  */
-public interface Replayable<U> {
+public interface CoordinatorPlayback<U> {
+
     /**
      * Applies the given record to this object.
      *
