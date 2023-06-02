@@ -47,12 +47,12 @@ class StringKeyValueSerializer extends PartitionWriter.Serializer[(String, Strin
   }
 }
 
-class PartitionWriterImplTest {
+class CoordinatorPartitionWriterTest {
   @Test
   def testRegisterDeregisterListener(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val partitionRecordWriter = new PartitionWriterImpl(
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
       CompressionType.NONE,
@@ -84,7 +84,7 @@ class PartitionWriterImplTest {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
     val time = new MockTime()
-    val partitionRecordWriter = new PartitionWriterImpl(
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
       CompressionType.NONE,
@@ -157,7 +157,7 @@ class PartitionWriterImplTest {
   def testWriteRecordTooLarge(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val partitionRecordWriter = new PartitionWriterImpl(
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
       CompressionType.NONE,
@@ -186,7 +186,7 @@ class PartitionWriterImplTest {
   def testWriteEmptyRecordList(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val partitionRecordWriter = new PartitionWriterImpl(
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
       CompressionType.NONE,
@@ -206,7 +206,7 @@ class PartitionWriterImplTest {
   def testNonexistentPartition(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val partitionRecordWriter = new PartitionWriterImpl(
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
       CompressionType.NONE,

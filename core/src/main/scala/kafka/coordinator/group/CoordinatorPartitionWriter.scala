@@ -56,7 +56,7 @@ private[group] class ListenerAdaptor(
   }
 }
 
-class PartitionWriterImpl[T](
+class CoordinatorPartitionWriter[T](
   replicaManager: ReplicaManager,
   serializer: PartitionWriter.Serializer[T],
   compressionType: CompressionType,
