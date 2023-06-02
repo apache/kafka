@@ -23,7 +23,9 @@ import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -142,6 +144,8 @@ public class PluginUtils {
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");
 
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = path ->
         Files.isDirectory(path) || isArchive(path) || isClassFile(path);
 
@@ -188,11 +192,34 @@ public class PluginUtils {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
 
-    public static List<Path> pluginLocations(Path topPath) throws IOException {
+    public static List<Path> pluginLocations(String pluginPath) {
+        if (pluginPath == null) {
+            return Collections.emptyList();
+        }
+        String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(pluginPath.trim(), -1);
+        List<Path> pluginLocations = new ArrayList<>();
+        for (String path : pluginPathElements) {
+            try {
+                Path pluginPathElement = Paths.get(path).toAbsolutePath();
+                // Currently 'plugin.paths' property is a list of top-level directories
+                // containing plugins
+                if (Files.isDirectory(pluginPathElement)) {
+                    pluginLocations.addAll(pluginLocations(pluginPathElement));
+                } else if (isArchive(pluginPathElement)) {
+                    pluginLocations.add(pluginPathElement);
+                }
+            } catch (InvalidPathException | IOException e) {
+                log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
+            }
+        }
+        return pluginLocations;
+    }
+
+    private static List<Path> pluginLocations(Path pluginPathElement) throws IOException {
         List<Path> locations = new ArrayList<>();
         try (
                 DirectoryStream<Path> listing = Files.newDirectoryStream(
-                        topPath,
+                        pluginPathElement,
                         PLUGIN_PATH_FILTER
                 )
         ) {

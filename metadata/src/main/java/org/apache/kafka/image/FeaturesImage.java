@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.image.node.FeaturesImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
@@ -144,13 +145,8 @@ public final class FeaturesImage {
             zkMigrationState.equals(other.zkMigrationState);
     }
 
-
     @Override
     public String toString() {
-        return "FeaturesImage{" +
-                "finalizedVersions=" + finalizedVersions +
-                ", metadataVersion=" + metadataVersion +
-                ", zkMigrationState=" + zkMigrationState +
-                '}';
+        return new FeaturesImageNode(this).stringify();
     }
 }

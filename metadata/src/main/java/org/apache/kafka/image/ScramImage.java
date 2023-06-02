@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.image.node.ScramImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.clients.admin.ScramMechanism;
@@ -80,8 +81,8 @@ public final class ScramImage {
 
     private static final String DESCRIBE_DUPLICATE_USER = "Cannot describe SCRAM credentials for the same user twice in a single request: ";
     private static final String DESCRIBE_USER_THAT_DOES_NOT_EXIST = "Attempt to describe a user credential that does not exist: ";
-    public DescribeUserScramCredentialsResponseData describe(DescribeUserScramCredentialsRequestData request) {
 
+    public DescribeUserScramCredentialsResponseData describe(DescribeUserScramCredentialsRequestData request) {
         List<UserName> users = request.users();
         Map<String, Boolean> uniqueUsers = new HashMap<String, Boolean>();
 
@@ -157,23 +158,6 @@ public final class ScramImage {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("ScramImage(");
-        List<ScramMechanism> sortedMechanisms = mechanisms.keySet().stream().sorted().collect(Collectors.toList());
-        String preMechanismComma = "";
-        for (ScramMechanism mechanism : sortedMechanisms) {
-            builder.append(preMechanismComma).append(mechanism).append(": {");
-            Map<String, ScramCredentialData> userMap = mechanisms.get(mechanism);
-            List<String> sortedUserNames = userMap.keySet().stream().sorted().collect(Collectors.toList());
-            String preUserNameComma = "";
-            for (String userName : sortedUserNames) {
-                builder.append(preUserNameComma).append(userName).append("=").append(userMap.get(userName));
-                preUserNameComma = ", ";
-            }
-            builder.append("}");
-            preMechanismComma = ", ";
-        }
-        builder.append(")");
-        return builder.toString();
+        return new ScramImageNode(this).stringify();
     }
 }

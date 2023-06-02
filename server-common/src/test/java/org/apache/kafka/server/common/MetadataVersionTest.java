@@ -312,4 +312,20 @@ class MetadataVersionTest {
         }
         assertEquals(expectedVersion, metadataVersion.registerBrokerRecordVersion());
     }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testGroupMetadataValueVersion(MetadataVersion metadataVersion) {
+        final short expectedVersion;
+        if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_3_IV0)) {
+            expectedVersion = 3;
+        } else if (metadataVersion.isAtLeast(IBP_2_1_IV0)) {
+            expectedVersion = 2;
+        } else if (metadataVersion.isAtLeast(IBP_0_10_1_IV0)) {
+            expectedVersion = 1;
+        } else {
+            expectedVersion = 0;
+        }
+        assertEquals(expectedVersion, metadataVersion.groupMetadataValueVersion());
+    }
 }

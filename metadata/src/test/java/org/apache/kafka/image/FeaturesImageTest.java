@@ -40,8 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class FeaturesImageTest {
-    final static FeaturesImage IMAGE1;
-    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public final static FeaturesImage IMAGE1;
+    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
     final static FeaturesDelta DELTA1;
     final static FeaturesImage IMAGE2;
 
