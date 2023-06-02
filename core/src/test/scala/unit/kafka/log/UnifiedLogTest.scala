@@ -3668,7 +3668,7 @@ class UnifiedLogTest {
   }
 
   @Test
-  def testTransactionIsOngoingAndVerificationState(): Unit = {
+  def testTransactionIsOngoingAndVerificationGuard(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3677,7 +3677,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(null, log.verificationState(producerId))
+    assertEquals(null, log.verificationGuard(producerId))
 
     val idempotentRecords = MemoryRecords.withIdempotentRecords(
       CompressionType.NONE,
@@ -3688,14 +3688,14 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationState = log.transactionNeedsVerifying(producerId)
-    assertTrue(verificationState != null)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId)
+    assertTrue(verificationGuard != null)
 
     log.appendAsLeader(idempotentRecords, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
 
-    // Since we wrote idempotent records, we keep verification state.
-    assertEquals(verificationState, log.verificationState(producerId))
+    // Since we wrote idempotent records, we keep verification guard.
+    assertEquals(verificationGuard, log.verificationGuard(producerId))
 
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
@@ -3706,13 +3706,13 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationState = verificationState)
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
-    // Verification state should be cleared now.
-    assertEquals(null, log.verificationState(producerId))
+    // Verification guard should be cleared now.
+    assertEquals(null, log.verificationGuard(producerId))
 
-    // A subsequent transactionNeedsVerifying will be empty since we are already verified.
-    assertEquals(null, log.transactionNeedsVerifying(producerId))
+    // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
+    assertEquals(null, log.maybeStartTransactionVerification(producerId))
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3722,16 +3722,16 @@ class UnifiedLogTest {
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(null, log.verificationState(producerId))
+    assertEquals(null, log.verificationGuard(producerId))
 
-    // A new transactionNeedsVerifying will not be empty, as we need to verify the next transaction.
-    val newVerificationState = log.transactionNeedsVerifying(producerId)
-    assertTrue(newVerificationState != null)
-    assertNotEquals(verificationState, newVerificationState)
+    // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId)
+    assertTrue(newVerificationGuard != null)
+    assertNotEquals(verificationGuard, newVerificationGuard)
   }
 
   @Test
-  def testEmptyTransactionStillClearsVerificationState(): Unit = {
+  def testEmptyTransactionStillClearsVerificationGuard(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3739,8 +3739,8 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationState = log.transactionNeedsVerifying(producerId)
-    assertTrue(verificationState != null)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId)
+    assertTrue(verificationGuard != null)
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3750,7 +3750,7 @@ class UnifiedLogTest {
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(null, log.verificationState(producerId))
+    assertEquals(null, log.verificationGuard(producerId))
   }
 
   @Test
@@ -3763,7 +3763,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(null, log.verificationState(producerId))
+    assertEquals(null, log.verificationGuard(producerId))
 
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
@@ -3774,9 +3774,9 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationState = log.transactionNeedsVerifying(producerId)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId)
     // Append should not throw error.
-    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationState = verificationState)
+    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

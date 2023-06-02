@@ -192,7 +192,7 @@ public class ProducerStateManager {
     public VerificationStateEntry verificationStateEntry(long producerId, boolean createIfAbsent) {
         return verificationStates.computeIfAbsent(producerId, pid -> {
             if (createIfAbsent)
-                return new VerificationStateEntry(pid, time.milliseconds());
+                return new VerificationStateEntry(time.milliseconds());
             else {
                 log.warn("The given producer ID did not have an entry in the producer state manager, so it's state will be returned as null");
                 return null;
@@ -361,7 +361,7 @@ public class ProducerStateManager {
 
     /**
      * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
-     * Also expire any verification states that are lingering as unverified.
+     * Also expire any verification state entries that are lingering as unverified.
      */
     public void removeExpiredProducers(long currentTimeMs) {
         List<Long> keys = producers.entrySet().stream()

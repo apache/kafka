@@ -1090,15 +1090,15 @@ class ProducerStateManagerTest {
   @Test
   def testEntryForVerification(): Unit = {
     val originalEntry = stateManager.verificationStateEntry(producerId, true)
-    val originalEntryVerificationState = originalEntry.verificationState()
+    val originalEntryVerificationGuard = originalEntry.verificationGuard()
 
     def verifyEntry(producerId: Long, newEntry: VerificationStateEntry): Unit = {
       val entry = stateManager.verificationStateEntry(producerId, false)
-      assertEquals(originalEntryVerificationState, entry.verificationState)
-      assertEquals(entry.verificationState, newEntry.verificationState)
+      assertEquals(originalEntryVerificationGuard, entry.verificationGuard)
+      assertEquals(entry.verificationGuard, newEntry.verificationGuard)
     }
 
-    // If we already have an entry, reuse the verification state.
+    // If we already have an entry, reuse it.
     val updatedEntry = stateManager.verificationStateEntry(producerId, true)
     verifyEntry(producerId, updatedEntry)
 
@@ -1114,7 +1114,7 @@ class ProducerStateManagerTest {
   }
 
   @Test
-  def testVerificationStateExpiration(): Unit = {
+  def testVerificationStateEntryExpiration(): Unit = {
     val originalEntry = stateManager.verificationStateEntry(producerId, true)
 
     // Before timeout we do not remove. Note: Accessing the verification entry does not update the time.

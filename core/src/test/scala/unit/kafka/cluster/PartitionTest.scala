@@ -3246,7 +3246,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testTransactionNeedsVerifying(): Unit = {
+  def testMaybeStartTransactionVerification(): Unit = {
     val controllerEpoch = 0
     val leaderEpoch = 5
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
@@ -3281,25 +3281,25 @@ class PartitionTest extends AbstractPartitionTest {
       baseSequence = 3,
       producerId = producerId)
 
-    // When verification state is empty, we should not be able to append.
+    // When verification guard is not there, we should not be able to append.
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
 
-    // Before appendRecordsToLeader is called, ReplicaManager will call transactionNeedsVerifying. We should get a non-null verification object.
-    val verificationState = partition.transactionNeedsVerifying(producerId)
-    assertTrue(verificationState != null)
+    // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-null verification object.
+    val verificationGuard = partition.maybeStartTransactionVerification(producerId)
+    assertTrue(verificationGuard != null)
 
-    // With the wrong verification state, append should fail.
+    // With the wrong verification guard, append should fail.
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(),
       origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, Optional.of(new Object)))
 
     // We should return the same verification object when we still need to verify. Append should proceed.
-    val verificationState2 = partition.transactionNeedsVerifying(producerId)
-    assertEquals(verificationState, verificationState2)
-    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationState)
+    val verificationGuard2 = partition.maybeStartTransactionVerification(producerId)
+    assertEquals(verificationGuard, verificationGuard2)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationGuard)
 
-    // We should no longer need a verification object. Future appends without verification state will also succeed.
-    val verificationState3 = partition.transactionNeedsVerifying(producerId)
-    assertEquals(null, verificationState3)
+    // We should no longer need a verification object. Future appends without verification guard will also succeed.
+    val verificationGuard3 = partition.maybeStartTransactionVerification(producerId)
+    assertEquals(null, verificationGuard3)
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
   }
 

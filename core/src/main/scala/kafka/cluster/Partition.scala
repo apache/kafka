@@ -575,10 +575,10 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  // Returns a verification state object if we need to verify. Otherwise return null.
-  def transactionNeedsVerifying(producerId: Long): Object = {
+  // Returns a verificationGuard object if we need to verify. This starts or continues the verification process. Otherwise return null.
+  def maybeStartTransactionVerification(producerId: Long): Object = {
     leaderLogIfLocal match {
-      case Some(leaderLog) => leaderLog.transactionNeedsVerifying(producerId)
+      case Some(leaderLog) => leaderLog.maybeStartTransactionVerification(producerId)
       case None => null
     }
   }
@@ -1272,7 +1272,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal, verificationState: Object = null): LogAppendInfo = {
+                            requestLocal: RequestLocal, verificationGuard: Object = null): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1286,7 +1286,7 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion, requestLocal, verificationState)
+            interBrokerProtocolVersion, requestLocal, verificationGuard)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
