@@ -39,11 +39,15 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class Plugins {
 
@@ -63,16 +67,72 @@ public class Plugins {
     // VisibleForTesting
     Plugins(Map<String, String> props, ClassLoader parent, ClassLoaderFactory factory) {
         String pluginPath = WorkerConfig.pluginPath(props);
+        PluginDiscoveryMode discoveryMode = WorkerConfig.pluginDiscovery(props);
         List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = factory.newDelegatingClassLoader(parent);
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, delegatingLoader, factory);
-        scanResult = initLoaders(pluginSources);
+        scanResult = initLoaders(pluginSources, discoveryMode);
     }
 
-    private PluginScanResult initLoaders(Set<PluginSource> pluginSources) {
-        PluginScanResult reflectiveScanResult = new ReflectionScanner().discoverPlugins(pluginSources);
-        delegatingLoader.installDiscoveredPlugins(reflectiveScanResult);
-        return reflectiveScanResult;
+    public PluginScanResult initLoaders(Set<PluginSource> pluginSources, PluginDiscoveryMode discoveryMode) {
+        PluginScanResult empty = new PluginScanResult(Collections.emptyList());
+        PluginScanResult serviceLoadingScanResult;
+        try {
+            serviceLoadingScanResult = PluginDiscoveryMode.serviceLoad(discoveryMode) ?
+                    new ServiceLoaderScanner().discoverPlugins(pluginSources) : empty;
+        } catch (Throwable t) {
+            log.error("Unable to perform ServiceLoader scanning as requested by {}={}, this error may be avoided by reconfiguring {}={}",
+                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG, discoveryMode,
+                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.ONLY_SCAN, t);
+            throw t;
+        }
+        PluginScanResult reflectiveScanResult = PluginDiscoveryMode.reflectivelyScan(discoveryMode) ?
+                new ReflectionScanner().discoverPlugins(pluginSources) : empty;
+        PluginScanResult scanResult = new PluginScanResult(Arrays.asList(reflectiveScanResult, serviceLoadingScanResult));
+        maybeReportHybridDiscoveryIssue(discoveryMode, serviceLoadingScanResult, scanResult);
+        delegatingLoader.installDiscoveredPlugins(scanResult);
+        return scanResult;
+    }
+
+    private static void maybeReportHybridDiscoveryIssue(PluginDiscoveryMode discoveryMode, PluginScanResult serviceLoadingScanResult, PluginScanResult mergedResult) {
+        SortedSet<PluginDesc<?>> missingPlugins = new TreeSet<>();
+        mergedResult.forEach(missingPlugins::add);
+        serviceLoadingScanResult.forEach(missingPlugins::remove);
+        if (missingPlugins.isEmpty()) {
+            switch (discoveryMode) {
+                case ONLY_SCAN:
+                    log.debug("Service loading of plugins disabled, consider reconfiguring {}={}",
+                            WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.HYBRID_WARN);
+                    break;
+                case HYBRID_WARN:
+                case HYBRID_FAIL:
+                    log.warn("All plugins have ServiceLoader manifests, consider reconfiguring {}={}",
+                            WorkerConfig.PLUGIN_DISCOVERY_CONFIG, PluginDiscoveryMode.SERVICE_LOAD);
+                    break;
+                case SERVICE_LOAD:
+                    log.debug("Reflective loading of plugins disabled, plugins without manifests will not be visible");
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown discovery mode");
+            }
+        } else {
+            String message = String.format(
+                    "Plugins are missing ServiceLoader manifests, these plugins will not be visible with %s=%s: %s",
+                    WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
+                    PluginDiscoveryMode.SERVICE_LOAD,
+                    missingPlugins.stream()
+                            .map(pluginDesc -> pluginDesc.location() + "\t" + pluginDesc.className() + "\t" + pluginDesc.version())
+                            .collect(Collectors.joining("\n", "[\n", "\n]")));
+            switch (discoveryMode) {
+                case HYBRID_WARN:
+                    log.warn(message);
+                    break;
+                case HYBRID_FAIL:
+                    throw new ConnectException(message);
+                default:
+                    throw new IllegalArgumentException("Unknown discovery mode");
+            }
+        }
     }
 
     private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {
