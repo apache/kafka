@@ -40,7 +40,7 @@ public class RocksDbTimeOrderedKeyValueBytesStoreSupplier {
     }
 
     public String metricsScope() {
-        return "rocksdb-buffer";
+        return "rocksdb";
     }
 
 }

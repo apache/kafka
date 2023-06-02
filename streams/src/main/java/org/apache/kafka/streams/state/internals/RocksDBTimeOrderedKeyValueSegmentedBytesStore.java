@@ -22,7 +22,6 @@ import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.rocksdb.WriteBatch;
 
@@ -36,7 +35,7 @@ public class RocksDBTimeOrderedKeyValueSegmentedBytesStore extends AbstractRocks
                                                   final long retention,
                                                   final long segmentInterval) {
         super(name, metricsScope, retention, segmentInterval, new TimeFirstWindowKeySchema(),
-            Optional.ofNullable(null));
+            Optional.empty());
     }
 
     @Override
