@@ -66,13 +66,13 @@ public class KRaftMigrationZkWriter {
     static final String CREATE_TOPIC = "CreateTopic";
     static final String UPDATE_TOPIC = "UpdateTopic";
     static final String DELETE_TOPIC = "DeleteTopic";
-    static final String UPDATE_PARTITION = "UpdatePartition";
+    static final String UPDATE_PARTITIONS = "UpdatePartitions";
     static final String DELETE_PARTITION = "DeletePartition";
     static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
     static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
     static final String UPDATE_TOPIC_CONFIG = "UpdateTopicConfig";
     static final String DELETE_TOPIC_CONFIG = "DeleteTopicConfig";
-    static final String UPDATE_CLIENT_QUOTA = "UpdateClientQuota";
+    static final String UPDATE_CLIENT_QUOTAS = "UpdateClientQuotas";
     static final String UPDATE_ACL = "UpdateAcl";
     static final String DELETE_ACL = "DeleteAcl";
 
@@ -223,8 +223,8 @@ public class KRaftMigrationZkWriter {
             );
             ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
             operationConsumer.accept(
-                UPDATE_TOPIC_CONFIG,
-                "Updating Configs for Topic " + topicName + ", ID " + topicId,
+                DELETE_TOPIC_CONFIG,
+                "Deleting Configs for Topic " + topicName + ", ID " + topicId,
                 migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState)
             );
         });
@@ -232,7 +232,7 @@ public class KRaftMigrationZkWriter {
         newPartitions.forEach((topicId, partitionMap) -> {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
-                UPDATE_PARTITION,
+                UPDATE_PARTITIONS,
                 "Creating additional partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
@@ -242,7 +242,7 @@ public class KRaftMigrationZkWriter {
         changedPartitions.forEach((topicId, partitionMap) -> {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
-                UPDATE_PARTITION,
+                UPDATE_PARTITIONS,
                 "Updating Partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
@@ -295,7 +295,7 @@ public class KRaftMigrationZkWriter {
                 Map<Integer, PartitionRegistration> changedPartitions = topicDelta.partitionChanges();
                 if (!newPartitions.isEmpty()) {
                     operationConsumer.accept(
-                        UPDATE_PARTITION,
+                        UPDATE_PARTITIONS,
                         "Create new partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().createTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), newPartitions),
@@ -306,7 +306,7 @@ public class KRaftMigrationZkWriter {
                     // Need a final for the lambda
                     final Map<Integer, PartitionRegistration> finalChangedPartitions = changedPartitions;
                     operationConsumer.accept(
-                        UPDATE_PARTITION,
+                        UPDATE_PARTITIONS,
                         "Updating Partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().updateTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), finalChangedPartitions),
@@ -441,7 +441,7 @@ public class KRaftMigrationZkWriter {
 
         changedNonUserEntities.forEach(entity -> {
             Map<String, Double> quotaMap = clientQuotasImage.entities().getOrDefault(entity, ClientQuotaImage.EMPTY).quotaMap();
-            opConsumer.accept(UPDATE_CLIENT_QUOTA, "Update client quotas for " + entity, migrationState ->
+            opConsumer.accept(UPDATE_CLIENT_QUOTAS, "Update client quotas for " + entity, migrationState ->
                 migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, Collections.emptyMap(), migrationState));
         });
 
@@ -450,7 +450,7 @@ public class KRaftMigrationZkWriter {
             Map<String, Double> quotaMap = clientQuotasImage.entities().
                 getOrDefault(entity, ClientQuotaImage.EMPTY).quotaMap();
             Map<String, String> scramMap = getScramCredentialStringsForUser(scramImage, userName);
-            opConsumer.accept(UPDATE_CLIENT_QUOTA, "Update client quotas for " + userName, migrationState ->
+            opConsumer.accept(UPDATE_CLIENT_QUOTAS, "Update client quotas for " + userName, migrationState ->
                 migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, scramMap, migrationState));
         });
     }
@@ -510,7 +510,7 @@ public class KRaftMigrationZkWriter {
                         users.add(userName);
                     } else {
                         Map<String, Double> quotaMap = metadataImage.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                        operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updating client quota " + clientQuotaEntity, migrationState ->
+                        operationConsumer.accept(UPDATE_CLIENT_QUOTAS, "Updating client quota " + clientQuotaEntity, migrationState ->
                             migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, Collections.emptyMap(), migrationState));
                     }
                 });
@@ -522,11 +522,11 @@ public class KRaftMigrationZkWriter {
                 ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
                 if ((metadataImage.clientQuotas() == null) ||
                     (metadataImage.clientQuotas().entities().get(clientQuotaEntity) == null)) {
-                    operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updating scram credentials for " + clientQuotaEntity, migrationState ->
+                    operationConsumer.accept(UPDATE_CLIENT_QUOTAS, "Updating scram credentials for " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), Collections.emptyMap(), userScramMap, migrationState));
                 } else {
                     Map<String, Double> quotaMap = metadataImage.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                    operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updating client quota for " + clientQuotaEntity, migrationState ->
+                    operationConsumer.accept(UPDATE_CLIENT_QUOTAS, "Updating client quota for " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
                 }
             });

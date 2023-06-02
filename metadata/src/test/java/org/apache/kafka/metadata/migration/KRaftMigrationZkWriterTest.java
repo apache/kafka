@@ -25,7 +25,10 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -34,6 +37,7 @@ import org.apache.kafka.image.AclsDelta;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.AclsImageTest;
 import org.apache.kafka.image.ClientQuotasImage;
+import org.apache.kafka.image.ClientQuotasImageTest;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.image.ConfigurationsImage;
@@ -45,7 +49,12 @@ import org.apache.kafka.image.ProducerIdsDelta;
 import org.apache.kafka.image.ProducerIdsImage;
 import org.apache.kafka.image.ProducerIdsImageTest;
 import org.apache.kafka.image.ScramImage;
+import org.apache.kafka.image.ScramImageTest;
+import org.apache.kafka.image.TopicsDelta;
+import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.image.TopicsImageTest;
+import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.junit.jupiter.api.Test;
 
@@ -95,7 +104,6 @@ public class KRaftMigrationZkWriterTest {
         };
 
         CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
-        CapturingAclMigrationClient aclClient = new CapturingAclMigrationClient();
         CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
             .setBrokersInZk(0)
             .setTopicMigrationClient(topicClient)
@@ -149,10 +157,10 @@ public class KRaftMigrationZkWriterTest {
             ClusterImage.EMPTY,         // Broker registrations are not dual-written
             TopicsImageTest.IMAGE1,
             ConfigurationsImageTest.IMAGE1,
-            ClientQuotasImage.EMPTY,    // TODO KAFKA-15017
+            ClientQuotasImageTest.IMAGE1,
             ProducerIdsImageTest.IMAGE1,
             AclsImageTest.IMAGE1,
-            ScramImage.EMPTY            // TODO KAFKA-15017
+            ScramImageTest.IMAGE1
         );
 
         Map<String, Integer> opCounts = new HashMap<>();
@@ -163,6 +171,7 @@ public class KRaftMigrationZkWriterTest {
         assertEquals(2, opCounts.remove("UpdateBrokerConfig"));
         assertEquals(1, opCounts.remove("UpdateProducerId"));
         assertEquals(4, opCounts.remove("UpdateAcl"));
+        assertEquals(5, opCounts.remove("UpdateClientQuotas"));
         assertEquals(0, opCounts.size());
 
         assertEquals(2, topicClient.createdTopics.size());
@@ -218,10 +227,91 @@ public class KRaftMigrationZkWriterTest {
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleSnapshot(image, consumer);
         assertEquals(1, opCounts.remove("CreateTopic"));
-        assertEquals(1, opCounts.remove("UpdatePartition"));
+        assertEquals(1, opCounts.remove("UpdatePartitions"));
         assertEquals(1, opCounts.remove("UpdateTopic"));
         assertEquals(0, opCounts.size());
         assertEquals("bar", topicClient.createdTopics.get(0));
+    }
+
+    @Test
+    public void testDeleteTopicFromSnapshot() {
+        CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
+            @Override
+            public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
+                visitor.visitTopic("spam", Uuid.randomUuid(), Collections.emptyMap());
+            }
+        };
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+                .setBrokersInZk(0)
+                .setTopicMigrationClient(topicClient)
+                .build();
+
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        writer.handleTopicsSnapshot(TopicsImage.EMPTY, consumer);
+        assertEquals(1, opCounts.remove("DeleteTopic"));
+        assertEquals(1, opCounts.remove("DeleteTopicConfig"));
+        assertEquals(0, opCounts.size());
+        assertEquals(Collections.singletonList("spam"), topicClient.deletedTopics);
+
+        opCounts.clear();
+        topicClient.reset();
+        writer.handleTopicsSnapshot(TopicsImageTest.IMAGE1, consumer);
+        assertEquals(1, opCounts.remove("DeleteTopic"));
+        assertEquals(1, opCounts.remove("DeleteTopicConfig"));
+        assertEquals(2, opCounts.remove("CreateTopic"));
+        assertEquals(0, opCounts.size());
+        assertEquals(Collections.singletonList("spam"), topicClient.deletedTopics);
+        assertEquals(Arrays.asList("foo", "bar"), topicClient.createdTopics);
+    }
+
+    @Test
+    public void testUpdatePartitionsFromSnapshot() {
+        Uuid topicId = Uuid.randomUuid();
+        Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
+        partitionMap.put(0, new PartitionRegistration(new int[]{2, 3, 4}, new int[]{2, 3, 4}, new int[]{}, new int[]{}, 2, LeaderRecoveryState.RECOVERED, 0, -1));
+        partitionMap.put(1, new PartitionRegistration(new int[]{3, 4, 5}, new int[]{3, 4, 5}, new int[]{}, new int[]{}, 3, LeaderRecoveryState.RECOVERED, 0, -1));
+
+        CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
+            @Override
+            public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
+                Map<Integer, List<Integer>> assignments = new HashMap<>();
+                assignments.put(0, Arrays.asList(2, 3, 4));
+                assignments.put(1, Arrays.asList(3, 4, 5));
+                visitor.visitTopic("spam", topicId, assignments);
+                visitor.visitPartition(new TopicIdPartition(topicId, new TopicPartition("spam", 0)), partitionMap.get(0));
+                visitor.visitPartition(new TopicIdPartition(topicId, new TopicPartition("spam", 1)), partitionMap.get(1));
+            }
+        };
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+                .setBrokersInZk(0)
+                .setTopicMigrationClient(topicClient)
+                .build();
+
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
+        delta.replay(new TopicRecord().setTopicId(topicId).setName("spam"));
+        delta.replay((PartitionRecord) partitionMap.get(0).toRecord(topicId, 0).message());
+        delta.replay((PartitionRecord) partitionMap.get(1).toRecord(topicId, 1).message());
+        TopicsImage image = delta.apply();
+
+        Map<String, Integer> opCounts = new HashMap<>();
+        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+        writer.handleTopicsSnapshot(image, consumer);
+        assertEquals(0, opCounts.size(), "No operations expected since the data is the same");
+
+        delta = new TopicsDelta(image);
+        delta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(2, 3)));
+        delta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(1).setReplicas(Arrays.asList(3, 4, 5)).setLeader(3));
+        image = delta.apply();
+        writer.handleTopicsSnapshot(image, consumer);
+        assertEquals(1, opCounts.remove("UpdatePartitions"));
+        assertEquals(0, opCounts.size());
     }
 
     @Test
