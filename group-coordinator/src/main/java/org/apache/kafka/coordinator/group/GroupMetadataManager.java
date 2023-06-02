@@ -49,6 +49,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -457,7 +458,7 @@ public class GroupMetadataManager {
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    private Result<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
+    private CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
         String groupId,
         String memberId,
         int memberEpoch,
@@ -603,7 +604,7 @@ public class GroupMetadataManager {
             response.setAssignment(createResponseAssignment(updatedMember));
         }
 
-        return new Result<>(records, response);
+        return new CoordinatorResult<>(records, response);
     }
 
     /**
@@ -614,7 +615,7 @@ public class GroupMetadataManager {
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    private Result<ConsumerGroupHeartbeatResponseData> consumerGroupLeave(
+    private CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupLeave(
         String groupId,
         String memberId
     ) throws ApiException {
@@ -647,7 +648,7 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch() + 1;
         records.add(newGroupEpochRecord(groupId, groupEpoch));
 
-        return new Result<>(records, new ConsumerGroupHeartbeatResponseData()
+        return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(-1)
         );
@@ -662,7 +663,7 @@ public class GroupMetadataManager {
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    public Result<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
+    public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
         RequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) throws ApiException {

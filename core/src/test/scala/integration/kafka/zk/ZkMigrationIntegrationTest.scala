@@ -26,7 +26,7 @@ import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.{PasswordEncoder, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -383,6 +383,89 @@ class ZkMigrationIntegrationTest {
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
+  }
+
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
+    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
+  ))
+  def testNewAndChangedTopicsInDualWrite(zkCluster: ClusterInstance): Unit = {
+    // Create a topic in ZK mode
+    val topicName = "test"
+    var admin = zkCluster.createAdminClient()
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      val clientProps = kraftCluster.controllerClientProperties()
+      val voters = clientProps.get(RaftConfig.QUORUM_VOTERS_CONFIG)
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(30, TimeUnit.SECONDS)
+
+      // Wait for migration to begin
+      log.info("Waiting for ZK migration to begin")
+      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+
+      // Alter the metadata
+      log.info("Create new topic with AdminClient")
+      admin = zkCluster.createAdminClient()
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic(topicName, 2, 3.toShort))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+
+      val existingPartitions = Seq(new TopicPartition(topicName, 0), new TopicPartition(topicName, 1))
+      // Verify the changes made to KRaft are seen in ZK
+      verifyTopicPartitionMetadata(topicName, existingPartitions, zkClient)
+
+      log.info("Create new partitions with AdminClient")
+      admin.createPartitions(Map(topicName -> NewPartitions.increaseTo(3)).asJava).all().get(60, TimeUnit.SECONDS)
+
+      // Verify the changes seen in Zk.
+      verifyTopicPartitionMetadata(topicName, existingPartitions ++ Seq(new TopicPartition(topicName, 2)), zkClient)
+    } finally {
+      zkCluster.stop()
+      kraftCluster.close()
+    }
+  }
+
+  def verifyTopicPartitionMetadata(topicName: String, partitions: Seq[TopicPartition], zkClient: KafkaZkClient): Unit = {
+    val (topicIdReplicaAssignment, success) = TestUtils.computeUntilTrue(
+      zkClient.getReplicaAssignmentAndTopicIdForTopics(Set(topicName)).headOption) {
+      x => x.exists(_.assignment.size == partitions.size)
+    }
+    assertTrue(success, "Unable to find topic metadata in Zk")
+    TestUtils.waitUntilTrue(() =>{
+      val lisrMap = zkClient.getTopicPartitionStates(partitions.toSeq)
+      lisrMap.size == partitions.size &&
+        lisrMap.forall { case (tp, lisr) =>
+          lisr.leaderAndIsr.leader >= 0 &&
+            topicIdReplicaAssignment.exists(_.assignment(tp).replicas == lisr.leaderAndIsr.isr)
+        }
+    }, "Unable to find topic partition metadata")
   }
 
   def allocateProducerId(bootstrapServers: String): Unit = {

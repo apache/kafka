@@ -58,6 +58,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
@@ -307,7 +308,7 @@ public class GroupMetadataManagerTest {
                 .state();
         }
 
-        public Result<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
+        public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
             ConsumerGroupHeartbeatRequestData request
         ) {
             snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
@@ -328,7 +329,7 @@ public class GroupMetadataManagerTest {
                 false
             );
 
-            Result<ConsumerGroupHeartbeatResponseData> result = groupMetadataManager.consumerGroupHeartbeat(
+            CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = groupMetadataManager.consumerGroupHeartbeat(
                 context,
                 request
             );
@@ -492,7 +493,7 @@ public class GroupMetadataManagerTest {
             Collections.emptyMap()
         ));
 
-        Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("group-foo")
                 .setMemberEpoch(0)
@@ -647,7 +648,7 @@ public class GroupMetadataManagerTest {
         // Member joins with previous epoch and has a subset of the owned partitions. This
         // is accepted as the response with the bumped epoch may have been lost. In this
         // case, we provide back the correct epoch to the member.
-        Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
@@ -690,7 +691,7 @@ public class GroupMetadataManagerTest {
         assertThrows(GroupIdNotFoundException.class, () ->
             context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false));
 
-        Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
@@ -791,7 +792,7 @@ public class GroupMetadataManagerTest {
             )))
         ));
 
-        Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
@@ -924,7 +925,7 @@ public class GroupMetadataManagerTest {
         ));
 
         // Member 3 joins the consumer group.
-        Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId3)
@@ -1049,7 +1050,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // Member 2 leaves the consumer group.
-        Result<ConsumerGroupHeartbeatResponseData> result = context.consumerGroupHeartbeat(
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
@@ -1159,7 +1160,7 @@ public class GroupMetadataManagerTest {
             }
         ));
 
-        Result<ConsumerGroupHeartbeatResponseData> result;
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result;
 
         // Members in the group are in Stable state.
         assertEquals(ConsumerGroupMember.MemberState.STABLE, context.consumerGroupMemberState(groupId, memberId1));
@@ -1566,7 +1567,7 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
-        Result<ConsumerGroupHeartbeatResponseData> result;
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result;
 
         // Prepare new assignment for the group.
         assignor.prepareGroupAssignment(new GroupAssignment(

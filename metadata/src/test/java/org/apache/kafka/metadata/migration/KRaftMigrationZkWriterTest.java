@@ -21,6 +21,8 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -55,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.DELETE_BROKER_CONFIG;
 import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.DELETE_TOPIC_CONFIG;
@@ -67,6 +70,60 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class KRaftMigrationZkWriterTest {
+
+    @Test
+    public void testExtraneousZkPartitions() {
+        CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
+            @Override
+            public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
+                Map<Integer, List<Integer>> assignments = new HashMap<>();
+                assignments.put(0, Arrays.asList(2, 3, 4));
+                assignments.put(1, Arrays.asList(3, 4, 5));
+                assignments.put(2, Arrays.asList(2, 4, 5));
+                assignments.put(3, Arrays.asList(1, 2, 3)); // This one is not in KRaft
+                visitor.visitTopic("foo", TopicsImageTest.FOO_UUID, assignments);
+
+                // Skip partition 1, visit 3 (the extra one)
+                IntStream.of(0, 2, 3).forEach(partitionId -> {
+                    visitor.visitPartition(
+                        new TopicIdPartition(TopicsImageTest.FOO_UUID, new TopicPartition("foo", partitionId)),
+                        TopicsImageTest.IMAGE1.getPartition(TopicsImageTest.FOO_UUID, partitionId)
+                    );
+                });
+
+            }
+        };
+
+        CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
+        CapturingAclMigrationClient aclClient = new CapturingAclMigrationClient();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(0)
+            .setTopicMigrationClient(topicClient)
+            .setConfigMigrationClient(configClient)
+            .build();
+
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+
+        MetadataImage image = new MetadataImage(
+            MetadataProvenance.EMPTY,
+            FeaturesImage.EMPTY,
+            ClusterImage.EMPTY,
+            TopicsImageTest.IMAGE1,     // This includes "foo" with 3 partitions
+            ConfigurationsImage.EMPTY,
+            ClientQuotasImage.EMPTY,
+            ProducerIdsImage.EMPTY,
+            AclsImage.EMPTY,
+            ScramImage.EMPTY
+        );
+
+        writer.handleSnapshot(image, (opType, opLog, operation) -> {
+            operation.apply(ZkMigrationLeadershipState.EMPTY);
+        });
+        assertEquals(topicClient.updatedTopics.get("foo").size(), 3);
+        assertEquals(topicClient.deletedTopicPartitions.get("foo"), Collections.singleton(3));
+        assertEquals(topicClient.updatedTopicPartitions.get("foo"), Collections.singleton(1));
+    }
+
     /**
      * If ZK is empty, ensure that the writer will sync all metadata from the MetadataImage to ZK
      */
@@ -161,6 +218,8 @@ public class KRaftMigrationZkWriterTest {
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleSnapshot(image, consumer);
         assertEquals(1, opCounts.remove("CreateTopic"));
+        assertEquals(1, opCounts.remove("UpdatePartition"));
+        assertEquals(1, opCounts.remove("UpdateTopic"));
         assertEquals(0, opCounts.size());
         assertEquals("bar", topicClient.createdTopics.get(0));
     }
