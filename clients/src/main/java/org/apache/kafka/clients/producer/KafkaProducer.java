@@ -87,7 +87,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.clients.producer.internals.TransactionManager.InvalidStateDetectionStrategy.FOREGROUND;
+import static org.apache.kafka.clients.producer.internals.TransactionManager.CallingThread.APPLICATION;
 
 /**
  * A Kafka client that publishes records to the Kafka cluster.
@@ -834,7 +834,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfProducerClosed();
         log.info("Aborting incomplete transaction");
         long abortStart = time.nanoseconds();
-        TransactionalRequestResult result = transactionManager.beginAbort(FOREGROUND);
+        TransactionalRequestResult result = transactionManager.beginAbort(APPLICATION);
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
@@ -1081,7 +1081,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors.record();
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
             if (transactionManager != null) {
-                transactionManager.maybeTransitionToErrorState(e, FOREGROUND);
+                transactionManager.maybeTransitionToErrorState(e, APPLICATION);
             }
             return new FutureFailure(e);
         } catch (InterruptedException e) {

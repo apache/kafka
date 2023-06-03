@@ -66,7 +66,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.producer.internals.TransactionManager.InvalidStateDetectionStrategy.BACKGROUND;
+import static org.apache.kafka.clients.producer.internals.TransactionManager.CallingThread.SENDER;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -270,7 +270,7 @@ public class Sender implements Runnable {
                 try {
                     // It is possible for the transaction manager to throw errors when aborting. Catch these
                     // so as not to interfere with the rest of the shutdown logic.
-                    transactionManager.beginAbort(BACKGROUND);
+                    transactionManager.beginAbort(SENDER);
                 } catch (Exception e) {
                     log.error("Error in kafka producer I/O thread while aborting transaction: ", e);
                 }
@@ -351,7 +351,7 @@ public class Sender implements Runnable {
                         exception instanceof ClusterAuthorizationException) {
             transactionManager.failPendingRequests(new AuthenticationException(exception));
             maybeAbortBatches(exception);
-            transactionManager.transitionToUninitialized(exception);
+            transactionManager.transitionToUninitialized(exception, SENDER);
             return true;
         }
         return false;

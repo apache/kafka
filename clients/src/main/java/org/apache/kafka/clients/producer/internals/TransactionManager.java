@@ -202,62 +202,60 @@ public class TransactionManager {
     /**
      * During the normal course of operations for the transaction manager, it transitions through different internal
      * states (i.e. by updating {@link #currentState}) to one of those defined in {@link State}. These state transitions
-     * result from:
+     * result from actions on one of two threads:
      *
      * <ul>
-     *     <li><em>Foreground {@link Producer} API calls</em></li>
-     *     <li><em>Background thread operations</em></li>
+     *     <li><em>Application</em> thread that invokes {@link Producer} API calls</li>
+     *     <li><em>{@link Sender}</em> thread operations</li>
      * </ul>
      *
-     * <p/>
-     *
-     * When an invalid state transition is detected during execution of one of the <em>foreground {@link Producer} API
-     * calls</em>, the {@link #currentState} is <em>not updated</em>, though an {@link IllegalStateException} is
-     * thrown. This gives the user the opportunity to fix the issue without permanently poisoning the state of the
-     * transaction manager. The foreground {@link Producer} API calls that perform a state transition include:
+     * When an invalid state transition is detected during execution on the <em>application</em> thread, the
+     * {@link #currentState} is <em>not updated</em> and an {@link IllegalStateException} is thrown. This gives the
+     * application the opportunity to fix the issue without permanently poisoning the state of the
+     * transaction manager. The {@link Producer} API calls that perform a state transition include:
      *
      * <ul>
      *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
      *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
-     *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort(InvalidStateDetectionStrategy)}
+     *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort(CallingThread)}
      *     </li>
      *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls
      *         {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
      *     </li>
      *     <li>{@link Producer#send(ProducerRecord)} (and its variants) calls
      *         {@link #maybeAddPartition(TopicPartition)} and
-     *         {@link #maybeTransitionToErrorState(RuntimeException, InvalidStateDetectionStrategy)}
+     *         {@link #maybeTransitionToErrorState(RuntimeException, CallingThread)}
      *     </li>
      * </ul>
      *
      * <p/>
      *
-     * Some of the above API calls perform a portion of their work asynchronously using <em>background
-     * thread operations</em> that include record batching, network I/O, broker response handlers, etc. If an invalid
-     * state transition is detected in a background thread, in addition to throwing an {@link IllegalStateException},
-     * the transaction manager intentionally "poisons" itself by setting its {@link #currentState} to
-     * {@link State#FATAL_ERROR}, a state from which it cannot recover.
+     * The {@link Producer} is implemented such that much of its work is performed asynchronously on the
+     * <em>{@link Sender}</em> thread. This includes record batching, network I/O, broker response handlers, etc. If an
+     * invalid state transition is detected in the <em>{@link Sender}</em> thread, in addition to throwing an
+     * {@link IllegalStateException}, the transaction manager intentionally "poisons" itself by setting its
+     * {@link #currentState} to {@link State#FATAL_ERROR}, a state from which it cannot recover.
      *
      * <p/>
      *
      * It's important to prevent possible corruption when the transaction manager has determined that it is in a
-     * fatal state. New transactions attempted via foreground {@link Producer} API calls and in-process background
-     * thread operations will both invoke the transaction manager's {@link #maybeFailWithError()} method which
-     * causes a {@link KafkaException} is thrown. In either case, the transaction manager's stated guarantees will
-     * not be violated.
+     * fatal state. Subsequent transaction operations attempted via either the <em>application</em> or the
+     * <em>{@link Sender}</em> thread should fail. This is achieved when these operations invoke the
+     * {@link #maybeFailWithError()} method, as it causes a {@link KafkaException} to be thrown, ensuring the stated
+     * transactional guarantees are not violated.
      *
      * <p/>
      *
      * See KAFKA-14831 for more detail.
      */
-    public enum InvalidStateDetectionStrategy {
+    public enum CallingThread {
 
-        FOREGROUND(false), BACKGROUND(true);
+        APPLICATION(false), SENDER(true);
 
         private final boolean shouldPoisonState;
 
-        InvalidStateDetectionStrategy(boolean shouldPoisonState) {
+        CallingThread(boolean shouldPoisonState) {
             this.shouldPoisonState = shouldPoisonState;
         }
 
@@ -290,18 +288,18 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
-        return initializeTransactions(ProducerIdAndEpoch.NONE, InvalidStateDetectionStrategy.FOREGROUND);
+        return initializeTransactions(ProducerIdAndEpoch.NONE, CallingThread.APPLICATION);
     }
 
     synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch producerIdAndEpoch,
-                                                                   InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
+                                                                   CallingThread callingThread) {
         maybeFailWithError();
 
         boolean isEpochBump = producerIdAndEpoch != ProducerIdAndEpoch.NONE;
         return handleCachedTransactionRequestResult(() -> {
             // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
             if (!isEpochBump) {
-                transitionTo(State.INITIALIZING, null, invalidStateDetectionStrategy);
+                transitionTo(State.INITIALIZING, null, callingThread);
                 log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
             } else {
                 log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
@@ -322,31 +320,33 @@ public class TransactionManager {
         ensureTransactional();
         throwIfPendingState("beginTransaction");
         maybeFailWithError();
-        transitionTo(State.IN_TRANSACTION, null, InvalidStateDetectionStrategy.FOREGROUND);
+        transitionTo(State.IN_TRANSACTION, null, CallingThread.APPLICATION);
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
+        CallingThread callingThread = CallingThread.APPLICATION;
+
         return handleCachedTransactionRequestResult(() -> {
             maybeFailWithError();
-            transitionTo(State.COMMITTING_TRANSACTION, null, InvalidStateDetectionStrategy.FOREGROUND);
-            return beginCompletingTransaction(TransactionResult.COMMIT, InvalidStateDetectionStrategy.FOREGROUND);
+            transitionTo(State.COMMITTING_TRANSACTION, null, callingThread);
+            return beginCompletingTransaction(TransactionResult.COMMIT, callingThread);
         }, State.COMMITTING_TRANSACTION, "commitTransaction");
     }
 
-    public synchronized TransactionalRequestResult beginAbort(InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
+    public synchronized TransactionalRequestResult beginAbort(CallingThread callingThread) {
         return handleCachedTransactionRequestResult(() -> {
             if (currentState != State.ABORTABLE_ERROR)
                 maybeFailWithError();
-            transitionTo(State.ABORTING_TRANSACTION, null, invalidStateDetectionStrategy);
+            transitionTo(State.ABORTING_TRANSACTION, null, callingThread);
 
             // We're aborting the transaction, so there should be no need to add new partitions
             newPartitionsInTransaction.clear();
-            return beginCompletingTransaction(TransactionResult.ABORT, invalidStateDetectionStrategy);
+            return beginCompletingTransaction(TransactionResult.ABORT, callingThread);
         }, State.ABORTING_TRANSACTION, "abortTransaction");
     }
 
     private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult,
-                                                                  InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
+                                                                  CallingThread callingThread) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
@@ -368,7 +368,7 @@ public class TransactionManager {
             }
         }
 
-        return initializeTransactions(this.producerIdAndEpoch, invalidStateDetectionStrategy);
+        return initializeTransactions(this.producerIdAndEpoch, callingThread);
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -455,8 +455,7 @@ public class TransactionManager {
         return currentState == State.ABORTING_TRANSACTION;
     }
 
-    synchronized void transitionToAbortableError(RuntimeException exception,
-                                                 InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
+    synchronized void transitionToAbortableError(RuntimeException exception, CallingThread callingThread) {
         if (currentState == State.ABORTING_TRANSACTION) {
             log.debug("Skipping transition to abortable error state since the transaction is already being " +
                     "aborted. Underlying exception: ", exception);
@@ -464,12 +463,12 @@ public class TransactionManager {
         }
 
         log.info("Transiting to abortable error state due to {}", exception.toString());
-        transitionTo(State.ABORTABLE_ERROR, exception, invalidStateDetectionStrategy);
+        transitionTo(State.ABORTABLE_ERROR, exception, callingThread);
     }
 
-    synchronized void transitionToFatalError(RuntimeException exception) {
+    synchronized void transitionToFatalError(RuntimeException exception, CallingThread callingThread) {
         log.info("Transiting to fatal error state due to {}", exception.toString());
-        transitionTo(State.FATAL_ERROR, exception, InvalidStateDetectionStrategy.BACKGROUND);
+        transitionTo(State.FATAL_ERROR, exception, callingThread);
 
         if (pendingTransition != null) {
             pendingTransition.result.fail(exception);
@@ -524,13 +523,13 @@ public class TransactionManager {
      * InitProducerId request. This method is only called when the producer epoch is exhausted; we will bump the epoch
      * instead.
      */
-    private void resetIdempotentProducerId() {
+    private void resetIdempotentProducerId(CallingThread callingThread) {
         if (isTransactional())
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         log.debug("Resetting idempotent producer ID. ID and epoch before reset are {}", this.producerIdAndEpoch);
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        transitionTo(State.UNINITIALIZED, null, InvalidStateDetectionStrategy.BACKGROUND);
+        transitionTo(State.UNINITIALIZED, null, callingThread);
     }
 
     private void resetSequenceForPartition(TopicPartition topicPartition) {
@@ -548,9 +547,9 @@ public class TransactionManager {
         this.partitionsToRewriteSequences.add(tp);
     }
 
-    private void bumpIdempotentProducerEpoch() {
+    private void bumpIdempotentProducerEpoch(@SuppressWarnings("SameParameterValue") CallingThread callingThread) {
         if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
-            resetIdempotentProducerId();
+            resetIdempotentProducerId(callingThread);
         } else {
             setProducerIdAndEpoch(new ProducerIdAndEpoch(this.producerIdAndEpoch.producerId, (short) (this.producerIdAndEpoch.epoch + 1)));
             log.debug("Incremented producer epoch, current producer ID and epoch are now {}", this.producerIdAndEpoch);
@@ -567,12 +566,14 @@ public class TransactionManager {
     }
 
     synchronized void bumpIdempotentEpochAndResetIdIfNeeded() {
+        CallingThread callingThread = CallingThread.SENDER;
+
         if (!isTransactional()) {
             if (epochBumpRequired) {
-                bumpIdempotentProducerEpoch();
+                bumpIdempotentProducerEpoch(callingThread);
             }
             if (currentState != State.INITIALIZING && !hasProducerId()) {
-                transitionTo(State.INITIALIZING, null, InvalidStateDetectionStrategy.BACKGROUND);
+                transitionTo(State.INITIALIZING, null, callingThread);
                 InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                         .setTransactionalId(null)
                         .setTransactionTimeoutMs(Integer.MAX_VALUE);
@@ -685,32 +686,31 @@ public class TransactionManager {
         removeInFlightBatch(batch);
     }
 
-    public synchronized void transitionToUninitialized(RuntimeException exception) {
-        transitionTo(State.UNINITIALIZED, exception, InvalidStateDetectionStrategy.BACKGROUND);
+    public synchronized void transitionToUninitialized(RuntimeException exception, CallingThread callingThread) {
+        transitionTo(State.UNINITIALIZED, exception, callingThread);
         if (pendingTransition != null) {
             pendingTransition.result.fail(exception);
         }
         lastError = null;
     }
 
-    public synchronized void maybeTransitionToErrorState(RuntimeException exception,
-                                                         InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
+    public synchronized void maybeTransitionToErrorState(RuntimeException exception, CallingThread callingThread) {
         if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
                 || exception instanceof ProducerFencedException
                 || exception instanceof UnsupportedVersionException) {
-            transitionToFatalError(exception);
+            transitionToFatalError(exception, callingThread);
         } else if (isTransactional()) {
             if (canBumpEpoch() && !isCompleting()) {
                 epochBumpRequired = true;
             }
-            transitionToAbortableError(exception, invalidStateDetectionStrategy);
+            transitionToAbortableError(exception, callingThread);
         }
     }
     synchronized void handleFailedBatch(ProducerBatch batch,
                                         RuntimeException exception,
                                         boolean adjustSequenceNumbers) {
-        maybeTransitionToErrorState(exception, InvalidStateDetectionStrategy.BACKGROUND);
+        maybeTransitionToErrorState(exception, CallingThread.SENDER);
         removeInFlightBatch(batch);
 
         if (hasFatalError()) {
@@ -804,6 +804,8 @@ public class TransactionManager {
     // Attempts to resolve unresolved sequences. If all in-flight requests are complete and some partitions are still
     // unresolved, either bump the epoch if possible, or transition to a fatal error
     synchronized void maybeResolveSequences() {
+        CallingThread callingThread = CallingThread.SENDER;
+
         for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.keySet().iterator(); iter.hasNext(); ) {
             TopicPartition topicPartition = iter.next();
             if (!hasInflightBatches(topicPartition)) {
@@ -823,10 +825,10 @@ public class TransactionManager {
                             epochBumpRequired = true;
                             KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
                                     "the transaction and continue.");
-                            transitionToAbortableError(exception, InvalidStateDetectionStrategy.BACKGROUND);
+                            transitionToAbortableError(exception, callingThread);
                         } else {
                             KafkaException exception = new KafkaException(unackedMessagesErr + "It isn't safe to continue.");
-                            transitionToFatalError(exception);
+                            transitionToFatalError(exception, callingThread);
                         }
                     } else {
                         // For the idempotent producer, bump the epoch
@@ -1056,15 +1058,13 @@ public class TransactionManager {
                 initProducerIdVersion.maxVersion() >= 3;
     }
 
-    private void transitionTo(State target,
-                              RuntimeException error,
-                              InvalidStateDetectionStrategy invalidStateDetectionStrategy) {
+    private void transitionTo(State target, RuntimeException error, CallingThread callingThread) {
         if (!currentState.isTransitionValid(currentState, target)) {
             String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
             String message = idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name();
 
-            if (invalidStateDetectionStrategy.shouldPoisonState()) {
+            if (callingThread.shouldPoisonState()) {
                 currentState = State.FATAL_ERROR;
                 lastError = new IllegalStateException(message);
                 throw lastError;
@@ -1231,9 +1231,9 @@ public class TransactionManager {
 
     private void completeTransaction() {
         if (epochBumpRequired) {
-            transitionTo(State.INITIALIZING, null, InvalidStateDetectionStrategy.BACKGROUND);
+            transitionTo(State.INITIALIZING, null, CallingThread.SENDER);
         } else {
-            transitionTo(State.READY, null, InvalidStateDetectionStrategy.BACKGROUND);
+            transitionTo(State.READY, null, CallingThread.SENDER);
         }
         lastError = null;
         epochBumpRequired = false;
@@ -1257,12 +1257,12 @@ public class TransactionManager {
 
         void fatalError(RuntimeException e) {
             result.fail(e);
-            transitionToFatalError(e);
+            transitionToFatalError(e, CallingThread.SENDER);
         }
 
         void abortableError(RuntimeException e) {
             result.fail(e);
-            transitionToAbortableError(e, InvalidStateDetectionStrategy.BACKGROUND);
+            transitionToAbortableError(e, CallingThread.SENDER);
         }
 
         void abortableErrorIfPossible(RuntimeException e) {
@@ -1383,7 +1383,7 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                transitionTo(State.READY, null, InvalidStateDetectionStrategy.BACKGROUND);
+                transitionTo(State.READY, null, CallingThread.SENDER);
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
