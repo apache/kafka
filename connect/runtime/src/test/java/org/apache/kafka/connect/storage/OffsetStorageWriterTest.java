@@ -228,6 +228,33 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
+    public void testFlushSuccessWhenWritesSucceedToBothPrimaryAndSecondaryStoresForTombstoneOffsets() throws InterruptedException, TimeoutException, ExecutionException {
+
+        KafkaOffsetBackingStore connectorStore = mock(KafkaOffsetBackingStore.class);
+        OffsetBackingStore workerStore = mock(OffsetBackingStore.class);
+
+        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                () -> LoggingContext.forConnector("source-connector"),
+                workerStore,
+                connectorStore,
+                "offsets-topic",
+                mock(TopicAdmin.class));
+
+        // Tombstone record. Succeeds in both primary and secondary stores.
+        expectStore(connectorStore, OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, false, null);
+        expectStore(workerStore, OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, false, null);
+
+        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
+
+        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
+        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
+        offsetStorageWriter.doFlush((error, result) -> {
+            assertNull(error);
+            assertNull(result);
+        }).get(1000L, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
     public void testFlushSuccessWhenWriteToSecondaryStoreFailsForNonTombstoneOffsets() throws InterruptedException, TimeoutException, ExecutionException {
 
         KafkaOffsetBackingStore connectorStore = mock(KafkaOffsetBackingStore.class);
@@ -255,7 +282,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test
-    public void testFlushSuccessWhenWritesToPrimarySecondarySucceeds() throws InterruptedException, TimeoutException, ExecutionException {
+    public void testFlushSuccessWhenWritesToPrimaryAndSecondaryStoreSucceeds() throws InterruptedException, TimeoutException, ExecutionException {
 
         KafkaOffsetBackingStore connectorStore = mock(KafkaOffsetBackingStore.class);
         OffsetBackingStore workerStore = mock(OffsetBackingStore.class);
@@ -297,6 +324,33 @@ public class OffsetStorageWriterTest {
         // Normal offset record. Fails in primary and succeeds in secondary store
         expectStore(connectorStore, OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, true, null);
         expectStore(workerStore, OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
+
+        OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
+
+        offsetStorageWriter.offset(OFFSET_KEY, OFFSET_VALUE);
+        assertTrue(offsetStorageWriter.beginFlush(1000L, TimeUnit.MILLISECONDS));
+        offsetStorageWriter.doFlush((error, result) -> {
+            assertEquals(EXCEPTION, error);
+            assertNull(result);
+        }).get(1000L, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceedsForTombstoneRecords() throws InterruptedException, TimeoutException, ExecutionException {
+
+        KafkaOffsetBackingStore connectorStore = mock(KafkaOffsetBackingStore.class);
+        OffsetBackingStore workerStore = mock(OffsetBackingStore.class);
+
+        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                () -> LoggingContext.forConnector("source-connector"),
+                workerStore,
+                connectorStore,
+                "offsets-topic",
+                mock(TopicAdmin.class));
+
+        // Tombstone offset record. Fails in primary and succeeds in secondary store
+        expectStore(connectorStore, OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, true, null);
+        expectStore(workerStore, OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, false, null);
 
         OffsetStorageWriter offsetStorageWriter = new OffsetStorageWriter(offsetBackingStore, NAMESPACE, keyConverter, valueConverter);
 
