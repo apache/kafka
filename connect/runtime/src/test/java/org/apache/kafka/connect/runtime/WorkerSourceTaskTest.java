@@ -894,7 +894,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void expectBeginFlush(Supplier<Boolean> resultSupplier) throws Exception {
-        when(offsetWriter.beginFlush(anyLong(), any(TimeUnit.class))).thenReturn(resultSupplier.get());
+        when(offsetWriter.beginFlush(anyLong(), any(TimeUnit.class))).thenAnswer(ignored -> resultSupplier.get());
     }
 
     private void expectOffsetFlush() throws Exception {
