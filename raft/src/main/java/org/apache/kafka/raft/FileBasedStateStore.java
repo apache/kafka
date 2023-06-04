@@ -32,11 +32,11 @@ import java.io.BufferedWriter;
 import java.io.UncheckedIOException;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -139,16 +139,17 @@ public class FileBasedStateStore implements QuorumStateStore {
 
         log.trace("Writing tmp quorum state {}", temp.getAbsolutePath());
 
-        try (final FileOutputStream fileOutputStream = new FileOutputStream(temp);
-             final BufferedWriter writer = new BufferedWriter(
-                 new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+        final OpenOption[] options = {StandardOpenOption.WRITE,
+            StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE};
+
+        try (BufferedWriter writer = Files.newBufferedWriter(temp.toPath(), StandardCharsets.UTF_8, options)) {
             short version = state.highestSupportedVersion();
 
             ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version);
             jsonState.set(DATA_VERSION, new ShortNode(version));
             writer.write(jsonState.toString());
             writer.flush();
-            fileOutputStream.getFD().sync();
+            writer.close();
             Utils.atomicMoveWithFallback(temp.toPath(), stateFile.toPath());
         } catch (IOException e) {
             throw new UncheckedIOException(

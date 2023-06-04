@@ -21,14 +21,14 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -74,13 +74,28 @@ public class CheckpointFile<T> {
 
     public void write(Collection<T> entries) throws IOException {
         synchronized (lock) {
+            final OpenOption[] options = {StandardOpenOption.WRITE,
+                StandardOpenOption.CREATE, StandardOpenOption.SPARSE};
+
             // write to temp file and then swap with the existing file
-            try (FileOutputStream fileOutputStream = new FileOutputStream(tempPath.toFile());
-                 BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-                CheckpointWriteBuffer<T> checkpointWriteBuffer = new CheckpointWriteBuffer<>(writer, version, formatter);
-                checkpointWriteBuffer.write(entries);
+
+            try (BufferedWriter writer = Files.newBufferedWriter(tempPath, StandardCharsets.UTF_8, options)) {
+                // Write the version
+                writer.write(Integer.toString(version));
+                writer.newLine();
+
+                // Write the entries count
+                writer.write(Integer.toString(entries.size()));
+                writer.newLine();
+
+                // Write each entry on a new line.
+                for (T entry : entries) {
+                    writer.write(formatter.toString(entry));
+                    writer.newLine();
+                }
+
                 writer.flush();
-                fileOutputStream.getFD().sync();
+                writer.close();
             }
 
             Utils.atomicMoveWithFallback(tempPath, absolutePath);
