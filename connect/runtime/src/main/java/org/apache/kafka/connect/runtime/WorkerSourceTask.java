@@ -58,7 +58,8 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
 
     private volatile CommittableOffsets committableOffsets;
-    private final SubmittedRecords submittedRecords;
+    //VisibleForTesting
+    final SubmittedRecords submittedRecords;
     private final AtomicReference<Exception> producerSendException;
 
     public WorkerSourceTask(ConnectorTaskId id,
