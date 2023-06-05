@@ -33,7 +33,7 @@ import java.util.TreeMap;
 
 public class TestKitNodes {
     public static class Builder {
-        private boolean coResident = false;
+        private boolean combined = false;
         private Uuid clusterId = null;
         private MetadataVersion bootstrapMetadataVersion = null;
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
@@ -49,8 +49,8 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder setCoResident(boolean coResident) {
-            this.coResident = coResident;
+        public Builder setCombined(boolean combined) {
+            this.combined = combined;
             return this;
         }
 
@@ -127,7 +127,7 @@ public class TestKitNodes {
         }
 
         private int startControllerId() {
-            if (coResident) {
+            if (combined) {
                 return startBrokerId();
             }
             return startBrokerId() + 3000;
@@ -139,7 +139,7 @@ public class TestKitNodes {
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
     private final NavigableMap<Integer, BrokerNode> brokerNodes;
 
-    public boolean isCoResidentNode(int node) {
+    public boolean isCombined(int node) {
         return controllerNodes.containsKey(node) && brokerNodes.containsKey(node);
     }
 

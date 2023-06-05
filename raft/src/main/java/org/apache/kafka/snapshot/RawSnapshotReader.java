@@ -35,7 +35,7 @@ public interface RawSnapshotReader {
     long sizeInBytes();
 
     /**
-     * Creates a slize of unaligned records from the position up to a size.
+     * Creates a slice of unaligned records from the position up to a size.
      *
      * @param position the starting position of the slice in the snapshot
      * @param size the maximum size of the slice

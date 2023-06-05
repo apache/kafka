@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 
 /**
@@ -28,8 +25,6 @@ import org.apache.kafka.streams.state.VersionedBytesStore;
  * {@link VersionedBytesStore#put(Object, Object)} and {@link VersionedBytesStore#delete(Bytes, long)}.
  */
 public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyValueBytesStore implements VersionedBytesStore {
-    private static final Deserializer<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_DESERIALIZER
-        = new NullableValueAndTimestampDeserializer<>(new ByteArrayDeserializer());
 
     private final VersionedBytesStore inner;
 
@@ -42,6 +37,13 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     }
 
     @Override
+    public long put(final Bytes key, final byte[] value, final long timestamp) {
+        final long validTo = inner.put(key, value, timestamp);
+        log(key, value, timestamp);
+        return validTo;
+    }
+
+    @Override
     public byte[] get(final Bytes key, final long asOfTimestamp) {
         return inner.get(key, asOfTimestamp);
     }
@@ -49,26 +51,17 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     @Override
     public byte[] delete(final Bytes key, final long timestamp) {
         final byte[] oldValue = inner.delete(key, timestamp);
-        log(key, ValueAndTimestamp.makeAllowNullable(null, timestamp));
+        log(key, null, timestamp);
         return oldValue;
     }
 
     @Override
-    void log(final Bytes key, final byte[] rawValueAndTimestamp) {
-        final ValueAndTimestamp<byte[]> valueAndTimestamp
-            = VALUE_AND_TIMESTAMP_DESERIALIZER.deserialize(null, rawValueAndTimestamp);
-        log(key, valueAndTimestamp);
-    }
-
-    private void log(final Bytes key, final ValueAndTimestamp<byte[]> valueAndTimestamp) {
-        if (valueAndTimestamp == null) {
-            throw new IllegalStateException("Serialized bytes to put for versioned store cannot be null");
-        }
+    public void log(final Bytes key, final byte[] value, final long timestamp) {
         context.logChange(
             name(),
             key,
-            valueAndTimestamp.value(),
-            valueAndTimestamp.timestamp(),
+            value,
+            timestamp,
             wrapped().getPosition()
         );
     }

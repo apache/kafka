@@ -24,6 +24,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.net.URL;
+import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
@@ -72,7 +73,7 @@ public class SynchronizationTest {
     public void setup() {
         Map<String, String> pluginProps = Collections.singletonMap(
             WorkerConfig.PLUGIN_PATH_CONFIG,
-            String.join(",", TestPlugins.pluginPath())
+            TestPlugins.pluginPathJoined()
         );
         threadPrefix = SynchronizationTest.class.getSimpleName()
             + "." + testName.getMethodName() + "-";
@@ -80,10 +81,10 @@ public class SynchronizationTest {
         pclBreakpoint = new Breakpoint<>();
         plugins = new Plugins(pluginProps) {
             @Override
-            protected DelegatingClassLoader newDelegatingClassLoader(List<String> paths, ClassLoader parent) {
+            protected DelegatingClassLoader newDelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
                 return AccessController.doPrivileged(
                     (PrivilegedAction<DelegatingClassLoader>) () ->
-                        new SynchronizedDelegatingClassLoader(paths, parent)
+                        new SynchronizedDelegatingClassLoader(pluginLocations, parent)
                 );
             }
         };
@@ -171,8 +172,8 @@ public class SynchronizationTest {
             ClassLoader.registerAsParallelCapable();
         }
 
-        public SynchronizedDelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
-            super(pluginPaths, parent);
+        public SynchronizedDelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
+            super(pluginLocations, parent);
         }
 
         @Override

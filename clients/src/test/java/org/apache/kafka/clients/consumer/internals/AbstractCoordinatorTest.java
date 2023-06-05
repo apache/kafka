@@ -1206,10 +1206,21 @@ public class AbstractCoordinatorTest {
                 throw e;
             return false;
         }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
+        coordinator.ensureActiveGroup();
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
         try {
-            coordinator.ensureActiveGroup();
-            mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+            long startMs = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startMs < 1000) {
+                Thread.sleep(10);
+                coordinator.timeToNextHeartbeat(0);
+            }
+            fail("Expected timeToNextHeartbeat to raise an error in 1 second");
+        } catch (RuntimeException exception) {
+            assertEquals(exception, e);
+        }
+
+        try {
             long startMs = System.currentTimeMillis();
             while (System.currentTimeMillis() - startMs < 1000) {
                 Thread.sleep(10);
@@ -1558,6 +1569,45 @@ public class AbstractCoordinatorTest {
             fail("Expected an authentication error.");
         } catch (AuthenticationException e) {
             // OK
+        }
+    }
+
+    @Test
+    public void testBackoffAndRetryUponRetriableError() {
+        this.mockTime = new MockTime();
+        long currentTimeMs = System.currentTimeMillis();
+        this.mockTime.setCurrentTimeMs(System.currentTimeMillis());
+
+        setupCoordinator(); // note: uses 100ms backoff
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        // Retriable Exception
+        mockClient.prepareResponse(joinGroupResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS));
+        mockClient.prepareResponse(joinGroupResponse(Errors.NONE)); // Retry w/o error
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        coordinator.joinGroupIfNeeded(mockTime.timer(REQUEST_TIMEOUT_MS));
+
+        assertEquals(100, mockTime.milliseconds() - currentTimeMs, 1);
+    }
+
+    @Test
+    public void testReturnUponRetriableErrorAndExpiredTimer() throws InterruptedException {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        Timer t = mockTime.timer(500);
+        try {
+            Future<Boolean> attempt = executor.submit(() -> coordinator.joinGroupIfNeeded(t));
+            mockTime.sleep(500);
+            mockClient.prepareResponse(joinGroupResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS));
+            assertFalse(attempt.get());
+        } catch (Exception e) {
+            fail();
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
         }
     }
 

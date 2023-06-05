@@ -236,7 +236,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-            final Bytes to = Bytes.increment(prefix);
+            final Bytes to = incrementWithoutOverflow(prefix);
             return new RocksDBDualCFRangeIterator(
                 name,
                 db.newIterator(newColumnFamily),

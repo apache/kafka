@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Arrays;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -35,6 +36,7 @@ import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparato
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -174,7 +176,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
+        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
+        this.metadataSnapshot = new MetadataSnapshot(this.rackId, subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.autoCommitEnabled = autoCommitEnabled;
@@ -188,7 +191,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId,
             JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, rebalanceConfig.groupInstanceId);
         this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
-        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
 
         if (autoCommitEnabled)
             this.nextAutoCommitTimer = time.timer(autoCommitIntervalMs);
@@ -282,7 +284,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // into the subscriptions as long as they still match the subscribed pattern
 
             Set<String> addedTopics = new HashSet<>();
-            // this is a copy because its handed to listener below
+            // this is a copy because it's handed to listener below
             for (TopicPartition tp : assignedPartitions) {
                 if (!joinedSubscription.contains(tp.topic()))
                     addedTopics.add(tp.topic());
@@ -489,7 +491,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             // Update the current snapshot, which will be used to check for subscription
             // changes that would require a rebalance (e.g. new partitions).
-            metadataSnapshot = new MetadataSnapshot(subscriptions, cluster, version);
+            metadataSnapshot = new MetadataSnapshot(rackId, subscriptions, cluster, version);
         }
     }
 
@@ -757,7 +759,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         if (joinPrepareTimer == null) {
-            // We should complete onJoinPrepare before rebalanceTimeout,
+            // We should complete onJoinPrepare before rebalanceTimeoutMs,
             // and continue to join group to avoid member got kicked out from group
             joinPrepareTimer = time.timer(rebalanceConfig.rebalanceTimeoutMs);
         } else {
@@ -780,10 +782,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             // Keep retrying/waiting the offset commit when:
             // 1. offset commit haven't done (and joinPrepareTimer not expired)
-            // 2. failed with retryable exception (and joinPrepareTimer not expired)
+            // 2. failed with retriable exception (and joinPrepareTimer not expired)
             // Otherwise, continue to revoke partitions, ex:
-            // 1. if joinPrepareTime has expired
-            // 2. if offset commit failed with no-retryable exception
+            // 1. if joinPrepareTimer has expired
+            // 2. if offset commit failed with non-retriable exception
             // 3. if offset commit success
             boolean onJoinPrepareAsyncCommitCompleted = true;
             if (joinPrepareTimer.isExpired()) {
@@ -839,7 +841,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     break;
 
                 case COOPERATIVE:
-                    // only revoke those partitions that are not in the subscription any more.
+                    // only revoke those partitions that are not in the subscription anymore.
                     Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
                     revokedPartitions.addAll(ownedPartitions.stream()
                         .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
@@ -1613,14 +1615,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static class MetadataSnapshot {
         private final int version;
-        private final Map<String, Integer> partitionsPerTopic;
+        private final Map<String, List<PartitionRackInfo>> partitionsPerTopic;
 
-        private MetadataSnapshot(SubscriptionState subscription, Cluster cluster, int version) {
-            Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        private MetadataSnapshot(Optional<String> clientRack, SubscriptionState subscription, Cluster cluster, int version) {
+            Map<String, List<PartitionRackInfo>> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.metadataTopics()) {
-                Integer numPartitions = cluster.partitionCountForTopic(topic);
-                if (numPartitions != null)
-                    partitionsPerTopic.put(topic, numPartitions);
+                List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+                if (partitions != null) {
+                    List<PartitionRackInfo> partitionRacks = partitions.stream()
+                            .map(p -> new PartitionRackInfo(clientRack, p))
+                            .collect(Collectors.toList());
+                    partitionsPerTopic.put(topic, partitionRacks);
+                }
             }
             this.partitionsPerTopic = partitionsPerTopic;
             this.version = version;
@@ -1633,6 +1639,40 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         @Override
         public String toString() {
             return "(version" + version + ": " + partitionsPerTopic + ")";
+        }
+    }
+
+    private static class PartitionRackInfo {
+        private final Set<String> racks;
+
+        PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
+            if (clientRack.isPresent() && partition.replicas() != null) {
+                racks = Arrays.stream(partition.replicas()).map(Node::rack).collect(Collectors.toSet());
+            } else {
+                racks = Collections.emptySet();
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof PartitionRackInfo)) {
+                return false;
+            }
+            PartitionRackInfo rackInfo = (PartitionRackInfo) o;
+            return Objects.equals(racks, rackInfo.racks);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(racks);
+        }
+
+        @Override
+        public String toString() {
+            return racks.isEmpty() ? "NO_RACKS" : "racks=" + racks;
         }
     }
 
