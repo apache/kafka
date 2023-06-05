@@ -54,6 +54,7 @@ public class LogManagerBuilder {
     private LogDirFailureChannel logDirFailureChannel = null;
     private Time time = Time.SYSTEM;
     private boolean keepPartitionMetadataFile = true;
+    private boolean remoteStorageSystemEnable = false;
 
     public LogManagerBuilder setLogDirs(List<File> logDirs) {
         this.logDirs = logDirs;
@@ -145,6 +146,11 @@ public class LogManagerBuilder {
         return this;
     }
 
+    public LogManagerBuilder setRemoteStorageSystemEnable(boolean remoteStorageSystemEnable) {
+        this.remoteStorageSystemEnable = remoteStorageSystemEnable;
+        return this;
+    }
+
     public LogManager build() {
         if (logDirs == null) throw new RuntimeException("you must set logDirs");
         if (configRepository == null) throw new RuntimeException("you must set configRepository");
@@ -172,6 +178,7 @@ public class LogManagerBuilder {
                               brokerTopicStats,
                               logDirFailureChannel,
                               time,
-                              keepPartitionMetadataFile);
+                              keepPartitionMetadataFile,
+                              remoteStorageSystemEnable);
     }
 }

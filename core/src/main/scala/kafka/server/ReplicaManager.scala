@@ -1142,7 +1142,7 @@ class ReplicaManager(val config: KafkaConfig,
                               currentLeaderEpoch: Optional[Integer],
                               fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = {
     val partition = getPartitionOrException(topicPartition)
-    partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader)
+    partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader, remoteLogManager)
   }
 
   def legacyFetchOffsetsForTimestamp(topicPartition: TopicPartition,
