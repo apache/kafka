@@ -371,7 +371,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
 
     val topicId = Uuid.randomUuid()
     val partitions = Map(
-      0 -> new PartitionRegistration.Builder().setReplicas(Array(0, 1, 2)).setIsr(Array(0, 1, 2)).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build(),
+      0 -> new PartitionRegistration.Builder().setReplicas(Array(0, 1, 2)).setIsr(Array(0, 1, 2)).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(-1).build(),
       1 -> new PartitionRegistration.Builder().setReplicas(Array(1, 2, 3)).setIsr(Array(1, 2, 3)).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(-1).build()
     ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
     migrationState = migrationClient.topicClient().createTopic("test", topicId, partitions, migrationState)
