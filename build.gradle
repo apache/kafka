@@ -2537,6 +2537,8 @@ project(':jmh-benchmarks') {
     implementation project(':storage')
     implementation project(':streams')
     implementation project(':core')
+    implementation project(':connect:api')
+    implementation project(':connect:transforms')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
 

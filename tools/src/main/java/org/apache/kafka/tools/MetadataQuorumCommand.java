@@ -195,7 +195,7 @@ public class MetadataQuorumCommand {
     static long relativeTimeMs(long timestampMs, String desc) {
         Instant lastTimestamp = Instant.ofEpochMilli(timestampMs);
         Instant now = Instant.now();
-        if (!(lastTimestamp.isAfter(Instant.EPOCH) && lastTimestamp.isBefore(now))) {
+        if (!(lastTimestamp.isAfter(Instant.EPOCH) && (lastTimestamp.isBefore(now) || lastTimestamp.equals(now)))) {
             throw new KafkaException(
                 format("Error while computing relative time, possible drift in system clock.%n" +
                     "Current timestamp is %d, %s timestamp is %d", now.toEpochMilli(), desc, timestampMs)

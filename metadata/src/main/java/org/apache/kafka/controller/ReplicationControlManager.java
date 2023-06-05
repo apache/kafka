@@ -1384,7 +1384,9 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<BrokerHeartbeatReply> processBrokerHeartbeat(
-                BrokerHeartbeatRequestData request, long registerBrokerRecordOffset) {
+        BrokerHeartbeatRequestData request,
+        long registerBrokerRecordOffset
+    ) {
         int brokerId = request.brokerId();
         long brokerEpoch = request.brokerEpoch();
         clusterControl.checkBrokerEpoch(brokerId, brokerEpoch);
@@ -1417,6 +1419,23 @@ public class ReplicationControlManager {
                 states.next().inControlledShutdown(),
                 states.next().shouldShutDown());
         return ControllerResult.of(records, reply);
+    }
+
+    /**
+     * Process a broker heartbeat which has been sitting on the queue for too long, and has
+     * expired. With default settings, this would happen after 1 second. We process expired
+     * heartbeats by updating the lastSeenNs of the broker, so that the broker won't get fenced
+     * incorrectly. However, we don't perform any state changes that we normally would, such as
+     * unfencing a fenced broker, etc.
+     */
+    void processExpiredBrokerHeartbeat(BrokerHeartbeatRequestData request) {
+        int brokerId = request.brokerId();
+        clusterControl.checkBrokerEpoch(brokerId, request.brokerEpoch());
+        clusterControl.heartbeatManager().touch(brokerId,
+                clusterControl.brokerRegistrations().get(brokerId).fenced(),
+                request.currentMetadataOffset());
+        log.error("processExpiredBrokerHeartbeat: controller event queue overloaded. Timed out " +
+                "heartbeat from broker {}.", brokerId);
     }
 
     public ControllerResult<Void> unregisterBroker(int brokerId) {
@@ -1883,18 +1902,20 @@ public class ReplicationControlManager {
     }
 
     ListPartitionReassignmentsResponseData listPartitionReassignments(
-            List<ListPartitionReassignmentsTopics> topicList) {
+        List<ListPartitionReassignmentsTopics> topicList,
+        long epoch
+    ) {
         ListPartitionReassignmentsResponseData response =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null);
         if (topicList == null) {
             // List all reassigning topics.
-            for (Entry<Uuid, int[]> entry : reassigningTopics.entrySet()) {
+            for (Entry<Uuid, int[]> entry : reassigningTopics.entrySet(epoch)) {
                 listReassigningTopic(response, entry.getKey(), Replicas.toList(entry.getValue()));
             }
         } else {
             // List the given topics.
             for (ListPartitionReassignmentsTopics topic : topicList) {
-                Uuid topicId = topicsByName.get(topic.name());
+                Uuid topicId = topicsByName.get(topic.name(), epoch);
                 if (topicId != null) {
                     listReassigningTopic(response, topicId, topic.partitionIndexes());
                 }

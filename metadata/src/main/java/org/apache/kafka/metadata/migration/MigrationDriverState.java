@@ -44,17 +44,18 @@ public enum MigrationDriverState {
     WAIT_FOR_CONTROLLER_QUORUM(false),     // Ensure all the quorum nodes are ready for migration.
     WAIT_FOR_BROKERS(false),                // Wait for Zk brokers to be ready for migration.
     BECOME_CONTROLLER(false),              // Become controller for the Zk Brokers.
-    ZK_MIGRATION(true),                    // The cluster has satisfied the migration criteria
+    ZK_MIGRATION(false),                   // The cluster has satisfied the migration criteria
+    SYNC_KRAFT_TO_ZK(false),               // A full sync of metadata from KRaft to ZK.
     KRAFT_CONTROLLER_TO_BROKER_COMM(true), // First communication from Controller to send full RPCs to the Zk brokers.
     DUAL_WRITE(true);                      // The data has been migrated
 
-    private final boolean isActiveController;
+    private final boolean allowDualWrite;
 
-    MigrationDriverState(boolean isActiveController) {
-        this.isActiveController = isActiveController;
+    MigrationDriverState(boolean allowDualWrite) {
+        this.allowDualWrite = allowDualWrite;
     }
 
-    boolean isActiveController() {
-        return isActiveController;
+    boolean allowDualWrite() {
+        return allowDualWrite;
     }
 }

@@ -34,6 +34,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer._
@@ -1101,6 +1102,33 @@ class KRaftClusterTest {
           executionException.getCause.getMessage)
       } finally {
         admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testTimedOutHeartbeats(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      setConfigProp(KafkaConfig.BrokerHeartbeatIntervalMsProp, 10.toString).
+      setConfigProp(KafkaConfig.BrokerSessionTimeoutMsProp, 1000.toString).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      controller.controller.waitForReadyBrokers(3).get()
+      TestUtils.retry(60000) {
+        val latch = controller.controller.asInstanceOf[QuorumController].pause()
+        Thread.sleep(1001)
+        latch.countDown()
+        assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
+        assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
+          "Expected timedOutHeartbeats to be greater than 0.");
       }
     } finally {
       cluster.close()
