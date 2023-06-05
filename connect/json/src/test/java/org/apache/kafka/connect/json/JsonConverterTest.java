@@ -116,6 +116,14 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void numberWithLeadingZerosToConnect() {
+        assertEquals(new SchemaAndValue(Schema.INT8_SCHEMA, (byte) 12), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int8\" }, \"payload\": 0012 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT16_SCHEMA, (short) 123), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int16\" }, \"payload\": 000123 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 12345), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int32\" }, \"payload\": 000012345 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 123456789L), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int64\" }, \"payload\": 00000123456789 }".getBytes()));
+    }
+
+    @Test
     public void floatToConnect() {
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 12.34f), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"float\" }, \"payload\": 12.34 }".getBytes()));
     }

@@ -14,44 +14,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+
+package test.plugins;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 
 /**
- * A byte buffer backed input inputStream
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>This class has no default constructor
  */
-public final class ByteBufferInputStream extends InputStream {
-    private final ByteBuffer buffer;
+public class NoDefaultConstructorOverridePolicy implements ConnectorClientConfigOverridePolicy {
 
-    public ByteBufferInputStream(ByteBuffer buffer) {
-        this.buffer = buffer;
-    }
+    public NoDefaultConstructorOverridePolicy(int ignored) {
 
-    public int read() {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-        return buffer.get() & 0xFF;
-    }
-
-    public int read(byte[] bytes, int off, int len) {
-        if (len == 0) {
-            return 0;
-        }
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-
-        len = Math.min(len, buffer.remaining());
-        buffer.get(bytes, off, len);
-        return len;
     }
 
     @Override
-    public int available() throws IOException {
-        return buffer.remaining();
+    public void close() throws IOException {
+
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+
+    }
+
+    @Override
+    public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
+        return null;
     }
 }
