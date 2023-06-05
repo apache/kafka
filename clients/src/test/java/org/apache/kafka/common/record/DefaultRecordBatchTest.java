@@ -483,15 +483,15 @@ public class DefaultRecordBatchTest {
             Arguments.of(CompressionType.GZIP, 1, largeRecordValue),
             Arguments.of(CompressionType.SNAPPY, 1, smallRecordValue),
             Arguments.of(CompressionType.SNAPPY, 1, largeRecordValue),
+            Arguments.of(CompressionType.ZSTD, 1, smallRecordValue),
+            Arguments.of(CompressionType.ZSTD, 1, largeRecordValue),
             /*
              * 1 allocation per batch (i.e. per iterator instance) for buffer holding compressed data
              * 1 allocation per batch (i.e. per iterator instance) for buffer holding uncompressed data
              * = 2 buffer allocations
              */
             Arguments.of(CompressionType.LZ4, 2, smallRecordValue),
-            Arguments.of(CompressionType.LZ4, 2, largeRecordValue),
-            Arguments.of(CompressionType.ZSTD, 2, smallRecordValue),
-            Arguments.of(CompressionType.ZSTD, 2, largeRecordValue)
+            Arguments.of(CompressionType.LZ4, 2, largeRecordValue)
         );
     }
 

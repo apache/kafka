@@ -1344,7 +1344,7 @@ project(':clients') {
   }
 
   dependencies {
-    implementation libs.zstd
+    implementation files('/Users/diviv/oss/zstd-jni/target/zstd-jni-1.5.5-3.jar')
     implementation libs.lz4
     implementation libs.snappy
     implementation libs.slf4jApi

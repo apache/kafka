@@ -269,7 +269,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     public InputStream recordInputStream(BufferSupplier bufferSupplier) {
         final ByteBuffer buffer = this.buffer.duplicate();
-        buffer.position(RECORDS_OFFSET);
+        buffer.position(buffer.position() + RECORDS_OFFSET);
         return compressionType().wrapForInput(buffer, magic(), bufferSupplier);
     }
 

@@ -17,16 +17,15 @@
 
 package org.apache.kafka.common.compress;
 
-import com.github.luben.zstd.BufferPool;
 import com.github.luben.zstd.RecyclingBufferPool;
-import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
+import com.github.luben.zstd.ZstdBufferDecompressingStreamNoFinalizer;
 import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
 import java.io.BufferedOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -45,27 +44,47 @@ public class ZstdFactory {
         }
     }
 
-    public static InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+    public static InputStream wrapForInput(ByteBuffer compressedData, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
-            // We use our own BufferSupplier instead of com.github.luben.zstd.RecyclingBufferPool since our
-            // implementation doesn't require locking or soft references. The buffer allocated by this buffer pool is
-            // used by zstd-jni for 1\ reading compressed data from input stream into a buffer before passing it over JNI
-            // 2\ implementation of skip inside zstd-jni where buffer is obtained and released with every call
-            final BufferPool bufferPool = new BufferPool() {
+            // The responsibility of closing the stream is pushed to the caller of this method.
+            final ZstdBufferDecompressingStreamNoFinalizer stream = new ZstdBufferDecompressingStreamNoFinalizer(compressedData);
+            return new InputStream() {
                 @Override
-                public ByteBuffer get(int capacity) {
-                    return decompressionBufferSupplier.get(capacity);
-                }
+                public int read() throws IOException {
+                    // prevent a call to underlying stream if no data is remaining
+                    if (!stream.hasRemaining())
+                        return -1;
 
+                    ByteBuffer temp = null;
+                    try {
+                        temp = decompressionBufferSupplier.get(1);
+                        int res = stream.read(temp);
+                        if (res <= 0) {
+                            return -1;
+                        }
+                        return Byte.toUnsignedInt(temp.get());
+                    } finally {
+                        if (temp != null)
+                            decompressionBufferSupplier.release(temp);
+                    }
+                }
                 @Override
-                public void release(ByteBuffer buffer) {
-                    decompressionBufferSupplier.release(buffer);
+                public int read(byte[] b, int off, int len) throws IOException {
+                    // prevent a call to underlying stream if no data is remaining
+                    if (!stream.hasRemaining())
+                        return -1;
+
+                    int res = stream.read(ByteBuffer.wrap(b, off, len));
+                    if (res <= 0) {
+                        return -1;
+                    }
+                    return res;
+                }
+                @Override
+                public void close() {
+                    stream.close();
                 }
             };
-            // Ideally, data from ZstdInputStreamNoFinalizer should be read in a bulk because every call to
-            // `ZstdInputStreamNoFinalizer#read()` is a JNI call. The caller is expected to
-            // balance the tradeoff between reading large amount of data vs. making multiple JNI calls.
-            return new ZstdInputStreamNoFinalizer(new ByteBufferInputStream(buffer), bufferPool);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
