@@ -257,7 +257,7 @@ public class KafkaBasedLog<K, V> {
             partitionInfos = consumer.partitionsFor(topic);
         }
         if (partitionInfos.isEmpty())
-            throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
+            throw new ConnectException("Could not look up partition metadata for topic '" + topic + "' in the" +
                     " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
                     " this is your first use of the topic it may have taken too long to create.");
 
