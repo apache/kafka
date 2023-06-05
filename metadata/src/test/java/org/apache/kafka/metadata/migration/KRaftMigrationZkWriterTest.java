@@ -30,6 +30,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.resource.PatternType;
@@ -69,6 +70,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -92,20 +94,20 @@ public class KRaftMigrationZkWriterTest {
         CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
             @Override
             public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
-                Map<Integer, List<Integer>> assignments = new HashMap<>();
-                assignments.put(0, Arrays.asList(2, 3, 4));
-                assignments.put(1, Arrays.asList(3, 4, 5));
-                assignments.put(2, Arrays.asList(2, 4, 5));
-                assignments.put(3, Arrays.asList(1, 2, 3)); // This one is not in KRaft
-                visitor.visitTopic("foo", TopicsImageTest.FOO_UUID, assignments);
+            Map<Integer, List<Integer>> assignments = new HashMap<>();
+            assignments.put(0, Arrays.asList(2, 3, 4));
+            assignments.put(1, Arrays.asList(3, 4, 5));
+            assignments.put(2, Arrays.asList(2, 4, 5));
+            assignments.put(3, Arrays.asList(1, 2, 3)); // This one is not in KRaft
+            visitor.visitTopic("foo", TopicsImageTest.FOO_UUID, assignments);
 
-                // Skip partition 1, visit 3 (the extra one)
-                IntStream.of(0, 2, 3).forEach(partitionId -> {
-                    visitor.visitPartition(
-                        new TopicIdPartition(TopicsImageTest.FOO_UUID, new TopicPartition("foo", partitionId)),
-                        TopicsImageTest.IMAGE1.getPartition(TopicsImageTest.FOO_UUID, partitionId)
-                    );
-                });
+            // Skip partition 1, visit 3 (the extra one)
+            IntStream.of(0, 2, 3).forEach(partitionId -> {
+                visitor.visitPartition(
+                    new TopicIdPartition(TopicsImageTest.FOO_UUID, new TopicPartition("foo", partitionId)),
+                    TopicsImageTest.IMAGE1.getPartition(TopicsImageTest.FOO_UUID, partitionId)
+                );
+            });
 
             }
         };
@@ -275,8 +277,13 @@ public class KRaftMigrationZkWriterTest {
         assertEquals(Arrays.asList("foo", "bar"), topicClient.createdTopics);
     }
 
-    @Test
-    public void testUpdatePartitionsFromSnapshot() {
+    @FunctionalInterface
+    interface TopicVerifier {
+        void verify(Uuid topicId, TopicsImage topicsImage, CapturingTopicMigrationClient topicClient, KRaftMigrationZkWriter writer);
+    }
+
+    void setupTopicWithTwoPartitions(TopicVerifier verifier) {
+        // Set up a topic with two partitions in ZK (via iterateTopics) and a KRaft TopicsImage, then run the given verifier
         Uuid topicId = Uuid.randomUuid();
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
         partitionMap.put(0, new PartitionRegistration(new int[]{2, 3, 4}, new int[]{2, 3, 4}, new int[]{}, new int[]{}, 2, LeaderRecoveryState.RECOVERED, 0, -1));
@@ -293,11 +300,11 @@ public class KRaftMigrationZkWriterTest {
                 visitor.visitPartition(new TopicIdPartition(topicId, new TopicPartition("spam", 1)), partitionMap.get(1));
             }
         };
-        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
-                .setBrokersInZk(0)
-                .setTopicMigrationClient(topicClient)
-                .build();
 
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(0)
+            .setTopicMigrationClient(topicClient)
+            .build();
         KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
 
         TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
@@ -306,19 +313,149 @@ public class KRaftMigrationZkWriterTest {
         delta.replay((PartitionRecord) partitionMap.get(1).toRecord(topicId, 1).message());
         TopicsImage image = delta.apply();
 
-        Map<String, Integer> opCounts = new HashMap<>();
-        KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
-                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
-        writer.handleTopicsSnapshot(image, consumer);
-        assertEquals(0, opCounts.size(), "No operations expected since the data is the same");
+        verifier.verify(topicId, image, topicClient, writer);
+    }
 
-        delta = new TopicsDelta(image);
-        delta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(2, 3)));
-        delta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(1).setReplicas(Arrays.asList(3, 4, 5)).setLeader(3));
-        image = delta.apply();
-        writer.handleTopicsSnapshot(image, consumer);
-        assertEquals(1, opCounts.remove("UpdatePartitions"));
-        assertEquals(0, opCounts.size());
+    @Test
+    public void testUpdatePartitionsFromSnapshot() {
+        setupTopicWithTwoPartitions((topicId, topicsImage, topicClient, writer) -> {
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleTopicsSnapshot(topicsImage, consumer);
+            assertEquals(0, opCounts.size(), "No operations expected since the data is the same");
+
+            TopicsDelta topicsDelta = new TopicsDelta(topicsImage);
+            topicsDelta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(2, 3)));
+            topicsDelta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(1).setReplicas(Arrays.asList(3, 4, 5)).setLeader(3));
+            topicsImage = topicsDelta.apply();
+
+            writer.handleTopicsSnapshot(topicsImage, consumer);
+            assertEquals(1, opCounts.remove("UpdatePartitions"));
+            assertEquals(0, opCounts.size());
+        });
+    }
+
+    @Test
+    public void testTopicReassignmentDelta() {
+        setupTopicWithTwoPartitions((topicId, topicsImage, topicClient, writer) -> {
+            TopicsDelta topicsDelta = new TopicsDelta(topicsImage);
+            topicsDelta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(2, 3)));
+            topicsImage = topicsDelta.apply();
+
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleTopicsDelta(__ -> "", topicsImage, topicsDelta, consumer);
+            assertEquals(1, opCounts.remove("UpdatePartitions"));
+            assertEquals(0, opCounts.size());
+
+            assertEquals(1, topicClient.updatedTopicPartitions.get("spam").size());
+            assertEquals(Collections.singleton(0), topicClient.updatedTopicPartitions.get("spam"));
+        });
+    }
+
+    @Test
+    public void testNewTopicSnapshot() {
+        setupTopicWithTwoPartitions((topicId, topicsImage, topicClient, writer) -> {
+            TopicsDelta topicsDelta = new TopicsDelta(topicsImage);
+            Uuid newTopicId = Uuid.randomUuid();
+            topicsDelta.replay(new TopicRecord().setTopicId(newTopicId).setName("new"));
+            topicsDelta.replay(new PartitionRecord().setTopicId(newTopicId).setPartitionId(0).setReplicas(Arrays.asList(0, 1, 2)));
+            topicsDelta.replay(new PartitionRecord().setTopicId(newTopicId).setPartitionId(1).setReplicas(Arrays.asList(1, 2, 3)));
+            topicsDelta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(2, 3)));
+            topicsImage = topicsDelta.apply();
+
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleTopicsSnapshot(topicsImage, consumer);
+            assertEquals(1, opCounts.remove("UpdatePartitions"));
+            assertEquals(1, opCounts.remove("CreateTopic"));
+            assertEquals(0, opCounts.size());
+        });
+    }
+
+    @Test
+    public void testNewTopicDelta() {
+        setupTopicWithTwoPartitions((topicId, topicsImage, topicClient, writer) -> {
+            TopicsDelta topicsDelta = new TopicsDelta(topicsImage);
+            Uuid newTopicId = Uuid.randomUuid();
+            topicsDelta.replay(new TopicRecord().setTopicId(newTopicId).setName("new"));
+            topicsDelta.replay(new PartitionRecord().setTopicId(newTopicId).setPartitionId(0).setReplicas(Arrays.asList(0, 1, 2)));
+            topicsDelta.replay(new PartitionRecord().setTopicId(newTopicId).setPartitionId(1).setReplicas(Arrays.asList(1, 2, 3)));
+            topicsDelta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(2, 3)));
+            topicsImage = topicsDelta.apply();
+
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleTopicsDelta(__ -> "", topicsImage, topicsDelta, consumer);
+            assertEquals(1, opCounts.remove("UpdatePartitions"));
+            assertEquals(1, opCounts.remove("CreateTopic"));
+            assertEquals(0, opCounts.size());
+        });
+    }
+
+    @Test
+    public void testNewPartitionDelta() {
+        setupTopicWithTwoPartitions((topicId, topicsImage, topicClient, writer) -> {
+            TopicsDelta topicsDelta = new TopicsDelta(topicsImage);
+            topicsDelta.replay(new PartitionRecord().setTopicId(topicId).setPartitionId(2).setReplicas(Arrays.asList(1, 2, 3)));
+            topicsImage = topicsDelta.apply();
+
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleTopicsDelta(__ -> "", topicsImage, topicsDelta, consumer);
+            assertEquals(1, opCounts.remove("UpdatePartitions"));
+            assertEquals(1, opCounts.remove("UpdateTopic"));
+            assertEquals(0, opCounts.size());
+        });
+    }
+
+    @Test
+    public void testPartitionDelta() {
+        setupTopicWithTwoPartitions((topicId, topicsImage, topicClient, writer) -> {
+            TopicsDelta topicsDelta = new TopicsDelta(topicsImage);
+            topicsDelta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(0).setReplicas(Arrays.asList(3, 4, 5)).setLeader(3));
+            topicsDelta.replay(new PartitionChangeRecord().setTopicId(topicId).setPartitionId(1).setReplicas(Arrays.asList(1, 2, 3)).setLeader(1));
+            topicsImage = topicsDelta.apply();
+
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleTopicsDelta(__ -> "", topicsImage, topicsDelta, consumer);
+            assertEquals(1, opCounts.remove("UpdateTopic"));
+            assertEquals(1, opCounts.remove("UpdatePartitions"));
+            assertEquals(0, opCounts.size());
+
+            assertEquals(2, topicClient.updatedTopics.get("spam").size());
+            assertEquals(new HashSet<>(Arrays.asList(0, 1)), topicClient.updatedTopicPartitions.get("spam"));
+        });
+    }
+
+    @Test
+    public void testDeleteTopicDelta() {
+        setupTopicWithTwoPartitions((topicId, topicsImage, topicClient, writer) -> {
+            TopicsDelta topicsDelta = new TopicsDelta(topicsImage);
+            topicsDelta.replay(new RemoveTopicRecord().setTopicId(topicId));
+            TopicsImage newTopicsImage = topicsDelta.apply();
+
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            Map<Uuid, String> emptyTopicNames = Collections.emptyMap();
+            assertThrows(RuntimeException.class,
+                () -> writer.handleTopicsDelta(emptyTopicNames::get, newTopicsImage, topicsDelta, consumer));
+
+            Map<Uuid, String> topicNames = Collections.singletonMap(topicId, "spam");
+            writer.handleTopicsDelta(topicNames::get, newTopicsImage, topicsDelta, consumer);
+            assertEquals(1, opCounts.remove("DeleteTopic"));
+            assertEquals(0, opCounts.size());
+
+            assertEquals(Collections.singletonList("spam"), topicClient.deletedTopics);
+        });
     }
 
     @Test
@@ -338,7 +475,7 @@ public class KRaftMigrationZkWriterTest {
         ConfigurationsImage image = delta.apply();
         Map<String, Integer> opCounts = new HashMap<>();
         KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
-                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleConfigsDelta(image, delta, consumer);
         assertEquals(
             Collections.singletonMap("foo", "bar"),
@@ -625,9 +762,13 @@ public class KRaftMigrationZkWriterTest {
 
     @Test
     public void testClientQuotasSnapshot() {
-        List<ClientQuotaRecord.EntityData> entityData = Collections.singletonList(
+        List<ClientQuotaRecord.EntityData> user2Entity = Collections.singletonList(
             new ClientQuotaRecord.EntityData()
                 .setEntityType("user").setEntityName("user2"));
+        List<ClientQuotaRecord.EntityData> ipEntity = Collections.singletonList(
+            new ClientQuotaRecord.EntityData()
+                .setEntityType("ip").setEntityName("127.0.0.1"));
+
         MockRandom random = new MockRandom();
         ScramCredential credential = new ScramCredential(
             randomBuffer(random, 1024),
@@ -638,7 +779,8 @@ public class KRaftMigrationZkWriterTest {
         CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient() {
             @Override
             public void iterateClientQuotas(ClientQuotaVisitor visitor) {
-                visitor.visitClientQuota(entityData, Collections.singletonMap("request_percentage", 58.58));
+                visitor.visitClientQuota(user2Entity, Collections.singletonMap("request_percentage", 48.48));
+                visitor.visitClientQuota(ipEntity, Collections.singletonMap("connection_creation_rate", 10.0));
                 visitor.visitScramCredential("alice", ScramMechanism.SCRAM_SHA_256, credential);
             }
         };
@@ -654,7 +796,7 @@ public class KRaftMigrationZkWriterTest {
 
         ClientQuotasDelta clientQuotasDelta = new ClientQuotasDelta(ClientQuotasImage.EMPTY);
         clientQuotasDelta.replay(new ClientQuotaRecord()
-            .setEntity(entityData)
+            .setEntity(user2Entity)
             .setKey("request_percentage")
             .setValue(58.58)
             .setRemove(false));
@@ -672,8 +814,17 @@ public class KRaftMigrationZkWriterTest {
 
         // Empty image, should remove things from ZK (write an empty map)
         writer.handleClientQuotasSnapshot(ClientQuotasImage.EMPTY, ScramImage.EMPTY, consumer);
-        assertEquals(2, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(3, opCounts.remove("UpdateClientQuotas"));
         assertEquals(0, opCounts.size());
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "user2")));
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("ip", "127.0.0.1")));
 
         assertEquals(
             Collections.emptyMap(),
@@ -683,10 +834,10 @@ public class KRaftMigrationZkWriterTest {
             Collections.emptyMap(),
             configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
 
-        // With only client quota image, should write user2 and clear alice
+        // With only client quota image, should write user2, clear alice, and clear ip
         configClient.reset();
         writer.handleClientQuotasSnapshot(clientQuotasImage, ScramImage.EMPTY, consumer);
-        assertEquals(2, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(3, opCounts.remove("UpdateClientQuotas"));
         assertEquals(0, opCounts.size());
 
         assertEquals(
@@ -697,15 +848,19 @@ public class KRaftMigrationZkWriterTest {
             Collections.emptyMap(),
             configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
 
-        // With only scram image, should update george, clear alice, and clear user2
+        // With only scram image, should update george, clear alice, clear user2, clear ip
         configClient.reset();
         writer.handleClientQuotasSnapshot(ClientQuotasImage.EMPTY, scramImage, consumer);
-        assertEquals(3, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(4, opCounts.remove("UpdateClientQuotas"));
         assertEquals(0, opCounts.size());
 
         assertEquals(
             Collections.emptyMap(),
             configClient.writtenQuotas.get(Collections.singletonMap("user", "user2")));
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("ip", "127.0.0.1")));
 
         assertEquals(
             Collections.emptyMap(),
@@ -714,15 +869,19 @@ public class KRaftMigrationZkWriterTest {
         assertTrue(
             configClient.writtenQuotas.get(Collections.singletonMap("user", "george")).containsKey("SCRAM-SHA-256"));
 
-        // With both images, should write user2 and george and clear alice
+        // With both images, should write user2 and george, clear alice and ip
         configClient.reset();
         writer.handleClientQuotasSnapshot(clientQuotasImage, scramImage, consumer);
-        assertEquals(3, opCounts.remove("UpdateClientQuotas"));
+        assertEquals(4, opCounts.remove("UpdateClientQuotas"));
         assertEquals(0, opCounts.size());
 
         assertEquals(
             Collections.singletonMap("request_percentage", 58.58),
             configClient.writtenQuotas.get(Collections.singletonMap("user", "user2")));
+
+        assertEquals(
+            Collections.emptyMap(),
+            configClient.writtenQuotas.get(Collections.singletonMap("ip", "127.0.0.1")));
 
         assertEquals(
             Collections.emptyMap(),

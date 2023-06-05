@@ -267,6 +267,9 @@ public class KRaftMigrationZkWriter {
     ) {
         topicsDelta.deletedTopicIds().forEach(topicId -> {
             String name = deletedTopicNameResolver.apply(topicId);
+            if (name == null) {
+                throw new RuntimeException("Cannot delete topic with ID " + topicId + " since there is no associated topic name.");
+            }
             operationConsumer.accept(DELETE_TOPIC, "Deleting topic " + name + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().deleteTopic(name, migrationState));
         });
