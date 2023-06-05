@@ -332,8 +332,8 @@ class KafkaController(val config: KafkaConfig, //KafkaConfig 类实例，里面�
     info("Sending update metadata request")
     sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
 
-    replicaStateMachine.startup()
-    partitionStateMachine.startup()
+    replicaStateMachine.startup() // 启动副本状态机
+    partitionStateMachine.startup() // 启动分区状态机
 
     info(s"Ready to serve as the new controller with epoch $epoch")
 
