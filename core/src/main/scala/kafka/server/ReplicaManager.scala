@@ -631,7 +631,7 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * TODO: move this action queue to handle thread so we can simplify concurrency handling
    */
-  private val actionQueue = new ActionQueue
+  private val actionQueue = new DelayedActionQueue
 
   def tryCompleteActions(): Unit = actionQueue.tryCompleteActions()
 
@@ -655,7 +655,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
    * @param transactionStatePartition     partition that holds the transactional state if transactionalId is present
-   * @param actionQueueAdd                function to add an action to the action queue.
+   * @param actionQueue                   the action queue to use. ReplicaManager#actionQueue is used by default.
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -668,7 +668,7 @@ class ReplicaManager(val config: KafkaConfig,
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
                     transactionStatePartition: Option[Int] = None,
-                    actionQueueAdd: (() => Unit) => Unit = actionQueue.add): Unit = {
+                    actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       
@@ -733,7 +733,7 @@ class ReplicaManager(val config: KafkaConfig,
           ) // response status
         }
 
-        actionQueueAdd {
+        actionQueue.add {
           () => allResults.foreach { case (topicPartition, result) =>
             val requestKey = TopicPartitionOperationKey(topicPartition)
             result.info.leaderHwChange match {
@@ -1066,6 +1066,9 @@ class ReplicaManager(val config: KafkaConfig,
     requiredAcks == -1 || requiredAcks == 1 || requiredAcks == 0
   }
 
+  /**
+   * Append the messages to the local replica logs
+   */
   private def appendToLocalLog(internalTopicsAllowed: Boolean,
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],

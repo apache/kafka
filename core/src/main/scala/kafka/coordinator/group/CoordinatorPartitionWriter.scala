@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.ReplicaManager
+import kafka.server.{ActionQueue, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
@@ -32,7 +32,11 @@ import java.nio.ByteBuffer
 import java.util
 import scala.collection.Map
 
-private[group] class ListenerAdaptor(
+/**
+ * ListenerAdapter adapts the PartitionListener interface to the
+ * PartitionWriter.Listener interface.
+ */
+private[group] class ListenerAdapter(
   val listener: PartitionWriter.Listener
 ) extends PartitionListener {
   override def onHighWatermarkUpdated(
@@ -43,7 +47,7 @@ private[group] class ListenerAdaptor(
   }
 
   override def equals(that: Any): Boolean = that match {
-    case other: ListenerAdaptor => listener.equals(other.listener)
+    case other: ListenerAdapter => listener.equals(other.listener)
     case _ => false
   }
 
@@ -62,6 +66,15 @@ class CoordinatorPartitionWriter[T](
   compressionType: CompressionType,
   time: Time
 ) extends PartitionWriter[T] {
+  // We use an action queue which directly executes actions. This is possible
+  // here because we don't hold any conflicting locks.
+  private val directActionQueue = new ActionQueue {
+    override def add(action: () => Unit): Unit = {
+      action()
+    }
+
+    override def tryCompleteActions(): Unit = {}
+  }
 
   /**
    * Register a PartitionWriter.Listener.
@@ -73,7 +86,7 @@ class CoordinatorPartitionWriter[T](
     tp: TopicPartition,
     listener: PartitionWriter.Listener
   ): Unit = {
-    replicaManager.maybeAddListener(tp, new ListenerAdaptor(listener))
+    replicaManager.maybeAddListener(tp, new ListenerAdapter(listener))
   }
 
   /**
@@ -86,7 +99,7 @@ class CoordinatorPartitionWriter[T](
     tp: TopicPartition,
     listener: PartitionWriter.Listener
   ): Unit = {
-    replicaManager.removeListener(tp, new ListenerAdaptor(listener))
+    replicaManager.removeListener(tp, new ListenerAdapter(listener))
   }
 
   /**
@@ -140,7 +153,9 @@ class CoordinatorPartitionWriter[T](
           origin = AppendOrigin.COORDINATOR,
           entriesPerPartition = Map(tp -> recordsBuilder.build()),
           responseCallback = results => appendResults = results,
-          actionQueueAdd = item => item() // Immediately complete the action queue item.
+          // We can directly complete the purgatories here because we don't hold
+          // any conflicting locks.
+          actionQueue = directActionQueue
         )
 
         val partitionResult = appendResults.getOrElse(tp,

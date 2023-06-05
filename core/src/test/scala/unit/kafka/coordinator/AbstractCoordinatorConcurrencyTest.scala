@@ -181,7 +181,7 @@ object AbstractCoordinatorConcurrencyTest {
                                requestLocal: RequestLocal = RequestLocal.NoCaching,
                                transactionalId: String = null,
                                transactionStatePartition: Option[Int],
-                               actionQueueAdd: (() => Unit) => Unit = null): Unit = {
+                               actionQueue: ActionQueue = null): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return

@@ -64,18 +64,18 @@ class CoordinatorPartitionWriterTest {
     }
 
     partitionRecordWriter.registerListener(tp, listener)
-    verify(replicaManager).maybeAddListener(tp, new ListenerAdaptor(listener))
+    verify(replicaManager).maybeAddListener(tp, new ListenerAdapter(listener))
 
     partitionRecordWriter.deregisterListener(tp, listener)
-    verify(replicaManager).removeListener(tp, new ListenerAdaptor(listener))
+    verify(replicaManager).removeListener(tp, new ListenerAdapter(listener))
 
     assertEquals(
-      new ListenerAdaptor(listener),
-      new ListenerAdaptor(listener)
+      new ListenerAdapter(listener),
+      new ListenerAdapter(listener)
     )
     assertEquals(
-      new ListenerAdaptor(listener).hashCode(),
-      new ListenerAdaptor(listener).hashCode()
+      new ListenerAdapter(listener).hashCode(),
+      new ListenerAdapter(listener).hashCode()
     )
   }
 
