@@ -111,8 +111,8 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
       // Add a new ACL for resource2
       val newAce2 = new AccessControlEntry(principal.toString, "10.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
       val resource2Acls = replaceAclsAndReadWithAuthorizer(authorizer, resource2, Seq(acl3.entry(), newAce2), acls => acls.size == 2)
-      assertEquals(acl3, resource2Acls.head)
-      assertEquals(newAce2, resource2Acls.last.entry())
+      assertTrue(resource2Acls.size == 2)
+      assertTrue(resource2Acls.map(_.entry()).toSet.subsetOf(Set(acl3.entry(), newAce2)))
     } finally {
       authorizer.close()
     }
