@@ -28,6 +28,7 @@ public final class LocalReplicaChanges {
     private final Set<TopicPartition> deletes;
     private final Map<TopicPartition, PartitionInfo> leaders;
     private final Map<TopicPartition, PartitionInfo> followers;
+    // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
 
     LocalReplicaChanges(
