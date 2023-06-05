@@ -69,7 +69,7 @@ public class TestPlugins {
         /**
          * A plugin which will always throw an exception during loading
          */
-        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException"),
+        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException", false),
         /**
          * A plugin which samples information about its initialization.
          */
