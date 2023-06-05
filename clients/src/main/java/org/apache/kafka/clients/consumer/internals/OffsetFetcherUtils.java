@@ -275,11 +275,6 @@ class OffsetFetcherUtils {
             this.fetchedOffsets = new HashMap<>();
             this.partitionsToRetry = new HashSet<>();
         }
-
-        Map<TopicPartition, Long> offsetAndMetadataMap() {
-            return fetchedOffsets.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
-        }
     }
 
     /**
