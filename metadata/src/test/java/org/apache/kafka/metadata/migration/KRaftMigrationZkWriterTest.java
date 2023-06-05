@@ -94,21 +94,20 @@ public class KRaftMigrationZkWriterTest {
         CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
             @Override
             public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
-            Map<Integer, List<Integer>> assignments = new HashMap<>();
-            assignments.put(0, Arrays.asList(2, 3, 4));
-            assignments.put(1, Arrays.asList(3, 4, 5));
-            assignments.put(2, Arrays.asList(2, 4, 5));
-            assignments.put(3, Arrays.asList(1, 2, 3)); // This one is not in KRaft
-            visitor.visitTopic("foo", TopicsImageTest.FOO_UUID, assignments);
+                Map<Integer, List<Integer>> assignments = new HashMap<>();
+                assignments.put(0, Arrays.asList(2, 3, 4));
+                assignments.put(1, Arrays.asList(3, 4, 5));
+                assignments.put(2, Arrays.asList(2, 4, 5));
+                assignments.put(3, Arrays.asList(1, 2, 3)); // This one is not in KRaft
+                visitor.visitTopic("foo", TopicsImageTest.FOO_UUID, assignments);
 
-            // Skip partition 1, visit 3 (the extra one)
-            IntStream.of(0, 2, 3).forEach(partitionId -> {
-                visitor.visitPartition(
-                    new TopicIdPartition(TopicsImageTest.FOO_UUID, new TopicPartition("foo", partitionId)),
-                    TopicsImageTest.IMAGE1.getPartition(TopicsImageTest.FOO_UUID, partitionId)
-                );
-            });
-
+                // Skip partition 1, visit 3 (the extra one)
+                IntStream.of(0, 2, 3).forEach(partitionId -> {
+                    visitor.visitPartition(
+                        new TopicIdPartition(TopicsImageTest.FOO_UUID, new TopicPartition("foo", partitionId)),
+                        TopicsImageTest.IMAGE1.getPartition(TopicsImageTest.FOO_UUID, partitionId)
+                    );
+                });
             }
         };
 
