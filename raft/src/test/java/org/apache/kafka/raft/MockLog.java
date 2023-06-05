@@ -198,10 +198,6 @@ public class MockLog implements ReplicatedLog {
         return lastOffsetAndEpochFiltered(epochStartOffset -> epochStartOffset.epoch <= epoch);
     }
 
-    private OffsetAndEpoch epochForEndOffset(long endOffset) {
-        return lastOffsetAndEpochFiltered(epochStartOffset -> epochStartOffset.startOffset < endOffset);
-    }
-
     private OffsetAndEpoch lastOffsetAndEpochFiltered(Predicate<EpochStartOffset> predicate) {
         int epochLowerBound = earliestSnapshotId().map(OffsetAndEpoch::epoch).orElse(0);
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
