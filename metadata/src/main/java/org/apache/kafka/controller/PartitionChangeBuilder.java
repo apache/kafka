@@ -268,7 +268,8 @@ public class PartitionChangeBuilder {
      *
      * In MV before 3.6 there was a bug (KAFKA-15021) in the brokers' replica manager
      * that required that the leader epoch be bump whenever the ISR shrank. In MV 3.6 this leader
-     * bump is not required when the ISR shrinks.
+     * bump is not required when the ISR shrinks. Note, that the leader epoch is never increased if
+     * the ISR expanded.
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {

@@ -1088,13 +1088,17 @@ class Partition(val topicPartition: TopicPartition,
     val leaderLogEndOffset = leaderLog.logEndOffsetMetadata
     var newHighWatermark = leaderLogEndOffset
     remoteReplicasMap.values.foreach { replica =>
-      // Note here we are using the "maximal", see explanation above
       val replicaState = replica.stateSnapshot
+
+      def shouldWaitForReplicaToJoinIsr: Boolean = {
+        replicaState.isCaughtUp(leaderLogEndOffset.messageOffset, currentTimeMs, replicaLagTimeMaxMs) &&
+        isReplicaIsrEligible(replica.brokerId)
+      }
+
+      // Note here we are using the "maximal", see explanation above
       if (replicaState.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
-          ((replicaState.isCaughtUp(leaderLogEndOffset.messageOffset, currentTimeMs, replicaLagTimeMaxMs) &&
-            isReplicaIsrEligible(replica.brokerId)) ||
-           partitionState.maximalIsr.contains(replica.brokerId)
-          )) {
+          (partitionState.maximalIsr.contains(replica.brokerId) || shouldWaitForReplicaToJoinIsr)
+      ) {
         newHighWatermark = replicaState.logEndOffsetMetadata
       }
     }

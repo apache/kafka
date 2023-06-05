@@ -1458,7 +1458,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("fenced", "shutdown", "unfenced"))
-  def testHWMIncreasesWithFencedOrShutdownFollower(brokerState: String): Unit = {
+  def testHighWatermarkIncreasesWithFencedOrShutdownFollower(brokerState: String): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
@@ -1548,6 +1548,9 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(shrinkedIsr, partition.partitionState.isr)
     assertEquals(shrinkedIsr, partition.partitionState.maximalIsr)
     assertEquals(Set.empty, partition.getOutOfSyncReplicas(partition.replicaLagTimeMaxMs))
+
+    // In the case of unfenced, the HWM doesn't increase, otherwise the the HWM increases because the
+    // fenced and shutdown replica is not considered during HWM calculation.
     if (brokerState == "unfenced") {
       assertEquals(10, partition.localLogOrException.highWatermark)
     } else {

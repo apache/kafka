@@ -365,7 +365,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testSendToPartitionWithFollowerShutdown(quorum: String): Unit = {
+  def testSendToPartitionWithFollowerShutdownShouldNotTimeout(quorum: String): Unit = {
+    // This test produces to a leader that has follower that is shutting down. It shows that
+    // the produce request succeed, do not timeout and do not need to be retried.
     val producer = createProducer()
     val follower = 1
     val replicas = List(0, follower)
