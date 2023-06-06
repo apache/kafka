@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.coordinator.group.runtime;
 
 import java.util.List;
 import java.util.Objects;
 
 /**
  * The result of an operation applied to a state machine. The result
- * contains a list of {{@link Record}} and a response.
+ * contains a list of records and a response.
  *
  * @param <T> The type of the response.
+ * @param <U> The type of the record.
  */
-class Result<T> {
+public class CoordinatorResult<T, U> {
     /**
      * The records.
      */
-    private final List<Record> records;
+    private final List<U> records;
 
     /**
      * The response.
@@ -42,8 +43,8 @@ class Result<T> {
      * @param records   A non-null list of records.
      * @param response  A non-null response.
      */
-    public Result(
-        List<Record> records,
+    public CoordinatorResult(
+        List<U> records,
         T response
     ) {
         this.records = Objects.requireNonNull(records);
@@ -53,7 +54,7 @@ class Result<T> {
     /**
      * @return The list of records.
      */
-    public List<Record> records() {
+    public List<U> records() {
         return records;
     }
 
@@ -69,7 +70,7 @@ class Result<T> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        Result<?> result = (Result<?>) o;
+        CoordinatorResult<?, ?> result = (CoordinatorResult<?, ?>) o;
 
         if (!records.equals(result.records)) return false;
         return response.equals(result.response);

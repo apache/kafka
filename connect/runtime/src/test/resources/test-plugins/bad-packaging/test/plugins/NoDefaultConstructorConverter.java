@@ -14,44 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+package test.plugins;
+
+import java.util.Map;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.storage.Converter;
 
 /**
- * A byte buffer backed input inputStream
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>This class has no default constructor
  */
-public final class ByteBufferInputStream extends InputStream {
-    private final ByteBuffer buffer;
+public class NoDefaultConstructorConverter implements Converter {
 
-    public ByteBufferInputStream(ByteBuffer buffer) {
-        this.buffer = buffer;
-    }
-
-    public int read() {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-        return buffer.get() & 0xFF;
-    }
-
-    public int read(byte[] bytes, int off, int len) {
-        if (len == 0) {
-            return 0;
-        }
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-
-        len = Math.min(len, buffer.remaining());
-        buffer.get(bytes, off, len);
-        return len;
+    public NoDefaultConstructorConverter(int ignored) {
     }
 
     @Override
-    public int available() throws IOException {
-        return buffer.remaining();
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
+
+    }
+
+    @Override
+    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
+        return new byte[0];
+    }
+
+    @Override
+    public SchemaAndValue toConnectData(final String topic, final byte[] value) {
+        return null;
     }
 }
