@@ -303,7 +303,6 @@ class DumpLogSegmentsTest {
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,
-      MetadataRecordSerde.INSTANCE,
       time,
       time.scheduler,
       MetadataLogConfig(

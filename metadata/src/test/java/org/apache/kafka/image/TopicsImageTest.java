@@ -28,7 +28,6 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
@@ -100,15 +99,15 @@ public class TopicsImageTest {
     static {
         TOPIC_IMAGES1 = Arrays.asList(
             newTopicImage("foo", FOO_UUID,
-                new PartitionRegistration(new int[] {2, 3, 4},
-                    new int[] {2, 3}, Replicas.NONE, Replicas.NONE, 2, LeaderRecoveryState.RECOVERED, 1, 345),
-                new PartitionRegistration(new int[] {3, 4, 5},
-                    new int[] {3, 4, 5}, Replicas.NONE, Replicas.NONE, 3, LeaderRecoveryState.RECOVERED, 4, 684),
-                new PartitionRegistration(new int[] {2, 4, 5},
-                    new int[] {2, 4, 5}, Replicas.NONE, Replicas.NONE, 2, LeaderRecoveryState.RECOVERED, 10, 84)),
+                new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
+                    setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build(),
+                new PartitionRegistration.Builder().setReplicas(new int[] {3, 4, 5}).
+                    setIsr(new int[] {3, 4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build(),
+                new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
+                    setIsr(new int[] {2, 4, 5}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(10).setPartitionEpoch(84).build()),
             newTopicImage("bar", BAR_UUID,
-                new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
-                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 0, LeaderRecoveryState.RECOVERED, 1, 345)));
+                new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                    setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
 
@@ -139,11 +138,11 @@ public class TopicsImageTest {
 
         List<TopicImage> topics2 = Arrays.asList(
             newTopicImage("bar", BAR_UUID,
-                new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
-                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 1, LeaderRecoveryState.RECOVERED, 2, 346)),
+                new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                    setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(346).build()),
             newTopicImage("baz", BAZ_UUID,
-                new PartitionRegistration(new int[] {1, 2, 3, 4},
-                    new int[] {3, 4}, new int[] {2}, new int[] {1}, 3, LeaderRecoveryState.RECOVERED, 2, 1)));
+                new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
+                    setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build()));
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
 
@@ -162,7 +161,14 @@ public class TopicsImageTest {
     }
 
     private PartitionRegistration newPartition(int[] replicas) {
-        return new PartitionRegistration(replicas, replicas, Replicas.NONE, Replicas.NONE, replicas[0], LeaderRecoveryState.RECOVERED, 1, 1);
+        return new PartitionRegistration.Builder().
+            setReplicas(replicas).
+            setIsr(replicas).
+            setLeader(replicas[0]).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(1).
+            setPartitionEpoch(1).
+            build();
     }
 
     @Test

@@ -631,7 +631,7 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * TODO: move this action queue to handle thread so we can simplify concurrency handling
    */
-  private val actionQueue = new ActionQueue
+  private val actionQueue = new DelayedActionQueue
 
   def tryCompleteActions(): Unit = actionQueue.tryCompleteActions()
 
@@ -655,6 +655,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
    * @param transactionStatePartition     partition that holds the transactional state if transactionalId is present
+   * @param actionQueue                   the action queue to use. ReplicaManager#actionQueue is used by default.
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -666,7 +667,8 @@ class ReplicaManager(val config: KafkaConfig,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
-                    transactionStatePartition: Option[Int] = None): Unit = {
+                    transactionStatePartition: Option[Int] = None,
+                    actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       
@@ -722,6 +724,7 @@ class ReplicaManager(val config: KafkaConfig,
             new PartitionResponse(
               result.error,
               result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
+              result.info.lastOffset,
               result.info.logAppendTime,
               result.info.logStartOffset,
               result.info.recordErrors,
@@ -731,23 +734,21 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
         actionQueue.add {
-          () =>
-            allResults.foreach {
-              case (topicPartition, result) =>
-                val requestKey = TopicPartitionOperationKey(topicPartition)
-                result.info.leaderHwChange match {
-                  case LeaderHwChange.INCREASED =>
-                    // some delayed operations may be unblocked after HW changed
-                    delayedProducePurgatory.checkAndComplete(requestKey)
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                    delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                  case LeaderHwChange.SAME =>
-                    // probably unblock some follower fetch requests since log end offset has been updated
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                  case LeaderHwChange.NONE =>
-                  // nothing
-                }
+          () => allResults.foreach { case (topicPartition, result) =>
+            val requestKey = TopicPartitionOperationKey(topicPartition)
+            result.info.leaderHwChange match {
+              case LeaderHwChange.INCREASED =>
+                // some delayed operations may be unblocked after HW changed
+                delayedProducePurgatory.checkAndComplete(requestKey)
+                delayedFetchPurgatory.checkAndComplete(requestKey)
+                delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+              case LeaderHwChange.SAME =>
+                // probably unblock some follower fetch requests since log end offset has been updated
+                delayedFetchPurgatory.checkAndComplete(requestKey)
+              case LeaderHwChange.NONE =>
+              // nothing
             }
+          }
         }
 
         recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
@@ -764,7 +765,6 @@ class ReplicaManager(val config: KafkaConfig,
           // this is because while the delayed produce operation is being created, new
           // requests may arrive and hence make this operation completable.
           delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-
         } else {
           // we can respond immediately
           val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
