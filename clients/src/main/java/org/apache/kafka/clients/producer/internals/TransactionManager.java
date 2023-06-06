@@ -1296,7 +1296,7 @@ public class TransactionManager {
                         handleResponse(response.responseBody());
                     }
                 } else {
-                    fatalError(new KafkaException("Could not execute transactional request for unknown reasons"));
+                    fatalError(new IllegalStateException("Could not execute transactional request for unknown reasons"));
                 }
             }
         }
