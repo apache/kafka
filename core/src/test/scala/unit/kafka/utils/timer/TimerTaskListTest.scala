@@ -22,11 +22,11 @@ import org.junit.jupiter.api.Test
 
 class TimerTaskListTest {
 
-  private class TestTask(val delayMs: Long) extends TimerTask {
+  private class TestTask(delayMs: Long) extends org.apache.kafka.server.util.timer.TimerTask(delayMs) {
     def run(): Unit = { }
   }
 
-  private def size(list: TimerTaskList): Int = {
+  private def size(list: org.apache.kafka.server.util.timer.TimerTaskList): Int = {
     var count = 0
     list.foreach(_ => count += 1)
     count
@@ -35,13 +35,13 @@ class TimerTaskListTest {
   @Test
   def testAll(): Unit = {
     val sharedCounter = new AtomicInteger(0)
-    val list1 = new TimerTaskList(sharedCounter)
-    val list2 = new TimerTaskList(sharedCounter)
-    val list3 = new TimerTaskList(sharedCounter)
+    val list1 = new org.apache.kafka.server.util.timer.TimerTaskList(sharedCounter)
+    val list2 = new org.apache.kafka.server.util.timer.TimerTaskList(sharedCounter)
+    val list3 = new org.apache.kafka.server.util.timer.TimerTaskList(sharedCounter)
 
     val tasks = (1 to 10).map { i =>
       val task = new TestTask(0L)
-      list1.add(new TimerTaskEntry(task, 10L))
+      list1.add(new org.apache.kafka.server.util.timer.TimerTaskEntry(task, 10L))
       assertEquals(i, sharedCounter.get)
       task
     }
@@ -52,7 +52,7 @@ class TimerTaskListTest {
     tasks.take(4).foreach { task =>
       val prevCount = sharedCounter.get
       // new TimerTaskEntry(task) will remove the existing entry from the list
-      list2.add(new TimerTaskEntry(task, 10L))
+      list2.add(new org.apache.kafka.server.util.timer.TimerTaskEntry(task, 10L))
       assertEquals(prevCount, sharedCounter.get)
     }
     assertEquals(10 - 4, size(list1))
@@ -64,7 +64,7 @@ class TimerTaskListTest {
     tasks.drop(4).foreach { task =>
       val prevCount = sharedCounter.get
       // new TimerTaskEntry(task) will remove the existing entry from the list
-      list3.add(new TimerTaskEntry(task, 10L))
+      list3.add(new org.apache.kafka.server.util.timer.TimerTaskEntry(task, 10L))
       assertEquals(prevCount, sharedCounter.get)
     }
     assertEquals(0, size(list1))

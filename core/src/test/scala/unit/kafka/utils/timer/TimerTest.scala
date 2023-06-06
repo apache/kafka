@@ -16,17 +16,24 @@
  */
 package kafka.utils.timer
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import org.apache.kafka.common.utils.Time
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.junit.jupiter.api.Assertions._
+
 import java.util.concurrent.atomic._
-import org.junit.jupiter.api.{Test, AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable.ArrayBuffer
 
 class TimerTest {
 
-  private class TestTask(override val delayMs: Long, id: Int, latch: CountDownLatch, output: ArrayBuffer[Int]) extends TimerTask {
+  private class TestTask(
+    delayMs:
+    Long, id: Int,
+    latch: CountDownLatch,
+    output: ArrayBuffer[Int]
+  ) extends org.apache.kafka.server.util.timer.TimerTask(delayMs) {
     private[this] val completed = new AtomicBoolean(false)
     def run(): Unit = {
       if (completed.compareAndSet(false, true)) {
@@ -36,11 +43,11 @@ class TimerTest {
     }
   }
 
-  private[this] var timer: Timer = _
+  private[this] var timer: org.apache.kafka.server.util.timer.Timer = _
 
   @BeforeEach
   def setup(): Unit = {
-    timer = new SystemTimer("test", tickMs = 1, wheelSize = 3)
+    timer = new org.apache.kafka.server.util.timer.SystemTimer("test", 1, 3, Time.SYSTEM.hiResClockMs)
   }
 
   @AfterEach
