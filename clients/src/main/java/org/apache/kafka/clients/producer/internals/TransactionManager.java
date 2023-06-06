@@ -1741,11 +1741,11 @@ public class TransactionManager {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
-                    abortableError(error.exception());
+                    fatalError(error.exception());
                     break;
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
-                    abortableError(new CommitFailedException("Transaction offset Commit failed " +
+                    fatalError(new CommitFailedException("Transaction offset Commit failed " +
                         "due to consumer group metadata mismatch: " + error.exception().getMessage()));
                     break;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH

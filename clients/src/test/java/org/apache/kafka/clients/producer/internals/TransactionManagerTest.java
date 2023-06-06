@@ -950,11 +950,12 @@ public class TransactionManagerTest {
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.FENCED_INSTANCE_ID)));
 
         runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.hasFatalError());
         assertTrue(transactionManager.lastError() instanceof FencedInstanceIdException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof FencedInstanceIdException);
-        assertAbortableError(FencedInstanceIdException.class);
+        assertFatalError(FencedInstanceIdException.class);
     }
 
     @Test
@@ -983,11 +984,12 @@ public class TransactionManagerTest {
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID)));
 
         runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.hasFatalError());
         assertTrue(transactionManager.lastError() instanceof CommitFailedException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof CommitFailedException);
-        assertAbortableError(CommitFailedException.class);
+        assertFatalError(CommitFailedException.class);
     }
 
     @Test
@@ -1018,11 +1020,12 @@ public class TransactionManagerTest {
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
 
         runUntil(transactionManager::hasError);
+        assertTrue(transactionManager::hasFatalError);
         assertTrue(transactionManager.lastError() instanceof CommitFailedException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof CommitFailedException);
-        assertAbortableError(CommitFailedException.class);
+        assertFatalError(CommitFailedException.class);
     }
 
     @Test
