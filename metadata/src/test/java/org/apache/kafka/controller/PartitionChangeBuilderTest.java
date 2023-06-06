@@ -77,9 +77,14 @@ public class PartitionChangeBuilderTest {
         );
     }
 
-    private final static PartitionRegistration FOO = new PartitionRegistration(
-        new int[] {2, 1, 3}, new int[] {2, 1, 3}, Replicas.NONE, Replicas.NONE,
-        1, LeaderRecoveryState.RECOVERED, 100, 200);
+    private static final PartitionRegistration FOO = new PartitionRegistration.Builder().
+        setReplicas(new int[] {2, 1, 3}).
+        setIsr(new int[] {2, 1, 3}).
+        setLeader(1).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
@@ -87,9 +92,16 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, true);
     }
 
-    private final static PartitionRegistration BAR = new PartitionRegistration(
-        new int[] {1, 2, 3, 4}, new int[] {1, 2, 3}, new int[] {1}, new int[] {4},
-        1, LeaderRecoveryState.RECOVERED, 100, 200);
+    private static final PartitionRegistration BAR = new PartitionRegistration.Builder().
+        setReplicas(new int[] {1, 2, 3, 4}).
+        setIsr(new int[] {1, 2, 3}).
+        setRemovingReplicas(new int[] {1}).
+        setAddingReplicas(new int[] {4}).
+        setLeader(1).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
@@ -97,9 +109,14 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, true);
     }
 
-    private final static PartitionRegistration BAZ = new PartitionRegistration(
-        new int[] {2, 1, 3}, new int[] {1, 3}, Replicas.NONE, Replicas.NONE,
-        3, LeaderRecoveryState.RECOVERED, 100, 200);
+    private static final PartitionRegistration BAZ = new PartitionRegistration.Builder().
+        setReplicas(new int[] {2, 1, 3}).
+        setIsr(new int[] {1, 3}).
+        setLeader(3).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
 
@@ -107,9 +124,14 @@ public class PartitionChangeBuilderTest {
         return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true, true);
     }
 
-    private final static PartitionRegistration OFFLINE = new PartitionRegistration(
-        new int[] {2, 1, 3}, new int[] {3}, Replicas.NONE, Replicas.NONE,
-        -1, LeaderRecoveryState.RECOVERED, 100, 200);
+    private static final PartitionRegistration OFFLINE = new PartitionRegistration.Builder().
+        setReplicas(new int[] {2, 1, 3}).
+        setIsr(new int[] {3}).
+        setLeader(-1).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(100).
+        setPartitionEpoch(200).
+        build();
 
     private final static Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
@@ -332,16 +354,14 @@ public class PartitionChangeBuilderTest {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
-        PartitionRegistration registration = new PartitionRegistration(
-            new int[] {leaderId, leaderId + 1, leaderId + 2},
-            new int[] {leaderId},
-            Replicas.NONE,
-            Replicas.NONE,
-            leaderId,
-            recoveryState,
-            100,
-            200
-        );
+        PartitionRegistration registration = new PartitionRegistration.Builder().
+            setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
+            setIsr(new int[] {leaderId}).
+            setLeader(leaderId).
+            setLeaderRecoveryState(recoveryState).
+            setLeaderEpoch(100).
+            setPartitionEpoch(200).
+            build();
 
         // Change the partition so that there is no leader
         PartitionChangeBuilder offlineBuilder = new PartitionChangeBuilder(
@@ -393,16 +413,14 @@ public class PartitionChangeBuilderTest {
     void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported) {
         final byte noChange = (byte) -1;
         int leaderId = 1;
-        PartitionRegistration registration = new PartitionRegistration(
-            new int[] {leaderId, leaderId + 1, leaderId + 2},
-            new int[] {leaderId + 1, leaderId + 2},
-            Replicas.NONE,
-            Replicas.NONE,
-            NO_LEADER,
-            LeaderRecoveryState.RECOVERED,
-            100,
-            200
-        );
+        PartitionRegistration registration = new PartitionRegistration.Builder().
+            setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
+            setIsr(new int[] {leaderId + 1, leaderId + 2}).
+            setLeader(NO_LEADER).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(100).
+            setPartitionEpoch(200).
+            build();
 
         // Change the partition using unclean leader election
         PartitionChangeBuilder onlineBuilder = new PartitionChangeBuilder(
@@ -457,16 +475,16 @@ public class PartitionChangeBuilderTest {
         LeaderRecoveryState leaderRecoveryState = LeaderRecoveryState.RECOVERED;
         int leaderEpoch = 0;
         int partitionEpoch = 0;
-        PartitionRegistration part = new PartitionRegistration(
-            replicas,
-            isr,
-            removingReplicas,
-            addingReplicas,
-            leader,
-            leaderRecoveryState,
-            leaderEpoch,
-            partitionEpoch
-        );
+        PartitionRegistration part = new PartitionRegistration.Builder().
+            setReplicas(replicas).
+            setIsr(isr).
+            setRemovingReplicas(removingReplicas).
+            setAddingReplicas(addingReplicas).
+            setLeader(leader).
+            setLeaderRecoveryState(leaderRecoveryState).
+            setLeaderEpoch(leaderEpoch).
+            setPartitionEpoch(partitionEpoch).
+            build();
 
         Uuid topicId = Uuid.randomUuid();
         // Always return false for valid leader. This is so none of the new replicas are valid leaders. This is so we
