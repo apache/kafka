@@ -72,8 +72,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueSegmentedBytesStore;
+import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
@@ -1256,10 +1261,21 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
+
+        Optional<TimeOrderedKeyValueBuffer<K, V>> buffer = Optional.empty();
+
+        if (joined.gracePeriod() != null) {
+            final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,  1).get();
+
+            buffer = Optional.of(new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name));
+        }
+
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
             joiner,
-            leftJoin);
+            leftJoin,
+            Optional.ofNullable(joined.gracePeriod()),
+            buffer);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
