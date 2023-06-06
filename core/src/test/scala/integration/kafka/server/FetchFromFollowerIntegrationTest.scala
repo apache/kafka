@@ -200,6 +200,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       val assignments = partitionOrder.map { p =>
         topics.map(topic => new TopicPartition(topic, p)).toSet
       }
+
       val assignmentFutures = consumers.zipWithIndex.map { case (consumer, i) =>
         executor.submit(() => {
           val expectedAssignment = assignments(i)
@@ -207,13 +208,19 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
             s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}")
         }, 0)
       }
-      assignmentFutures.foreach(future => assertEquals(0, future.get(20, TimeUnit.SECONDS)))
+      assignmentFutures.foreach(future => assertEquals(0, future.get(30, TimeUnit.SECONDS)))
 
       assignments.flatten.foreach { tp =>
         producer.send(new ProducerRecord(tp.topic, tp.partition, s"key-$tp".getBytes, s"value-$tp".getBytes))
       }
-      consumers.zipWithIndex.foreach { case (consumer, i) =>
-        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size)
+
+      val recordFutures = consumers.zipWithIndex.map { case (consumer, i) =>
+        executor.submit(() => {
+          TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size, waitTimeMs = 30000)
+        })
+      }
+      recordFutures.zipWithIndex.foreach { case (future, i) =>
+        val records = future.get(30, TimeUnit.SECONDS)
         assertEquals(assignments(i), records.map(r => new TopicPartition(r.topic, r.partition)).toSet)
       }
     }

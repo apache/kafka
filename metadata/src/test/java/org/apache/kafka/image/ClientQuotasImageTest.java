@@ -40,9 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ClientQuotasImageTest {
-    final static ClientQuotasImage IMAGE1;
+    public final static ClientQuotasImage IMAGE1;
 
-    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
 
     final static ClientQuotasDelta DELTA1;
 

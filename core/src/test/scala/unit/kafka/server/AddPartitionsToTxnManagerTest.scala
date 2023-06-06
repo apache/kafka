@@ -91,18 +91,24 @@ class AddPartitionsToTxnManagerTest {
     addPartitionsToTxnManager.addTxnData(node1, transactionData(transactionalId2, producerId2), setErrors(transaction2Errors))
     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId3, producerId3), setErrors(transaction3Errors))
 
-    val transaction1AgainErrorsOldEpoch = mutable.Map[TopicPartition, Errors]()
-    val transaction1AgainErrorsNewEpoch = mutable.Map[TopicPartition, Errors]()
+    // We will try to add transaction1 3 more times (retries). One will have the same epoch, one will have a newer epoch, and one will have an older epoch than the new one we just added.
+    val transaction1RetryWithSameEpochErrors = mutable.Map[TopicPartition, Errors]()
+    val transaction1RetryWithNewerEpochErrors = mutable.Map[TopicPartition, Errors]()
+    val transaction1RetryWithOldEpochErrors = mutable.Map[TopicPartition, Errors]()
+
     // Trying to add more transactional data for the same transactional ID, producer ID, and epoch should simply replace the old data and send a retriable response.
-    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transaction1AgainErrorsOldEpoch))
+    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transaction1RetryWithSameEpochErrors))
     val expectedNetworkErrors = topicPartitions.map(_ -> Errors.NETWORK_EXCEPTION).toMap
     assertEquals(expectedNetworkErrors, transaction1Errors)
 
     // Trying to add more transactional data for the same transactional ID and producer ID, but new epoch should replace the old data and send an error response for it.
-    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 1), setErrors(transaction1AgainErrorsNewEpoch))
-    
+    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 1), setErrors(transaction1RetryWithNewerEpochErrors))
     val expectedEpochErrors = topicPartitions.map(_ -> Errors.INVALID_PRODUCER_EPOCH).toMap
-    assertEquals(expectedEpochErrors, transaction1AgainErrorsOldEpoch)
+    assertEquals(expectedEpochErrors, transaction1RetryWithSameEpochErrors)
+
+    // Trying to add more transactional data for the same transactional ID and producer ID, but an older epoch should immediately return with error and keep the old data queued to send.
+    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 0), setErrors(transaction1RetryWithOldEpochErrors))
+    assertEquals(expectedEpochErrors, transaction1RetryWithOldEpochErrors)
 
     val requestsAndHandlers = addPartitionsToTxnManager.generateRequests()
     requestsAndHandlers.foreach { requestAndHandler =>
@@ -182,7 +188,7 @@ class AddPartitionsToTxnManagerTest {
     receiveResponse(versionMismatchResponse)
     assertEquals(expectedVersionMismatchErrors, transaction1Errors)
     assertEquals(expectedVersionMismatchErrors, transaction2Errors)
-    
+
     val expectedDisconnectedErrors = topicPartitions.map(_ -> Errors.NETWORK_EXCEPTION).toMap
     addTransactionsToVerify()
     receiveResponse(disconnectedResponse)
@@ -199,7 +205,7 @@ class AddPartitionsToTxnManagerTest {
 
     val preConvertedTransaction1Errors = topicPartitions.map(_ -> Errors.PRODUCER_FENCED).toMap
     val expectedTransaction1Errors = topicPartitions.map(_ -> Errors.INVALID_PRODUCER_EPOCH).toMap
-    val preConvertedTransaction2Errors = Map(new TopicPartition("foo", 1) -> Errors.NONE, 
+    val preConvertedTransaction2Errors = Map(new TopicPartition("foo", 1) -> Errors.NONE,
       new TopicPartition("foo", 2) -> Errors.INVALID_RECORD,
       new TopicPartition("foo", 3) -> Errors.NONE)
     val expectedTransaction2Errors = Map(new TopicPartition("foo", 2) -> Errors.INVALID_RECORD)

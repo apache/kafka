@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
@@ -33,6 +34,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer._
@@ -1072,6 +1074,62 @@ class KRaftClusterTest {
         admin.close()
       }
       assertFoobarValue(123)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testOverlyLargeCreateTopics(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val newTopics = new util.ArrayList[NewTopic]()
+        for (i <- 0 to 10000) {
+          newTopics.add(new NewTopic("foo" + i, 100000, 1.toShort))
+        }
+        val executionException = assertThrows(classOf[ExecutionException],
+            () => admin.createTopics(newTopics).all().get())
+        assertNotNull(executionException.getCause)
+        assertEquals(classOf[PolicyViolationException], executionException.getCause.getClass)
+        assertEquals("Unable to perform excessively large batch operation.",
+          executionException.getCause.getMessage)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testTimedOutHeartbeats(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      setConfigProp(KafkaConfig.BrokerHeartbeatIntervalMsProp, 10.toString).
+      setConfigProp(KafkaConfig.BrokerSessionTimeoutMsProp, 1000.toString).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      controller.controller.waitForReadyBrokers(3).get()
+      TestUtils.retry(60000) {
+        val latch = controller.controller.asInstanceOf[QuorumController].pause()
+        Thread.sleep(1001)
+        latch.countDown()
+        assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
+        assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
+          "Expected timedOutHeartbeats to be greater than 0.");
+      }
     } finally {
       cluster.close()
     }

@@ -19,24 +19,25 @@ package org.apache.kafka.connect.util.clusters;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.api.ContentResponse;
+import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.client.util.StringContentProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.Response;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,13 +57,13 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_CONFIG;
 
 /**
  * Start an embedded connect worker. Internally, this class will spin up a Kafka and Zk cluster, setup any tmp
@@ -82,6 +83,7 @@ public class EmbeddedConnectCluster {
 
     private final Set<WorkerHandle> connectCluster;
     private final EmbeddedKafkaCluster kafkaCluster;
+    private final HttpClient httpClient;
     private final Map<String, String> workerProps;
     private final String connectClusterName;
     private final int numBrokers;
@@ -103,6 +105,7 @@ public class EmbeddedConnectCluster {
         this.numBrokers = numBrokers;
         this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps, additionalKafkaClusterClientConfigs);
         this.connectCluster = new LinkedHashSet<>();
+        this.httpClient = new HttpClient();
         this.numInitialWorkers = numWorkers;
         this.maskExitProcedures = maskExitProcedures;
         // leaving non-configurable for now
@@ -142,6 +145,11 @@ public class EmbeddedConnectCluster {
         }
         kafkaCluster.start();
         startConnect();
+        try {
+            httpClient.start();
+        } catch (Exception e) {
+            throw new ConnectException("Failed to start HTTP client", e);
+        }
     }
 
     /**
@@ -151,6 +159,7 @@ public class EmbeddedConnectCluster {
      * @throws RuntimeException if Kafka brokers fail to stop
      */
     public void stop() {
+        Utils.closeQuietly(httpClient::stop, "HTTP client for embedded Connect cluster");
         connectCluster.forEach(this::stopWorker);
         try {
             kafkaCluster.stop();
@@ -658,6 +667,30 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Alter a connector's offsets via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong> endpoint
+     * @param connectorName name of the connector
+     * @param offsets offsets to alter
+     */
+    public String alterConnectorOffsets(String connectorName, ConnectorOffsets offsets) {
+        String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
+        ObjectMapper mapper = new ObjectMapper();
+        String content;
+        try {
+            content = mapper.writeValueAsString(offsets);
+        } catch (IOException e) {
+            throw new ConnectException("Could not serialize connector offsets and execute PATCH request");
+        }
+
+        Response response = requestPatch(url, content);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        } else {
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not execute PATCH request. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
      * Get the full URL of the admin endpoint that corresponds to the given REST resource
      *
      * @param resource the resource under the worker's admin endpoint
@@ -810,6 +843,18 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Execute a PATCH request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @param body the payload of the PATCH request
+     * @return the response to the PATCH request
+     * @throws ConnectException if execution of the PATCH request fails
+     */
+    public Response requestPatch(String url, String body) {
+        return requestHttpMethod(url, body, Collections.emptyMap(), "PATCH");
+    }
+
+    /**
      * Execute a DELETE request on the given URL.
      *
      * @param url the HTTP endpoint
@@ -844,32 +889,25 @@ public class EmbeddedConnectCluster {
      * @throws ConnectException if execution of the HTTP method fails
      */
     protected Response requestHttpMethod(String url, String body, Map<String, String> headers,
-                                      String httpMethod) {
+                                         String httpMethod) {
         log.debug("Executing {} request to URL={}." + (body != null ? " Payload={}" : ""),
                 httpMethod, url, body);
+
         try {
-            HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
-            httpCon.setDoOutput(true);
-            httpCon.setRequestMethod(httpMethod);
+            Request req = httpClient.newRequest(url);
+            req.method(httpMethod);
             if (body != null) {
-                httpCon.setRequestProperty("Content-Type", "application/json");
-                headers.forEach(httpCon::setRequestProperty);
-                try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
-                    out.write(body);
-                }
+                headers.forEach(req::header);
+                req.content(new StringContentProvider(body), "application/json");
             }
-            try (InputStream is = httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST
-                                  ? httpCon.getInputStream()
-                                  : httpCon.getErrorStream()
-            ) {
-                String responseEntity = responseToString(is);
-                log.info("{} response for URL={} is {}",
-                        httpMethod, url, responseEntity.isEmpty() ? "empty" : responseEntity);
-                return Response.status(Response.Status.fromStatusCode(httpCon.getResponseCode()))
-                        .entity(responseEntity)
-                        .build();
-            }
-        } catch (IOException e) {
+
+            ContentResponse res = req.send();
+            log.info("{} response for URL={} is {}",
+                    httpMethod, url, res.getContentAsString().isEmpty() ? "empty" : res.getContentAsString());
+            return Response.status(Response.Status.fromStatusCode(res.getStatus()))
+                    .entity(res.getContentAsString())
+                    .build();
+        } catch (Exception e) {
             log.error("Could not execute " + httpMethod + " request to " + url, e);
             throw new ConnectException(e);
         }
@@ -877,15 +915,6 @@ public class EmbeddedConnectCluster {
 
     private String responseToString(Response response) {
         return response == null ? "empty" : (String) response.getEntity();
-    }
-
-    private String responseToString(InputStream stream) throws IOException {
-        int c;
-        StringBuilder response = new StringBuilder();
-        while ((c = stream.read()) != -1) {
-            response.append((char) c);
-        }
-        return response.toString();
     }
 
     public static class Builder {
