@@ -194,7 +194,6 @@ public class ProducerStateManager {
             if (createIfAbsent)
                 return new VerificationStateEntry(time.milliseconds());
             else {
-                log.warn("The given producer ID did not have an entry in the producer state manager, so it's state will be returned as null");
                 return null;
             }
         });

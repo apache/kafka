@@ -40,7 +40,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -580,7 +580,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Maybe create and return the verificationGuard object for the given producer ID if the transaction is not yet ongoing.
+   * Maybe create and return the verification guard object for the given producer ID if the transaction is not yet ongoing.
    * Creation starts the verification process. Otherwise return null.
    */
   def maybeStartTransactionVerification(producerId: Long): Object = lock synchronized {
@@ -602,7 +602,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Return true if the given producer ID has a transaction ongoing.
    */
   def hasOngoingTransaction(producerId: Long): Boolean = lock synchronized {
-    producerStateManager.activeProducers.getOrDefault(producerId, ProducerStateEntry.empty(producerId)).currentTxnFirstOffset.isPresent
+    val entry = producerStateManager.activeProducers.get(producerId)
+    entry != null && entry.currentTxnFirstOffset.isPresent
   }
 
   /**
@@ -1011,16 +1012,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // the partition. If we do not have an ongoing transaction or correct guard, return an error and do not append.
           // There are two phases -- the first append to the log and subsequent appends.
           //
-          // 1. First append: Verification starts with creating a verificationGuard, sending a verification request to the transaction coordinator, and
+          // 1. First append: Verification starts with creating a verification guard object, sending a verification request to the transaction coordinator, and
           // given a "verified" response, continuing the append path. (A non-verified response throws an error.) We create the unique verification guard for the transaction
           // to ensure there is no race between the transaction coordinator response and an abort marker getting written to the log. We need a unique guard because we could
           // have a sequence of events where we start a transaction verification, have the transaction coordinator send a verified response, write an abort marker,
-          // start a new transaction not aware of the partition, and receive the stale verification (ABA problem). With a unique verificationGuard, this sequence would not
+          // start a new transaction not aware of the partition, and receive the stale verification (ABA problem). With a unique verification guard object, this sequence would not
           // result in appending to the log and would return an error. The guard is removed after the first append to the transaction and from then, we can rely on phase 2.
           //
           // 2. Subsequent appends: Once we write to the transaction, the in-memory state currentTxnFirstOffset is populated. This field remains until the
           // transaction is completed or aborted. We can guarantee the transaction coordinator knows about the transaction given step 1 and that the transaction is still
-          // ongoing. If the transaction is expected to be ongoing, we will not st a verification guard. If the transaction is aborted, hasOngoingTransaction is false and
+          // ongoing. If the transaction is expected to be ongoing, we will not set a verification guard. If the transaction is aborted, hasOngoingTransaction is false and
           // requestVerificationGuard is null, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
           if (batch.isTransactional && producerStateManager.producerStateManagerConfig().transactionVerificationEnabled())
             if (!hasOngoingTransaction(batch.producerId) && (requestVerificationGuard != verificationGuard(batch.producerId) || requestVerificationGuard == null))

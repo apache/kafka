@@ -1106,11 +1106,10 @@ class ProducerStateManagerTest {
     stateManager.clearVerificationStateEntry(producerId)
     verifyEntry(producerId, updatedEntry)
 
-    // Add the transactional data and clear the entry
+    // Add the transactional data and clear the entry.
     append(stateManager, producerId, 0, 0, offset = 0, isTransactional = true)
     stateManager.clearVerificationStateEntry(producerId)
     assertEquals(null, stateManager.verificationStateEntry(producerId, false))
-
   }
 
   @Test
