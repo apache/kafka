@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 
@@ -54,17 +55,20 @@ public class MockClient implements KafkaClient {
         private final AbstractResponse responseBody;
         private final boolean disconnected;
         private final boolean isUnsupportedRequest;
+        private final boolean hasUnalignedCorrelationId;
 
         public FutureResponse(Node node,
                               RequestMatcher requestMatcher,
                               AbstractResponse responseBody,
                               boolean disconnected,
-                              boolean isUnsupportedRequest) {
+                              boolean isUnsupportedRequest,
+                              boolean hasUnalignedCorrelationId) {
             this.node = node;
             this.requestMatcher = requestMatcher;
             this.responseBody = responseBody;
             this.disconnected = disconnected;
             this.isUnsupportedRequest = isUnsupportedRequest;
+            this.hasUnalignedCorrelationId = hasUnalignedCorrelationId;
         }
 
     }
@@ -256,7 +260,13 @@ public class MockClient implements KafkaClient {
                                 + abstractRequest + " with prepared response " + futureResp.responseBody);
                 }
 
-                ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
+                // Build request ID
+                RequestHeader requestHeader = request.makeHeader(version);
+                if (futureResp.hasUnalignedCorrelationId) {
+                    requestHeader.data().setCorrelationId(request.correlationId() + 1);
+                }
+
+                ClientResponse resp = new ClientResponse(requestHeader, request.callback(), request.destination(),
                         request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
                         unsupportedVersionException, null, futureResp.responseBody);
                 responses.add(resp);
@@ -416,7 +426,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareResponseFrom(AbstractResponse response, Node node) {
-        prepareResponseFrom(ALWAYS_TRUE, response, node, false, false);
+        prepareResponseFrom(ALWAYS_TRUE, response, node, false, false, false);
     }
 
     /**
@@ -430,11 +440,11 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node) {
-        prepareResponseFrom(matcher, response, node, false, false);
+        prepareResponseFrom(matcher, response, node, false, false, false);
     }
 
     public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node, boolean disconnected) {
-        prepareResponseFrom(matcher, response, node, disconnected, false);
+        prepareResponseFrom(matcher, response, node, disconnected, false, false);
     }
 
     public void prepareResponse(AbstractResponse response, boolean disconnected) {
@@ -442,7 +452,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareResponseFrom(AbstractResponse response, Node node, boolean disconnected) {
-        prepareResponseFrom(ALWAYS_TRUE, response, node, disconnected, false);
+        prepareResponseFrom(ALWAYS_TRUE, response, node, disconnected, false, false);
     }
 
     /**
@@ -453,7 +463,21 @@ public class MockClient implements KafkaClient {
      * @param disconnected Whether the request was disconnected
      */
     public void prepareResponse(RequestMatcher matcher, AbstractResponse response, boolean disconnected) {
-        prepareResponseFrom(matcher, response, null, disconnected, false);
+        prepareResponseFrom(matcher, response, null, disconnected, false, false);
+    }
+
+    /**
+     * Prepare a response for a request matching the provided matcher. If the matcher does not
+     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
+     *
+     * The response returned will have an unaligned correlation ID.
+     *
+     * @param matcher The request matcher to apply
+     * @param response The response body
+     * @param disconnected Whether the request was disconnected
+     */
+    public void prepareResponseWithUnalignedCorrelationId(RequestMatcher matcher, AbstractResponse response, boolean disconnected) {
+        prepareResponseFrom(matcher, response, null, disconnected, false, true);
     }
 
     /**
@@ -462,15 +486,16 @@ public class MockClient implements KafkaClient {
      * @param matcher The request matcher to apply
      */
     public void prepareUnsupportedVersionResponse(RequestMatcher matcher) {
-        prepareResponseFrom(matcher, null, null, false, true);
+        prepareResponseFrom(matcher, null, null, false, true, false);
     }
 
     private void prepareResponseFrom(RequestMatcher matcher,
                                      AbstractResponse response,
                                      Node node,
                                      boolean disconnected,
-                                     boolean isUnsupportedVersion) {
-        futureResponses.add(new FutureResponse(node, matcher, response, disconnected, isUnsupportedVersion));
+                                     boolean isUnsupportedVersion,
+                                     boolean hasUnalignedCorrelationId) {
+        futureResponses.add(new FutureResponse(node, matcher, response, disconnected, isUnsupportedVersion, hasUnalignedCorrelationId));
     }
 
     public void waitForRequests(final int minRequests, long maxWaitMs) throws InterruptedException {

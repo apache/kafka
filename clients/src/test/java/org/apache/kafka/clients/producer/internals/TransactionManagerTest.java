@@ -60,6 +60,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
+import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -1904,6 +1905,17 @@ public class TransactionManagerTest {
         assertThrows(KafkaException.class, () -> transactionManager.beginAbort());
         assertThrows(KafkaException.class, () -> transactionManager.sendOffsetsToTransaction(
             Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
+    }
+
+    @Test
+    public void testMismatchingCorrelationId() {
+        transactionManager.initializeTransactions();
+        client.prepareResponseWithUnalignedCorrelationId(body -> true, FindCoordinatorResponse.prepareResponse(Errors.NONE, transactionalId, brokerNode), false);
+
+        runUntil(transactionManager::hasError);
+
+        assertTrue(transactionManager.hasFatalError());
+        assertTrue(transactionManager.lastError() instanceof CorrelationIdMismatchException);
     }
 
     @Test

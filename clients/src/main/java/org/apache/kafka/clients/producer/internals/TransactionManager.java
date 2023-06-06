@@ -56,6 +56,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
+import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -1279,7 +1280,8 @@ public class TransactionManager {
         @Override
         public void onComplete(ClientResponse response) {
             if (response.requestHeader().correlationId() != inFlightRequestCorrelationId) {
-                fatalError(new RuntimeException("Detected more than one in-flight transactional request."));
+                fatalError(new CorrelationIdMismatchException("Detected more than one in-flight transactional request.",
+                    inFlightRequestCorrelationId, response.requestHeader().correlationId()));
             } else {
                 clearInFlightCorrelationId();
                 if (response.wasDisconnected()) {
