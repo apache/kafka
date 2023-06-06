@@ -1572,7 +1572,7 @@ public class ReplicationControlManagerTest {
                 setIsr(new int[] {1, 2, 4}).
                 setLeader(1).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-                setLeaderEpoch(1).
+                setLeaderEpoch(0).
                 setPartitionEpoch(1).
                 build(),
             replication.getPartition(fooId, 0));
@@ -1586,7 +1586,7 @@ public class ReplicationControlManagerTest {
                 .setPartitions(asList(new PartitionData()
                     .setPartitionIndex(0)
                     .setPartitionEpoch(1)
-                    .setLeaderEpoch(1)
+                    .setLeaderEpoch(0)
                     .setNewIsrWithEpochs(isrWithDefaultEpoch(1, 2, 3, 4))))));
 
         ControllerRequestContext requestContext =
@@ -1620,7 +1620,7 @@ public class ReplicationControlManagerTest {
                     .setPartitions(asList(new AlterPartitionResponseData.PartitionData()
                         .setPartitionIndex(0)
                         .setLeaderId(1)
-                        .setLeaderEpoch(1)
+                        .setLeaderEpoch(0)
                         .setIsr(asList(1, 2, 3, 4))
                         .setPartitionEpoch(2)
                         .setErrorCode(NONE.code()))))),
@@ -1650,7 +1650,7 @@ public class ReplicationControlManagerTest {
                 setPartitions(asList(new PartitionData().
                     setPartitionIndex(0).
                     setPartitionEpoch(1).
-                    setLeaderEpoch(1).
+                    setLeaderEpoch(0).
                     setNewIsrWithEpochs(isrWithDefaultEpoch(1, 2, 3, 4))))));
 
         // The broker 4 has failed silently and now registers again.
@@ -1767,7 +1767,7 @@ public class ReplicationControlManagerTest {
         replication.handleBrokerFenced(3, fenceRecords);
         ctx.replay(fenceRecords);
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).setIsr(new int[] {1, 2, 4}).
-            setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(1).build(), replication.getPartition(fooId, 0));
+            setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build(), replication.getPartition(fooId, 0));
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
             replication.alterPartitionReassignments(
                 new AlterPartitionReassignmentsRequestData().setTopics(asList(
@@ -1804,11 +1804,11 @@ public class ReplicationControlManagerTest {
             alterResult.response());
         ctx.replay(alterResult.records());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2}).
-            setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(2).build(), replication.getPartition(fooId, 0));
+            setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(2).build(), replication.getPartition(fooId, 0));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 0}).setIsr(new int[] {0, 1, 2}).
-            setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(2).build(), replication.getPartition(fooId, 1));
+            setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(fooId, 1));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 0}).setIsr(new int[] {4, 2}).
-            setAddingReplicas(new int[] {0, 1}).setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(2).build(), replication.getPartition(barId, 0));
+            setAddingReplicas(new int[] {0, 1}).setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(barId, 0));
         ListPartitionReassignmentsResponseData currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
                 setTopics(asList(new OngoingTopicReassignment().
@@ -1829,13 +1829,13 @@ public class ReplicationControlManagerTest {
             new AlterPartitionRequestData().setBrokerId(4).setBrokerEpoch(104).
                 setTopics(asList(new TopicData().setTopicId(barId).setPartitions(asList(
                     new PartitionData().setPartitionIndex(0).setPartitionEpoch(2).
-                        setLeaderEpoch(1).setNewIsrWithEpochs(isrWithDefaultEpoch(4, 1, 2, 0)))))));
+                        setLeaderEpoch(0).setNewIsrWithEpochs(isrWithDefaultEpoch(4, 1, 2, 0)))))));
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
             new AlterPartitionResponseData.TopicData().setTopicId(barId).setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(4).
-                    setLeaderEpoch(1).
+                    setLeaderEpoch(0).
                     setIsr(asList(4, 1, 2, 0)).
                     setPartitionEpoch(3).
                     setErrorCode(NONE.code()))))),
@@ -1867,7 +1867,7 @@ public class ReplicationControlManagerTest {
         ctx.replay(cancelResult.records());
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).setIsr(new int[] {4, 2}).
-            setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(3).build(), replication.getPartition(barId, 0));
+            setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(3).build(), replication.getPartition(barId, 0));
     }
 
     @Test
