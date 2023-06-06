@@ -38,7 +38,7 @@ public class TimerTaskEntry {
     }
 
     public boolean cancelled() {
-        return !timerTask.getTimerTaskEntry().equals(this);
+        return timerTask.getTimerTaskEntry() != this;
     }
 
     public void remove() {
