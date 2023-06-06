@@ -60,7 +60,9 @@ public abstract class SinkConnector extends Connector {
      * @param connectorConfig the configuration of the connector
      * @param offsets a map from topic partition to offset, containing the offsets that the user has requested to
      *                alter/reset. For any topic partitions whose offsets are being reset instead of altered, their
-     *                corresponding value in the map will be {@code null}.
+     *                corresponding value in the map will be {@code null}. This map may be empty, but never null. An
+     *                empty offsets map could indicate that the offsets were reset previously or that no offsets have
+     *                been committed yet.
      * @return whether this method has been overridden by the connector; the default implementation returns
      * {@code false}, and all other implementations (that do not unconditionally throw exceptions) should return
      * {@code true}

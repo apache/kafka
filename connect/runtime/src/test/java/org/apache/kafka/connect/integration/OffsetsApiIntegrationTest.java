@@ -574,6 +574,199 @@ public class OffsetsApiIntegrationTest {
                 "Source connector offsets should reflect the expected number of records produced");
     }
 
+    @Test
+    public void testResetSinkConnectorOffsets() throws Exception {
+        resetAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
+    }
+
+    @Test
+    public void testResetSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
+        Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
+        connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.GROUP_ID_CONFIG,
+                "overridden-group-id");
+        resetAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
+        // Ensure that the overridden consumer group ID was the one actually used
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> "overridden-group-id".equals(consumerGroupListing.groupId())));
+            assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(CONNECTOR_NAME).equals(consumerGroupListing.groupId())));
+        }
+    }
+
+    @Test
+    public void testResetSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
+        EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
+
+        try (AutoCloseable ignored = kafkaCluster::stop) {
+            kafkaCluster.start();
+
+            Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
+
+            resetAndVerifySinkConnectorOffsets(connectorConfigs, kafkaCluster);
+        }
+    }
+
+    private void resetAndVerifySinkConnectorOffsets(Map<String, String> connectorConfigs, EmbeddedKafkaCluster kafkaCluster) throws Exception {
+        int numPartitions = 3;
+        int numMessages = 10;
+        kafkaCluster.createTopic(TOPIC, numPartitions);
+
+        // Produce numMessages messages to each partition
+        for (int partition = 0; partition < numPartitions; partition++) {
+            for (int message = 0; message < numMessages; message++) {
+                kafkaCluster.produce(TOPIC, partition, "key", "value");
+            }
+        }
+        // Create sink connector
+        connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions, numMessages,
+                "Sink connector consumer group offsets should catch up to the topic end offsets");
+
+        connect.stopConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorIsStopped(
+                CONNECTOR_NAME,
+                "Connector did not stop in time"
+        );
+
+        // Reset the sink connector's offsets
+        String response = connect.resetConnectorOffsets(CONNECTOR_NAME);
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+                "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
+
+        waitForEmptySinkConnectorOffsets(CONNECTOR_NAME);
+
+        // Reset the sink connector's offsets again while it is still in a STOPPED state and ensure that there is no error
+        response = connect.resetConnectorOffsets(CONNECTOR_NAME);
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+                "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
+
+        waitForEmptySinkConnectorOffsets(CONNECTOR_NAME);
+
+        // Resume the connector and expect its offsets to catch up to the latest offsets
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector tasks did not resume in time"
+        );
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions, 10,
+                "Sink connector consumer group offsets should catch up to the topic end offsets");
+    }
+
+    @Test
+    public void testResetSinkConnectorOffsetsZombieSinkTasks() throws Exception {
+        connect.kafka().createTopic(TOPIC, 1);
+
+        // Produce 10 messages
+        for (int message = 0; message < 10; message++) {
+            connect.kafka().produce(TOPIC, 0, "key", "value");
+        }
+
+        // Configure a sink connector whose sink task blocks in its stop method
+        Map<String, String> connectorConfigs = new HashMap<>();
+        connectorConfigs.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSinkConnector.class.getName());
+        connectorConfigs.put(TOPICS_CONFIG, TOPIC);
+        connectorConfigs.put("block", "Task::stop");
+
+        connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
+                "Connector tasks did not start in time.");
+
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, 1, 10,
+                "Sink connector consumer group offsets should catch up to the topic end offsets");
+
+        connect.stopConnector(CONNECTOR_NAME);
+
+        // Try to reset the offsets
+        ConnectRestException e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorOffsets(CONNECTOR_NAME));
+        assertThat(e.getMessage(), containsString("zombie sink task"));
+    }
+
+    @Test
+    public void testResetSourceConnectorOffsets() throws Exception {
+        resetAndVerifySourceConnectorOffsets(connect, baseSourceConnectorConfigs());
+    }
+
+    // Note that the following test also implicitly tests the custom offsets topic case since source connectors always use
+    // a separate offsets topic when exactly once support is enabled and the Kafka cluster targeted by the source connector
+    // is different from the Connect cluster's backing Kafka cluster.
+    @Test
+    public void testResetSourceConnectorOffsetsExactlyOnceSupportEnabledAndDifferentKafkaClusterTargeted() throws Exception {
+        Properties brokerProps = new Properties();
+        brokerProps.put("transaction.state.log.replication.factor", "1");
+        brokerProps.put("transaction.state.log.min.isr", "1");
+        EmbeddedKafkaCluster connectorTargetedKafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
+        workerProps.put(DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+
+        // This embedded Connect cluster will internally spin up its own embedded Kafka cluster
+        EmbeddedConnectCluster exactlyOnceSupportEnabledConnectCluster = new EmbeddedConnectCluster.Builder()
+                .name("connect-cluster")
+                .brokerProps(brokerProps)
+                .numWorkers(NUM_WORKERS)
+                .workerProps(workerProps)
+                .build();
+
+
+        try (AutoCloseable ignored = connectorTargetedKafkaCluster::stop) {
+            connectorTargetedKafkaCluster.start();
+
+            Map<String, String> connectorConfigs = baseSourceConnectorConfigs();
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    connectorTargetedKafkaCluster.bootstrapServers());
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    connectorTargetedKafkaCluster.bootstrapServers());
+
+            resetAndVerifySourceConnectorOffsets(connect, connectorConfigs);
+        }
+    }
+
+    public void resetAndVerifySourceConnectorOffsets(EmbeddedConnectCluster connect, Map<String, String> connectorConfigs) throws Exception {
+        // Create source connector
+        connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
+
+        waitForExpectedSourceConnectorOffsets(connect, CONNECTOR_NAME, NUM_TASKS, 10,
+                "Source connector offsets should reflect the expected number of records produced");
+
+        connect.stopConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorIsStopped(
+                CONNECTOR_NAME,
+                "Connector did not stop in time"
+        );
+
+        // Reset the source connector's offsets
+        String response = connect.resetConnectorOffsets(CONNECTOR_NAME);
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+                "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
+
+        waitForEmptySourceConnectorOffsets(connect, CONNECTOR_NAME);
+
+        // Reset the source connector's offsets again while it is still in a STOPPED state and ensure that there is no error
+        response = connect.resetConnectorOffsets(CONNECTOR_NAME);
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
+                "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
+
+        waitForEmptySourceConnectorOffsets(connect, CONNECTOR_NAME);
+
+        // Resume the connector and expect its offsets to catch up to the latest offsets
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector tasks did not resume in time"
+        );
+        waitForExpectedSourceConnectorOffsets(connect, CONNECTOR_NAME, NUM_TASKS, 10,
+                "Source connector offsets should reflect the expected number of records produced");
+    }
+
     private Map<String, String> baseSinkConnectorConfigs() {
         Map<String, String> configs = new HashMap<>();
         configs.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
@@ -662,5 +855,19 @@ public class OffsetsApiIntegrationTest {
             }
             return true;
         }, OFFSET_READ_TIMEOUT_MS, conditionDetails);
+    }
+
+    private void waitForEmptySinkConnectorOffsets(String connectorName) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
+            return offsets.offsets().isEmpty();
+        }, OFFSET_READ_TIMEOUT_MS, "Sink connector offsets should be empty after resetting offsets");
+    }
+
+    private void waitForEmptySourceConnectorOffsets(EmbeddedConnectCluster connect, String connectorName) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
+            return offsets.offsets().isEmpty();
+        }, OFFSET_READ_TIMEOUT_MS, "Source connector offsets should be empty after resetting offsets");
     }
 }

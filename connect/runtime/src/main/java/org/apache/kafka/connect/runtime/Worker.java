@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
@@ -38,9 +39,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -1268,39 +1270,55 @@ public class Worker {
             connector = plugins.newConnector(connectorClassOrAlias);
             if (ConnectUtils.isSinkConnector(connector)) {
                 log.debug("Altering consumer group offsets for sink connector: {}", connName);
-                alterSinkConnectorOffsets(connName, connector, connectorConfig, offsets, connectorLoader, cb);
+                modifySinkConnectorOffsets(connName, connector, connectorConfig, offsets, connectorLoader, cb);
             } else {
                 log.debug("Altering offsets for source connector: {}", connName);
-                alterSourceConnectorOffsets(connName, connector, connectorConfig, offsets, connectorLoader, cb);
+                modifySourceConnectorOffsets(connName, connector, connectorConfig, offsets, connectorLoader, cb);
             }
         }
     }
 
     /**
-     * Alter a sink connector's consumer group offsets.
+     * Reset a connector's offsets.
+     *
+     * @param connName the name of the connector whose offsets are to be reset
+     * @param connectorConfig the connector's configurations
+     * @param cb callback to invoke upon completion
+     */
+    public void resetConnectorOffsets(String connName, Map<String, String> connectorConfig, Callback<Message> cb) {
+        String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
+        Connector connector;
+
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            connector = plugins.newConnector(connectorClassOrAlias);
+            if (ConnectUtils.isSinkConnector(connector)) {
+                log.debug("Resetting consumer group offsets for sink connector: {}", connName);
+                modifySinkConnectorOffsets(connName, connector, connectorConfig, null, connectorLoader, cb);
+            } else {
+                log.debug("Resetting offsets for source connector: {}", connName);
+                modifySourceConnectorOffsets(connName, connector, connectorConfig, null, connectorLoader, cb);
+            }
+        }
+    }
+
+    /**
+     * Modify (alter / reset) a sink connector's consumer group offsets.
      * <p>
      * Visible for testing.
      *
-     * @param connName the name of the sink connector whose offsets are to be altered
+     * @param connName the name of the sink connector whose offsets are to be modified
      * @param connector an instance of the sink connector
      * @param connectorConfig the sink connector's configuration
-     * @param offsets a mapping from topic partitions to offsets that need to be written; may not be null or empty
+     * @param offsets a mapping from topic partitions to offsets that need to be written; this should be null for offset reset requests
      * @param connectorLoader the connector plugin's classloader to be used as the thread context classloader
      * @param cb callback to invoke upon completion
      */
-    void alterSinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                   Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
+    void modifySinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                    Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
             try {
-                Map<TopicPartition, Long> parsedOffsets = SinkUtils.parseSinkConnectorOffsets(offsets);
-                boolean alterOffsetsResult;
-                try {
-                    alterOffsetsResult = ((SinkConnector) connector).alterOffsets(connectorConfig, parsedOffsets);
-                } catch (UnsupportedOperationException e) {
-                    throw new ConnectException("Failed to alter offsets for connector " + connName + " because it doesn't support external " +
-                            "modification of offsets", e);
-                }
-
+                boolean isReset = offsets == null;
                 SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, connectorConfig);
                 Class<? extends Connector> sinkConnectorClass = connector.getClass();
                 Map<String, Object> adminConfig = adminConfigs(
@@ -1320,89 +1338,188 @@ public class Worker {
                 Admin admin = adminFactory.apply(adminConfig);
 
                 try {
-                    List<KafkaFuture<Void>> adminFutures = new ArrayList<>();
-
-                    Map<TopicPartition, OffsetAndMetadata> offsetsToAlter = parsedOffsets.entrySet()
-                            .stream()
-                            .filter(entry -> entry.getValue() != null)
-                            .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
-
-                    if (!offsetsToAlter.isEmpty()) {
-                        log.debug("Committing the following consumer group offsets using an admin client for sink connector {}: {}.",
-                                connName, offsetsToAlter);
-                        AlterConsumerGroupOffsetsOptions alterConsumerGroupOffsetsOptions = new AlterConsumerGroupOffsetsOptions().timeoutMs(
+                    Map<TopicPartition, Long> offsetsToWrite;
+                    if (isReset) {
+                        offsetsToWrite = new HashMap<>();
+                        ListConsumerGroupOffsetsOptions listConsumerGroupOffsetsOptions = new ListConsumerGroupOffsetsOptions().timeoutMs(
                                 (int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
-                        AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = admin.alterConsumerGroupOffsets(groupId, offsetsToAlter,
-                                alterConsumerGroupOffsetsOptions);
+                        try {
+                            admin.listConsumerGroupOffsets(groupId, listConsumerGroupOffsetsOptions)
+                                    .partitionsToOffsetAndMetadata()
+                                    .get(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                                    .forEach((topicPartition, offsetAndMetadata) -> offsetsToWrite.put(topicPartition, null));
 
-                        adminFutures.add(alterConsumerGroupOffsetsResult.all());
-                    }
-
-                    Set<TopicPartition> partitionsToReset = parsedOffsets.entrySet()
-                            .stream()
-                            .filter(entry -> entry.getValue() == null)
-                            .map(Map.Entry::getKey)
-                            .collect(Collectors.toSet());
-
-                    if (!partitionsToReset.isEmpty()) {
-                        log.debug("Deleting the consumer group offsets for the following topic partitions using an admin client for sink connector {}: {}.",
-                                connName, partitionsToReset);
-                        DeleteConsumerGroupOffsetsOptions deleteConsumerGroupOffsetsOptions = new DeleteConsumerGroupOffsetsOptions().timeoutMs(
-                                (int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
-                        DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = admin.deleteConsumerGroupOffsets(groupId, partitionsToReset,
-                                deleteConsumerGroupOffsetsOptions);
-
-                        adminFutures.add(deleteConsumerGroupOffsetsResult.all());
-                    }
-
-                    @SuppressWarnings("rawtypes")
-                    KafkaFuture<Void> compositeAdminFuture = KafkaFuture.allOf(adminFutures.toArray(new KafkaFuture[0]));
-
-                    compositeAdminFuture.whenComplete((ignored, error) -> {
-                        if (error != null) {
-                            // When a consumer group is non-empty, only group members can commit offsets. An attempt to alter offsets via the admin client
-                            // will result in an UnknownMemberIdException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped
-                            // completely or if the connector is resumed while the alter offsets request is being processed). Similarly, an attempt to
-                            // delete consumer group offsets for a non-empty consumer group will result in a GroupSubscribedToTopicException
-                            if (error instanceof UnknownMemberIdException || error instanceof GroupSubscribedToTopicException) {
-                                cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName + " either because its tasks " +
-                                                "haven't stopped completely yet or the connector was resumed before the request to alter its offsets could be successfully " +
-                                                "completed. If the connector is in a stopped state, this operation can be safely retried. If it doesn't eventually succeed, the " +
-                                                "Connect cluster may need to be restarted to get rid of the zombie sink tasks."),
-                                        null);
-                            } else {
-                                cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName, error), null);
-                            }
-                        } else {
-                            completeAlterOffsetsCallback(alterOffsetsResult, cb);
+                            log.debug("Found the following topic partitions (to reset offsets) for sink connector {} and consumer group ID {}: {}",
+                                    connName, groupId, offsetsToWrite.keySet());
+                        } catch (Exception e) {
+                            Utils.closeQuietly(admin, "Offset reset admin for sink connector " + connName);
+                            log.error("Failed to list offsets prior to resetting sink connector offsets", e);
+                            cb.onCompletion(new ConnectException("Failed to list offsets prior to resetting sink connector offsets", e), null);
+                            return;
                         }
-                    }).whenComplete((ignored, ignoredError) -> {
-                        // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
-                        // an exception itself, and we can thus ignore the error here
-                        Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
-                    });
+                    } else {
+                        offsetsToWrite = SinkUtils.parseSinkConnectorOffsets(offsets);
+                    }
+
+                    boolean alterOffsetsResult;
+                    try {
+                        alterOffsetsResult = ((SinkConnector) connector).alterOffsets(connectorConfig, offsetsToWrite);
+                    } catch (UnsupportedOperationException e) {
+                        throw new ConnectException("Failed to modify offsets for connector " + connName + " because it doesn't support external " +
+                                "modification of offsets", e);
+                    }
+
+                    // This should only occur for an offset reset request when:
+                    // 1. There was a prior attempt to reset offsets
+                    // OR
+                    // 2. No offsets have been committed yet
+                    if (offsetsToWrite.isEmpty()) {
+                        completeAlterOffsetsCallback(alterOffsetsResult, isReset, cb);
+                        return;
+                    }
+
+                    if (isReset) {
+                        resetSinkConnectorOffsets(connName, groupId, admin, cb, alterOffsetsResult);
+                    } else {
+                        alterSinkConnectorOffsets(connName, groupId, admin, offsetsToWrite, cb, alterOffsetsResult);
+                    }
                 } catch (Throwable t) {
-                    Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
+                    Utils.closeQuietly(admin, "Offset modification admin for sink connector " + connName);
                     throw t;
                 }
             } catch (Throwable t) {
-                cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to alter offsets for sink connector " + connName), null);
+                cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to modify offsets for sink connector " + connName), null);
             }
         }));
     }
 
     /**
-     * Alter a source connector's offsets.
+     * Alter a sink connector's consumer group offsets. This is done via calls to {@link Admin#alterConsumerGroupOffsets}
+     * and / or {@link Admin#deleteConsumerGroupOffsets}.
      *
-     * @param connName the name of the source connector whose offsets are to be altered
+     * @param connName the name of the sink connector whose offsets are to be altered
+     * @param groupId the sink connector's consumer group ID
+     * @param admin the {@link Admin admin client} to be used for altering the consumer group offsets; should be closed after use
+     * @param offsetsToWrite a mapping from topic partitions to offsets that need to be written; may not be null or empty
+     * @param cb callback to invoke upon completion
+     * @param alterOffsetsResult the result of the call to {@link SinkConnector#alterOffsets} for the connector
+     */
+    private void alterSinkConnectorOffsets(String connName, String groupId, Admin admin, Map<TopicPartition, Long> offsetsToWrite,
+                                           Callback<Message> cb, boolean alterOffsetsResult) {
+        List<KafkaFuture<Void>> adminFutures = new ArrayList<>();
+
+        Map<TopicPartition, OffsetAndMetadata> offsetsToAlter = offsetsToWrite.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null)
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+
+        if (!offsetsToAlter.isEmpty()) {
+            log.debug("Committing the following consumer group offsets using an admin client for sink connector {}: {}.",
+                    connName, offsetsToAlter);
+            AlterConsumerGroupOffsetsOptions alterConsumerGroupOffsetsOptions = new AlterConsumerGroupOffsetsOptions().timeoutMs(
+                    (int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+            AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = admin.alterConsumerGroupOffsets(groupId, offsetsToAlter,
+                    alterConsumerGroupOffsetsOptions);
+
+            adminFutures.add(alterConsumerGroupOffsetsResult.all());
+        }
+
+        Set<TopicPartition> partitionsToReset = offsetsToWrite.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() == null)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
+        if (!partitionsToReset.isEmpty()) {
+            log.debug("Deleting the consumer group offsets for the following topic partitions using an admin client for sink connector {}: {}.",
+                    connName, partitionsToReset);
+            DeleteConsumerGroupOffsetsOptions deleteConsumerGroupOffsetsOptions = new DeleteConsumerGroupOffsetsOptions().timeoutMs(
+                    (int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+            DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = admin.deleteConsumerGroupOffsets(groupId, partitionsToReset,
+                    deleteConsumerGroupOffsetsOptions);
+
+            adminFutures.add(deleteConsumerGroupOffsetsResult.all());
+        }
+
+        @SuppressWarnings("rawtypes")
+        KafkaFuture<Void> compositeAdminFuture = KafkaFuture.allOf(adminFutures.toArray(new KafkaFuture[0]));
+
+        compositeAdminFuture.whenComplete((ignored, error) -> {
+            if (error != null) {
+                // When a consumer group is non-empty, only group members can commit offsets. An attempt to alter offsets via the admin client
+                // will result in an UnknownMemberIdException if the consumer group is non-empty (i.e. if the sink tasks haven't stopped
+                // completely or if the connector is resumed while the alter offsets request is being processed). Similarly, an attempt to
+                // delete consumer group offsets for a non-empty consumer group will result in a GroupSubscribedToTopicException
+                if (error instanceof UnknownMemberIdException || error instanceof GroupSubscribedToTopicException) {
+                    cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName + " either because its tasks " +
+                                    "haven't stopped completely yet or the connector was resumed before the request to alter its offsets could be successfully " +
+                                    "completed. If the connector is in a stopped state, this operation can be safely retried. If it doesn't eventually succeed, the " +
+                                    "Connect cluster may need to be restarted to get rid of the zombie sink tasks."),
+                            null);
+                } else {
+                    cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName, error), null);
+                }
+            } else {
+                completeAlterOffsetsCallback(alterOffsetsResult, false, cb);
+            }
+        }).whenComplete((ignored, ignoredError) -> {
+            // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
+            // an exception itself, and we can thus ignore the error here
+            Utils.closeQuietly(admin, "Offset alter admin for sink connector " + connName);
+        });
+    }
+
+    /**
+     * Reset a sink connector's consumer group offsets. This is done by deleting the consumer group via a call to
+     * {@link Admin#deleteConsumerGroups}
+     *
+     * @param connName the name of the sink connector whose offsets are to be reset
+     * @param groupId the sink connector's consumer group ID
+     * @param admin the {@link Admin admin client} to be used for resetting the consumer group offsets; should be closed after use
+     * @param cb callback to invoke upon completion
+     * @param alterOffsetsResult the result of the call to {@link SinkConnector#alterOffsets} for the connector
+     */
+    private void resetSinkConnectorOffsets(String connName, String groupId, Admin admin, Callback<Message> cb, boolean alterOffsetsResult) {
+        DeleteConsumerGroupsOptions deleteConsumerGroupsOptions = new DeleteConsumerGroupsOptions()
+                .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+
+        admin.deleteConsumerGroups(Collections.singleton(groupId), deleteConsumerGroupsOptions)
+                .all()
+                .whenComplete((ignored, error) -> {
+                    if (error != null) {
+                        // When a consumer group is non-empty, attempts to delete it via the admin client result in a GroupNotEmptyException. This can occur
+                        // if the sink tasks haven't stopped completely or if the connector is resumed while the reset offsets request is being processed
+                        if (error instanceof GroupNotEmptyException) {
+                            cb.onCompletion(new ConnectException("Failed to reset consumer group offsets for connector " + connName + " either because its tasks " +
+                                    "haven't stopped completely yet or the connector was resumed before the request to reset its offsets could be successfully " +
+                                    "completed. If the connector is in a stopped state, this operation can be safely retried. If it doesn't eventually succeed, the " +
+                                    "Connect cluster may need to be restarted to get rid of the zombie sink tasks."),
+                                    null);
+                        } else {
+                            cb.onCompletion(new ConnectException("Failed to reset consumer group offsets for connector " + connName, error), null);
+                        }
+                    } else {
+                        completeAlterOffsetsCallback(alterOffsetsResult, true, cb);
+                    }
+                }).whenComplete((ignored, ignoredError) -> {
+                    // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
+                    // an exception itself, and we can thus ignore the error here
+                    Utils.closeQuietly(admin, "Offset reset admin for sink connector " + connName);
+                });
+    }
+
+    /**
+     * Modify (alter / reset) a source connector's offsets.
+     *
+     * @param connName the name of the source connector whose offsets are to be modified
      * @param connector an instance of the source connector
      * @param connectorConfig the source connector's configuration
-     * @param offsets a mapping from partitions to offsets that need to be written; may not be null or empty
+     * @param offsets a mapping from partitions to offsets that need to be written; this should be null for offset reset requests
      * @param connectorLoader the connector plugin's classloader to be used as the thread context classloader
      * @param cb callback to invoke upon completion
      */
-    private void alterSourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                             Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
+    private void modifySourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                              Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorConfig, config.topicCreationEnable());
         Map<String, Object> producerProps = config.exactlyOnceSourceEnabled()
                 ? exactlyOnceSourceTaskProducerConfigs(new ConnectorTaskId(connName, 0), config, sourceConfig,
@@ -1417,29 +1534,54 @@ public class Worker {
         offsetStore.configure(config);
 
         OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, connName, internalKeyConverter, internalValueConverter);
-        alterSourceConnectorOffsets(connName, connector, connectorConfig, offsets, offsetStore, producer, offsetWriter, connectorLoader, cb);
+        modifySourceConnectorOffsets(connName, connector, connectorConfig, offsets, offsetStore, producer, offsetWriter, connectorLoader, cb);
     }
 
     // Visible for testing
-    void alterSourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                     Map<Map<String, ?>, Map<String, ?>> offsets, ConnectorOffsetBackingStore offsetStore,
-                                     KafkaProducer<byte[], byte[]> producer, OffsetStorageWriter offsetWriter,
-                                     ClassLoader connectorLoader, Callback<Message> cb) {
+    void modifySourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                      Map<Map<String, ?>, Map<String, ?>> offsets, ConnectorOffsetBackingStore offsetStore,
+                                      KafkaProducer<byte[], byte[]> producer, OffsetStorageWriter offsetWriter,
+                                      ClassLoader connectorLoader, Callback<Message> cb) {
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
             try {
-                boolean alterOffsetsResult;
-                try {
-                    alterOffsetsResult = ((SourceConnector) connector).alterOffsets(connectorConfig, offsets);
-                } catch (UnsupportedOperationException e) {
-                    throw new ConnectException("Failed to alter offsets for connector " + connName + " because it doesn't support external " +
-                            "modification of offsets", e);
-                }
                 // This reads to the end of the offsets topic and can be a potentially time-consuming operation
                 offsetStore.start();
+                Map<Map<String, ?>, Map<String, ?>> offsetsToWrite;
 
-                // The alterSourceConnectorOffsets method should only be called after all the connector's tasks have been stopped, and it's
+                // If the offsets argument is null, it indicates an offsets reset operation - i.e. a null offset should
+                // be written for every source partition of the connector
+                boolean isReset;
+                if (offsets == null) {
+                    isReset = true;
+                    offsetsToWrite = new HashMap<>();
+                    offsetStore.connectorPartitions(connName).forEach(partition -> offsetsToWrite.put(partition, null));
+                    log.debug("Found the following partitions (to reset offsets) for source connector {}: {}", connName, offsetsToWrite.keySet());
+                } else {
+                    isReset = false;
+                    offsetsToWrite = offsets;
+                }
+
+                boolean alterOffsetsResult;
+                try {
+                    alterOffsetsResult = ((SourceConnector) connector).alterOffsets(connectorConfig, offsetsToWrite);
+                } catch (UnsupportedOperationException e) {
+                    throw new ConnectException("Failed to modify offsets for connector " + connName + " because it doesn't support external " +
+                            "modification of offsets", e);
+                }
+
+                // This should only occur for an offset reset request when there are no source partitions found for the source connector in the
+                // offset store - either because there was a prior attempt to reset offsets or if there are no offsets committed by this source
+                // connector so far
+                if (offsetsToWrite.isEmpty()) {
+                    log.debug("No offsets found for source connector {} - this can occur due to a prior attempt to reset offsets or if the " +
+                            "source connector hasn't committed any offsets yet", connName);
+                    completeAlterOffsetsCallback(alterOffsetsResult, isReset, cb);
+                    return;
+                }
+
+                // The modifySourceConnectorOffsets method should only be called after all the connector's tasks have been stopped, and it's
                 // safe to write offsets via an offset writer
-                offsets.forEach(offsetWriter::offset);
+                offsetsToWrite.forEach(offsetWriter::offset);
 
                 // We can call begin flush without a timeout because this newly created single-purpose offset writer can't do concurrent
                 // offset writes. We can also ignore the return value since it returns false if and only if there is no data to be flushed,
@@ -1450,7 +1592,7 @@ public class Worker {
                     producer.initTransactions();
                     producer.beginTransaction();
                 }
-                log.debug("Committing the following offsets for source connector {}: {}", connName, offsets);
+                log.debug("Committing the following offsets for source connector {}: {}", connName, offsetsToWrite);
                 FutureCallback<Void> offsetWriterCallback = new FutureCallback<>();
                 offsetWriter.doFlush(offsetWriterCallback);
                 if (config.exactlyOnceSourceEnabled()) {
@@ -1460,30 +1602,31 @@ public class Worker {
                 try {
                     offsetWriterCallback.get(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 } catch (ExecutionException e) {
-                    throw new ConnectException("Failed to alter offsets for source connector " + connName, e.getCause());
+                    throw new ConnectException("Failed to modify offsets for source connector " + connName, e.getCause());
                 } catch (TimeoutException e) {
-                    throw new ConnectException("Timed out while attempting to alter offsets for source connector " + connName, e);
+                    throw new ConnectException("Timed out while attempting to modify offsets for source connector " + connName, e);
                 } catch (InterruptedException e) {
-                    throw new ConnectException("Unexpectedly interrupted while attempting to alter offsets for source connector " + connName, e);
+                    throw new ConnectException("Unexpectedly interrupted while attempting to modify offsets for source connector " + connName, e);
                 }
 
-                completeAlterOffsetsCallback(alterOffsetsResult, cb);
+                completeAlterOffsetsCallback(alterOffsetsResult, isReset, cb);
             } catch (Throwable t) {
-                log.error("Failed to alter offsets for source connector {}", connName, t);
-                cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to alter offsets for source connector " + connName), null);
+                log.error("Failed to modify offsets for source connector {}", connName, t);
+                cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to modify offsets for source connector " + connName), null);
             } finally {
-                Utils.closeQuietly(offsetStore::stop, "Offset store for offset alter request for connector " + connName);
+                Utils.closeQuietly(offsetStore::stop, "Offset store for offset modification request for connector " + connName);
             }
         }));
     }
 
-    private void completeAlterOffsetsCallback(boolean alterOffsetsResult, Callback<Message> cb) {
+    private void completeAlterOffsetsCallback(boolean alterOffsetsResult, boolean isReset, Callback<Message> cb) {
+        String modificationType = isReset ? "reset" : "altered";
         if (alterOffsetsResult) {
-            cb.onCompletion(null, new Message("The offsets for this connector have been altered successfully"));
+            cb.onCompletion(null, new Message("The offsets for this connector have been " + modificationType + " successfully"));
         } else {
             cb.onCompletion(null, new Message("The Connect framework-managed offsets for this connector have been " +
-                    "altered successfully. However, if this connector manages offsets externally, they will need to be " +
-                    "manually altered in the system that the connector uses."));
+                    modificationType + " successfully. However, if this connector manages offsets externally, they will need to be " +
+                    "manually " + modificationType + " in the system that the connector uses."));
         }
     }
 

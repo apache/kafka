@@ -169,7 +169,7 @@
               files="(RequestResponse|WorkerSinkTask)Test.java"/>
 
     <suppress checks="JavaNCSS"
-              files="DistributedHerderTest.java"/>
+              files="(DistributedHerder|Worker)Test.java"/>
 
     <!-- Raft -->
     <suppress checks="NPathComplexity"
