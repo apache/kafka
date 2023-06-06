@@ -65,7 +65,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     public void createJoin(final Duration grace) {
-        final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier("testing",  1).get();
+        final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier("testing",  100).get();
         buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, grace, "testing");
         buffer.setSerdesIfNull(serdeGetter);
         store.init((StateStoreContext) context, store);
@@ -148,5 +148,20 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         pipeRecord("2", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
+    }
+
+    @Test
+    public void shouldHandleCollidingKeys() {
+        createJoin(Duration.ofMillis(1));
+        AtomicInteger count = new AtomicInteger(0);
+        pipeRecord("2", "0", 0L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(0));
+        pipeRecord("2", "2", 0L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(0));
+        pipeRecord("1", "0", 7L);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertThat(count.get(), equalTo(2));
     }
 }

@@ -81,9 +81,8 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         KeyValue<Bytes, byte[]> keyValue;
 
         if (predicate.get()) {
-            final KeyValueIterator<Bytes, byte[]> iterator = wrapped()
-                .fetchAll(0, wrapped().observedStreamTime - gracePeriod);
-            try {
+            try (final KeyValueIterator<Bytes, byte[]> iterator = wrapped()
+                .fetchAll(0, wrapped().observedStreamTime - gracePeriod)) {
                 if (iterator.hasNext()) {
                     keyValue = iterator.next();
                 } else {
@@ -103,7 +102,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                 );
                 while (keyValue != null && predicate.get()) {
                     if (bufferValue.context().timestamp() != minTimestamp) {
-                        iterator.close();
                         throw new IllegalStateException(
                             "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
                                 bufferValue.context().timestamp() + "]"
@@ -129,8 +127,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                         minTimestamp = Long.MAX_VALUE;
                     }
                 }
-            } finally {
-                iterator.close();
             }
         }
     }
@@ -151,7 +147,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         final Bytes serializedKey = Bytes.wrap(
             PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.key()),
                 record.timestamp(),
-                0).get());
+                Long.valueOf(recordContext.offset()).intValue()).get());
         final Change<byte[]> serialChange = valueSerde.serializeParts(topic, record.value());
         final BufferValue buffered = new BufferValue(serialChange.oldValue, serialChange.oldValue, serialChange.newValue, recordContext);
         wrapped().put(serializedKey, buffered.serialize(0).array());
