@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -92,7 +91,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         if (!gracePeriod.isPresent() || !buffer.isPresent()) {
             doJoin(record);
         } else {
-            if(record.key() == null) {
+            if( record.key() == null) {
                 LOG.warn(
                     "Skipping record due to null join key or value. "
                         + "topic=[{}] partition=[{}] offset=[{}]",
@@ -101,7 +100,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             }
             updateObservedStreamTime(record.timestamp());
             final long deadline = observedStreamTime - gracePeriod.get().toMillis();
-            if(record.timestamp() < deadline) {
+            if( record.timestamp() < deadline) {
                 doJoin(record);
             } else {
                 final Change<V1> change = new Change<>(record.value(), record.value());
