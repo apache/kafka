@@ -25,19 +25,23 @@ public abstract class TimerTask implements Runnable {
         this.delayMs = delayMs;
     }
 
-    public synchronized void cancel() {
-        if (timerTaskEntry != null) timerTaskEntry.remove();
-        timerTaskEntry = null;
+    public void cancel() {
+        synchronized (this) {
+            if (timerTaskEntry != null) timerTaskEntry.remove();
+            timerTaskEntry = null;
+        }
     }
 
-    synchronized void setTimerTaskEntry(TimerTaskEntry entry) {
-        // if this timerTask is already held by an existing timer task entry,
-        // we will remove such an entry first.
-        if (timerTaskEntry != null && !timerTaskEntry.equals(entry)) {
-            timerTaskEntry.remove();
-        }
+    void setTimerTaskEntry(TimerTaskEntry entry) {
+        synchronized (this) {
+            // if this timerTask is already held by an existing timer task entry,
+            // we will remove such an entry first.
+            if (timerTaskEntry != null && !timerTaskEntry.equals(entry)) {
+                timerTaskEntry.remove();
+            }
 
-        timerTaskEntry = entry;
+            timerTaskEntry = entry;
+        }
     }
 
     TimerTaskEntry getTimerTaskEntry() {
