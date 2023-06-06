@@ -67,7 +67,7 @@ public class Plugins {
         String pluginPath = WorkerConfig.pluginPath(props);
         List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = newDelegatingClassLoader(pluginLocations, parent);
-        scanResult = delegatingLoader.initLoaders();
+        scanResult = initLoaders();
     }
 
     // VisibleForTesting
@@ -75,6 +75,13 @@ public class Plugins {
         return AccessController.doPrivileged(
                 (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(pluginLocations, parent)
         );
+    }
+
+    public PluginScanResult initLoaders() {
+        Set<PluginSource> pluginSources = delegatingLoader.sources();
+        PluginScanResult reflectiveScanResult = new ReflectionScanner().discoverPlugins(pluginSources);
+        delegatingLoader.installDiscoveredPlugins(reflectiveScanResult);
+        return reflectiveScanResult;
     }
 
     private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {

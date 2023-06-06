@@ -24,6 +24,7 @@ import org.junit.rules.TemporaryFolder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.Set;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
@@ -39,7 +40,9 @@ public class DelegatingClassLoaderTest {
                 Collections.emptyList(),
                 DelegatingClassLoader.class.getClassLoader()
         );
-        classLoader.initLoaders();
+        Set<PluginSource> classLoaders = classLoader.sources();
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
+        classLoader.installDiscoveredPlugins(scanResult);
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
         }
@@ -51,7 +54,9 @@ public class DelegatingClassLoaderTest {
                 TestPlugins.pluginPath(),
                 DelegatingClassLoader.class.getClassLoader()
         );
-        classLoader.initLoaders();
+        Set<PluginSource> classLoaders = classLoader.sources();
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
+        classLoader.installDiscoveredPlugins(scanResult);
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertNotNull(classLoader.loadClass(pluginClassName));
             assertNotNull(classLoader.pluginClassLoader(pluginClassName));
@@ -66,7 +71,9 @@ public class DelegatingClassLoaderTest {
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
-        classLoader.initLoaders();
+        Set<PluginSource> classLoaders = classLoader.sources();
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
+        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
@@ -78,7 +85,9 @@ public class DelegatingClassLoaderTest {
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
-        classLoader.initLoaders();
+        Set<PluginSource> classLoaders = classLoader.sources();
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
+        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
@@ -87,7 +96,9 @@ public class DelegatingClassLoaderTest {
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
-        classLoader.initLoaders();
+        Set<PluginSource> classLoaders = classLoader.sources();
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
+        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
@@ -98,7 +109,9 @@ public class DelegatingClassLoaderTest {
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
-        classLoader.initLoaders();
+        Set<PluginSource> classLoaders = classLoader.sources();
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
+        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
@@ -116,7 +129,9 @@ public class DelegatingClassLoaderTest {
                 Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
                 DelegatingClassLoader.class.getClassLoader()
         );
-        classLoader.initLoaders();
+        Set<PluginSource> classLoaders = classLoader.sources();
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
+        classLoader.installDiscoveredPlugins(scanResult);
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertNotNull(classLoader.loadClass(pluginClassName));
             assertNotNull(classLoader.pluginClassLoader(pluginClassName));
