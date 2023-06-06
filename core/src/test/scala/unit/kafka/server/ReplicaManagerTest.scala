@@ -3682,7 +3682,7 @@ class ReplicaManagerTest {
     assertEquals(None, replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID))
   }
 
-  private def verifyRLMonLeadershipChange(leaderPartitions: util.Set[Partition], followerPartitions: util.Set[Partition]): Unit = {
+  private def verifyRLMOnLeadershipChange(leaderPartitions: util.Set[Partition], followerPartitions: util.Set[Partition]): Unit = {
     val leaderCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val followerCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val topicIdsCapture: ArgumentCaptor[util.Map[String, Uuid]] = ArgumentCaptor.forClass(classOf[util.Map[String, Uuid]])
@@ -3722,7 +3722,7 @@ class ReplicaManagerTest {
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
         reset(mockRemoteLogManager)
       }
 
@@ -3751,7 +3751,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
@@ -3784,7 +3784,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -3817,7 +3817,7 @@ class ReplicaManagerTest {
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(1, leaderPartition.getLeaderEpoch)
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
       }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
@@ -3848,7 +3848,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -3864,7 +3864,7 @@ class ReplicaManagerTest {
       assertEquals(0, noChangePartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
       }
 
       val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
@@ -3896,7 +3896,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -3941,7 +3941,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -3986,7 +3986,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
         reset(mockRemoteLogManager)
       }
 
@@ -4030,7 +4030,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
         reset(mockRemoteLogManager)
       }
 
@@ -4075,7 +4075,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
         reset(mockRemoteLogManager)
       }
 
@@ -4094,7 +4094,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -4130,7 +4130,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
         reset(mockRemoteLogManager)
       }
 
@@ -4157,7 +4157,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -4191,7 +4191,7 @@ class ReplicaManagerTest {
       val topicsDelta = topicsCreateDelta(localId, isStartIdLeader)
       val leaderMetadataImage = imageFromTopics(topicsDelta.apply())
       replicaManager.applyDelta(topicsDelta, leaderMetadataImage)
-      verifyRLMonLeadershipChange(Collections.emptySet(), Collections.emptySet())
+      verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.emptySet())
 
       assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
     } finally {
@@ -4231,7 +4231,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(0, followerPartition.localLogOrException.logEndOffset)
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -4276,7 +4276,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.localLogOrException.logEndOffset)
 
       if (enableRemoteStorage) {
-        verifyRLMonLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
       }
 
       // Verify that addFetcherForPartitions was called with the correct
@@ -4408,8 +4408,9 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumpedWithKRaftPath(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumpedWithKRaftPath(enableRemoteStorage: Boolean): Unit = {
     val localId = 0
     val topicPartition = new TopicPartition("foo", 0)
 
@@ -4417,7 +4418,8 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
+      enableRemoteStorage = enableRemoteStorage
     )
 
     try {
@@ -4448,6 +4450,11 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(0, followerPartition.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Verify that the partition was removed and added back.
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
@@ -4474,6 +4481,11 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(1, followerPartition.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Verify that partition's fetcher was not impacted.
       verify(mockReplicaFetcherManager, never()).removeFetcherForPartitions(any())
       verify(mockReplicaFetcherManager, never()).addFetcherForPartitions(any())
@@ -4497,6 +4509,11 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
       assertEquals(2, followerPartition.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Verify that the partition was removed and added back.
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
@@ -4512,8 +4529,9 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testReplicasAreStoppedWhileInControlledShutdownWithKRaft(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testReplicasAreStoppedWhileInControlledShutdownWithKRaft(enableRemoteStorage: Boolean): Unit = {
     val localId = 0
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
@@ -4525,7 +4543,8 @@ class ReplicaManagerTest {
       timer = new MockTimer(time),
       brokerId = localId,
       mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
-      isShuttingDown = isShuttingDown
+      isShuttingDown = isShuttingDown,
+      enableRemoteStorage = enableRemoteStorage
     )
 
     try {
@@ -4592,6 +4611,14 @@ class ReplicaManagerTest {
       assertEquals(0, fooPartition2.getLeaderEpoch)
       assertEquals(0, fooPartition2.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        val followers: util.Set[Partition] = new util.HashSet[Partition]()
+        followers.add(fooPartition0)
+        followers.add(fooPartition2)
+        verifyRLMOnLeadershipChange(Collections.singleton(fooPartition1), followers)
+        reset(mockRemoteLogManager)
+      }
+
       reset(mockReplicaFetcherManager)
 
       // The broker transitions to SHUTTING_DOWN state. This should not have
@@ -4636,6 +4663,14 @@ class ReplicaManagerTest {
       assertFalse(fooPartition2.isLeader)
       assertEquals(0, fooPartition2.getLeaderEpoch)
       assertEquals(0, fooPartition2.getPartitionEpoch)
+
+      if (enableRemoteStorage) {
+        val followers: util.Set[Partition] = new util.HashSet[Partition]()
+        followers.add(fooPartition0)
+        followers.add(fooPartition1)
+        verifyRLMOnLeadershipChange(Collections.emptySet(), followers)
+        reset(mockRemoteLogManager)
+      }
 
       // Fetcher for foo0 and foo1 are stopped.
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(foo0, foo1))
