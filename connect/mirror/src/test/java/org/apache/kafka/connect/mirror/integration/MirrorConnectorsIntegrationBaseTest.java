@@ -35,6 +35,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
 import org.apache.kafka.connect.mirror.MirrorClient;
@@ -245,8 +246,8 @@ public class MirrorConnectorsIntegrationBaseTest {
     @AfterEach
     public void shutdownClusters() throws Exception {
         try {
-            primaryProducer.close();
-            backupProducer.close();
+            Utils.closeQuietly(primaryProducer, "primary producer");
+            Utils.closeQuietly(backupProducer, "backup producer");
             for (String x : primary.connectors()) {
                 primary.deleteConnector(x);
             }

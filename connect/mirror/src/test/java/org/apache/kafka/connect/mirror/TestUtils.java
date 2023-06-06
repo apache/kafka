@@ -67,8 +67,9 @@ public class TestUtils {
         int cnt = 0;
         for (int r = 0; r < numRecords; r++) {
             for (int p = 0; p < numPartitions; p++) {
-                String value = "value-" + cnt++;
-                String key = "key";
+                String value = "value-" + cnt;
+                String key = "key-" + cnt;
+                cnt++;
                 records.add(new ProducerRecord<>(topicName, p, key.getBytes(), value.getBytes()));
             }
         }
