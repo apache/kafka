@@ -244,7 +244,7 @@ pipeline {
           }
           stages {
             stage('Check PowerPC Agent') {
-              agent { label 'jenkins-osu-power9-1' }
+              agent { label 'power9' }
               options {
                 timeout(time: 5, unit: 'MINUTES')
               }
@@ -253,7 +253,7 @@ pipeline {
               }
             }
             stage('Run PowerPC Build') {
-              agent { label 'jenkins-osu-power9-1' }
+              agent { label 'power9' }
               options {
                 timeout(time: 2, unit: 'HOURS')
               }
