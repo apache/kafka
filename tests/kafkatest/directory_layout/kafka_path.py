@@ -50,7 +50,7 @@ JARS = {
         TOOLS_JAR_NAME: "tools/build/libs/kafka-tools*.jar",
         TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar"
     },
-    # TODO remove with KAFKA-14762
+    # TODO: This is only used in 0.8.2.x system tests, remove with KAFKA-14762
     LATEST_0_9.__str__(): {
         TOOLS_JAR_NAME: "libs/kafka-tools*.jar",
         TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "libs/{argparse4j,jackson}*.jar"
