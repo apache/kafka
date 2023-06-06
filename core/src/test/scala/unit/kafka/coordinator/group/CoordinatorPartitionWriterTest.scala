@@ -134,10 +134,7 @@ class CoordinatorPartitionWriterTest {
       ("k2", "v2"),
     )
 
-    assertEquals(11, partitionRecordWriter.append(
-      tp,
-      records.asJava
-    ))
+    assertEquals(11, partitionRecordWriter.append(tp, records.asJava))
 
     val batch = recordsCapture.getValue.getOrElse(tp,
       throw new AssertionError(s"No records for $tp"))
@@ -151,6 +148,57 @@ class CoordinatorPartitionWriterTest {
     }.toList
 
     assertEquals(records, receivedRecords)
+  }
+
+  @Test
+  def testWriteRecordsWithFailure(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val time = new MockTime()
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager,
+      new StringKeyValueSerializer(),
+      CompressionType.NONE,
+      time
+    )
+
+    when(replicaManager.getLogConfig(tp)).thenReturn(Some(LogConfig.fromProps(
+      Collections.emptyMap(),
+      new Properties()
+    )))
+
+    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+
+    when(replicaManager.appendRecords(
+      ArgumentMatchers.eq(0L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      recordsCapture.capture(),
+      callbackCapture.capture(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()
+    )).thenAnswer(_ => {
+      callbackCapture.getValue.apply(Map(
+        tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
+      ))
+    })
+
+    val records = List(
+      ("k0", "v0"),
+      ("k1", "v1"),
+      ("k2", "v2"),
+    )
+
+    assertThrows(classOf[NotLeaderOrFollowerException],
+      () => partitionRecordWriter.append(tp, records.asJava))
   }
 
   @Test

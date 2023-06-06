@@ -56,7 +56,7 @@ private[group] class ListenerAdapter(
   }
 
   override def toString: String = {
-    s"ListenerAdaptor(listener=$listener)"
+    s"ListenerAdapter(listener=$listener)"
   }
 }
 
@@ -160,6 +160,10 @@ class CoordinatorPartitionWriter[T](
 
         val partitionResult = appendResults.getOrElse(tp,
           throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
+
+        if (partitionResult.error != Errors.NONE) {
+          throw partitionResult.error.exception()
+        }
 
         // Required offset.
         partitionResult.lastOffset + 1
