@@ -54,14 +54,16 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     public StreamsMetricsImpl streamsMetrics;
     @Mock
     public Sensor sensor;
+    public long offset;
 
     @Before
     public void setUp() {
         when(serdeGetter.keySerde()).thenReturn(new Serdes.StringSerde());
         when(serdeGetter.valueSerde()).thenReturn(new Serdes.StringSerde());
         final Metrics metrics = new Metrics();
+        offset = 0;
         streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
-        context = new MockInternalNewProcessorContext<>(StreamsTestUtils.getStreamsConfig(), new TaskId(0,0), TestUtils.tempDirectory());
+        context = new MockInternalNewProcessorContext<>(StreamsTestUtils.getStreamsConfig(), new TaskId(0, 0), TestUtils.tempDirectory());
     }
 
     public void createJoin(final Duration grace) {
@@ -73,15 +75,15 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     private void pipeRecord(final String key, final String value, final long time) {
-        Record<String, Change<String>> record = new Record<>(key, new Change<>(value, value), time);
-        context.setRecordContext(new ProcessorRecordContext(time, 30, 0, "testing", new RecordHeaders()));
+        final Record<String, Change<String>> record = new Record<>(key, new Change<>(value, value), time);
+        context.setRecordContext(new ProcessorRecordContext(time, offset++, 0, "testing", new RecordHeaders()));
         buffer.put(time, record, context.recordContext());
     }
 
     @Test
     public void shouldAddAndEvictRecord() {
         createJoin(Duration.ZERO);
-        AtomicInteger count = new AtomicInteger(0);
+        final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
@@ -90,7 +92,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     @Test
     public void shouldAddAndEvictRecordTwice() {
         createJoin(Duration.ZERO);
-        AtomicInteger count = new AtomicInteger(0);
+        final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
@@ -102,7 +104,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     @Test
     public void shouldAddAndEvictRecordTwiceWithNonZeroGrace() {
         createJoin(Duration.ofMillis(1));
-        AtomicInteger count = new AtomicInteger(0);
+        final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
@@ -114,7 +116,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     @Test
     public void shouldAddRecrodsTwiceAndEvictRecordsOnce() {
         createJoin(Duration.ZERO);
-        AtomicInteger count = new AtomicInteger(0);
+        final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
@@ -126,7 +128,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     @Test
     public void shouldDropLateRecords() {
         createJoin(Duration.ZERO);
-        AtomicInteger count = new AtomicInteger(0);
+        final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 1L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
@@ -138,7 +140,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     @Test
     public void shouldDropLateRecordsWithNonZeroGrace() {
         createJoin(Duration.ofMillis(1));
-        AtomicInteger count = new AtomicInteger(0);
+        final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 2L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
@@ -153,7 +155,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     @Test
     public void shouldHandleCollidingKeys() {
         createJoin(Duration.ofMillis(1));
-        AtomicInteger count = new AtomicInteger(0);
+        final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("2", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
