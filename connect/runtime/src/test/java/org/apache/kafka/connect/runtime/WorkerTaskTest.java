@@ -228,7 +228,8 @@ public class WorkerTaskTest {
         public TestWorkerTask(ConnectorTaskId id, Listener statusListener, TargetState initialState, ClassLoader loader,
                               ConnectMetrics connectMetrics, ErrorHandlingMetrics errorHandlingMetrics, RetryWithToleranceOperator retryWithToleranceOperator, Time time,
                               StatusBackingStore statusBackingStore) {
-            super(id, statusListener, initialState, loader, connectMetrics, errorHandlingMetrics,  retryWithToleranceOperator, time, statusBackingStore);
+            super(id, statusListener, initialState, loader, connectMetrics, errorHandlingMetrics,
+                    retryWithToleranceOperator, time, statusBackingStore, null);
         }
 
         @Override

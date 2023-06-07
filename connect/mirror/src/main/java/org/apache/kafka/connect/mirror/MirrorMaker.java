@@ -267,7 +267,10 @@ public class MirrorMaker {
         String workerId = sourceAndTarget.toString();
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
-        DistributedConfig distributedConfig = new DistributedConfig(workerProps);
+        DistributedConfig distributedConfig = new MirrorMakerWorkerConfig(
+                workerProps,
+                config.addFlowToContext() ? sourceAndTarget.toString() : null
+        );
         String kafkaClusterId = distributedConfig.kafkaClusterId();
         String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
         // Create the admin client to be shared by all backing stores for this herder

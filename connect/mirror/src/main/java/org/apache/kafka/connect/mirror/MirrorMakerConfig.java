@@ -86,6 +86,10 @@ public class MirrorMakerConfig extends AbstractConfig {
     private static final String ENABLE_INTERNAL_REST_DOC =
             "Whether to bring up an internal-only REST server that allows multi-node clusters to operate correctly.";
 
+    public static final String ADD_FLOW_CONTEXT_CONFIG = "add.flow.context";
+    private static final String ADD_FLOW_CONTEXT_DOC =
+            "Whether to add the flow (A->B) to the Connect-managed client.ids and the Connector log context.";
+
     private final Plugins plugins;
 
     private final Map<String, String> rawProperties;
@@ -174,6 +178,10 @@ public class MirrorMakerConfig extends AbstractConfig {
         }
  
         return props;
+    }
+
+    boolean addFlowToContext() {
+        return getBoolean(ADD_FLOW_CONTEXT_CONFIG);
     }
 
     // loads worker configs based on properties of the form x.y.z and cluster.x.y.z 
@@ -297,6 +305,7 @@ public class MirrorMakerConfig extends AbstractConfig {
                         in(Utils.enumOptions(SecurityProtocol.class)),
                         Importance.MEDIUM,
                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .define(ADD_FLOW_CONTEXT_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM, ADD_FLOW_CONTEXT_DOC)
                 .withClientSslSupport()
                 .withClientSaslSupport();
         RestServerConfig.addInternalConfig(result);

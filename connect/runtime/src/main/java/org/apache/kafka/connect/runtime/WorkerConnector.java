@@ -79,6 +79,7 @@ public class WorkerConnector implements Runnable {
     private State state;
     private final CloseableOffsetStorageReader offsetStorageReader;
     private final ConnectorOffsetBackingStore offsetStore;
+    private final String contextPrefix;
 
     public WorkerConnector(String connName,
                            Connector connector,
@@ -88,7 +89,8 @@ public class WorkerConnector implements Runnable {
                            ConnectorStatus.Listener statusListener,
                            CloseableOffsetStorageReader offsetStorageReader,
                            ConnectorOffsetBackingStore offsetStore,
-                           ClassLoader loader) {
+                           ClassLoader loader,
+                           String contextPrefix) {
         this.connName = connName;
         this.config = connectorConfig.originalsStrings();
         this.loader = loader;
@@ -104,6 +106,7 @@ public class WorkerConnector implements Runnable {
         this.shutdownLatch = new CountDownLatch(1);
         this.stopping = false;
         this.cancelled = false;
+        this.contextPrefix = contextPrefix;
     }
 
     public ClassLoader loader() {
@@ -115,7 +118,7 @@ public class WorkerConnector implements Runnable {
         // Clear all MDC parameters, in case this thread is being reused
         LoggingContext.clear();
 
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName, contextPrefix)) {
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + connName);
@@ -409,6 +412,7 @@ public class WorkerConnector implements Runnable {
     public String toString() {
         return "WorkerConnector{" +
                        "id=" + connName +
+                        (contextPrefix == null ? "" : ", context=" + contextPrefix) +
                        '}';
     }
 

@@ -74,7 +74,7 @@ class SourceTaskOffsetCommitter {
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
         long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(() -> {
-            try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
+            try (LoggingContext loggingContext = LoggingContext.forOffsets(id, config.contextPrefix())) {
                 commit(workerTask);
             }
         }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
@@ -86,7 +86,7 @@ class SourceTaskOffsetCommitter {
         if (task == null)
             return;
 
-        try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id, config.contextPrefix())) {
             task.cancel(false);
             if (!task.isDone())
                 task.get();

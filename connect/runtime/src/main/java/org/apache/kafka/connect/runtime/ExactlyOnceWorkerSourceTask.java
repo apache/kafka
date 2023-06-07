@@ -365,6 +365,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     public String toString() {
         return "ExactlyOnceWorkerSourceTask{" +
             "id=" + id +
+            (workerConfig.contextPrefix() == null ? "" : ", context=" + workerConfig.contextPrefix()) +
             '}';
     }
 
@@ -405,7 +406,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         private void maybeCommitTransaction(boolean shouldCommit) {
             if (shouldCommit) {
-                try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
+                try (LoggingContext loggingContext = LoggingContext.forOffsets(id, workerConfig.contextPrefix())) {
                     commitTransaction();
                 }
             }

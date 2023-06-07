@@ -227,7 +227,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        Executor closeExecutor) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, time, statusBackingStore);
+                retryWithToleranceOperator, time, statusBackingStore, workerConfig.contextPrefix());
 
         this.workerConfig = workerConfig;
         this.task = task;
