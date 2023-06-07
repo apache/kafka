@@ -77,6 +77,10 @@
         <subpackage name="metrics">
             <allow pkg="com.yammer.metrics" />
         </subpackage>
+
+        <subpackage name="network">
+            <allow pkg="org.apache.kafka.server.authorizer" />
+        </subpackage>
     </subpackage>
 
 </import-control>
