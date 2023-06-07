@@ -4284,6 +4284,9 @@ class KafkaApisTest {
     // in testing this here.
     if (version == 0) return
 
+    val fooId = Uuid.randomUuid()
+    addTopicToMetadataCache("foo", numPartitions = 2, topicId = fooId)
+
     def makeRequest(version: Short): RequestChannel.Request = {
       val groups = Map(
         "group-1" -> List(
@@ -4293,7 +4296,7 @@ class KafkaApisTest {
         "group-2" -> null,
         "group-3" -> null,
       ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false, Map("foo" -> fooId).asJava).build(version))
     }
 
     if (version < 8) {

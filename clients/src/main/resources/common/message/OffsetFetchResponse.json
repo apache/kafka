@@ -68,7 +68,8 @@
         "about": "The responses per topic.", "fields": [
         { "name": "Name", "type": "string", "versions": "0-8", "ignorable": true, "entityType": "topicName",
           "about": "The topic name." },
-        { "name": "TopicId", "type": "uuid", "versions": "9+", "ignorable": true, "about": "The unique topic ID" },
+        { "name": "TopicId", "type": "uuid", "versions": "9+", "ignorable": true,
+          "about": "The unique topic ID" },
         { "name": "Partitions", "type": "[]OffsetFetchResponsePartitions", "versions": "8+",
           "about": "The responses per partition", "fields": [
           { "name": "PartitionIndex", "type": "int32", "versions": "8+",

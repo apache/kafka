@@ -1479,14 +1479,45 @@ class KafkaApis(val requestChannel: RequestChannel,
     groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    val response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId(groupOffsetFetch.groupId)
+
+    val topicIdsToNames = metadataCache.topicIdsToNames()
+    val resolvedTopics =
+      if (requestContext.requestVersion() < 9)
+        groupOffsetFetch.topics.asScala
+      else {
+        val topics = new ArrayBuffer[OffsetFetchRequestData.OffsetFetchRequestTopics]()
+        groupOffsetFetch.topics.forEach { topic =>
+          topicIdsToNames.get(topic.topicId()) match {
+            case null =>
+              val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)
+              topic.partitionIndexes.forEach { partitionIndex =>
+                topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(partitionIndex)
+                  .setCommittedOffset(-1)
+                  .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+              }
+              response.topics.add(topicResponse)
+            case topicName =>
+              topic.setName(topicName)
+              topics += topic
+          }
+        }
+        topics
+      }
+
     // Clients are not allowed to see offsets for topics that are not authorized for Describe.
-    val (authorizedTopics, unauthorizedTopics) = authHelper.partitionSeqByAuthorized(
+    val result = authHelper.partitionSeqByAuthorized(
       requestContext,
       DESCRIBE,
       TOPIC,
-      groupOffsetFetch.topics.asScala
+      resolvedTopics
     )(_.name)
 
+    val (authorizedTopics, unauthorizedTopics) = result
+
+    val topicNamesToIds = metadataCache.topicNamesToIds()
     groupCoordinator.fetchOffsets(
       requestContext,
       groupOffsetFetch.groupId,
@@ -1498,13 +1529,23 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setGroupId(groupOffsetFetch.groupId)
           .setErrorCode(Errors.forException(exception).code)
       } else {
-        val response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId(groupOffsetFetch.groupId)
+        if (requestContext.requestVersion() >= 9) {
+          topicOffsets.forEach { topic =>
+            topicNamesToIds.get(topic.name()) match {
+              case null =>
+                debug(s"Unresolvable topic id for topic ${topic.name()} while preparing the OffsetFetchResponse")
+              case topicId =>
+                topic.setTopicId(topicId)
+            }
+          }
+        }
 
         response.topics.addAll(topicOffsets)
 
         unauthorizedTopics.foreach { topic =>
-          val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)
+          val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName(topic.name)
+            .setTopicId(topic.topicId)
           topic.partitionIndexes.forEach { partitionIndex =>
             topicResponse.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
               .setPartitionIndex(partitionIndex)
