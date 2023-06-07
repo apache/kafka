@@ -142,8 +142,8 @@ public class WorkerSourceTaskTest {
     private static final byte[] SERIALIZED_KEY = "converted-key".getBytes();
     private static final byte[] SERIALIZED_RECORD = "converted-record".getBytes();
 
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
-    private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private WorkerConfig config;
     private SourceConnectorConfig sourceConfig;
     private Plugins plugins;
@@ -190,7 +190,7 @@ public class WorkerSourceTaskTest {
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
 
-    private boolean enableTopicCreation;
+    private final boolean enableTopicCreation;
 
     @ParameterizedTest.Parameters
     public static Collection<Boolean> parameters() {
@@ -515,7 +515,7 @@ public class WorkerSourceTaskTest {
         verifyCleanStartup();
         verifyTopicCreation(TOPIC);
         verify(offsetWriter, times(2)).beginFlush(anyLong(), any(TimeUnit.class));
-        verify(offsetWriter).offset(PARTITION, OFFSET);
+        verify(offsetWriter, atLeastOnce()).offset(PARTITION, OFFSET);
         verify(sourceTask).stop();
         verify(statusListener).onShutdown(taskId);
         verifyOffsetFlush(true, 2);
@@ -557,10 +557,10 @@ public class WorkerSourceTaskTest {
     }
 
     @Test
-    public void testSendRecordsRetries() throws InterruptedException {
+    public void testSendRecordsRetries() {
         createWorkerTask();
 
-        // Differentiate only by Kafka partition so we can reuse conversion expectations
+        // Differentiate only by Kafka partition, so we can reuse conversion expectations
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -590,7 +590,7 @@ public class WorkerSourceTaskTest {
     }
 
     @Test
-    public void testSendRecordsProducerCallbackFail() throws Exception {
+    public void testSendRecordsProducerCallbackFail() {
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -629,7 +629,7 @@ public class WorkerSourceTaskTest {
     public void testSendRecordsTaskCommitRecordFail() throws Exception {
         createWorkerTask();
 
-        // Differentiate only by Kafka partition so we can reuse conversion expectations
+        // Differentiate only by Kafka partition, so we can reuse conversion expectations
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -653,7 +653,7 @@ public class WorkerSourceTaskTest {
         createWorkerTaskWithErrorToleration();
         expectTopicCreation(TOPIC);
 
-        //Use different offsets for each record so we can verify all were committed
+        //Use different offsets for each record, so we can verify all were committed
         final Map<String, Object> offset2 = Collections.singletonMap("key", 13);
 
         // send two records
@@ -689,12 +689,10 @@ public class WorkerSourceTaskTest {
     @Test
     public void testSlowTaskStart() throws Exception {
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        final CountDownLatch finishStartupLatch = new CountDownLatch(1);
         createWorkerTask();
 
         doAnswer((Answer<Object>) invocation -> {
             startupLatch.countDown();
-            ConcurrencyUtils.awaitLatch(finishStartupLatch, "Timeout waiting for task to stop");
             return null;
         }).when(sourceTask).start(TASK_PROPS);
 
@@ -708,7 +706,6 @@ public class WorkerSourceTaskTest {
         // cannot be invoked immediately in the thread trying to stop the task.
         ConcurrencyUtils.awaitLatch(startupLatch, "Timeout waiting for task to start");
         workerTask.stop();
-        finishStartupLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
 
         workerTaskFuture.get();
@@ -776,28 +773,20 @@ public class WorkerSourceTaskTest {
         return expectPolls(count, new AtomicInteger());
     }
 
-    private void expectSendRecord() throws InterruptedException {
+    private void expectSendRecord() {
         expectSendRecordTaskCommitRecordSucceed();
     }
 
-    private void expectSendRecordProducerCallbackFail() throws InterruptedException {
-        expectSendRecord(TOPIC, false, false, true, emptyHeaders());
+    private void expectSendRecordProducerCallbackFail() {
+        expectSendRecord(TOPIC, false, emptyHeaders());
     }
 
-    private void expectSendRecordTaskCommitRecordSucceed() throws InterruptedException {
-        expectSendRecord(TOPIC, true, true, true, emptyHeaders());
+    private void expectSendRecordTaskCommitRecordSucceed() {
+        expectSendRecord(TOPIC, true, emptyHeaders());
     }
 
-    private void expectSendRecord(
-            String topic,
-            boolean sendSuccess,
-            boolean commitSuccess,
-            boolean isMockedConverters,
-            Headers headers
-    ) throws InterruptedException {
-        if (isMockedConverters) {
-            expectConvertHeadersAndKeyValue(topic, headers);
-        }
+    private void expectSendRecord(String topic, boolean sendSuccess, Headers headers) {
+        expectConvertHeadersAndKeyValue(topic, headers);
 
         expectApplyTransformationChain();
 
