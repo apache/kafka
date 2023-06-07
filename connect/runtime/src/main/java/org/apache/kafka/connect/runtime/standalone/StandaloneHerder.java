@@ -400,8 +400,8 @@ public class StandaloneHerder extends AbstractHerder {
         }
 
         if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
-            cb.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be modified externally. " +
-                    "This can be done for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
+            cb.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be modified. This can be done " +
+                    "for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
             return false;
         }
 

@@ -694,36 +694,49 @@ public class OffsetsApiIntegrationTest {
         resetAndVerifySourceConnectorOffsets(connect, baseSourceConnectorConfigs());
     }
 
-    // Note that the following test also implicitly tests the custom offsets topic case since source connectors always use
-    // a separate offsets topic when exactly once support is enabled and the Kafka cluster targeted by the source connector
-    // is different from the Connect cluster's backing Kafka cluster.
     @Test
-    public void testResetSourceConnectorOffsetsExactlyOnceSupportEnabledAndDifferentKafkaClusterTargeted() throws Exception {
+    public void testResetSourceConnectorOffsetsCustomOffsetsTopic() throws Exception {
+        Map<String, String> connectorConfigs = baseSourceConnectorConfigs();
+        connectorConfigs.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "custom-offsets-topic");
+        resetAndVerifySourceConnectorOffsets(connect, connectorConfigs);
+    }
+
+    @Test
+    public void testResetSourceConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
+        EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
+
+        try (AutoCloseable ignored = kafkaCluster::stop) {
+            kafkaCluster.start();
+
+            Map<String, String> connectorConfigs = baseSourceConnectorConfigs();
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
+            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    kafkaCluster.bootstrapServers());
+
+            resetAndVerifySourceConnectorOffsets(connect, connectorConfigs);
+        }
+    }
+
+    @Test
+    public void testResetSourceConnectorOffsetsExactlyOnceSupportEnabled() throws Exception {
         Properties brokerProps = new Properties();
         brokerProps.put("transaction.state.log.replication.factor", "1");
         brokerProps.put("transaction.state.log.min.isr", "1");
-        EmbeddedKafkaCluster connectorTargetedKafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
         workerProps.put(DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
 
         // This embedded Connect cluster will internally spin up its own embedded Kafka cluster
         EmbeddedConnectCluster exactlyOnceSupportEnabledConnectCluster = new EmbeddedConnectCluster.Builder()
-                .name("connect-cluster")
+                .name("eos-enabled-connect-cluster")
                 .brokerProps(brokerProps)
                 .numWorkers(NUM_WORKERS)
                 .workerProps(workerProps)
                 .build();
+        exactlyOnceSupportEnabledConnectCluster.start();
 
-
-        try (AutoCloseable ignored = connectorTargetedKafkaCluster::stop) {
-            connectorTargetedKafkaCluster.start();
-
+        try (AutoCloseable ignored = exactlyOnceSupportEnabledConnectCluster::stop) {
             Map<String, String> connectorConfigs = baseSourceConnectorConfigs();
-            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                    connectorTargetedKafkaCluster.bootstrapServers());
-            connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                    connectorTargetedKafkaCluster.bootstrapServers());
-
-            resetAndVerifySourceConnectorOffsets(connect, connectorConfigs);
+            resetAndVerifySourceConnectorOffsets(exactlyOnceSupportEnabledConnectCluster, connectorConfigs);
         }
     }
 

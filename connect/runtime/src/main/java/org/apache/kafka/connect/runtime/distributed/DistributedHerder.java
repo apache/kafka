@@ -1598,8 +1598,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // naturally because requests to alter consumer group offsets / delete consumer groups will fail if there are still active members
         // in the group.
         if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
-            callback.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be modified externally. " +
-                    "This can be done for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
+            callback.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be modified. This can be done " +
+                    "for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
             return false;
         }
         return true;

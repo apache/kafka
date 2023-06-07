@@ -1374,7 +1374,7 @@ public class Worker {
                     // OR
                     // 2. No offsets have been committed yet
                     if (offsetsToWrite.isEmpty()) {
-                        completeAlterOffsetsCallback(alterOffsetsResult, isReset, cb);
+                        completeModifyOffsetsCallback(alterOffsetsResult, isReset, cb);
                         return;
                     }
 
@@ -1399,7 +1399,7 @@ public class Worker {
      *
      * @param connName the name of the sink connector whose offsets are to be altered
      * @param groupId the sink connector's consumer group ID
-     * @param admin the {@link Admin admin client} to be used for altering the consumer group offsets; should be closed after use
+     * @param admin the {@link Admin admin client} to be used for altering the consumer group offsets; will be closed after use
      * @param offsetsToWrite a mapping from topic partitions to offsets that need to be written; may not be null or empty
      * @param cb callback to invoke upon completion
      * @param alterOffsetsResult the result of the call to {@link SinkConnector#alterOffsets} for the connector
@@ -1460,7 +1460,7 @@ public class Worker {
                     cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName, error), null);
                 }
             } else {
-                completeAlterOffsetsCallback(alterOffsetsResult, false, cb);
+                completeModifyOffsetsCallback(alterOffsetsResult, false, cb);
             }
         }).whenComplete((ignored, ignoredError) -> {
             // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
@@ -1475,7 +1475,7 @@ public class Worker {
      *
      * @param connName the name of the sink connector whose offsets are to be reset
      * @param groupId the sink connector's consumer group ID
-     * @param admin the {@link Admin admin client} to be used for resetting the consumer group offsets; should be closed after use
+     * @param admin the {@link Admin admin client} to be used for resetting the consumer group offsets; will be closed after use
      * @param cb callback to invoke upon completion
      * @param alterOffsetsResult the result of the call to {@link SinkConnector#alterOffsets} for the connector
      */
@@ -1499,7 +1499,7 @@ public class Worker {
                             cb.onCompletion(new ConnectException("Failed to reset consumer group offsets for connector " + connName, error), null);
                         }
                     } else {
-                        completeAlterOffsetsCallback(alterOffsetsResult, true, cb);
+                        completeModifyOffsetsCallback(alterOffsetsResult, true, cb);
                     }
                 }).whenComplete((ignored, ignoredError) -> {
                     // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
@@ -1575,7 +1575,7 @@ public class Worker {
                 if (offsetsToWrite.isEmpty()) {
                     log.debug("No offsets found for source connector {} - this can occur due to a prior attempt to reset offsets or if the " +
                             "source connector hasn't committed any offsets yet", connName);
-                    completeAlterOffsetsCallback(alterOffsetsResult, isReset, cb);
+                    completeModifyOffsetsCallback(alterOffsetsResult, isReset, cb);
                     return;
                 }
 
@@ -1609,7 +1609,7 @@ public class Worker {
                     throw new ConnectException("Unexpectedly interrupted while attempting to modify offsets for source connector " + connName, e);
                 }
 
-                completeAlterOffsetsCallback(alterOffsetsResult, isReset, cb);
+                completeModifyOffsetsCallback(alterOffsetsResult, isReset, cb);
             } catch (Throwable t) {
                 log.error("Failed to modify offsets for source connector {}", connName, t);
                 cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to modify offsets for source connector " + connName), null);
@@ -1619,7 +1619,7 @@ public class Worker {
         }));
     }
 
-    private void completeAlterOffsetsCallback(boolean alterOffsetsResult, boolean isReset, Callback<Message> cb) {
+    private void completeModifyOffsetsCallback(boolean alterOffsetsResult, boolean isReset, Callback<Message> cb) {
         String modificationType = isReset ? "reset" : "altered";
         if (alterOffsetsResult) {
             cb.onCompletion(null, new Message("The offsets for this connector have been " + modificationType + " successfully"));
