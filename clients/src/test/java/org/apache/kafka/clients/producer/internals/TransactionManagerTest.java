@@ -1452,7 +1452,7 @@ public class TransactionManagerTest {
 
         assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
         assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
-        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort());
+        assertThrows(IllegalStateException.class, transactionManager::beginAbort);
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginCommit());
@@ -1481,7 +1481,7 @@ public class TransactionManagerTest {
         // rejected until they do.
 
         assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
-        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort());
+        assertThrows(IllegalStateException.class, transactionManager::beginAbort);
         assertThrows(IllegalStateException.class, transactionManager::beginCommit);
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
