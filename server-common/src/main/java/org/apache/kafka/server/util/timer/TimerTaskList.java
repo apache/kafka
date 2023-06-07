@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-public class TimerTaskList implements Delayed {
+class TimerTaskList implements Delayed {
     final AtomicInteger taskCounter;
     final AtomicLong expiration;
 
@@ -33,7 +33,7 @@ public class TimerTaskList implements Delayed {
     // root.prev points to the tail
     private TimerTaskEntry root;
 
-    public TimerTaskList(
+    TimerTaskList(
         AtomicInteger taskCounter
     ) {
         this.taskCounter = taskCounter;
