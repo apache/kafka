@@ -229,8 +229,12 @@ public class StandaloneHerder extends AbstractHerder {
                     try {
                         updateConnectorTasks(connName);
                     } catch (Throwable t) {
-                        log.error("Failed to update connector tasks after startup", t);
-                        callback.onCompletion(t, null);
+                        String errorMsg = "Failed to update tasks after connector startup";
+                        ConnectException e = new ConnectException(errorMsg, t);
+                        log.error(errorMsg, t);
+                        // Update the connector's status
+                        onFailure(connName, e);
+                        callback.onCompletion(e, null);
                         return;
                     }
                     callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
@@ -311,10 +315,14 @@ public class StandaloneHerder extends AbstractHerder {
         startConnector(connName, (error, targetState) -> {
             if (targetState == TargetState.STARTED) {
                 try {
-                    requestTaskReconfiguration(connName);
+                    updateConnectorTasks(connName);
                 } catch (Throwable t) {
-                    log.error("Failed to reconfigure connector tasks after restart", t);
-                    cb.onCompletion(t, null);
+                    String errorMsg = "Failed to update tasks after connector restart";
+                    ConnectException e = new ConnectException(errorMsg, t);
+                    log.error(errorMsg, t);
+                    // Update the connector's status
+                    onFailure(connName, e);
+                    cb.onCompletion(e, null);
                     return;
                 }
             }
@@ -530,7 +538,10 @@ public class StandaloneHerder extends AbstractHerder {
                             try {
                                 updateConnectorTasks(connector);
                             } catch (Throwable t) {
-                                log.error("Failed to update connector tasks after startup", t);
+                                String errorMsg = "Failed to update tasks after connector startup";
+                                log.error(errorMsg, t);
+                                // Update the connector's status
+                                onFailure(connector, new ConnectException(errorMsg, t));
                             }
                         });
                     }
