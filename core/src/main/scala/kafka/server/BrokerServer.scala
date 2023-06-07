@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
@@ -46,6 +45,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
@@ -364,25 +364,22 @@ class BrokerServer(
           config.interBrokerListenerName.value() + ". Found listener(s): " +
           endpoints.asScala.map(ep => ep.listenerName().orElse("(none)")).mkString(", "))
       }
-      val authorizerInfo = ServerInfo(new ClusterResource(clusterId),
-        config.nodeId,
-        endpoints,
-        interBrokerListener,
-        config.earlyStartListeners.map(_.value()).asJava)
 
       // Create and initialize an authorizer if one is configured.
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
-      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
-        case Some(authZ) =>
-          authZ.start(authorizerInfo).asScala.map { case (ep, cs) =>
-            ep -> cs.toCompletableFuture
-          }
-        case None =>
-          authorizerInfo.endpoints.asScala.map { ep =>
-            ep -> CompletableFuture.completedFuture[Void](null)
-          }.toMap
+
+      val endpointReadyFutures = {
+        val builder = new EndpointReadyFutures.Builder()
+        builder.build(authorizer.asJava,
+          new KafkaAuthorizerServerInfo(
+            new ClusterResource(clusterId),
+            config.nodeId,
+            endpoints,
+            interBrokerListener,
+            config.earlyStartListeners.map(_.value()).asJava))
       }
+      val authorizerFutures = endpointReadyFutures.futures().asScala.toMap
 
       val fetchManager = new FetchManager(Time.SYSTEM,
         new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
