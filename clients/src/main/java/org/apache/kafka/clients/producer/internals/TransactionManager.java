@@ -547,7 +547,7 @@ public class TransactionManager {
         this.partitionsToRewriteSequences.add(tp);
     }
 
-    private void bumpIdempotentProducerEpoch(@SuppressWarnings("SameParameterValue") CallingThread callingThread) {
+    private void bumpIdempotentProducerEpoch(CallingThread callingThread) {
         if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
             resetIdempotentProducerId(callingThread);
         } else {
