@@ -2129,7 +2129,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
       appendRecords(replicaManager, tp0, idempotentRecords)
       verify(addPartitionsToTxnManager, times(0)).addTxnData(any(), any(), any[AddPartitionsToTxnManager.AppendCallback]())
-      assertEquals(null, getVerificationGuard(replicaManager, tp0, producerId))
+      assertNull(getVerificationGuard(replicaManager, tp0, producerId))
 
       // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
@@ -2149,7 +2149,7 @@ class ReplicaManagerTest {
       appendRecordsToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> idempotentRecords2), transactionalId, Some(0))
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
       assertNotEquals(null, getVerificationGuard(replicaManager, tp0, producerId))
-      assertEquals(null, getVerificationGuard(replicaManager, tp1, producerId))
+      assertNull(getVerificationGuard(replicaManager, tp1, producerId))
     } finally {
       replicaManager.shutdown()
     }
@@ -2158,7 +2158,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testVerificationFlow(): Unit = {
+  def testTransactionVerificationFlow(): Unit = {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
@@ -2198,7 +2198,7 @@ class ReplicaManagerTest {
       assertEquals(Errors.INVALID_RECORD, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
-      // This time verification is successful
+      // This time verification is successful.
       appendRecords(replicaManager, tp0, transactionalRecords)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback2.capture())
@@ -2216,7 +2216,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testVerificationGuardOnMultiplePartitions(): Unit = {
+  def testTransactionVerificationGuardOnMultiplePartitions(): Unit = {
     val mockTimer = new MockTimer(time)
     val tp0 = new TopicPartition(topic, 0)
     val tp1 = new TopicPartition(topic, 1)
@@ -2291,7 +2291,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testDisabledVerification(): Unit = {
+  def testDisabledTransactionVerification(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("transaction.partition.verification.enable", "false")
     val config = KafkaConfig.fromProps(props)
@@ -2314,7 +2314,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
-      assertEquals(null, getVerificationGuard(replicaManager, tp, producerId))
+      assertNull(getVerificationGuard(replicaManager, tp, producerId))
 
       // We should not add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(0)).addTxnData(any(), any(), any())
@@ -2789,7 +2789,7 @@ class ReplicaManagerTest {
   private def getVerificationGuard(replicaManager: ReplicaManager,
                                    tp: TopicPartition,
                                    producerId: Long): Object = {
-    replicaManager.getPartitionOrException(tp).log.get.verificationGuard(producerId)
+    replicaManager.getPartitionOrException(tp).log.get.getOrMaybeCreateVerificationGuard(producerId)
   }
 
   private def setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager: AddPartitionsToTxnManager,
