@@ -68,13 +68,13 @@ public class KRaftMigrationZkWriter {
     static final String DELETE_TOPIC = "DeleteTopic";
     static final String UPDATE_PARTITIONS = "UpdatePartitions";
     static final String DELETE_PARTITION = "DeletePartition";
-    static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
-    static final String DELETE_BROKER_CONFIG = "DeleteBrokerConfig";
-    static final String UPDATE_TOPIC_CONFIG = "UpdateTopicConfig";
-    static final String DELETE_TOPIC_CONFIG = "DeleteTopicConfig";
+    static final String UPDATE_BROKER_CONFIGS = "UpdateBrokerConfigs";
+    static final String DELETE_BROKER_CONFIGS = "DeleteBrokerConfigs";
+    static final String UPDATE_TOPIC_CONFIGS = "UpdateTopicConfigs";
+    static final String DELETE_TOPIC_CONFIGS = "DeleteTopicConfigs";
     static final String UPDATE_CLIENT_QUOTAS = "UpdateClientQuotas";
-    static final String UPDATE_ACL = "UpdateAcl";
-    static final String DELETE_ACL = "DeleteAcl";
+    static final String UPDATE_ACLS = "UpdateAcls";
+    static final String DELETE_ACLS = "DeleteAcls";
 
 
     private final MigrationClient migrationClient;
@@ -223,7 +223,7 @@ public class KRaftMigrationZkWriter {
             );
             ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
             operationConsumer.accept(
-                DELETE_TOPIC_CONFIG,
+                    DELETE_TOPIC_CONFIGS,
                 "Deleting Configs for Topic " + topicName + ", ID " + topicId,
                 migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState)
             );
@@ -357,7 +357,7 @@ public class KRaftMigrationZkWriter {
         newResources.forEach(resource -> {
             Map<String, String> props = configsImage.configMapForResource(resource);
             if (!props.isEmpty()) {
-                String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
+                String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIGS, UPDATE_TOPIC_CONFIGS);
                 operationConsumer.accept(opType, "Create configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
@@ -366,11 +366,11 @@ public class KRaftMigrationZkWriter {
         resourcesToUpdate.forEach(resource -> {
             Map<String, String> props = configsImage.configMapForResource(resource);
             if (props.isEmpty()) {
-                String opType = brokerOrTopicOpType(resource, DELETE_BROKER_CONFIG, DELETE_TOPIC_CONFIG);
+                String opType = brokerOrTopicOpType(resource, DELETE_BROKER_CONFIGS, DELETE_TOPIC_CONFIGS);
                 operationConsumer.accept(opType, "Delete configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState));
             } else {
-                String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
+                String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIGS, UPDATE_TOPIC_CONFIGS);
                 operationConsumer.accept(opType, "Update configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
@@ -478,12 +478,13 @@ public class KRaftMigrationZkWriter {
     void handleConfigsDelta(ConfigurationsImage configsImage, ConfigurationsDelta configsDelta, KRaftMigrationOperationConsumer operationConsumer) {
         Set<ConfigResource> updatedResources = configsDelta.changes().keySet();
         updatedResources.forEach(configResource -> {
-            String opType = brokerOrTopicOpType(configResource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
             Map<String, String> props = configsImage.configMapForResource(configResource);
             if (props.isEmpty()) {
+                String opType = brokerOrTopicOpType(configResource, DELETE_BROKER_CONFIGS, DELETE_TOPIC_CONFIGS);
                 operationConsumer.accept(opType, "Delete configs for " + configResource, migrationState ->
                     migrationClient.configClient().deleteConfigs(configResource, migrationState));
             } else {
+                String opType = brokerOrTopicOpType(configResource, UPDATE_BROKER_CONFIGS, UPDATE_TOPIC_CONFIGS);
                 operationConsumer.accept(opType, "Update configs for " + configResource, migrationState ->
                     migrationClient.configClient().writeConfigs(configResource, props, migrationState));
             }
@@ -574,19 +575,19 @@ public class KRaftMigrationZkWriter {
         newResources.forEach(resourcePattern -> {
             Set<AccessControlEntry> accessControlEntries = allAclsInSnapshot.get(resourcePattern);
             String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
+            operationConsumer.accept(UPDATE_ACLS, name, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
 
         resourcesToDelete.forEach(deletedResource -> {
             String name = "Deleting resource " + deletedResource + " which has no ACLs in snapshot";
-            operationConsumer.accept(DELETE_ACL, name, migrationState ->
+            operationConsumer.accept(DELETE_ACLS, name, migrationState ->
                 migrationClient.aclClient().deleteResource(deletedResource, migrationState));
         });
 
         changedResources.forEach((resourcePattern, accessControlEntries) -> {
             String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
+            operationConsumer.accept(UPDATE_ACLS, name, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
     }
@@ -620,13 +621,13 @@ public class KRaftMigrationZkWriter {
 
         resourcesWithDeletedAcls.forEach(deletedResource -> {
             String name = "Deleting resource " + deletedResource + " which has no more ACLs";
-            operationConsumer.accept(DELETE_ACL, name, migrationState ->
+            operationConsumer.accept(DELETE_ACLS, name, migrationState ->
                 migrationClient.aclClient().deleteResource(deletedResource, migrationState));
         });
 
         aclsToWrite.forEach((resourcePattern, accessControlEntries) -> {
             String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
+            operationConsumer.accept(UPDATE_ACLS, name, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
     }

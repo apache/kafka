@@ -77,10 +77,6 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.DELETE_BROKER_CONFIG;
-import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.DELETE_TOPIC_CONFIG;
-import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.UPDATE_BROKER_CONFIG;
-import static org.apache.kafka.metadata.migration.KRaftMigrationZkWriter.UPDATE_TOPIC_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -176,9 +172,9 @@ public class KRaftMigrationZkWriterTest {
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleSnapshot(image, consumer);
         assertEquals(2, opCounts.remove("CreateTopic"));
-        assertEquals(2, opCounts.remove("UpdateBrokerConfig"));
+        assertEquals(2, opCounts.remove("UpdateBrokerConfigs"));
         assertEquals(1, opCounts.remove("UpdateProducerId"));
-        assertEquals(4, opCounts.remove("UpdateAcl"));
+        assertEquals(4, opCounts.remove("UpdateAcls"));
         assertEquals(5, opCounts.remove("UpdateClientQuotas"));
         assertEquals(0, opCounts.size());
 
@@ -261,7 +257,7 @@ public class KRaftMigrationZkWriterTest {
                 (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleTopicsSnapshot(TopicsImage.EMPTY, consumer);
         assertEquals(1, opCounts.remove("DeleteTopic"));
-        assertEquals(1, opCounts.remove("DeleteTopicConfig"));
+        assertEquals(1, opCounts.remove("DeleteTopicConfigs"));
         assertEquals(0, opCounts.size());
         assertEquals(Collections.singletonList("spam"), topicClient.deletedTopics);
 
@@ -269,7 +265,7 @@ public class KRaftMigrationZkWriterTest {
         topicClient.reset();
         writer.handleTopicsSnapshot(TopicsImageTest.IMAGE1, consumer);
         assertEquals(1, opCounts.remove("DeleteTopic"));
-        assertEquals(1, opCounts.remove("DeleteTopicConfig"));
+        assertEquals(1, opCounts.remove("DeleteTopicConfigs"));
         assertEquals(2, opCounts.remove("CreateTopic"));
         assertEquals(0, opCounts.size());
         assertEquals(Collections.singletonList("spam"), topicClient.deletedTopics);
@@ -321,6 +317,8 @@ public class KRaftMigrationZkWriterTest {
             Map<String, Integer> opCounts = new HashMap<>();
             KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
                 (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+
+            // No-op snapshot
             writer.handleTopicsSnapshot(topicsImage, consumer);
             assertEquals(0, opCounts.size(), "No operations expected since the data is the same");
 
@@ -458,7 +456,7 @@ public class KRaftMigrationZkWriterTest {
     }
 
     @Test
-    public void testBrokerConfigDelta() {
+    public void testBrokerAndTopicConfigDelta() {
         CapturingConfigMigrationClient configClient = new CapturingConfigMigrationClient();
         CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
             .setBrokersInZk(0)
@@ -476,6 +474,12 @@ public class KRaftMigrationZkWriterTest {
         KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleConfigsDelta(image, delta, consumer);
+
+        assertEquals(1, opCounts.remove("UpdateBrokerConfigs"));
+        assertEquals(1, opCounts.remove("UpdateTopicConfigs"));
+        assertEquals(1, opCounts.remove("DeleteTopicConfigs"));
+        assertEquals(0, opCounts.size());
+
         assertEquals(
             Collections.singletonMap("foo", "bar"),
             configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, "b0"))
@@ -523,6 +527,10 @@ public class KRaftMigrationZkWriterTest {
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleConfigsSnapshot(image, consumer);
 
+        assertEquals(2, opCounts.remove("UpdateBrokerConfigs"));
+        assertEquals(1, opCounts.remove("DeleteBrokerConfigs"));
+        assertEquals(0, opCounts.size());
+
         assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.BROKER, "3")),
             "Broker 3 is not in the ConfigurationsImage, it should get deleted");
 
@@ -538,9 +546,6 @@ public class KRaftMigrationZkWriterTest {
             Collections.singletonMap("foo", "bar"),
             configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, "2")),
             "Broker 2 not present in ZK, should see an update");
-
-        assertEquals(2, opCounts.get(UPDATE_BROKER_CONFIG));
-        assertEquals(1, opCounts.get(DELETE_BROKER_CONFIG));
     }
 
     @Test
@@ -577,6 +582,10 @@ public class KRaftMigrationZkWriterTest {
                 (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleConfigsSnapshot(image, consumer);
 
+        assertEquals(2, opCounts.remove("UpdateTopicConfigs"));
+        assertEquals(1, opCounts.remove("DeleteTopicConfigs"));
+        assertEquals(0, opCounts.size());
+
         assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, "topic-3")),
                 "Topic topic-3 is not in the ConfigurationsImage, it should get deleted");
 
@@ -592,9 +601,6 @@ public class KRaftMigrationZkWriterTest {
                 Collections.singletonMap("foo", "bar"),
                 configClient.writtenConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, "topic-2")),
                 "Topic topic-2 not present in ZK, should see an update");
-
-        assertEquals(2, opCounts.get(UPDATE_TOPIC_CONFIG));
-        assertEquals(1, opCounts.get(DELETE_TOPIC_CONFIG));
     }
 
     @Test
@@ -746,6 +752,10 @@ public class KRaftMigrationZkWriterTest {
         KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
         writer.handleAclsSnapshot(image, consumer);
+
+        assertEquals(2, opCounts.remove("UpdateAcls"));
+        assertEquals(1, opCounts.remove("DeleteAcls"));
+        assertEquals(0, opCounts.size());
 
         assertTrue(aclClient.deletedResources.contains(resource2));
         assertEquals(Collections.singleton(ace1Resource1), aclClient.updatedResources.get(resource1));
