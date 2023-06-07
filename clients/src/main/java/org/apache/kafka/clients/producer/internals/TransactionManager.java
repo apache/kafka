@@ -693,6 +693,7 @@ public class TransactionManager {
             transitionToAbortableError(exception);
         }
     }
+
     synchronized void handleFailedBatch(ProducerBatch batch,
                                         RuntimeException exception,
                                         boolean adjustSequenceNumbers) {
