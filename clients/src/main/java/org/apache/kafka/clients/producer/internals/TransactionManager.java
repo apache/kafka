@@ -694,9 +694,7 @@ public class TransactionManager {
         }
     }
 
-    synchronized void handleFailedBatch(ProducerBatch batch,
-                                        RuntimeException exception,
-                                        boolean adjustSequenceNumbers) {
+    synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
         maybeTransitionToErrorState(exception);
         removeInFlightBatch(batch);
 
