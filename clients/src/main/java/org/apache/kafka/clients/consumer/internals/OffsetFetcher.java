@@ -98,7 +98,7 @@ public class OffsetFetcher {
         this.apiVersions = apiVersions;
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptions,
-            time, apiVersions);
+                time, apiVersions);
     }
 
     private OffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
@@ -114,7 +114,7 @@ public class OffsetFetcher {
      * Reset offsets for all assigned partitions that require it.
      *
      * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
-     *   and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
+     *                                                                         and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
      */
     public void resetPositionsIfNeeded() {
         // Raise exception from previous offset fetch if there is one
@@ -122,8 +122,7 @@ public class OffsetFetcher {
         if (exception != null)
             throw exception;
 
-        Map<TopicPartition, Long> offsetResetTimestamps =
-            offsetFetcherUtils.getOffsetResetTimestamp();
+        Map<TopicPartition, Long> offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
 
         if (offsetResetTimestamps.isEmpty())
             return;
@@ -136,7 +135,7 @@ public class OffsetFetcher {
      */
     public void validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
-            offsetFetcherUtils.getPartitionsToValidate();
+                offsetFetcherUtils.getPartitionsToValidate();
 
         validatePositionsAsync(partitionsToValidate);
     }
@@ -187,7 +186,7 @@ public class OffsetFetcher {
 
             // if timeout is set to zero, do not try to poll the network client at all
             // and return empty immediately; otherwise try to get the results synchronously
-            // and throw timeout exception if cannot complete in time
+            // and throw timeout exception if it cannot complete in time
             if (timer.timeoutMs() == 0L)
                 return result;
 
@@ -382,8 +381,8 @@ public class OffsetFetcher {
      * Search the offsets by target times for the specified partitions.
      *
      * @param timestampsToSearch the mapping between partitions and target time
-     * @param requireTimestamps true if we should fail with an UnsupportedVersionException if the broker does
-     *                         not support fetching precise timestamps for offsets
+     * @param requireTimestamps  true if we should fail with an UnsupportedVersionException if the broker does
+     *                           not support fetching precise timestamps for offsets
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch,
@@ -430,16 +429,17 @@ public class OffsetFetcher {
      * Groups timestamps to search by node for topic partitions in `timestampsToSearch` that have
      * leaders available. Topic partitions from `timestampsToSearch` that do not have their leader
      * available are added to `partitionsToRetry`
+     *
      * @param timestampsToSearch The mapping from partitions ot the target timestamps
-     * @param partitionsToRetry A set of topic partitions that will be extended with partitions
-     *                          that need metadata update or re-connect to the leader.
+     * @param partitionsToRetry  A set of topic partitions that will be extended with partitions
+     *                           that need metadata update or re-connect to the leader.
      */
     private Map<Node, Map<TopicPartition, ListOffsetsPartition>> groupListOffsetRequests(
             Map<TopicPartition, Long> timestampsToSearch,
             Set<TopicPartition> partitionsToRetry) {
         final Map<TopicPartition, ListOffsetsPartition> partitionDataMap = new HashMap<>();
-        for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
-            TopicPartition tp  = entry.getKey();
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            TopicPartition tp = entry.getKey();
             Long offset = entry.getValue();
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
 
@@ -473,9 +473,9 @@ public class OffsetFetcher {
     /**
      * Send the ListOffsetRequest to a specific broker for the partitions and target timestamps.
      *
-     * @param node The node to send the ListOffsetRequest to.
+     * @param node               The node to send the ListOffsetRequest to.
      * @param timestampsToSearch The mapping from partitions to the target timestamps.
-     * @param requireTimestamp  True if we require a timestamp in the response.
+     * @param requireTimestamp   True if we require a timestamp in the response.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
@@ -499,13 +499,14 @@ public class OffsetFetcher {
 
     /**
      * Callback for the response of the list offset call above.
+     *
      * @param listOffsetsResponse The response from the server.
-     * @param future The future to be completed when the response returns. Note that any partition-level errors will
-     *               generally fail the entire future result. The one exception is UNSUPPORTED_FOR_MESSAGE_FORMAT,
-     *               which indicates that the broker does not support the v1 message format. Partitions with this
-     *               particular error are simply left out of the future map. Note that the corresponding timestamp
-     *               value of each partition may be null only for v0. In v1 and later the ListOffset API would not
-     *               return a null timestamp (-1 is returned instead when necessary).
+     * @param future              The future to be completed when the response returns. Note that any partition-level errors will
+     *                            generally fail the entire future result. The one exception is UNSUPPORTED_FOR_MESSAGE_FORMAT,
+     *                            which indicates that the broker does not support the v1 message format. Partitions with this
+     *                            particular error are simply left out of the future map. Note that the corresponding timestamp
+     *                            value of each partition may be null only for v0. In v1 and later the ListOffset API would not
+     *                            return a null timestamp (-1 is returned instead when necessary).
      */
     private void handleListOffsetResponse(ListOffsetsResponse listOffsetsResponse,
                                           RequestFuture<ListOffsetResult> future) {
@@ -516,7 +517,6 @@ public class OffsetFetcher {
             future.raise(e);
         }
     }
-
 
 
     /**
