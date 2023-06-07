@@ -44,10 +44,12 @@ public class ZstdFactory {
         }
     }
 
-    public static InputStream wrapForInput(ByteBuffer compressedData, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+    public static InputStream wrapForInput(ByteBuffer compressedData, BufferSupplier decompressionBufferSupplier) {
         try {
             // The responsibility of closing the stream is pushed to the caller of this method.
             final ZstdBufferDecompressingStreamNoFinalizer stream = new ZstdBufferDecompressingStreamNoFinalizer(compressedData);
+            // We need to convert the underlying stream, ZstdBufferDecompressingStreamNoFinalizer to InputStream interface,
+            // hence this wrapper.
             return new InputStream() {
                 @Override
                 public int read() throws IOException {

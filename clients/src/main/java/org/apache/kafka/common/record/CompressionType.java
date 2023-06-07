@@ -152,7 +152,7 @@ public enum CompressionType {
 
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            return new ChunkedBytesStream(ZstdFactory.wrapForInput(buffer, messageVersion, decompressionBufferSupplier), decompressionBufferSupplier, decompressionOutputSize(), false);
+            return new ChunkedBytesStream(ZstdFactory.wrapForInput(buffer, decompressionBufferSupplier), decompressionBufferSupplier, decompressionOutputSize(), false);
         }
 
         /**
