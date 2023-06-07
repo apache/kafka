@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.server.util.timer;
 
-class TimerTaskEntry {
+public class TimerTaskEntry {
     public final TimerTask timerTask;
     public final long expirationMs;
     volatile TimerTaskList list;
     TimerTaskEntry next;
     TimerTaskEntry prev;
 
-    TimerTaskEntry(
+    public TimerTaskEntry(
         TimerTask timerTask,
         long expirationMs
     ) {
