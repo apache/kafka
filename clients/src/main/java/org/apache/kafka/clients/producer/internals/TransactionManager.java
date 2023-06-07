@@ -299,7 +299,7 @@ public class TransactionManager {
         return handleCachedTransactionRequestResult(() -> {
             // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
             if (!isEpochBump) {
-                transitionTo(State.INITIALIZING, null, callingThread);
+                transitionTo(State.INITIALIZING, callingThread);
                 log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
             } else {
                 log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
@@ -320,7 +320,7 @@ public class TransactionManager {
         ensureTransactional();
         throwIfPendingState("beginTransaction");
         maybeFailWithError();
-        transitionTo(State.IN_TRANSACTION, null, CallingThread.APPLICATION);
+        transitionTo(State.IN_TRANSACTION, CallingThread.APPLICATION);
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -328,7 +328,7 @@ public class TransactionManager {
 
         return handleCachedTransactionRequestResult(() -> {
             maybeFailWithError();
-            transitionTo(State.COMMITTING_TRANSACTION, null, callingThread);
+            transitionTo(State.COMMITTING_TRANSACTION, callingThread);
             return beginCompletingTransaction(TransactionResult.COMMIT, callingThread);
         }, State.COMMITTING_TRANSACTION, "commitTransaction");
     }
@@ -337,7 +337,7 @@ public class TransactionManager {
         return handleCachedTransactionRequestResult(() -> {
             if (currentState != State.ABORTABLE_ERROR)
                 maybeFailWithError();
-            transitionTo(State.ABORTING_TRANSACTION, null, callingThread);
+            transitionTo(State.ABORTING_TRANSACTION, callingThread);
 
             // We're aborting the transaction, so there should be no need to add new partitions
             newPartitionsInTransaction.clear();
@@ -529,7 +529,7 @@ public class TransactionManager {
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         log.debug("Resetting idempotent producer ID. ID and epoch before reset are {}", this.producerIdAndEpoch);
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        transitionTo(State.UNINITIALIZED, null, callingThread);
+        transitionTo(State.UNINITIALIZED, callingThread);
     }
 
     private void resetSequenceForPartition(TopicPartition topicPartition) {
@@ -573,7 +573,7 @@ public class TransactionManager {
                 bumpIdempotentProducerEpoch(callingThread);
             }
             if (currentState != State.INITIALIZING && !hasProducerId()) {
-                transitionTo(State.INITIALIZING, null, callingThread);
+                transitionTo(State.INITIALIZING, callingThread);
                 InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                         .setTransactionalId(null)
                         .setTransactionTimeoutMs(Integer.MAX_VALUE);
@@ -1058,6 +1058,10 @@ public class TransactionManager {
                 initProducerIdVersion.maxVersion() >= 3;
     }
 
+    private void transitionTo(State target, CallingThread callingThread) {
+        transitionTo(target, null, callingThread);
+    }
+
     private void transitionTo(State target, RuntimeException error, CallingThread callingThread) {
         if (!currentState.isTransitionValid(currentState, target)) {
             String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
@@ -1231,9 +1235,9 @@ public class TransactionManager {
 
     private void completeTransaction() {
         if (epochBumpRequired) {
-            transitionTo(State.INITIALIZING, null, CallingThread.SENDER);
+            transitionTo(State.INITIALIZING, CallingThread.SENDER);
         } else {
-            transitionTo(State.READY, null, CallingThread.SENDER);
+            transitionTo(State.READY, CallingThread.SENDER);
         }
         lastError = null;
         epochBumpRequired = false;
@@ -1383,7 +1387,7 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                transitionTo(State.READY, null, CallingThread.SENDER);
+                transitionTo(State.READY, CallingThread.SENDER);
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
