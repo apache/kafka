@@ -66,8 +66,6 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.producer.internals.TransactionManager.CallingThread.SENDER;
-
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
@@ -240,6 +238,9 @@ public class Sender implements Runnable {
     public void run() {
         log.debug("Starting Kafka producer I/O thread.");
 
+        if (transactionManager != null)
+            transactionManager.setPoisonStateOnInvalidTransition(true);
+
         // main loop, runs until close is called
         while (running) {
             try {
@@ -270,7 +271,7 @@ public class Sender implements Runnable {
                 try {
                     // It is possible for the transaction manager to throw errors when aborting. Catch these
                     // so as not to interfere with the rest of the shutdown logic.
-                    transactionManager.beginAbort(SENDER);
+                    transactionManager.beginAbort();
                 } catch (Exception e) {
                     log.error("Error in kafka producer I/O thread while aborting transaction: ", e);
                 }
@@ -351,7 +352,7 @@ public class Sender implements Runnable {
                         exception instanceof ClusterAuthorizationException) {
             transactionManager.failPendingRequests(new AuthenticationException(exception));
             maybeAbortBatches(exception);
-            transactionManager.transitionToUninitialized(exception, SENDER);
+            transactionManager.transitionToUninitialized(exception);
             return true;
         }
         return false;

@@ -109,7 +109,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
-import static org.apache.kafka.clients.producer.internals.TransactionManager.CallingThread.SENDER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -2968,7 +2967,7 @@ public class SenderTest {
         // Append a record to the accumulator.
         FutureRecordMetadata metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
         // Now abort the transaction manually.
-        txnManager.beginAbort(SENDER);
+        txnManager.beginAbort();
         // Try to send.
         // This should abort the existing transaction and
         // drain all the unsent batches with a TransactionAbortedException.
@@ -3216,7 +3215,7 @@ public class SenderTest {
     private TransactionManager createTransactionManager() {
         return new TransactionManager(new LogContext(), null, 0, RETRY_BACKOFF_MS, new ApiVersions());
     }
-    
+
     private void setupWithTransactionState(TransactionManager transactionManager) {
         setupWithTransactionState(transactionManager, false, null, true, Integer.MAX_VALUE, 0);
     }
