@@ -314,7 +314,7 @@ public class TaskManager {
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
         topologyMetadata.addSubscribedTopicsFromAssignment(
-            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()),
             logPrefix
         );
 
@@ -1319,6 +1319,8 @@ public class TaskManager {
         if (fatalException != null) {
             throw fatalException;
         }
+
+        log.info("Shutdown complete");
     }
 
     private void shutdownStateUpdater() {

@@ -194,7 +194,8 @@ public class AbstractConfig {
     }
 
     public String getString(String key) {
-        return (String) get(key);
+        final String res = (String) get(key);
+        return res == null ? res : res.trim();
     }
 
     public ConfigDef.Type typeOf(String key) {
@@ -517,7 +518,6 @@ public class AbstractConfig {
      * @param originals           The map of raw configs.
      * @return map of resolved config variable.
      */
-    @SuppressWarnings("unchecked")
     private Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;

@@ -355,6 +355,10 @@ public abstract class AbstractCoordinator implements Closeable {
         // we don't need to send heartbeats
         if (state.hasNotJoinedGroup())
             return Long.MAX_VALUE;
+        if (heartbeatThread != null && heartbeatThread.hasFailed()) {
+            // if an exception occurs in the heartbeat thread, raise it.
+            throw heartbeatThread.failureCause();
+        }
         return heartbeat.timeToNextHeartbeat(now);
     }
 
@@ -1537,6 +1541,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.failed.set(new RuntimeException(e));
             } finally {
                 log.debug("Heartbeat thread has closed");
+                this.closed = true;
             }
         }
 

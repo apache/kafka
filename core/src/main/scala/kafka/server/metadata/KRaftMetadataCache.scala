@@ -35,6 +35,7 @@ import java.util.concurrent.ThreadLocalRandom
 import kafka.admin.BrokerMetadata
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
+import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.MetadataVersion
 
@@ -227,6 +228,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       flatMap(_.node(listenerName.value()).asScala).toSeq
   }
 
+  // Does NOT include offline replica metadata
   override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     Option(_currentImage.topics().getTopic(topicName)).
       flatMap(topic => Option(topic.partitions().get(partitionId))).
@@ -237,7 +239,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         setLeader(partition.leader).
         setLeaderEpoch(partition.leaderEpoch).
         setIsr(Replicas.toList(partition.isr)).
-        setZkVersion(partition.partitionEpoch)))
+        setZkVersion(partition.partitionEpoch).
+        setReplicas(Replicas.toList(partition.replicas))))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
@@ -309,6 +312,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
+  def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
+    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
+      map(brokerRegistration => brokerRegistration.epoch())
+  }
+
   override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
     val image = _currentImage
     val nodes = new util.HashMap[Integer, Node]
@@ -377,6 +385,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
     _currentImage.clientQuotas().describe(request)
+  }
+
+  def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData = {
+    _currentImage.scram().describe(request)
   }
 
   override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()

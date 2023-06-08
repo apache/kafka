@@ -401,8 +401,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.interceptors = interceptors;
             else
                 this.interceptors = new ProducerInterceptors<>(interceptorList);
-            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer,
-                    valueSerializer, interceptorList, reporters);
+            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keySerializer,
+                    this.valueSerializer, interceptorList, reporters);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
@@ -620,8 +620,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws IllegalStateException if no {@code transactional.id} has been configured
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
-     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         {@code transactional.id} is not authorized. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException error indicating that the configured
+     *         transactional.id is not authorized, or the idempotent producer id is unavailable. See the exception for
+     *         more details.  User may retry this function call after fixing the permission.
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked

@@ -47,7 +47,7 @@ class MetadataVersionIntegrationTest {
     assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
 
     // Update to new version
-    val updateVersion = MetadataVersion.IBP_3_5_IV0.featureLevel.shortValue
+    val updateVersion = MetadataVersion.IBP_3_5_IV1.featureLevel.shortValue
     val updateResult = admin.updateFeatures(
       Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
     updateResult.all().get()

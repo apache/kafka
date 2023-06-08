@@ -147,7 +147,7 @@ public class ReplicaFetcherThreadBenchmark {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
+            setProducerStateManagerConfig(60000, false).
             setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
@@ -178,7 +178,7 @@ public class ReplicaFetcherThreadBenchmark {
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
             Partition partition = new Partition(tp, 100, MetadataVersion.latest(),
-                    0, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
+                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
@@ -314,7 +314,8 @@ public class ReplicaFetcherThreadBenchmark {
                             config,
                             replicaManager,
                             replicaQuota,
-                            config::interBrokerProtocolVersion
+                            config::interBrokerProtocolVersion,
+                            () -> -1
                     ) {
                         @Override
                         public OffsetAndEpoch fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {

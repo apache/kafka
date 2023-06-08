@@ -522,7 +522,7 @@ class StreamsResetter(StreamsTestBaseService):
     def __init__(self, test_context, kafka, topic, applicationId):
         super(StreamsResetter, self).__init__(test_context,
                                               kafka,
-                                              "kafka.tools.StreamsResetter",
+                                              "org.apache.kafka.tools.StreamsResetter",
                                               "")
         self.topic = topic
         self.applicationId = applicationId

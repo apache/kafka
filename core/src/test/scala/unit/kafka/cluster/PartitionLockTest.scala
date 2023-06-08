@@ -271,6 +271,7 @@ class PartitionLockTest extends Logging {
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      () => 1L,
       mockTime,
       isrChangeListener,
       delayedOperations,
@@ -296,7 +297,7 @@ class PartitionLockTest extends Logging {
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeout = 5 * 60 * 1000
-        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
+        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
@@ -390,6 +391,7 @@ class PartitionLockTest extends Logging {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         followerId,
+        1,
         0L,
         1,
         maxBytes,
@@ -415,7 +417,7 @@ class PartitionLockTest extends Logging {
         updateFetchState = true
       )
 
-      assertTrue(logReadInfo.divergingEpoch.isEmpty)
+      assertTrue(!logReadInfo.divergingEpoch.isPresent)
 
       val batches = logReadInfo.fetchedData.records.batches.asScala
       if (batches.nonEmpty) {

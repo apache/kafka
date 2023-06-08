@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
-abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
+public abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
     KTableProcessorSupplier<K, V1, K, VOut> {
 
     private final KTableImpl<K, ?, V1> table1;
@@ -27,6 +27,7 @@ abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
     final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
     final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner;
 
+    boolean useVersionedSemantics = false;
     boolean sendOldValues = false;
 
     KTableKTableAbstractJoin(final KTableImpl<K, ?, V1> table1,
@@ -46,5 +47,18 @@ abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
         table2.enableSendingOldValues(true);
         sendOldValues = true;
         return true;
+    }
+
+    public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
+        this.useVersionedSemantics = useVersionedSemantics;
+    }
+
+    // VisibleForTesting
+    public boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
+    }
+
+    public String joinThisParentNodeName() {
+        return table1.graphNode.nodeName();
     }
 }

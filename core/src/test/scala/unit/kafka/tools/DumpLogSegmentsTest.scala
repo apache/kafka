@@ -75,7 +75,7 @@ class DumpLogSegmentsTest {
       time = time,
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
       producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
@@ -250,7 +250,7 @@ class DumpLogSegmentsTest {
     )
 
     val records: Array[SimpleRecord] = metadataRecords.map(message => {
-      val serde = new MetadataRecordSerde()
+      val serde = MetadataRecordSerde.INSTANCE
       val cache = new ObjectSerializationCache
       val size = serde.recordSize(message, cache)
       val buf = ByteBuffer.allocate(size)
@@ -328,7 +328,7 @@ class DumpLogSegmentsTest {
         new MockTime,
         lastContainedLogTimestamp,
         CompressionType.NONE,
-        new MetadataRecordSerde
+        MetadataRecordSerde.INSTANCE,
       ).get()
     ) { snapshotWriter =>
       snapshotWriter.append(metadataRecords.asJava)

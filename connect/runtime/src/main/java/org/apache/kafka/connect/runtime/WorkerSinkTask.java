@@ -677,11 +677,6 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     @Override
-    protected void recordCommitFailure(long duration, Throwable error) {
-        super.recordCommitFailure(duration, error);
-    }
-
-    @Override
     protected void recordCommitSuccess(long duration) {
         super.recordCommitSuccess(duration);
         sinkTaskMetricsGroup.recordOffsetCommitSuccess();

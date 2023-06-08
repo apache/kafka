@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -36,12 +38,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
+
 /**
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask implements Task {
     private final boolean eosEnabled;
     private final Sensor closeTaskSensor;
+    private final Sensor updateSensor;
     private final StreamsMetricsImpl streamsMetrics;
 
     @SuppressWarnings("rawtypes")
@@ -81,12 +86,22 @@ public class StandbyTask extends AbstractTask implements Task {
         processorContext.transitionToStandby(cache);
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
+        updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
         this.eosEnabled = config.eosEnabled;
     }
 
     @Override
     public boolean isActive() {
         return false;
+    }
+
+    @Override
+    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+        if (initRemaining) {
+            throw new IllegalStateException("Standby task would not record remaining records to restore");
+        }
+
+        maybeRecordSensor(numRecords, time, updateSensor);
     }
 
     /**

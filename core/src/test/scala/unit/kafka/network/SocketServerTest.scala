@@ -77,7 +77,7 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER, true)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER, true, false)
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
   server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
   val sockets = new ArrayBuffer[Socket]
@@ -137,6 +137,8 @@ class SocketServerTest {
   private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): RequestChannel.Request = {
     channel.receiveRequest(timeout) match {
       case request: RequestChannel.Request => request
+      case RequestChannel.WakeupRequest => throw new AssertionError("Unexpected wakeup received")
+      case request: RequestChannel.CallbackRequest => throw new AssertionError("Unexpected callback received")
       case RequestChannel.ShutdownRequest => throw new AssertionError("Unexpected shutdown received")
       case null => throw new AssertionError("receiveRequest timed out")
     }
@@ -1987,6 +1989,7 @@ class SocketServerTest {
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    sslProps.put(KafkaConfig.NumNetworkThreadsProp, "1")
     sslProps
   }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -201,6 +202,8 @@ public interface Task {
                                      final Exception cause);
 
     void clearTaskTimeout();
+
+    void recordRestoration(final Time time, final long numRecords, final boolean initRemaining);
 
     // task status inquiry
 
