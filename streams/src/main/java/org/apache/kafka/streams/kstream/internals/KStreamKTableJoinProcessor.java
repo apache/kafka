@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,9 +66,6 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         if (gracePeriod.isPresent() ^ buffer.isPresent()) {
             throw new IllegalArgumentException("Grace Period requires a buffer");
         }
-        if (!valueGetter.isVersioned() && gracePeriod.isPresent()) {
-            throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
-        }
         this.gracePeriod = gracePeriod;
         this.buffer = buffer;
     }
@@ -78,8 +76,15 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
         droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
         valueGetter.init(context);
+        internalProcessorContext = asInternalProcessorContext((org.apache.kafka.streams.processor.ProcessorContext) context);
         if (buffer.isPresent()) {
-            internalProcessorContext = asInternalProcessorContext((org.apache.kafka.streams.processor.ProcessorContext) context);
+            if (!valueGetter.isVersioned() && gracePeriod.isPresent()) {
+                throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
+            }
+            if (valueGetter instanceof VersionedBytesStoreSupplier
+                && ((VersionedBytesStoreSupplier) valueGetter).historyRetentionMs() < gracePeriod.orElse(Duration.ZERO).toMillis()) {
+                throw new IllegalArgumentException("History retention must be at least the stream's grace period.");
+            }
             buffer.get().setSerdesIfNull(new SerdeGetter(context));
             //cast doesn't matter, it is just because the processor is deprecated. The context gets converted back with StoreToProcessorContextAdapter.adapt(context)
             buffer.get().init((org.apache.kafka.streams.processor.StateStoreContext) context(), null);
@@ -88,13 +93,13 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
 
     @Override
     public void process(final Record<K1, V1> record) {
+        internalProcessorContext = asInternalProcessorContext((org.apache.kafka.streams.processor.ProcessorContext) context());
         if (!gracePeriod.isPresent() || !buffer.isPresent()) {
             if (maybeDropRecord(record)) {
                 return;
             }
             doJoin(record);
         } else {
-            internalProcessorContext = asInternalProcessorContext((org.apache.kafka.streams.processor.ProcessorContext) context());
             if (maybeDropRecord(record)) {
                 updateObservedStreamTime(record.timestamp());
                 return;
@@ -128,6 +133,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         observedStreamTime = Math.max(observedStreamTime, timestamp);
     }
 
+    @SuppressWarnings("unchecked")
     private void doJoin(final Record<K1, V1> record) {
         final K2 mappedKey = keyMapper.apply(record.key(), record.value());
         final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.isVersioned()

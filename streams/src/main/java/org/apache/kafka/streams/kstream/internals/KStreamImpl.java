@@ -1265,6 +1265,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Optional<TimeOrderedKeyValueBuffer<K, V>> buffer = Optional.empty();
 
         if (joined.gracePeriod() != null) {
+            if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
+                throw new RuntimeException("KTable must be versioned to use a grace period in a stream table join.");
+            }
             final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,
                 joined.gracePeriod().toMillis()).get();
 
