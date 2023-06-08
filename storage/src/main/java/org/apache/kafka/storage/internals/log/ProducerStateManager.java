@@ -24,7 +24,11 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.*;
+import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Crc32C;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.Scheduler;
 import org.slf4j.Logger;
 
@@ -687,12 +691,15 @@ public class ProducerStateManager {
 
         try (FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             fileChannel.write(buffer);
+            if (scheduler == null) {
+                // directly flush to disk
+                fileChannel.force(true);
+            }
         }
 
         if (scheduler != null) {
+            // flush to disk offloaded
             scheduler.scheduleOnce("flush-producer-snapshot", () -> Utils.flushFileQuietly(file.toPath(), "producer-snapshot"));
-        } else {
-            Utils.flushFileQuietly(file.toPath(), "producer-snapshot");
         }
     }
 
