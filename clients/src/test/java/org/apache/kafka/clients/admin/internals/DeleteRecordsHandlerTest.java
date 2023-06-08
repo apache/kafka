@@ -109,6 +109,23 @@ public class DeleteRecordsHandlerTest {
     }
 
     @Test
+    public void testHandlePartitionErrorResponse() {
+        TopicPartition errorPartition = t0p0;
+        Errors error = Errors.TOPIC_AUTHORIZATION_FAILED;
+        Map<TopicPartition, Short> errorsByPartition = new HashMap<>();
+        errorsByPartition.put(errorPartition, error.code());
+
+        AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
+                handleResponse(createResponse(errorsByPartition));
+
+        Map<TopicPartition, Throwable> failed = new HashMap<>();
+        failed.put(errorPartition, error.exception());
+        Set<TopicPartition> completed = new HashSet<>(recordsToDelete.keySet());
+        completed.removeAll(failed.keySet());
+        assertResult(result, completed, failed, emptyList(), emptySet());
+    }
+
+    @Test
     public void testHandleUnexpectedPartitionErrorResponse() {
         TopicPartition errorPartition = t0p0;
         Errors error = Errors.UNKNOWN_SERVER_ERROR;

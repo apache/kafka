@@ -2275,7 +2275,7 @@ public class KafkaAdminClientTest {
         partitionInfos.add(new PartitionInfo("my_topic", 1, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         partitionInfos.add(new PartitionInfo("my_topic", 2, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         partitionInfos.add(new PartitionInfo("my_topic", 3, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
-        partitionInfos.add(new PartitionInfo("my_topic", 4, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
+
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
                 partitionInfos, Collections.emptySet(),
                 Collections.emptySet(), nodes.get(0));
@@ -2284,11 +2284,13 @@ public class KafkaAdminClientTest {
         TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
         TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
         TopicPartition myTopicPartition3 = new TopicPartition("my_topic", 3);
-        TopicPartition myTopicPartition4 = new TopicPartition("my_topic", 4);
+
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.LEADER_NOT_AVAILABLE));
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             DeleteRecordsResponseData m = new DeleteRecordsResponseData();
@@ -2305,37 +2307,7 @@ public class KafkaAdminClientTest {
                         new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
                             .setPartitionIndex(myTopicPartition2.partition())
                             .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
-                            .setErrorCode(Errors.LEADER_NOT_AVAILABLE.code()),
-                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
-                            .setPartitionIndex(myTopicPartition3.partition())
-                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
-                            .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code()),
-                        new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
-                            .setPartitionIndex(myTopicPartition4.partition())
-                            .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                    ).iterator())));
-
-            env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
-            // metadata refresh because of LEADER_NOT_AVAILABLE and NOT_LEADER_OR_FOLLOWER
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
-            m = new DeleteRecordsResponseData();
-            m.topics().add(new DeleteRecordsResponseData.DeleteRecordsTopicResult().setName(myTopicPartition2.topic())
-                    .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(asList(
-                            new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
-                                    .setPartitionIndex(myTopicPartition2.partition())
-                                    .setLowWatermark(10)
-                                    .setErrorCode(Errors.NONE.code())
-                    ).iterator())));
-            env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
-
-            m = new DeleteRecordsResponseData();
-            m.topics().add(new DeleteRecordsResponseData.DeleteRecordsTopicResult().setName(myTopicPartition3.topic())
-                    .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(asList(
-                            new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
-                                    .setPartitionIndex(myTopicPartition3.partition())
-                                    .setLowWatermark(10)
-                                    .setErrorCode(Errors.NONE.code())
+                            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
                     ).iterator())));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
 
@@ -2344,7 +2316,6 @@ public class KafkaAdminClientTest {
             recordsToDelete.put(myTopicPartition1, RecordsToDelete.beforeOffset(10L));
             recordsToDelete.put(myTopicPartition2, RecordsToDelete.beforeOffset(10L));
             recordsToDelete.put(myTopicPartition3, RecordsToDelete.beforeOffset(10L));
-            recordsToDelete.put(myTopicPartition4, RecordsToDelete.beforeOffset(10L));
 
             DeleteRecordsResult results = env.adminClient().deleteRecords(recordsToDelete);
 
@@ -2363,20 +2334,19 @@ public class KafkaAdminClientTest {
                 assertTrue(e0.getCause() instanceof OffsetOutOfRangeException);
             }
 
-            // success on records deletion for partition 2
+            // not authorized to delete records for partition 2
             KafkaFuture<DeletedRecords> myTopicPartition2Result = values.get(myTopicPartition2);
-            long myTopicPartition2lowWatermark = myTopicPartition2Result.get().lowWatermark();
-            assertEquals(10, myTopicPartition2lowWatermark);
-
-            // success on records deletion for partition 3
-            KafkaFuture<DeletedRecords> myTopicPartition3Result = values.get(myTopicPartition3);
-            long myTopicPartition3lowWatermark = myTopicPartition3Result.get().lowWatermark();
-            assertEquals(10, myTopicPartition3lowWatermark);
-
-            // "unknown topic or partition" failure on records deletion for partition 4
-            KafkaFuture<DeletedRecords> myTopicPartition4Result = values.get(myTopicPartition4);
             try {
-                myTopicPartition4Result.get();
+                myTopicPartition2Result.get();
+                fail("get() should throw ExecutionException");
+            } catch (ExecutionException e1) {
+                assertTrue(e1.getCause() instanceof TopicAuthorizationException);
+            }
+
+            // the response does not contain a result for partition 3
+            KafkaFuture<DeletedRecords> myTopicPartition3Result = values.get(myTopicPartition3);
+            try {
+                myTopicPartition3Result.get();
                 fail("get() should throw ExecutionException");
             } catch (ExecutionException e1) {
                 assertTrue(e1.getCause() instanceof ApiException);

@@ -30,7 +30,9 @@ import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.DeleteRecordsRequestData;
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -76,17 +78,13 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
         Map<String, DeleteRecordsRequestData.DeleteRecordsTopic> deletionsForTopic = new HashMap<>();
         for (Map.Entry<TopicPartition, RecordsToDelete> entry: recordsToDelete.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
-            DeleteRecordsRequestData.DeleteRecordsTopic deleteRecords = deletionsForTopic.get(topicPartition.topic());
-            if (deleteRecords == null) {
-                deleteRecords = new DeleteRecordsRequestData.DeleteRecordsTopic()
-                        .setName(topicPartition.topic());
-                deletionsForTopic.put(topicPartition.topic(), deleteRecords);
-            }
+            DeleteRecordsRequestData.DeleteRecordsTopic deleteRecords = deletionsForTopic.computeIfAbsent(
+                    topicPartition.topic(),
+                    key -> new DeleteRecordsRequestData.DeleteRecordsTopic().setName(topicPartition.topic())
+            );
             deleteRecords.partitions().add(new DeleteRecordsRequestData.DeleteRecordsPartition()
                     .setPartitionIndex(topicPartition.partition())
                     .setOffset(entry.getValue().beforeOffset()));
-
-            System.out.println("Partitions: " + deleteRecords.partitions());
         }
 
         DeleteRecordsRequestData data = new DeleteRecordsRequestData()
@@ -147,11 +145,11 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
         List<TopicPartition> unmapped,
         Set<TopicPartition> retriable
     ) {
-        if (error == Errors.NOT_LEADER_OR_FOLLOWER || error == Errors.LEADER_NOT_AVAILABLE) {
+        if (error.exception() instanceof InvalidMetadataException) {
             log.debug(
                 "DeleteRecords lookup request for topic partition {} will be retried due to invalid leader metadata {}",
-                topicPartition,
-                error);
+                 topicPartition,
+                 error);
             unmapped.add(topicPartition);
         } else if (error.exception() instanceof RetriableException) {
             log.debug(
@@ -159,6 +157,12 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
                 topicPartition,
                 error);
             retriable.add(topicPartition);
+        } else if (error.exception() instanceof TopicAuthorizationException) {
+            log.error(
+                "DeleteRecords request for topic partition {} failed due to an error {}",
+                topicPartition,
+                error);
+            failed.put(topicPartition, error.exception());
         } else {
             log.error(
                 "DeleteRecords request for topic partition {} failed due to an unexpected error {}",
