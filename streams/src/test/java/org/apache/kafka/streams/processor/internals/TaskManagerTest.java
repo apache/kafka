@@ -3699,7 +3699,7 @@ public class TaskManagerTest {
         when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L))))
             .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
 
-        InOrder inOrder = Mockito.inOrder(adminClient);
+        final InOrder inOrder = Mockito.inOrder(adminClient);
 
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
