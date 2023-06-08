@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.cluster.Broker.ServerInfo
+import kafka.cluster.EndPoint
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
@@ -51,6 +52,7 @@ import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
 import java.net.InetAddress
 import java.util
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
@@ -197,7 +199,8 @@ class BrokerServer(
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
-      remoteLogManager = createRemoteLogManager(config)
+      val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+      remoteLogManager = createRemoteLogManager(remoteLogManagerConfig)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -473,6 +476,13 @@ class BrokerServer(
       // contain the original configuration values.
       new KafkaConfig(config.originals(), true)
 
+      remoteLogManager.foreach(rlm => {
+        val listenerName = ListenerName.normalised(remoteLogManagerConfig.remoteLogMetadataManagerListenerName())
+        val endpoint = endpoints.stream.filter(e => e.listenerName.equals(listenerName))
+          .findAny().orElse(endpoints.get(0))
+        rlm.endPoint(Optional.of(EndPoint.fromJava(endpoint)))
+      })
+
       // Start RemoteLogManager before broker start serving the requests.
       remoteLogManager.foreach(_.startup())
 
@@ -514,8 +524,7 @@ class BrokerServer(
     }
   }
 
-  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
-    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
     if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");

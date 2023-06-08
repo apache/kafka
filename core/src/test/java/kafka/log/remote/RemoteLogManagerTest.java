@@ -16,6 +16,7 @@
  */
 package kafka.log.remote;
 
+import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
@@ -24,10 +25,12 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
@@ -187,6 +190,36 @@ public class RemoteLogManagerTest {
         Map<String, Object> metadataMangerConfig = createRLMConfig(props).remoteLogMetadataManagerProps();
         assertEquals(props.get(configPrefix + key), metadataMangerConfig.get(key));
         assertFalse(metadataMangerConfig.containsKey("remote.log.metadata.y"));
+    }
+
+    @Test
+    void testRemoteStorageManagerWithUserDefinedConfigs() {
+        String key = "key";
+        String configPrefix = "config.prefix";
+        Properties props = new Properties();
+        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
+        props.put(configPrefix + key, "world");
+        props.put("remote.storage.manager.y", "z");
+
+        Map<String, Object> remoteStorageManagerConfig = createRLMConfig(props).remoteStorageManagerProps();
+        assertEquals(props.get(configPrefix + key), remoteStorageManagerConfig.get(key));
+        assertFalse(remoteStorageManagerConfig.containsKey("remote.storage.manager.y"));
+    }
+
+    @Test
+    void testRemoteLogMetadataManagerWithEndpointConfig() {
+        String host = "localhost";
+        String port = "1234";
+        String securityProtocol = "PLAINTEXT";
+        EndPoint endPoint = new EndPoint(host, Integer.parseInt(port), new ListenerName(securityProtocol),
+                SecurityProtocol.PLAINTEXT);
+        remoteLogManager.endPoint(Optional.of(endPoint));
+        remoteLogManager.startup();
+
+        ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
+        verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
+        assertEquals(host + ":" + port, capture.getValue().get("bootstrap.servers"));
+        assertEquals(securityProtocol, capture.getValue().get("security.protocol"));
     }
 
     @Test

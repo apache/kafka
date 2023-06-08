@@ -16,6 +16,7 @@
  */
 package kafka.log.remote;
 
+import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
@@ -137,6 +138,8 @@ public class RemoteLogManager implements Closeable {
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicPartitionIds = new ConcurrentHashMap<>();
 
+    // The endpoint for remote log metadata manager to connect to
+    private Optional<EndPoint> endpoint = Optional.empty();
     private boolean closed = false;
 
     /**
@@ -220,11 +223,20 @@ public class RemoteLogManager implements Closeable {
         });
     }
 
+    public void endPoint(Optional<EndPoint> endpoint) {
+        this.endpoint = endpoint;
+    }
+
     private void configureRLMM() {
         final Map<String, Object> rlmmProps = new HashMap<>(rlmConfig.remoteLogMetadataManagerProps());
 
         rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
         rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
+        endpoint.ifPresent(e -> {
+            rlmmProps.put("bootstrap.servers", e.host() + ":" + e.port());
+            rlmmProps.put("security.protocol", e.securityProtocol().name);
+        });
+
         remoteLogMetadataManager.configure(rlmmProps);
     }
 

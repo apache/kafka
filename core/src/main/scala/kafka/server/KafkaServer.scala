@@ -60,6 +60,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
+import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
@@ -280,7 +281,8 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
-        remoteLogManager = createRemoteLogManager(config)
+        val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+        remoteLogManager = createRemoteLogManager(remoteLogManagerConfig)
 
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
@@ -504,6 +506,13 @@ class KafkaServer(
           new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
+        remoteLogManager.foreach(rlm => {
+          val listenerName = ListenerName.normalised(remoteLogManagerConfig.remoteLogMetadataManagerListenerName())
+          val endpoint = brokerInfo.broker.endPoints.find(e => e.listenerName.equals(listenerName))
+            .orElse(Some(brokerInfo.broker.endPoints.head))
+          rlm.endPoint(Optional.of(endpoint.get))
+        })
+
         // Start RemoteLogManager before broker start serving the requests.
         remoteLogManager.foreach(_.startup())
 
@@ -596,8 +605,7 @@ class KafkaServer(
     }
   }
 
-  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
-    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
     if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if(config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
