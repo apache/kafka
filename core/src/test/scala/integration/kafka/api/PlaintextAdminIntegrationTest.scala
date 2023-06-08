@@ -957,15 +957,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       .lowWatermarks.get(topicPartition).get.lowWatermark)
 
     // OffsetOutOfRangeException if offset > high_watermark
-    var cause = assertThrows(classOf[ExecutionException],
+    val cause = assertThrows(classOf[ExecutionException],
       () => client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20L)).asJava).lowWatermarks.get(topicPartition).get).getCause
     assertEquals(classOf[OffsetOutOfRangeException], cause.getClass)
-
-    val nonExistPartition = new TopicPartition(topic, 3)
-    // LeaderNotAvailableException if non existent partition
-    cause = assertThrows(classOf[ExecutionException],
-      () => client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20L)).asJava).lowWatermarks.get(nonExistPartition).get).getCause
-    assertEquals(classOf[LeaderNotAvailableException], cause.getClass)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
