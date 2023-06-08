@@ -19,6 +19,8 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +34,7 @@ import java.util.LinkedList;
 import java.util.Stack;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.kafka.common.utils.Utils.wrapNullable;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,18 +46,20 @@ public class SerializationTest {
     final private String topic = "testTopic";
     final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
-            put(String.class, Arrays.asList("my string"));
-            put(Short.class, Arrays.asList((short) 32767, (short) -32768));
-            put(Integer.class, Arrays.asList(423412424, -41243432));
-            put(Long.class, Arrays.asList(922337203685477580L, -922337203685477581L));
-            put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
-            put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
-            put(byte[].class, Arrays.asList("my string".getBytes()));
-            put(ByteBuffer.class, Arrays.asList(ByteBuffer.wrap("my string".getBytes()),
+            put(String.class, Arrays.asList(null, "my string"));
+            put(Short.class, Arrays.asList(null, (short) 32767, (short) -32768));
+            put(Integer.class, Arrays.asList(null, 423412424, -41243432));
+            put(Long.class, Arrays.asList(null, 922337203685477580L, -922337203685477581L));
+            put(Float.class, Arrays.asList(null, 5678567.12312f, -5678567.12341f));
+            put(Double.class, Arrays.asList(null, 5678567.12312d, -5678567.12341d));
+            put(byte[].class, Arrays.asList(null, "my string".getBytes()));
+            put(ByteBuffer.class, Arrays.asList(
+                    null,
+                    ByteBuffer.wrap("my string".getBytes()),
                     ByteBuffer.allocate(10).put("my string".getBytes()),
                     ByteBuffer.allocateDirect(10).put("my string".getBytes())));
-            put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
-            put(UUID.class, Arrays.asList(UUID.randomUUID()));
+            put(Bytes.class, Arrays.asList(null, new Bytes("my string".getBytes())));
+            put(UUID.class, Arrays.asList(null, UUID.randomUUID()));
         }
     };
 
@@ -67,8 +72,17 @@ public class SerializationTest {
         for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
             try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
                 for (Object value : test.getValue()) {
-                    assertEquals(value, serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)),
+                    final byte[] serialized = serde.serializer().serialize(topic, value);
+                    assertEquals(value, serde.deserializer().deserialize(topic, serialized),
                         "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+
+                    if (value instanceof byte[]) {
+                        assertArrayEquals((byte[]) value, (byte[]) serde.deserializer().deserialize(topic, null, (byte[]) value),
+                                "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+                    } else {
+                        assertEquals(value, serde.deserializer().deserialize(topic, null, wrapNullable(serialized)),
+                                "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+                    }
                 }
             }
         }
@@ -82,6 +96,8 @@ public class SerializationTest {
                     "Should support null in " + cls.getSimpleName() + " serialization");
                 assertNull(serde.deserializer().deserialize(topic, null),
                     "Should support null in " + cls.getSimpleName() + " deserialization");
+                assertNull(serde.deserializer().deserialize(topic, null, (ByteBuffer) null),
+                        "Should support null in " + cls.getSimpleName() + " deserialization");
             }
         }
     }
@@ -359,6 +375,23 @@ public class SerializationTest {
         }
     }
 
+    @Test
+    public void stringDeserializerSupportByteBuffer() {
+        final String data = "Hello, ByteBuffer!";
+        try (Serde<String> serde = Serdes.String()) {
+            final Serializer<String> serializer = serde.serializer();
+            final Deserializer<String> deserializer = serde.deserializer();
+            final byte[] serializedBytes = serializer.serialize(topic, data);
+            final ByteBuffer heapBuff = ByteBuffer.allocate(serializedBytes.length << 1).put(serializedBytes);
+            heapBuff.flip();
+            assertEquals(data, deserializer.deserialize(topic, null, heapBuff));
+
+            final ByteBuffer directBuff = ByteBuffer.allocateDirect(serializedBytes.length << 2).put(serializedBytes);
+            directBuff.flip();
+            assertEquals(data, deserializer.deserialize(topic, null, directBuff));
+        }
+    }
+
     private Serde<String> getStringSerde(String encoder) {
         Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", encoder);
@@ -387,6 +420,33 @@ public class SerializationTest {
             assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanSerializer(Boolean dataToSerialize) {
+        byte[] testData = new byte[1];
+        testData[0] = (byte) (dataToSerialize ? 1 : 0);
+
+        Serde<Boolean> booleanSerde = Serdes.Boolean();
+        assertArrayEquals(testData, booleanSerde.serializer().serialize(topic, dataToSerialize));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBooleanDeserializer(Boolean dataToDeserialize) {
+        byte[] testData = new byte[1];
+        testData[0] = (byte) (dataToDeserialize ? 1 : 0);
+
+        Serde<Boolean> booleanSerde = Serdes.Boolean();
+        assertEquals(dataToDeserialize, booleanSerde.deserializer().deserialize(topic, testData));
+    }
+
+    @Test
+    public void booleanDeserializerShouldThrowOnEmptyInput() {
+        try (Serde<Boolean> serde = Serdes.Boolean()) {
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
         }
     }
 }

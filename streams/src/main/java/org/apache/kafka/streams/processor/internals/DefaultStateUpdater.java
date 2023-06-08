@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
@@ -76,7 +75,6 @@ public class DefaultStateUpdater implements StateUpdater {
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
-        private final Logger log;
 
         private long totalCheckpointLatency = 0L;
 
@@ -86,10 +84,6 @@ public class DefaultStateUpdater implements StateUpdater {
             super(name);
             this.changelogReader = changelogReader;
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
-
-            final String logPrefix = String.format("state-updater [%s] ", name);
-            final LogContext logContext = new LogContext(logPrefix);
-            log = logContext.logger(DefaultStateUpdater.class);
         }
 
         public Collection<Task> getUpdatingTasks() {
@@ -140,16 +134,11 @@ public class DefaultStateUpdater implements StateUpdater {
             log.info("State updater thread started");
             try {
                 while (isRunning.get()) {
-                    try {
-                        runOnce();
-                    } catch (final InterruptedException | InterruptException interruptedException) {
-                        return;
-                    }
+                    runOnce();
                 }
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
             } finally {
-                Thread.interrupted(); // Clear the interrupted flag.
                 removeAddedTasksFromInputQueue();
                 removeUpdatingAndPausedTasks();
                 updaterMetrics.clear();
@@ -167,7 +156,7 @@ public class DefaultStateUpdater implements StateUpdater {
         //
         //   Note that, 1-3) are measured as restoring time, while 4) and 5) measured separately
         //   as checkpointing time and idle time
-        private void runOnce() throws InterruptedException {
+        private void runOnce() {
             final long totalStartTimeMs = time.milliseconds();
             performActionsOnTasks();
 
@@ -179,7 +168,6 @@ public class DefaultStateUpdater implements StateUpdater {
             maybeCheckpointTasks(checkpointStartTimeMs);
 
             final long waitStartTimeMs = time.milliseconds();
-
             waitIfAllChangelogsCompletelyRead();
 
             final long endTimeMs = time.milliseconds();
@@ -312,16 +300,21 @@ public class DefaultStateUpdater implements StateUpdater {
             updatingTasks.clear();
         }
 
-        private void waitIfAllChangelogsCompletelyRead() throws InterruptedException {
-            if (isRunning.get() && changelogReader.allChangelogsCompleted()) {
-                tasksAndActionsLock.lock();
-                try {
-                    while (tasksAndActions.isEmpty() && !isTopologyResumed.get()) {
-                        tasksAndActionsCondition.await();
-                    }
-                } finally {
-                    tasksAndActionsLock.unlock();
+        private void waitIfAllChangelogsCompletelyRead() {
+            tasksAndActionsLock.lock();
+            try {
+                while (isRunning.get() &&
+                    changelogReader.allChangelogsCompleted() &&
+                    tasksAndActions.isEmpty() &&
+                    !isTopologyResumed.get()) {
+
+                    tasksAndActionsCondition.await();
                 }
+            } catch (final InterruptedException ignored) {
+                // we never interrupt the thread, but only signal the condition
+                // and hence this exception should never be thrown
+            } finally {
+                tasksAndActionsLock.unlock();
             }
         }
 
@@ -522,6 +515,7 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     private final Time time;
+    private final Logger log;
     private final String name;
     private final Metrics metrics;
     private final ChangelogReader changelogReader;
@@ -554,6 +548,10 @@ public class DefaultStateUpdater implements StateUpdater {
         this.changelogReader = changelogReader;
         this.topologyMetadata = topologyMetadata;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+
+        final String logPrefix = String.format("state-updater [%s] ", name);
+        final LogContext logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(DefaultStateUpdater.class);
     }
 
     public void start() {
@@ -570,8 +568,20 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public void shutdown(final Duration timeout) {
         if (stateUpdaterThread != null) {
-            stateUpdaterThread.interrupt();
+            log.info("Shutting down StateUpdater thread");
+
+            // first set the running flag and then
+            // notify the condition in case the thread is waiting on it;
+            // note this ordering should not be changed
             stateUpdaterThread.isRunning.set(false);
+
+            tasksAndActionsLock.lock();
+            try {
+                tasksAndActionsCondition.signalAll();
+            } finally {
+                tasksAndActionsLock.unlock();
+            }
+
             try {
                 if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
@@ -738,7 +748,7 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public boolean restoresActiveTasks() {
         return !executeWithQueuesLocked(
-            () -> getStreamOfNonPausedTasks().filter(Task::isActive).collect(Collectors.toSet())
+            () -> getStreamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
         ).isEmpty();
     }
 

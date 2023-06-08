@@ -498,8 +498,34 @@ public class RangeAssignorTest {
         verifyRackAssignment(assignor, topics, 3, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, -1);
         verifyRackAssignment(assignor, topics, 2, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, 0);
         verifyRackAssignment(assignor, topics, 1, racks(2), consumerRacks, consumerTopics,
-                asList("t1-0, t1-2, t2-0, t2-2, t3-0, t4-0", "t1-1, t1-3, t2-1, t2-3, t3-1, t4-1", "t1-4, t2-4", "t1-5, t2-5"), 4);
-        verifyRackAssignment(assignor, topics, 1, racks(3), consumerRacks, consumerTopics, nonRackAwareAssignment, 10);
+                asList("t1-0, t1-2, t2-0, t2-2, t3-0, t4-0", "t1-1, t1-3, t2-1, t2-3, t3-1, t4-1", "t1-5, t2-5", "t1-4, t2-4"), 0);
+        verifyRackAssignment(assignor, topics, 1, racks(3), consumerRacks, consumerTopics,
+                asList("t1-0, t1-3, t2-0, t2-3, t3-0, t4-0", "t1-1, t1-4, t2-1, t2-4, t3-1, t4-1", "t1-2, t2-2", "t1-5, t2-5"), 6);
+    }
+
+    @Test
+    public void testCoPartitionedAssignmentWithSameSubscription() {
+        Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 6),
+                mkEntry("t3", 2), mkEntry("t4", 2),
+                mkEntry("t5", 4), mkEntry("t6", 4));
+        List<String> topicList = asList("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9");
+        List<List<String>> consumerTopics = asList(topicList, topicList, topicList);
+        List<String> consumerRacks = asList(ALL_RACKS[0], ALL_RACKS[1], ALL_RACKS[2]);
+        List<String> nonRackAwareAssignment = asList(
+                "t1-0, t1-1, t2-0, t2-1, t3-0, t4-0, t5-0, t5-1, t6-0, t6-1",
+                "t1-2, t1-3, t2-2, t2-3, t3-1, t4-1, t5-2, t6-2",
+                "t1-4, t1-5, t2-4, t2-5, t5-3, t6-3"
+        );
+
+        verifyRackAssignment(assignor, topics, 3, nullRacks(3), consumerRacks, consumerTopics, nonRackAwareAssignment, -1);
+        AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
+        verifyRackAssignment(assignor, topics, 3, racks(3), consumerRacks, consumerTopics, nonRackAwareAssignment, 0);
+        List<String> rackAwareAssignment = asList(
+                "t1-0, t1-2, t2-0, t2-2, t3-0, t4-0, t5-1, t6-1",
+                "t1-1, t1-3, t2-1, t2-3, t3-1, t4-1, t5-2, t6-2",
+                "t1-4, t1-5, t2-4, t2-5, t5-0, t5-3, t6-0, t6-3"
+        );
+        verifyRackAssignment(assignor, topics, 2, racks(3), consumerRacks, consumerTopics, rackAwareAssignment, 0);
     }
 
     private void verifyNonRackAwareAssignment(Map<String, Integer> topics, List<List<String>> consumerTopics, List<String> nonRackAwareAssignment) {

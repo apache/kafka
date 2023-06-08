@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -36,6 +37,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -43,6 +45,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class Plugins {
 
@@ -53,6 +56,7 @@ public class Plugins {
 
     private static final Logger log = LoggerFactory.getLogger(Plugins.class);
     private final DelegatingClassLoader delegatingLoader;
+    private final PluginScanResult scanResult;
 
     public Plugins(Map<String, String> props) {
         this(props, Plugins.class.getClassLoader());
@@ -60,15 +64,16 @@ public class Plugins {
 
     // VisibleForTesting
     Plugins(Map<String, String> props, ClassLoader parent) {
-        List<String> pluginLocations = WorkerConfig.pluginLocations(props);
+        String pluginPath = WorkerConfig.pluginPath(props);
+        List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = newDelegatingClassLoader(pluginLocations, parent);
-        delegatingLoader.initLoaders();
+        scanResult = delegatingLoader.initLoaders();
     }
 
     // VisibleForTesting
-    protected DelegatingClassLoader newDelegatingClassLoader(final List<String> paths, ClassLoader parent) {
+    protected DelegatingClassLoader newDelegatingClassLoader(final List<Path> pluginLocations, ClassLoader parent) {
         return AccessController.doPrivileged(
-                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(paths, parent)
+                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(pluginLocations, parent)
         );
     }
 
@@ -191,28 +196,39 @@ public class Plugins {
         return delegatingLoader.connectorLoader(connectorClassOrAlias);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public Set<PluginDesc<Connector>> connectors() {
+        Set<PluginDesc<Connector>> connectors = new TreeSet<>((Set) sinkConnectors());
+        connectors.addAll((Set) sourceConnectors());
+        return connectors;
+    }
+
     public Set<PluginDesc<SinkConnector>> sinkConnectors() {
-        return delegatingLoader.sinkConnectors();
+        return scanResult.sinkConnectors();
     }
 
     public Set<PluginDesc<SourceConnector>> sourceConnectors() {
-        return delegatingLoader.sourceConnectors();
+        return scanResult.sourceConnectors();
     }
 
     public Set<PluginDesc<Converter>> converters() {
-        return delegatingLoader.converters();
+        return scanResult.converters();
     }
 
     public Set<PluginDesc<HeaderConverter>> headerConverters() {
-        return delegatingLoader.headerConverters();
+        return scanResult.headerConverters();
     }
 
     public Set<PluginDesc<Transformation<?>>> transformations() {
-        return delegatingLoader.transformations();
+        return scanResult.transformations();
     }
 
     public Set<PluginDesc<Predicate<?>>> predicates() {
-        return delegatingLoader.predicates();
+        return scanResult.predicates();
+    }
+
+    public Set<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies() {
+        return scanResult.connectorClientConfigPolicies();
     }
 
     public Object newPlugin(String classOrAlias) throws ClassNotFoundException {
@@ -235,7 +251,7 @@ public class Plugins {
             );
         } catch (ClassNotFoundException e) {
             List<PluginDesc<? extends Connector>> matches = new ArrayList<>();
-            Set<PluginDesc<Connector>> connectors = delegatingLoader.connectors();
+            Set<PluginDesc<Connector>> connectors = connectors();
             for (PluginDesc<? extends Connector> plugin : connectors) {
                 Class<?> pluginClass = plugin.pluginClass();
                 String simpleName = pluginClass.getSimpleName();
@@ -293,7 +309,7 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because Converter doesn't implement Configurable, and even if it did
                 // we have to remove the property prefixes before calling config(...) and we still always want to call Converter.config.
-                klass = pluginClassFromConfig(config, classPropertyName, Converter.class, delegatingLoader.converters());
+                klass = pluginClassFromConfig(config, classPropertyName, Converter.class, scanResult.converters());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
@@ -304,7 +320,7 @@ public class Plugins {
                     throw new ConnectException(
                             "Failed to find any class that implements Converter and which name matches "
                             + converterClassOrAlias + ", available converters are: "
-                            + pluginNames(delegatingLoader.converters())
+                            + pluginNames(scanResult.converters())
                     );
                 }
                 break;
@@ -376,7 +392,7 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
                 // before calling config(...)
-                klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class, delegatingLoader.headerConverters());
+                klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class, scanResult.headerConverters());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback.
@@ -393,7 +409,7 @@ public class Plugins {
                             "Failed to find any class that implements HeaderConverter and which name matches "
                                     + converterClassOrAlias
                                     + ", available header converters are: "
-                                    + pluginNames(delegatingLoader.headerConverters())
+                                    + pluginNames(scanResult.headerConverters())
                     );
                 }
         }
@@ -425,7 +441,7 @@ public class Plugins {
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 // Attempt to load first with the current classloader, and plugins as a fallback.
-                klass = pluginClassFromConfig(config, classPropertyName, ConfigProvider.class, delegatingLoader.configProviders());
+                klass = pluginClassFromConfig(config, classPropertyName, ConfigProvider.class, scanResult.configProviders());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
@@ -436,7 +452,7 @@ public class Plugins {
                     throw new ConnectException(
                             "Failed to find any class that implements ConfigProvider and which name matches "
                                     + configProviderClassOrAlias + ", available ConfigProviders are: "
-                                    + pluginNames(delegatingLoader.configProviders())
+                                    + pluginNames(scanResult.configProviders())
                     );
                 }
                 break;

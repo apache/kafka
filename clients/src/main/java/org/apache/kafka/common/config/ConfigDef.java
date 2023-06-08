@@ -53,9 +53,12 @@ import java.util.stream.Collectors;
  * <pre>
  * ConfigDef defs = new ConfigDef();
  *
- * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, &quot;Configuration with default value.&quot;);
- * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), &quot;Configuration with user provided validator.&quot;);
- * defs.define(&quot;config_with_dependents&quot;, Type.INT, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
+ * // check {@link #define(String, Type, Object, Importance, String)} for more details.
+ * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, Importance.High, &quot;Configuration with default value.&quot;);
+ * // check {@link #define(String, Type, Object, Validator, Importance, String)} for more details.
+ * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), Importance.High, &quot;Configuration with user provided validator.&quot;);
+ * // check {@link #define(String, Type, Importance, String, String, int, Width, String, List<String>)} for more details.
+ * defs.define(&quot;config_with_dependents&quot;, Type.INT, Importance.LOW, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, Width.SHORT, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
  *
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt;();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
@@ -67,9 +70,9 @@ import java.util.stream.Collectors;
  * // will return default value of 42
  * int anotherConfig = (Integer) configs.get(&quot;config_with_validator&quot;);
  *
- * To validate the full configuration, use:
- * List&lt;Config&gt; configs = defs.validate(props);
- * The {@link Config} contains updated configuration information given the current configuration values.
+ * // To validate the full configuration, use:
+ * List&lt;ConfigValue&gt; configValues = defs.validate(props);
+ * // The {@link ConfigValue} contains updated configuration information given the current configuration values.
  * </pre>
  * <p/>
  * This class can be used standalone or in combination with {@link AbstractConfig} which provides some additional

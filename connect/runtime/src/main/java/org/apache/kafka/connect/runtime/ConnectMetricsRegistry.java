@@ -154,9 +154,9 @@ public class ConnectMetricsRegistry {
                                            "The maximum time in milliseconds taken by this task to commit offsets.", workerTaskTags);
         taskCommitTimeAvg = createTemplate("offset-commit-avg-time-ms", TASK_GROUP_NAME,
                                            "The average time in milliseconds taken by this task to commit offsets.", workerTaskTags);
-        taskBatchSizeMax = createTemplate("batch-size-max", TASK_GROUP_NAME, "The maximum size of the batches processed by the connector.",
+        taskBatchSizeMax = createTemplate("batch-size-max", TASK_GROUP_NAME, "The number of records in the largest batch the task has processed so far.",
                                           workerTaskTags);
-        taskBatchSizeAvg = createTemplate("batch-size-avg", TASK_GROUP_NAME, "The average size of the batches processed by the connector.",
+        taskBatchSizeAvg = createTemplate("batch-size-avg", TASK_GROUP_NAME, "The average number of records in the batches the task has processed so far.",
                                           workerTaskTags);
         taskCommitFailurePercentage = createTemplate("offset-commit-failure-percentage", TASK_GROUP_NAME,
                                                      "The average percentage of this task's offset commit attempts that failed.",

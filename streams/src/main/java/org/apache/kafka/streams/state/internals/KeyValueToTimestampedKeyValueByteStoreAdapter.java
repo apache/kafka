@@ -59,7 +59,7 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestamp) {
-        store.put(key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp));
+        store.put(key, rawValue(valueWithTimestamp));
     }
 
     @Override
@@ -67,14 +67,14 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
                               final byte[] valueWithTimestamp) {
         return convertToTimestampedFormat(store.putIfAbsent(
             key,
-            valueWithTimestamp == null ? null : rawValue(valueWithTimestamp)));
+            rawValue(valueWithTimestamp)));
     }
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             final byte[] valueWithTimestamp = entry.value;
-            store.put(entry.key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp));
+            store.put(entry.key, rawValue(valueWithTimestamp));
         }
     }
 

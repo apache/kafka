@@ -35,23 +35,23 @@ public interface Callback {
      *                  <p>
      *                  Non-Retriable exceptions (fatal, the message will never be sent):
      *                  <ul>
-     *                  <li>InvalidTopicException
-     *                  <li>OffsetMetadataTooLargeException
-     *                  <li>RecordBatchTooLargeException
-     *                  <li>RecordTooLargeException
-     *                  <li>UnknownServerException
-     *                  <li>UnknownProducerIdException
-     *                  <li>InvalidProducerEpochException
+     *                      <li>{@link org.apache.kafka.common.errors.InvalidTopicException InvalidTopicException}
+     *                      <li>{@link org.apache.kafka.common.errors.OffsetMetadataTooLarge OffsetMetadataTooLarge}
+     *                      <li>{@link org.apache.kafka.common.errors.RecordBatchTooLargeException RecordBatchTooLargeException}
+     *                      <li>{@link org.apache.kafka.common.errors.RecordTooLargeException RecordTooLargeException}
+     *                      <li>{@link org.apache.kafka.common.errors.UnknownServerException UnknownServerException}
+     *                      <li>{@link org.apache.kafka.common.errors.UnknownProducerIdException UnknownProducerIdException}
+     *                      <li>{@link org.apache.kafka.common.errors.InvalidProducerEpochException InvalidProducerEpochException}
      *                  </ul>
      *                  Retriable exceptions (transient, may be covered by increasing #.retries):
      *                  <ul>
-     *                  <li>CorruptRecordException
-     *                  <li>InvalidMetadataException
-     *                  <li>NotEnoughReplicasAfterAppendException
-     *                  <li>NotEnoughReplicasException
-     *                  <li>OffsetOutOfRangeException
-     *                  <li>TimeoutException
-     *                  <li>UnknownTopicOrPartitionException
+     *                      <li>{@link org.apache.kafka.common.errors.CorruptRecordException CorruptRecordException}
+     *                      <li>{@link org.apache.kafka.common.errors.InvalidMetadataException InvalidMetadataException}
+     *                      <li>{@link org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException NotEnoughReplicasAfterAppendException}
+     *                      <li>{@link org.apache.kafka.common.errors.NotEnoughReplicasException NotEnoughReplicasException}
+     *                      <li>{@link org.apache.kafka.common.errors.OffsetOutOfRangeException OffsetOutOfRangeException}
+     *                      <li>{@link org.apache.kafka.common.errors.TimeoutException TimeoutException}
+     *                      <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException UnknownTopicOrPartitionException}
      *                  </ul>
      */
     void onCompletion(RecordMetadata metadata, Exception exception);

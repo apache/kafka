@@ -160,16 +160,14 @@ class BrokerMetadataPublisherTest {
     partitions: Map[Int, Seq[Int]]
   ): TopicImage = {
     val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
-      Int.box(partitionId) -> new PartitionRegistration(
-        replicas.toArray,
-        replicas.toArray,
-        Array.empty[Int],
-        Array.empty[Int],
-        replicas.head,
-        LeaderRecoveryState.RECOVERED,
-        0,
-        0
-      )
+      Int.box(partitionId) -> new PartitionRegistration.Builder().
+        setReplicas(replicas.toArray).
+        setIsr(replicas.toArray).
+        setLeader(replicas.head).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(0).
+        setPartitionEpoch(0).
+        build()
     }
     new TopicImage(topic, topicId, partitionRegistrations.asJava)
   }
@@ -177,9 +175,9 @@ class BrokerMetadataPublisherTest {
   private def topicsImage(
     topics: Seq[TopicImage]
   ): TopicsImage = {
-    val idsMap = topics.map(t => t.id -> t).toMap
-    val namesMap = topics.map(t => t.name -> t).toMap
-    new TopicsImage(idsMap.asJava, namesMap.asJava)
+    var retval = TopicsImage.EMPTY
+    topics.foreach { t => retval = retval.including(t) }
+    retval
   }
 
   private def newMockDynamicConfigPublisher(
@@ -254,6 +252,7 @@ class BrokerMetadataPublisherTest {
       val publisher = Mockito.spy(broker.brokerMetadataPublisher)
       doThrow(new RuntimeException("injected failure")).when(publisher).updateCoordinator(any(), any(), any(), any(), any())
       broker.sharedServer.loader.removeAndClosePublisher(broker.brokerMetadataPublisher).get(1, TimeUnit.MINUTES)
+      broker.metadataPublishers.remove(broker.brokerMetadataPublisher)
       broker.sharedServer.loader.installPublishers(List(publisher).asJava).get(1, TimeUnit.MINUTES)
       val admin = Admin.create(cluster.clientProperties())
       try {

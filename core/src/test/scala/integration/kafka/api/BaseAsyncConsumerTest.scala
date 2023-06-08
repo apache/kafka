@@ -19,6 +19,7 @@ package kafka.api
 import kafka.utils.TestUtils.waitUntilTrue
 import org.junit.jupiter.api.Test
 
+
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
   @Test
   def testCommitAsync(): Unit = {
@@ -42,6 +43,5 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     consumer.commitSync();
-    // TODO: commitSync will be tested after implemented consumer.committed()
   }
 }

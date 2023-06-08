@@ -146,7 +146,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
     }
 
     @Test
@@ -193,7 +193,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
             ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
     }
 
     @Test
@@ -238,7 +238,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
     }
 
     @Test
@@ -285,7 +285,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
             ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
     }
 
     @Test
@@ -330,7 +330,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
     }
 
     @Test
@@ -377,7 +377,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
             ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
     }
 
     @Test
@@ -474,6 +474,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
     }
 }

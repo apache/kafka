@@ -328,6 +328,24 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array(KRAFT, ZK))
+  def testAclConfigWithWhitespace(quorum: String): Unit = {
+    val props = properties
+    props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, " true")
+    // replace all property values with leading & trailing whitespaces
+    props.replaceAll((_,v) => " " + v + " ")
+    val cfg = KafkaConfig.fromProps(props)
+    var testAuthorizer: Authorizer = null
+    try {
+      testAuthorizer = createAuthorizer(cfg.originals)
+      assertTrue(authorize(testAuthorizer, requestContext, READ, resource),
+        "when acls = null or [],  authorizer should allow op with allow.everyone = true.")
+    } finally {
+      testAuthorizer.close()
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array(KRAFT, ZK))
   def testAclManagementAPIs(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")

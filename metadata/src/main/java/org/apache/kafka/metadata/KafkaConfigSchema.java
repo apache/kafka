@@ -210,7 +210,7 @@ public class KafkaConfigSchema {
                                       Object value,
                                       ConfigSource source,
                                       Function<String, String> converter) {
-        // Convert the value into a nulllable string suitable for storing in ConfigEntry.
+        // Convert the value into a nullable string suitable for storing in ConfigEntry.
         String stringValue = null;
         if (value != null) {
             if (value instanceof String) {
