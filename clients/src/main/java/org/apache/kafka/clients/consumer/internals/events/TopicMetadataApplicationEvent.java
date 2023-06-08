@@ -16,23 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-abstract public class ApplicationEvent {
-    public final Type type;
+import org.apache.kafka.common.PartitionInfo;
 
-    protected ApplicationEvent(Type type) {
-        this.type = type;
+import java.util.List;
+import java.util.Map;
+
+public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
+    private final String topic;
+    public TopicMetadataApplicationEvent(final String topic) {
+        super(Type.TOPIC_METADATA);
+        this.topic = topic;
     }
 
-    @Override
-    public String toString() {
-        return type + " ApplicationEvent";
-    }
-
-    public enum Type {
-        NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, ASSIGNMENT_CHANGE,
-        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA
+    public String topic() {
+        return topic;
     }
 }
