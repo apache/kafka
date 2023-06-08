@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -46,6 +47,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -56,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -77,6 +80,7 @@ public class DefaultBackgroundThreadTest {
     private final int requestTimeoutMs = 500;
     private GroupState groupState;
     private CommitRequestManager commitManager;
+    private TopicMetadataRequestManager topicMetadataRequestManager;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -101,6 +105,7 @@ public class DefaultBackgroundThreadTest {
                 true);
         this.groupState = new GroupState(rebalanceConfig);
         this.commitManager = mock(CommitRequestManager.class);
+        this.topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
     }
 
     @Test
@@ -223,6 +228,17 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
+    void testFetchTopicMetadata() {
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        when(this.topicMetadataRequestManager.requestTopicMetadata(Optional.of(anyString()))).thenReturn(new CompletableFuture<>());
+        this.applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic"));
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
+        backgroundThread.close();
+    }
+
+    @Test
     void testPollResultTimer() {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         // purposely setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
@@ -249,6 +265,7 @@ public class DefaultBackgroundThreadTest {
     private RequestManagers mockRequestManagers() {
         return new RequestManagers(
                 offsetsRequestManager,
+                topicMetadataRequestManager,
                 Optional.of(coordinatorManager),
                 Optional.of(commitManager));
     }
@@ -285,19 +302,20 @@ public class DefaultBackgroundThreadTest {
                 this.groupState,
                 this.coordinatorManager,
                 this.commitManager,
-                this.offsetsRequestManager);
+                this.offsetsRequestManager,
+                this.topicMetadataRequestManager);
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {
         return new NetworkClientDelegate.PollResult(
-                RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+            RETRY_BACKOFF_MS,
+            Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
     }
 
     private NetworkClientDelegate.PollResult mockPollCommitResult() {
         return new NetworkClientDelegate.PollResult(
-                RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+            RETRY_BACKOFF_MS,
+            Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
     }
 
     private NetworkClientDelegate.PollResult emptyPollOffsetsRequestResult() {

@@ -24,8 +24,12 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 
+import org.apache.kafka.common.PartitionInfo;
+
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
@@ -60,6 +64,10 @@ public class ApplicationEventProcessor {
                 return process((NewTopicsMetadataUpdateRequestEvent) event);
             case ASSIGNMENT_CHANGE:
                 return process((AssignmentChangeApplicationEvent) event);
+            case TOPIC_METADATA:
+                return process((TopicMetadataApplicationEvent) event);
+            case UNSUBSCRIBE:
+                return process((UnsubscribeApplicationEvent) event);
             case LIST_OFFSETS:
                 return process((ListOffsetsApplicationEvent) event);
         }
@@ -97,13 +105,7 @@ public class ApplicationEventProcessor {
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.addOffsetCommitRequest(event.offsets()).whenComplete((r, e) -> {
-            if (e != null) {
-                event.future().completeExceptionally(e);
-                return;
-            }
-            event.future().complete(null);
-        });
+        event.chain(manager.addOffsetCommitRequest(event.offsets()));
         return true;
     }
 
@@ -137,6 +139,13 @@ public class ApplicationEventProcessor {
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
                 requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
                         event.requireTimestamps());
+        event.chain(future);
+        return true;
+    }
+
+    private boolean process(final TopicMetadataApplicationEvent event) {
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+            this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
         return true;
     }
