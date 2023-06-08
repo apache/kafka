@@ -904,7 +904,8 @@ public class StreamsConfig extends AbstractConfig {
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                    in(Utils.enumOptions(SecurityProtocol.class)),
+                    org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in(
+                            Utils.enumOptions(SecurityProtocol.class)),
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .define(TASK_TIMEOUT_MS_CONFIG,
