@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Timer;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -54,4 +55,13 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
         }
     }
 
+    public void chain(final CompletableFuture<T> providedFuture) {
+        providedFuture.whenComplete((value, exception) -> {
+            if (exception != null) {
+                this.future.completeExceptionally(exception);
+            } else {
+                this.future.complete(value);
+            }
+        });
+    }
 }

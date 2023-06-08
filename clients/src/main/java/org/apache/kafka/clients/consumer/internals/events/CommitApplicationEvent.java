@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.Map;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
-
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {

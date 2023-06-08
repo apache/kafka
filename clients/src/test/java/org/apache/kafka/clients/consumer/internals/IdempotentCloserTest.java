@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IdempotentCloserTest {
 
-    private static final Runnable CALLBACK_NO_OP = () -> {};
+    private static final Runnable CALLBACK_NO_OP = () -> { };
 
     private static final Runnable CALLBACK_WITH_RUNTIME_EXCEPTION = () -> {
         throw new RuntimeException("Simulated error during callback");

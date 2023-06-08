@@ -20,9 +20,14 @@ import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.PartitionInfo;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 public class ApplicationEventProcessor {
 
@@ -53,6 +58,8 @@ public class ApplicationEventProcessor {
                 return process((OffsetFetchApplicationEvent) event);
             case METADATA_UPDATE:
                 return process((MetadataUpdateApplicationEvent) event);
+            case TOPIC_METADATA:
+                return process((TopicMetadataApplicationEvent) event);
             case UNSUBSCRIBE:
                 return process((UnsubscribeApplicationEvent) event);
             case LIST_OFFSETS:
@@ -92,13 +99,7 @@ public class ApplicationEventProcessor {
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.addOffsetCommitRequest(event.offsets()).whenComplete((r, e) -> {
-            if (e != null) {
-                event.future().completeExceptionally(e);
-                return;
-            }
-            event.future().complete(null);
-        });
+        event.chain(manager.addOffsetCommitRequest(event.offsets()));
         return true;
     }
 
@@ -128,14 +129,21 @@ public class ApplicationEventProcessor {
 
     private boolean process(final ListOffsetsApplicationEvent event) {
         requestManagers.listOffsetsRequestManager.fetchOffsets(event.partitions, event.timestamp,
-                        event.requireTimestamps)
-                .whenComplete((result, error) -> {
-                    if (error != null) {
-                        event.future().completeExceptionally(error);
-                        return;
-                    }
-                    event.future().complete(result);
-                });
+                event.requireTimestamps)
+            .whenComplete((result, error) -> {
+                if (error != null) {
+                    event.future().completeExceptionally(error);
+                    return;
+                }
+                event.future().complete(result);
+            });
+        return true;
+    }
+
+    private boolean process(final TopicMetadataApplicationEvent event) {
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+            this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+        event.chain(future);
         return true;
     }
 }

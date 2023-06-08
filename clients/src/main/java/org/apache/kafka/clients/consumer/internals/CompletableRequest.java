@@ -14,27 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * A request that is completable by the user. This is used to wrap requests that are sent to the background thread
+ * for completion.
+ * @param <T> The type of the response.
  */
-public abstract class ApplicationEvent {
+public class CompletableRequest<T> {
+    private final CompletableFuture<T> future;
 
-    public enum Type {
-        NOOP, COMMIT, POLL, FETCH, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, UNSUBSCRIBE,
-        LIST_OFFSETS, TOPIC_METADATA
+    public CompletableRequest() {
+        this.future = new CompletableFuture<>();
     }
 
-    protected final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
-    }
-
-    public Type type() {
-        return type;
+    public CompletableFuture<T> future() {
+        return this.future;
     }
 }

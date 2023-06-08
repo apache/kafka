@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
@@ -98,6 +97,7 @@ public class CommitRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
         }
 
+        pendingRequests.inflightOffsetFetches.forEach(System.out::println);
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE,
                 Collections.unmodifiableList(pendingRequests.drain(currentTimeMs)));
     }
@@ -120,15 +120,15 @@ public class CommitRequestManager implements RequestManager {
 
     /**
      * Handles {@link org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent}. It creates an
-     * {@link OffsetCommitRequestState} and enqueue it to send later.
+     * {@link CompletableOffsetCommitRequest} and enqueue it to send later.
      */
-    public CompletableFuture<ClientResponse> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         return pendingRequests.addOffsetCommitRequest(offsets);
     }
 
     /**
      * Handles {@link org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent}. It creates an
-     * {@link OffsetFetchRequestState} and enqueue it to send later.
+     * {@link CompletableOffsetFetchRequest} and enqueue it to send later.
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {
         return pendingRequests.addOffsetFetchRequest(partitions);
@@ -140,17 +140,17 @@ public class CommitRequestManager implements RequestManager {
 
 
     // Visible for testing
-    List<OffsetFetchRequestState> unsentOffsetFetchRequests() {
+    List<CompletableOffsetFetchRequest> unsentOffsetFetchRequests() {
         return pendingRequests.unsentOffsetFetches;
     }
 
     // Visible for testing
-    Queue<OffsetCommitRequestState> unsentOffsetCommitRequests() {
+    Queue<CompletableOffsetCommitRequest> unsentOffsetCommitRequests() {
         return pendingRequests.unsentOffsetCommits;
     }
 
     // Visible for testing
-    CompletableFuture<ClientResponse> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
+    CompletableFuture<Void> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
         log.debug("Enqueuing autocommit offsets: {}", allConsumedOffsets);
         return this.addOffsetCommitRequest(allConsumedOffsets)
                 .whenComplete((response, throwable) -> {
@@ -170,26 +170,20 @@ public class CommitRequestManager implements RequestManager {
                 });
     }
 
-    private class OffsetCommitRequestState {
+    private class CompletableOffsetCommitRequest extends CompletableRequest<Void> {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
         private final GroupState.Generation generation;
         private final String groupInstanceId;
-        private final NetworkClientDelegate.FutureCompletionHandler future;
 
-        public OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                        final String groupId,
-                                        final String groupInstanceId,
-                                        final GroupState.Generation generation) {
+        public CompletableOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                              final String groupId,
+                                              final String groupInstanceId,
+                                              final GroupState.Generation generation) {
             this.offsets = offsets;
-            this.future = new NetworkClientDelegate.FutureCompletionHandler();
             this.groupId = groupId;
             this.generation = generation;
             this.groupInstanceId = groupInstanceId;
-        }
-
-        public CompletableFuture<ClientResponse> future() {
-            return future.future();
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
@@ -223,25 +217,30 @@ public class CommitRequestManager implements RequestManager {
             return new NetworkClientDelegate.UnsentRequest(
                     builder,
                     coordinatorRequestManager.coordinator(),
-                    future);
+                    (response, throwable) -> {
+                        if (throwable == null) {
+                            this.future().complete(null);
+                        } else {
+                            this.future().completeExceptionally(throwable);
+                        }
+                    });
         }
     }
 
-    private class OffsetFetchRequestState extends RequestState {
+    private class CompletableOffsetFetchRequest extends CompletableRequest<Map<TopicPartition, OffsetAndMetadata>> {
         public final Set<TopicPartition> requestedPartitions;
         public final GroupState.Generation requestedGeneration;
-        public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+        private final RequestState requestState;
 
-        public OffsetFetchRequestState(final Set<TopicPartition> partitions,
-                                       final GroupState.Generation generation,
-                                       final long retryBackoffMs) {
-            super(logContext, retryBackoffMs);
+        public CompletableOffsetFetchRequest(final Set<TopicPartition> partitions,
+                                             final GroupState.Generation generation,
+                                             final long retryBackoffMs) {
             this.requestedPartitions = partitions;
             this.requestedGeneration = generation;
-            this.future = new CompletableFuture<>();
+            this.requestState = new RequestState(logContext, retryBackoffMs);
         }
 
-        public boolean sameRequest(final OffsetFetchRequestState request) {
+        public boolean sameRequest(final CompletableOffsetFetchRequest request) {
             return Objects.equals(requestedGeneration, request.requestedGeneration) && requestedPartitions.equals(request.requestedPartitions);
         }
 
@@ -251,13 +250,10 @@ public class CommitRequestManager implements RequestManager {
                     true,
                     new ArrayList<>(this.requestedPartitions),
                     throwOnFetchStableOffsetUnsupported);
-            NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
+            return new NetworkClientDelegate.UnsentRequest(
                     builder,
-                    coordinatorRequestManager.coordinator());
-            unsentRequest.future().whenComplete((r, t) -> {
-                onResponse(currentTimeMs, (OffsetFetchResponse) r.responseBody());
-            });
-            return unsentRequest;
+                    coordinatorRequestManager.coordinator(),
+                    (r, t) -> onResponse(currentTimeMs, (OffsetFetchResponse) r.responseBody()));
         }
 
         public void onResponse(
@@ -283,15 +279,15 @@ public class CommitRequestManager implements RequestManager {
                 coordinatorRequestManager.markCoordinatorUnknown(responseError.message(), Time.SYSTEM.milliseconds());
                 retry(currentTimeMs);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.completeExceptionally(GroupAuthorizationException.forGroupId(groupState.groupId));
+                future().completeExceptionally(GroupAuthorizationException.forGroupId(groupState.groupId));
             } else {
-                future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
+                future().completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
             }
         }
 
         private void retry(final long currentTimeMs) {
-            onFailedAttempt(currentTimeMs);
-            onSendAttempt(currentTimeMs);
+            this.requestState.onFailedAttempt(currentTimeMs);
+            this.requestState.onSendAttempt(currentTimeMs);
             pendingRequests.addOffsetFetchRequest(this);
         }
 
@@ -310,7 +306,7 @@ public class CommitRequestManager implements RequestManager {
                     log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does " +
+                        future().completeExceptionally(new KafkaException("Topic or Partition " + tp + " does " +
                                 "not " +
                                 "exist"));
                         return;
@@ -322,7 +318,7 @@ public class CommitRequestManager implements RequestManager {
                     } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
                         unstableTxnOffsetTopicPartitions.add(tp);
                     } else {
-                        future.completeExceptionally(new KafkaException("Unexpected error in fetch offset " +
+                        future().completeExceptionally(new KafkaException("Unexpected error in fetch offset " +
                                 "response for partition " + tp + ": " + error.message()));
                         return;
                     }
@@ -337,7 +333,7 @@ public class CommitRequestManager implements RequestManager {
             }
 
             if (unauthorizedTopics != null) {
-                future.completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
+                future().completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!unstableTxnOffsetTopicPartitions.isEmpty()) {
                 // TODO: Optimization question: Do we need to retry all partitions upon a single partition error?
                 log.info("The following partitions still have unstable offsets " +
@@ -347,43 +343,43 @@ public class CommitRequestManager implements RequestManager {
                         "normal offsets waiting for replication after appending to local log", unstableTxnOffsetTopicPartitions);
                 retry(currentTimeMs);
             } else {
-                future.complete(offsets);
+                future().complete(offsets);
             }
         }
 
-        private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> chainFuture(final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-            return this.future.whenComplete((r, t) -> {
+        private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> chainFuture(final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> otherFuture) {
+            return this.future().whenComplete((r, t) -> {
                 if (t != null) {
-                    future.completeExceptionally(t);
+                    otherFuture.completeExceptionally(t);
                 } else {
-                    future.complete(r);
+                    otherFuture.complete(r);
                 }
             });
         }
     }
 
     /**
-     * <p>This is used to stage the unsent {@link OffsetCommitRequestState} and {@link OffsetFetchRequestState}.
+     * <p>This is used to stage the unsent {@link CompletableOffsetCommitRequest} and {@link CompletableOffsetFetchRequest}.
      * <li>unsentOffsetCommits holds the offset commit requests that have not been sent out</>
      * <li>unsentOffsetFetches holds the offset fetch requests that have not been sent out</li>
-     * <li>inflightOffsetFetches holds the offset fetch requests that have been sent out but incompleted</>.
-     *
+     * <li>inflightOffsetFetches holds the offset fetch requests that have been sent out but not completed</>.
+     * <p>
      * {@code addOffsetFetchRequest} dedupes the requests to avoid sending the same requests.
      */
 
     class PendingRequests {
         // Queue is used to ensure the sequence of commit
-        Queue<OffsetCommitRequestState> unsentOffsetCommits = new LinkedList<>();
-        List<OffsetFetchRequestState> unsentOffsetFetches = new ArrayList<>();
-        List<OffsetFetchRequestState> inflightOffsetFetches = new ArrayList<>();
+        Queue<CompletableOffsetCommitRequest> unsentOffsetCommits = new LinkedList<>();
+        List<CompletableOffsetFetchRequest> unsentOffsetFetches = new ArrayList<>();
+        List<CompletableOffsetFetchRequest> inflightOffsetFetches = new ArrayList<>();
 
-        public boolean hasUnsentRequests() {
+        boolean hasUnsentRequests() {
             return !unsentOffsetCommits.isEmpty() || !unsentOffsetFetches.isEmpty();
         }
 
-        public CompletableFuture<ClientResponse> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
             // TODO: Dedupe committing the same offsets to the same partitions
-            OffsetCommitRequestState request = new OffsetCommitRequestState(
+            CompletableOffsetCommitRequest request = new CompletableOffsetCommitRequest(
                     offsets,
                     groupState.groupId,
                     groupState.groupInstanceId.orElse(null),
@@ -393,24 +389,24 @@ public class CommitRequestManager implements RequestManager {
         }
 
         /**
-         *  <p>Adding an offset fetch request to the outgoing buffer.  If the same request was made, we chain the future
-         *  to the existing one.
+         * <p>Adding an offset fetch request to the outgoing buffer.  If the same request was made, we chain the future
+         * to the existing one.
          *
-         *  <p>If the request is new, it invokes a callback to remove itself from the {@code inflightOffsetFetches}
-         *  upon completion.</>
+         * <p>If the request is new, it invokes a callback to remove itself from the {@code inflightOffsetFetches}
+         * upon completion.</>
          */
-        private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
-            Optional<OffsetFetchRequestState> dupe =
+        private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final CompletableOffsetFetchRequest request) {
+            Optional<CompletableOffsetFetchRequest> dupe =
                     unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
-            Optional<OffsetFetchRequestState> inflight =
+            Optional<CompletableOffsetFetchRequest> inflight =
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
             if (dupe.isPresent() || inflight.isPresent()) {
                 log.info("Duplicated OffsetFetchRequest: " + request.requestedPartitions);
-                dupe.orElseGet(() -> inflight.get()).chainFuture(request.future);
+                dupe.orElseGet(() -> inflight.get()).chainFuture(request.future());
             } else {
                 // remove the request from the outbound buffer: inflightOffsetFetches
-                request.future.whenComplete((r, t) -> {
+                request.future().whenComplete((r, t) -> {
                     if (!inflightOffsetFetches.remove(request)) {
                         log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
                                 "outbound buffer:" + request);
@@ -418,11 +414,11 @@ public class CommitRequestManager implements RequestManager {
                 });
                 this.unsentOffsetFetches.add(request);
             }
-            return request.future;
+            return request.future();
         }
 
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {
-            OffsetFetchRequestState request = new OffsetFetchRequestState(
+            CompletableOffsetFetchRequest request = new CompletableOffsetFetchRequest(
                     partitions,
                     groupState.generation,
                     retryBackoffMs);
@@ -432,27 +428,27 @@ public class CommitRequestManager implements RequestManager {
         /**
          * Clear {@code unsentOffsetCommits} and moves all the sendable request in {@code unsentOffsetFetches} to the
          * {@code inflightOffsetFetches} to bookkeep all of the inflight requests.
-         *
+         * <p>
          * Note: Sendable requests are determined by their timer as we are expecting backoff on failed attempt. See
          * {@link RequestState}.
          **/
-        public List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
+        List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
             // Add all unsent offset commit requests to the unsentRequests list
             unsentRequests.addAll(
                     unsentOffsetCommits.stream()
-                            .map(OffsetCommitRequestState::toUnsentRequest)
+                            .map(CompletableOffsetCommitRequest::toUnsentRequest)
                             .collect(Collectors.toList()));
 
             // Partition the unsent offset fetch requests into sendable and non-sendable lists
-            Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
+            Map<Boolean, List<CompletableOffsetFetchRequest>> partitionedBySendability =
                     unsentOffsetFetches.stream()
-                            .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
+                            .collect(Collectors.partitioningBy(request -> request.requestState.canSendRequest(currentTimeMs)));
 
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
-            for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
-                request.onSendAttempt(currentTimeMs);
+            for (CompletableOffsetFetchRequest request : partitionedBySendability.get(true)) {
+                request.requestState.onSendAttempt(currentTimeMs);
                 unsentRequests.add(request.toUnsentRequest(currentTimeMs));
                 inflightOffsetFetches.add(request);
             }
