@@ -40,6 +40,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
@@ -199,23 +200,21 @@ public class NetworkClientDelegate implements AutoCloseable {
     public static class UnsentRequest {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
-        private Optional<Node> node; // empty if random node can be chosen
+        private final Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
-        public UnsentRequest(
-                final AbstractRequest.Builder<?> requestBuilder,
-                final Optional<Node> node) {
-            this(requestBuilder, node, new FutureCompletionHandler());
-        }
-
-        public UnsentRequest(
-                final AbstractRequest.Builder<?> requestBuilder,
-                final Optional<Node> node,
-                final FutureCompletionHandler handler) {
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder, final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
-            this.handler = handler;
+            this.handler = new FutureCompletionHandler();
+        }
+
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
+                             final Optional<Node> node,
+                             final BiConsumer<ClientResponse, Throwable> callback) {
+            this(requestBuilder, node);
+            this.handler.future.whenComplete(callback);
         }
 
         public void setTimer(final Time time, final long requestTimeoutMs) {
@@ -241,6 +240,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public static class FutureCompletionHandler implements RequestCompletionHandler {
+
         private final CompletableFuture<ClientResponse> future;
 
         FutureCompletionHandler() {
@@ -249,10 +249,6 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         public void onFailure(final RuntimeException e) {
             future.completeExceptionally(e);
-        }
-
-        public CompletableFuture<ClientResponse> future() {
-            return future;
         }
 
         @Override
@@ -268,5 +264,4 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
         }
     }
-
 }
