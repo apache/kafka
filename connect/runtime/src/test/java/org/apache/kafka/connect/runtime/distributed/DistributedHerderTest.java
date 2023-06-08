@@ -122,6 +122,7 @@ import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CON
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
+import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.leq;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
@@ -4238,7 +4239,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testAlterOffsetsSinkConnector() throws Exception {
+    public void testModifyOffsetsSinkConnector() throws Exception {
         EasyMock.reset(herder);
         EasyMock.expect(herder.connectorType(EasyMock.anyObject())).andReturn(ConnectorType.SINK).anyTimes();
         PowerMock.expectPrivate(herder, "updateDeletedConnectorStatus").andVoid().anyTimes();
@@ -4253,7 +4254,9 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // Now handle the alter connector offsets request
-        Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap("partitionKey", "partitionValue"),
+                Collections.singletonMap("offsetKey", "offsetValue"));
         member.wakeup();
         PowerMock.expectLastCall();
         member.ensureActive();
@@ -4262,7 +4265,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
         Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
-        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
+        worker.modifyConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
         Message msg = new Message("The offsets for this connector have been altered successfully");
         EasyMock.expectLastCall().andAnswer(() -> {
             workerCallbackCapture.getValue().onCompletion(null, msg);
@@ -4282,7 +4285,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testResetOffsetsSourceConnectorExactlyOnceDisabled() throws Exception {
+    public void testModifyOffsetsSourceConnectorExactlyOnceDisabled() throws Exception {
         // Get the initial assignment
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
@@ -4300,7 +4303,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
         Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
-        worker.resetConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), capture(workerCallbackCapture));
+        worker.modifyConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), isNull(), capture(workerCallbackCapture));
         Message msg = new Message("The offsets for this connector have been reset successfully");
         EasyMock.expectLastCall().andAnswer(() -> {
             workerCallbackCapture.getValue().onCompletion(null, msg);
@@ -4320,7 +4323,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testAlterOffsetsSourceConnectorExactlyOnceEnabled() throws Exception {
+    public void testModifyOffsetsSourceConnectorExactlyOnceEnabled() throws Exception {
         // Setup herder with exactly-once support for source connectors enabled
         herder = exactlyOnceHerder();
         rebalanceListener = herder.new RebalanceListener(time);
@@ -4336,7 +4339,9 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().anyTimes();
 
         // Now handle the alter connector offsets request
-        Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap("partitionKey", "partitionValue"),
+                Collections.singletonMap("offsetKey", "offsetValue"));
         member.wakeup();
         PowerMock.expectLastCall().anyTimes();
         member.ensureActive();
@@ -4365,7 +4370,7 @@ public class DistributedHerderTest {
 
         Capture<Callback<Message>> workerCallbackCapture = Capture.newInstance();
         Message msg = new Message("The offsets for this connector have been altered successfully");
-        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
+        worker.modifyConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture));
         EasyMock.expectLastCall().andAnswer(() -> {
             workerCallbackCapture.getValue().onCompletion(null, msg);
             return null;
@@ -4379,7 +4384,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1_FENCED);
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1_FENCED);
         Capture<Callback<Message>> workerCallbackCapture2 = Capture.newInstance();
-        worker.alterConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture2));
+        worker.modifyConnectorOffsets(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG), EasyMock.eq(offsets), capture(workerCallbackCapture2));
         EasyMock.expectLastCall().andAnswer(() -> {
             workerCallbackCapture2.getValue().onCompletion(null, msg);
             return null;
@@ -4405,7 +4410,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testResetOffsetsSourceConnectorExactlyOnceEnabledZombieFencingFailure() throws Exception {
+    public void testModifyOffsetsSourceConnectorExactlyOnceEnabledZombieFencingFailure() throws Exception {
         // Setup herder with exactly-once support for source connectors enabled
         herder = exactlyOnceHerder();
         rebalanceListener = herder.new RebalanceListener(time);

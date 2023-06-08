@@ -906,6 +906,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
+        if (offsets == null || offsets.isEmpty()) {
+            callback.onCompletion(new ConnectException("The offsets to be altered may not be null or empty"), null);
+            return;
+        }
         modifyConnectorOffsets(connName, offsets, callback);
     }
 

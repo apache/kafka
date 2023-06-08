@@ -1524,8 +1524,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     protected void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
-        boolean isReset = offsets == null;
-        log.trace("Submitting {} offsets request for connector '{}'", isReset ? "reset" : "alter", connName);
+        log.trace("Submitting {} offsets request for connector '{}'", offsets == null ? "reset" : "alter", connName);
 
         addRequest(() -> {
             if (!modifyConnectorOffsetsChecks(connName, callback)) {
@@ -1545,22 +1544,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         // zombie fencing is done asynchronously and the conditions could have changed since the previous check
                         addRequest(() -> {
                             if (modifyConnectorOffsetsChecks(connName, callback)) {
-                                if (isReset) {
-                                    worker.resetConnectorOffsets(connName, configState.connectorConfig(connName), callback);
-                                } else {
-                                    worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
-                                }
+                                worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
                             }
                             return null;
                         }, forwardErrorCallback(callback));
                     }
                 });
             } else {
-                if (isReset) {
-                    worker.resetConnectorOffsets(connName, configState.connectorConfig(connName), callback);
-                } else {
-                    worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
-                }
+                worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
             }
             return null;
         }, forwardErrorCallback(callback));

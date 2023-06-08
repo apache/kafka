@@ -379,11 +379,7 @@ public class StandaloneHerder extends AbstractHerder {
             return;
         }
 
-        if (offsets == null) {
-            worker.resetConnectorOffsets(connName, configState.connectorConfig(connName), cb);
-        } else {
-            worker.alterConnectorOffsets(connName, configState.connectorConfig(connName), offsets, cb);
-        }
+        worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, cb);
     }
 
     /**

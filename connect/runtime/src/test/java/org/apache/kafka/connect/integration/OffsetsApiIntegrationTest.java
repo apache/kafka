@@ -575,6 +575,68 @@ public class OffsetsApiIntegrationTest {
     }
 
     @Test
+    public void testAlterSourceConnectorOffsetsInvalidRequestBody() throws Exception {
+        // Create a source connector and stop it
+        connect.configureConnector(CONNECTOR_NAME, baseSourceConnectorConfigs());
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
+        connect.stopConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorIsStopped(
+                CONNECTOR_NAME,
+                "Connector did not stop in time"
+        );
+        String url = connect.endpointForResource(String.format("connectors/%s/offsets", CONNECTOR_NAME));
+
+        String content = "[]";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(500, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Cannot deserialize value"));
+        }
+
+        content = "{}";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(400, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Partitions / offsets need to be provided for an alter offsets request"));
+        }
+
+        content = "{\"key\": []}";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(500, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Unrecognized field"));
+        }
+
+        content = "{\"offsets\": []}";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(400, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Partitions / offsets need to be provided for an alter offsets request"));
+        }
+
+        content = "{\"offsets\": {}}";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(500, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Cannot deserialize value"));
+        }
+
+        content = "{\"offsets\": [123]}";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(500, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Cannot construct instance"));
+        }
+
+        content = "{\"offsets\": [{\"key\": \"val\"}]}";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(500, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Unrecognized field"));
+        }
+
+        content = "{\"offsets\": [{\"partition\": []]}]}";
+        try (Response response = connect.requestPatch(url, content)) {
+            assertEquals(500, response.getStatus());
+            assertThat(response.getEntity().toString(), containsString("Cannot deserialize value"));
+        }
+    }
+
+    @Test
     public void testResetSinkConnectorOffsets() throws Exception {
         resetAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
