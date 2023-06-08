@@ -22,7 +22,7 @@ on:
       dryRun:
         description: 'Dry Run'
         required: true
-        default: true
+        default: false
         type: boolean
       operationsPerRun:
         description: 'Max GitHub API operations'
