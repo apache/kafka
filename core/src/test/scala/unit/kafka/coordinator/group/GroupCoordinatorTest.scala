@@ -3865,6 +3865,7 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3900,6 +3901,7 @@ class GroupCoordinatorTest {
       any[Option[ReentrantLock]],
       any(),
       any(), 
+      any(),
       any(),
       any())).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4047,6 +4049,7 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
+      any(),
       any())
     ).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -4079,6 +4082,7 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any(),

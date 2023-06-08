@@ -531,8 +531,8 @@ public class ReplicationControlManagerTest {
             setTopicId(result3.response().topics().find("foo").topicId()));
         assertEquals(expectedResponse3, result3.response());
         ctx.replay(result3.records());
-        assertEquals(new PartitionRegistration(new int[] {1, 2, 0},
-            new int[] {1, 2, 0}, Replicas.NONE, Replicas.NONE, 1, LeaderRecoveryState.RECOVERED, 0, 0),
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 0}).
+            setIsr(new int[] {1, 2, 0}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build(),
             replicationControl.getPartition(
                 ((TopicRecord) result3.records().get(0).message()).topicId(), 0));
         ControllerResult<CreateTopicsResponseData> result4 =
@@ -593,14 +593,12 @@ public class ReplicationControlManagerTest {
         // Broker 2 cannot be in the ISR because it is fenced and broker 1
         // cannot be in the ISR because it is in controlled shutdown.
         assertEquals(
-            new PartitionRegistration(new int[]{1, 0, 2},
-                new int[]{0},
-                Replicas.NONE,
-                Replicas.NONE,
-                0,
-                LeaderRecoveryState.RECOVERED,
-                0,
-                0),
+            new PartitionRegistration.Builder().setReplicas(new int[]{1, 0, 2}).
+                setIsr(new int[]{0}).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0).build(),
             replicationControl.getPartition(
                 ((TopicRecord) result.records().get(0).message()).topicId(), 0));
     }
@@ -1384,14 +1382,13 @@ public class ReplicationControlManagerTest {
         // Broker 2 cannot be in the ISR because it is fenced and broker 1
         // cannot be in the ISR because it is in controlled shutdown.
         assertEquals(
-            new PartitionRegistration(new int[]{0, 1, 2},
-                new int[]{0},
-                Replicas.NONE,
-                Replicas.NONE,
-                0,
-                LeaderRecoveryState.RECOVERED,
-                0,
-                0),
+            new PartitionRegistration.Builder().setReplicas(new int[]{0, 1, 2}).
+                setIsr(new int[]{0}).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0).
+                build(),
             replicationControl.getPartition(
                 ((TopicRecord) result.records().get(0).message()).topicId(), 1));
     }
@@ -1447,7 +1444,7 @@ public class ReplicationControlManagerTest {
             new int[] {1, 2, 3}, new int[] {3, 2, 1}}).topicId();
         ctx.createTestTopic("bar", new int[][] {
             new int[] {1, 2, 3}}).topicId();
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
             replication.alterPartitionReassignments(
                 new AlterPartitionReassignmentsRequestData().setTopics(asList(
@@ -1481,13 +1478,13 @@ public class ReplicationControlManagerTest {
                         setRemovingReplicas(asList(3)).
                         setAddingReplicas(asList(0)).
                         setReplicas(asList(0, 2, 1, 3))))));
-        assertEquals(currentReassigning, replication.listPartitionReassignments(null));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(null, Long.MAX_VALUE));
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(asList(
                 new ListPartitionReassignmentsTopics().setName("bar").
-                    setPartitionIndexes(asList(0, 1, 2)))));
+                    setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
         assertEquals(currentReassigning, replication.listPartitionReassignments(asList(
             new ListPartitionReassignmentsTopics().setName("foo").
-                setPartitionIndexes(asList(0, 1, 2)))));
+                setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
         ControllerResult<AlterPartitionReassignmentsResponseData> cancelResult =
             replication.alterPartitionReassignments(
                 new AlterPartitionReassignmentsRequestData().setTopics(asList(
@@ -1550,7 +1547,7 @@ public class ReplicationControlManagerTest {
                     setErrorCode(expectedError.code()))))),
             alterPartitionResult.response());
         ctx.replay(alterPartitionResult.records());
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
     }
 
     @ParameterizedTest
@@ -1570,15 +1567,14 @@ public class ReplicationControlManagerTest {
         ctx.replay(fenceRecords);
 
         assertEquals(
-            new PartitionRegistration(
-                new int[] {1, 2, 3, 4},
-                new int[] {1, 2, 4},
-                new int[] {},
-                new int[] {},
-                1,
-                LeaderRecoveryState.RECOVERED,
-                1,
-                1),
+            new PartitionRegistration.Builder().
+                setReplicas(new int[] {1, 2, 3, 4}).
+                setIsr(new int[] {1, 2, 4}).
+                setLeader(1).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(1).
+                build(),
             replication.getPartition(fooId, 0));
 
         AlterPartitionRequestData alterIsrRequest = new AlterPartitionRequestData()
@@ -1590,7 +1586,7 @@ public class ReplicationControlManagerTest {
                 .setPartitions(asList(new PartitionData()
                     .setPartitionIndex(0)
                     .setPartitionEpoch(1)
-                    .setLeaderEpoch(1)
+                    .setLeaderEpoch(0)
                     .setNewIsrWithEpochs(isrWithDefaultEpoch(1, 2, 3, 4))))));
 
         ControllerRequestContext requestContext =
@@ -1624,7 +1620,7 @@ public class ReplicationControlManagerTest {
                     .setPartitions(asList(new AlterPartitionResponseData.PartitionData()
                         .setPartitionIndex(0)
                         .setLeaderId(1)
-                        .setLeaderEpoch(1)
+                        .setLeaderEpoch(0)
                         .setIsr(asList(1, 2, 3, 4))
                         .setPartitionEpoch(2)
                         .setErrorCode(NONE.code()))))),
@@ -1654,7 +1650,7 @@ public class ReplicationControlManagerTest {
                 setPartitions(asList(new PartitionData().
                     setPartitionIndex(0).
                     setPartitionEpoch(1).
-                    setLeaderEpoch(1).
+                    setLeaderEpoch(0).
                     setNewIsrWithEpochs(isrWithDefaultEpoch(1, 2, 3, 4))))));
 
         // The broker 4 has failed silently and now registers again.
@@ -1713,15 +1709,14 @@ public class ReplicationControlManagerTest {
         ).topicId();
 
         assertEquals(
-            new PartitionRegistration(
-                new int[] {1, 2, 3, 4},
-                new int[] {1, 2, 3, 4},
-                new int[] {},
-                new int[] {},
-                1,
-                LeaderRecoveryState.RECOVERED,
-                0,
-                0),
+            new PartitionRegistration.Builder().
+                setReplicas(new int[] {1, 2, 3, 4}).
+                setIsr(new int[] {1, 2, 3, 4}).
+                setLeader(1).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0).
+                build(),
             replication.getPartition(fooId, 0));
 
         ctx.inControlledShutdownBrokers(3);
@@ -1767,12 +1762,12 @@ public class ReplicationControlManagerTest {
             new int[] {2, 3, 4, 1}}).topicId();
         Uuid barId = ctx.createTestTopic("bar", new int[][] {
             new int[] {4, 3, 2}}).topicId();
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
         List<ApiMessageAndVersion> fenceRecords = new ArrayList<>();
         replication.handleBrokerFenced(3, fenceRecords);
         ctx.replay(fenceRecords);
-        assertEquals(new PartitionRegistration(new int[] {1, 2, 3, 4}, new int[] {1, 2, 4},
-            new int[] {}, new int[] {}, 1, LeaderRecoveryState.RECOVERED, 1, 1), replication.getPartition(fooId, 0));
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).setIsr(new int[] {1, 2, 4}).
+            setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build(), replication.getPartition(fooId, 0));
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
             replication.alterPartitionReassignments(
                 new AlterPartitionReassignmentsRequestData().setTopics(asList(
@@ -1808,12 +1803,12 @@ public class ReplicationControlManagerTest {
                     setErrorMessage(null))))),
             alterResult.response());
         ctx.replay(alterResult.records());
-        assertEquals(new PartitionRegistration(new int[] {1, 2, 3}, new int[] {1, 2},
-            new int[] {}, new int[] {}, 1, LeaderRecoveryState.RECOVERED, 2, 2), replication.getPartition(fooId, 0));
-        assertEquals(new PartitionRegistration(new int[] {1, 2, 3, 0}, new int[] {0, 1, 2},
-            new int[] {}, new int[] {}, 0, LeaderRecoveryState.RECOVERED, 1, 2), replication.getPartition(fooId, 1));
-        assertEquals(new PartitionRegistration(new int[] {1, 2, 3, 4, 0}, new int[] {4, 2},
-            new int[] {}, new int[] {0, 1}, 4, LeaderRecoveryState.RECOVERED, 1, 2), replication.getPartition(barId, 0));
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2}).
+            setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(2).build(), replication.getPartition(fooId, 0));
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 0}).setIsr(new int[] {0, 1, 2}).
+            setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(fooId, 1));
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 0}).setIsr(new int[] {4, 2}).
+            setAddingReplicas(new int[] {0, 1}).setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(barId, 0));
         ListPartitionReassignmentsResponseData currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
                 setTopics(asList(new OngoingTopicReassignment().
@@ -1822,25 +1817,25 @@ public class ReplicationControlManagerTest {
                         setRemovingReplicas(Collections.emptyList()).
                         setAddingReplicas(asList(0, 1)).
                         setReplicas(asList(1, 2, 3, 4, 0))))));
-        assertEquals(currentReassigning, replication.listPartitionReassignments(null));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(null, Long.MAX_VALUE));
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(asList(
             new ListPartitionReassignmentsTopics().setName("foo").
-                setPartitionIndexes(asList(0, 1, 2)))));
+                setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
         assertEquals(currentReassigning, replication.listPartitionReassignments(asList(
             new ListPartitionReassignmentsTopics().setName("bar").
-                setPartitionIndexes(asList(0, 1, 2)))));
+                setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
             new AlterPartitionRequestData().setBrokerId(4).setBrokerEpoch(104).
                 setTopics(asList(new TopicData().setTopicId(barId).setPartitions(asList(
                     new PartitionData().setPartitionIndex(0).setPartitionEpoch(2).
-                        setLeaderEpoch(1).setNewIsrWithEpochs(isrWithDefaultEpoch(4, 1, 2, 0)))))));
+                        setLeaderEpoch(0).setNewIsrWithEpochs(isrWithDefaultEpoch(4, 1, 2, 0)))))));
         assertEquals(new AlterPartitionResponseData().setTopics(asList(
             new AlterPartitionResponseData.TopicData().setTopicId(barId).setPartitions(asList(
                 new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(4).
-                    setLeaderEpoch(1).
+                    setLeaderEpoch(0).
                     setIsr(asList(4, 1, 2, 0)).
                     setPartitionEpoch(3).
                     setErrorCode(NONE.code()))))),
@@ -1870,9 +1865,9 @@ public class ReplicationControlManagerTest {
                         setErrorMessage(null)))))),
             cancelResult);
         ctx.replay(cancelResult.records());
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
-        assertEquals(new PartitionRegistration(new int[] {2, 3, 4}, new int[] {4, 2},
-            new int[] {}, new int[] {}, 4, LeaderRecoveryState.RECOVERED, 2, 3), replication.getPartition(barId, 0));
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).setIsr(new int[] {4, 2}).
+            setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(3).build(), replication.getPartition(barId, 0));
     }
 
     @Test
@@ -1892,8 +1887,8 @@ public class ReplicationControlManagerTest {
         ctx.createPartitions(2, "foo", new int[][] {new int[] {3, 4, 5}},
             INVALID_REPLICA_ASSIGNMENT.code());
         ctx.createPartitions(2, "foo", new int[][] {new int[] {2, 4, 5}}, NONE.code());
-        assertEquals(new PartitionRegistration(new int[] {2, 4, 5},
-                new int[] {2}, Replicas.NONE, Replicas.NONE, 2, LeaderRecoveryState.RECOVERED, 0, 0),
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
+                setIsr(new int[] {2}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build(),
             ctx.replicationControl.getPartition(fooId, 1));
     }
 
@@ -2429,7 +2424,7 @@ public class ReplicationControlManagerTest {
         log.debug("Created topic with ID {}", topicId);
 
         // Confirm we start off with no reassignments.
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
 
         // Reassign to [2, 3]
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResultOne =
@@ -2455,7 +2450,7 @@ public class ReplicationControlManagerTest {
                             setReplicas(asList(2, 3, 0, 1))))));
 
         // Make sure the reassignment metadata is as expected.
-        assertEquals(currentReassigning, replication.listPartitionReassignments(null));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(null, Long.MAX_VALUE));
 
         PartitionRegistration partition = replication.getPartition(topicId, 0);
 
@@ -2527,7 +2522,7 @@ public class ReplicationControlManagerTest {
                             setAddingReplicas(asList(4, 5)).
                             setReplicas(asList(4, 5, 0, 1, 2, 3))))));
 
-        assertEquals(currentReassigning, replication.listPartitionReassignments(null));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(null, Long.MAX_VALUE));
 
         // Make sure the leader is in the replicas still
         partition = replication.getPartition(topicId, 0);
@@ -2561,7 +2556,7 @@ public class ReplicationControlManagerTest {
         // After reassignment is finally complete, make sure 4 is the leader now.
         partition = replication.getPartition(topicId, 0);
         assertEquals(4, partition.leader);
-        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
     }
 
     private static BrokerState brokerState(int brokerId, Long brokerEpoch) {

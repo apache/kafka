@@ -1184,7 +1184,7 @@ class PartitionTest extends AbstractPartitionTest {
     builder.build()
   }
 
-  def createIdempotentRecords(records: Iterable[SimpleRecord], 
+  def createIdempotentRecords(records: Iterable[SimpleRecord],
                               baseOffset: Long,
                               baseSequence: Int = 0,
                               producerId: Long = 1L): MemoryRecords = {
@@ -1454,6 +1454,108 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(alterPartitionListener.expands.get, 0)
     assertEquals(alterPartitionListener.shrinks.get, 0)
     assertEquals(alterPartitionListener.failures.get, 1)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("fenced", "shutdown", "unfenced"))
+  def testHighWatermarkIncreasesWithFencedOrShutdownFollower(brokerState: String): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId = brokerId + 1
+    val replicas = List(brokerId, remoteBrokerId)
+    val shrinkedIsr = Set(brokerId)
+
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    addBrokerEpochToMockMetadataCache(metadataCache, replicas)
+
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    assertTrue(
+      partition.makeLeader(
+        new LeaderAndIsrPartitionState()
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(brokerId)
+          .setLeaderEpoch(leaderEpoch)
+          .setIsr(replicas.map(Int.box).asJava)
+          .setPartitionEpoch(1)
+          .setReplicas(replicas.map(Int.box).asJava)
+          .setIsNew(false),
+        offsetCheckpoints,
+        None
+      ),
+      "Expected become leader transition to succeed"
+    )
+    assertEquals(replicas.toSet, partition.partitionState.isr)
+    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+
+    // Fetch to let the follower catch up to the log end offset
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+
+    // Follower fetches and catches up to the log end offset.
+    assertReplicaState(
+      partition,
+      remoteBrokerId,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = log.logEndOffset
+    )
+    // Check that the leader updated the HWM to the LEO which is what the follower has
+    assertEquals(log.logEndOffset, partition.localLogOrException.highWatermark)
+
+    if (brokerState == "fenced") {
+      when(metadataCache.isBrokerFenced(remoteBrokerId)).thenReturn(true)
+    } else if (brokerState == "shutdown") {
+      when(metadataCache.isBrokerShuttingDown(remoteBrokerId)).thenReturn(true)
+    }
+
+    // Append records to the log as leader of the current epoch
+    seedLogData(log, numRecords = 10, leaderEpoch)
+
+    // Controller shrinks the ISR after
+    assertFalse(
+      partition.makeLeader(
+        new LeaderAndIsrPartitionState()
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(brokerId)
+          .setLeaderEpoch(leaderEpoch)
+          .setIsr(shrinkedIsr.toList.map(Int.box).asJava)
+          .setPartitionEpoch(2)
+          .setReplicas(replicas.map(Int.box).asJava)
+          .setIsNew(false),
+        offsetCheckpoints,
+        None
+      ),
+      "Expected to stay leader"
+    )
+
+    assertTrue(partition.isLeader)
+    assertEquals(shrinkedIsr, partition.partitionState.isr)
+    assertEquals(shrinkedIsr, partition.partitionState.maximalIsr)
+    assertEquals(Set.empty, partition.getOutOfSyncReplicas(partition.replicaLagTimeMaxMs))
+
+    // In the case of unfenced, the HWM doesn't increase, otherwise the the HWM increases because the
+    // fenced and shutdown replica is not considered during HWM calculation.
+    if (brokerState == "unfenced") {
+      assertEquals(10, partition.localLogOrException.highWatermark)
+    } else {
+      assertEquals(20, partition.localLogOrException.highWatermark)
+    }
   }
 
   @ParameterizedTest

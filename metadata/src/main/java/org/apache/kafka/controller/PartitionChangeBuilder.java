@@ -30,6 +30,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -73,7 +74,7 @@ public class PartitionChangeBuilder {
     private final Uuid topicId;
     private final int partitionId;
     private final IntPredicate isAcceptableLeader;
-    private final boolean isLeaderRecoverySupported;
+    private final MetadataVersion metadataVersion;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
@@ -81,16 +82,18 @@ public class PartitionChangeBuilder {
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
 
-    public PartitionChangeBuilder(PartitionRegistration partition,
-                                  Uuid topicId,
-                                  int partitionId,
-                                  IntPredicate isAcceptableLeader,
-                                  boolean isLeaderRecoverySupported) {
+    public PartitionChangeBuilder(
+        PartitionRegistration partition,
+        Uuid topicId,
+        int partitionId,
+        IntPredicate isAcceptableLeader,
+        MetadataVersion metadataVersion
+    ) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
-        this.isLeaderRecoverySupported = isLeaderRecoverySupported;
+        this.metadataVersion = metadataVersion;
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
@@ -104,9 +107,12 @@ public class PartitionChangeBuilder {
     }
 
     public PartitionChangeBuilder setTargetIsrWithBrokerStates(List<BrokerState> targetIsrWithEpoch) {
-        this.targetIsr = targetIsrWithEpoch.stream()
-            .map(brokerState -> brokerState.brokerId()).collect(Collectors.toList());
-        return this;
+        return setTargetIsr(
+            targetIsrWithEpoch
+              .stream()
+              .map(brokerState -> brokerState.brokerId())
+              .collect(Collectors.toList())
+        );
     }
 
     public PartitionChangeBuilder setTargetReplicas(List<Integer> targetReplicas) {
@@ -236,7 +242,7 @@ public class PartitionChangeBuilder {
                 // new leader. This can result in data loss!
                 record.setIsr(Collections.singletonList(electionResult.node));
                 if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING &&
-                    isLeaderRecoverySupported) {
+                    metadataVersion.isLeaderRecoverySupported()) {
                     // And mark the leader recovery state as RECOVERING
                     record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
                 }
@@ -251,8 +257,7 @@ public class PartitionChangeBuilder {
      *
      * We need to bump the leader epoch if:
      * 1. The leader changed, or
-     * 2. The new ISR does not contain all the nodes that the old ISR did, or
-     * 3. The new replica list does not contain all the nodes that the old replica list did.
+     * 2. The new replica list does not contain all the nodes that the old replica list did.
      *
      * Changes that do NOT fall in any of these categories will increase the partition epoch, but
      * not the leader epoch. Note that if the leader epoch increases, the partition epoch will
@@ -263,11 +268,18 @@ public class PartitionChangeBuilder {
      * NO_LEADER_CHANGE, a leader epoch bump will automatically occur. That takes care of
      * case 1. In this function, we check for cases 2 and 3, and handle them by manually
      * setting record.leader to the current leader.
+     *
+     * In MV before 3.6 there was a bug (KAFKA-15021) in the brokers' replica manager
+     * that required that the leader epoch be bump whenever the ISR shrank. In MV 3.6 this leader
+     * bump is not required when the ISR shrinks. Note, that the leader epoch is never increased if
+     * the ISR expanded.
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {
-            if (!Replicas.contains(targetIsr, partition.isr) ||
-                    !Replicas.contains(targetReplicas, partition.replicas)) {
+            if (!Replicas.contains(targetReplicas, partition.replicas)) {
+                record.setLeader(partition.leader);
+            } else if (!metadataVersion.isSkipLeaderEpochBumpSupported() &&
+                       !Replicas.contains(targetIsr, partition.isr)) {
                 record.setLeader(partition.leader);
             }
         }
