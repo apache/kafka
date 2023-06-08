@@ -45,3 +45,4 @@ jobs:
           days-before-stale: 90
           days-before-close: -1
           stale-issue-label: 'stale'
+          stale-pr-message: 'This PR is stale because it has been open 90 days with no activity.'
