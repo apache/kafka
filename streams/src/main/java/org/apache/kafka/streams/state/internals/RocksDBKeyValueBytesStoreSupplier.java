@@ -20,12 +20,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
+public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
     private final String name;
     private final boolean returnTimestampedStore;
 
-    public RocksDbKeyValueBytesStoreSupplier(final String name,
+    public RocksDBKeyValueBytesStoreSupplier(final String name,
                                              final boolean returnTimestampedStore) {
         this.name = name;
         this.returnTimestampedStore = returnTimestampedStore;

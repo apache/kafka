@@ -46,6 +46,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
     private final String topic;
+    private int seqnum;
 
     public RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueSegmentedBytesStore store,
                                             final Duration gracePeriod,
@@ -55,6 +56,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         minTimestamp = Long.MAX_VALUE;
         numRecords = 0;
         bufferSize = 0;
+        seqnum = 0;
         this.topic = topic;
     }
 
@@ -83,49 +85,38 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         if (predicate.get()) {
             try (final KeyValueIterator<Bytes, byte[]> iterator = wrapped()
                 .fetchAll(0, wrapped().observedStreamTime - gracePeriod)) {
-                if (iterator.hasNext()) {
+                while (iterator.hasNext() && predicate.get()) {
                     keyValue = iterator.next();
-                } else {
-                    if (numRecords() == 0) {
-                        minTimestamp = Long.MAX_VALUE;
+
+                    final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
+                    final K key = keySerde.deserializer().deserialize(topic,
+                        PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
+                    minTimestamp = bufferValue.context().timestamp();
+
+                    if (wrapped().observedStreamTime - gracePeriod > minTimestamp) {
+                        return;
                     }
-                    return;
-                }
 
-                BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
-                K key = keySerde.deserializer().deserialize(topic,
-                    PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
+                    Change<V> value = valueSerde.deserializeParts(
+                        topic,
+                        new Change<>(bufferValue.newValue(), bufferValue.oldValue())
+                    );
 
-                Change<V> value = valueSerde.deserializeParts(
-                    topic,
-                    new Change<>(bufferValue.newValue(), bufferValue.oldValue())
-                );
-                while (keyValue != null && predicate.get()) {
                     if (bufferValue.context().timestamp() != minTimestamp) {
                         throw new IllegalStateException(
                             "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
                                 bufferValue.context().timestamp() + "]"
                         );
                     }
+
                     callback.accept(new Eviction<>(key, value, bufferValue.context()));
+
                     wrapped().remove(keyValue.key);
                     numRecords--;
                     bufferSize = bufferSize - computeRecordSize(keyValue.key, bufferValue);
-                    if (iterator.hasNext()) {
-                        keyValue = iterator.next();
-                        bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
-                        key = keySerde.deserializer().deserialize(topic,
-                            PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
-                        value = valueSerde.deserializeParts(
-                            topic,
-                            new Change<>(bufferValue.newValue(), bufferValue.oldValue())
-                        );
-                        minTimestamp = bufferValue.context().timestamp();
-
-                    } else {
-                        keyValue = null;
-                        minTimestamp = Long.MAX_VALUE;
-                    }
+                }
+                if (numRecords == 0) {
+                    minTimestamp = Long.MAX_VALUE;
                 }
             }
         }
@@ -147,7 +138,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         final Bytes serializedKey = Bytes.wrap(
             PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.key()),
                 record.timestamp(),
-                Long.valueOf(recordContext.offset()).intValue()).get());
+                seqnum++).get());
         final Change<byte[]> serialChange = valueSerde.serializeParts(topic, record.value());
         final BufferValue buffered = new BufferValue(serialChange.oldValue, serialChange.oldValue, serialChange.newValue, recordContext);
         wrapped().put(serializedKey, buffered.serialize(0).array());
