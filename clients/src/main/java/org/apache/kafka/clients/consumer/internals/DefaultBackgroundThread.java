@@ -84,7 +84,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final GroupState groupState,
                             final CoordinatorRequestManager coordinatorManager,
                             final CommitRequestManager commitRequestManager,
-                            final OffsetsRequestManager offsetsRequestManager,
+                            final OffsetsRequestManager offsetsRequestManager) {
                             final TopicMetadataRequestManager topicMetadataRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;

@@ -201,5 +201,4 @@ public class TopicMetadataRequestManagerTest {
             Arguments.of(Errors.NETWORK_EXCEPTION, true),
             Arguments.of(Errors.NONE, false));
     }
-
 }
