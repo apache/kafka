@@ -28,14 +28,14 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 
 public class ApplicationEventProcessor {
+
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final Map<RequestManager.Type, Optional<RequestManager>> registry;
     private final ConsumerMetadata metadata;
 
-    public ApplicationEventProcessor(
-        final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-        final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry,
-        final ConsumerMetadata metadata) {
+    public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                     final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry,
+                                     final ConsumerMetadata metadata) {
         this.backgroundEventQueue = backgroundEventQueue;
         this.registry = requestManagerRegistry;
         this.metadata = metadata;
@@ -53,9 +53,7 @@ public class ApplicationEventProcessor {
             case FETCH_COMMITTED_OFFSET:
                 return process((OffsetFetchApplicationEvent) event);
             case METADATA_UPDATE:
-                return process((MetadataUpdateApplicationEvent) event);
-            case UNSUBSCRIBE:
-                return process((UnsubscribeApplicationEvent) event);
+                return process((NewTopicsMetadataUpdateRequestEvent) event);
         }
         return false;
     }
@@ -115,16 +113,8 @@ public class ApplicationEventProcessor {
         return true;
     }
 
-    private boolean process(final MetadataUpdateApplicationEvent event) {
+    private boolean process(final NewTopicsMetadataUpdateRequestEvent event) {
         metadata.requestUpdateForNewTopics();
-        return true;
-    }
-
-    private boolean process(final UnsubscribeApplicationEvent event) {
-        /*
-                this.coordinator.onLeavePrepare();
-                this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
-         */
         return true;
     }
 }

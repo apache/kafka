@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class UnsubscribeApplicationEvent extends ApplicationEvent {
+public class NewTopicsMetadataUpdateRequestEvent extends ApplicationEvent {
 
-    public UnsubscribeApplicationEvent() {
-        super(Type.UNSUBSCRIBE);
+    public NewTopicsMetadataUpdateRequestEvent() {
+        super(Type.METADATA_UPDATE);
     }
 }

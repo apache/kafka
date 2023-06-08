@@ -32,9 +32,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -530,7 +529,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
 
         if (partitions.isEmpty()) {
-            this.unsubscribe();
+            // TODO: implementation of unsubscribe() will be included in forthcoming commits.
+            // this.unsubscribe();
             return;
         }
 
@@ -539,7 +539,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (Utils.isBlank(topic))
                 throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
         }
-        // TODO: implement fetcher
+
+        // TODO: implementation of refactored Fetcher will be included in forthcoming commits.
         // fetcher.clearBufferedDataForUnassignedPartitions(partitions);
 
         // make sure the offsets of topic partitions the consumer is unsubscribing from
@@ -548,12 +549,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         log.info("Assigned to partition(s): {}", Utils.join(partitions, ", "));
         if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
-           updateMetadata(time.milliseconds());
-    }
-
-    private void updateMetadata(long milliseconds) {
-        final MetadataUpdateApplicationEvent event = new MetadataUpdateApplicationEvent(milliseconds);
-        eventHandler.add(event);
+            eventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
     }
 
     @Override
@@ -568,9 +564,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void unsubscribe() {
-        // fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
-        eventHandler.add(new UnsubscribeApplicationEvent());
-        this.subscriptions.unsubscribe();
+        throw new KafkaException("method not implemented");
     }
 
     @Override

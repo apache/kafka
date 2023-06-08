@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -170,7 +170,7 @@ public class PrototypeAsyncConsumerTest {
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().contains(tp));
         verify(eventHandler).add(any(CommitApplicationEvent.class));
-        verify(eventHandler).add(any(MetadataUpdateApplicationEvent.class));
+        verify(eventHandler).add(any(NewTopicsMetadataUpdateRequestEvent.class));
     }
 
     @Test

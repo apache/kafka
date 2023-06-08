@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -58,6 +58,7 @@ import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
     private static final long RETRY_BACKOFF_MS = 100;
+    private static final int REQUEST_TIMEOUT_MS = 500;
     private final Properties properties = new Properties();
     private MockTime time;
     private ConsumerMetadata metadata;
@@ -67,7 +68,6 @@ public class DefaultBackgroundThreadTest {
     private ApplicationEventProcessor applicationEventProcessor;
     private CoordinatorRequestManager coordinatorManager;
     private ErrorEventHandler errorEventHandler;
-    private int requestTimeoutMs = 500;
     private GroupState groupState;
     private CommitRequestManager commitManager;
 
@@ -128,7 +128,7 @@ public class DefaultBackgroundThreadTest {
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
-        ApplicationEvent e = new MetadataUpdateApplicationEvent(time.milliseconds());
+        ApplicationEvent e = new NewTopicsMetadataUpdateRequestEvent();
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
         verify(metadata).requestUpdateForNewTopics();
@@ -163,10 +163,10 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testPollResultTimer() {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
-        // purposely setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
+        // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+                Collections.singletonList(findCoordinatorUnsentRequest(time)));
         assertEquals(10, backgroundThread.handlePollResult(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
@@ -182,17 +182,14 @@ public class DefaultBackgroundThreadTest {
         return registry;
     }
 
-    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
-            final Time time,
-            final long timeout
-    ) {
+    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(final Time time) {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
             Optional.empty());
-        req.setTimer(time, timeout);
+        req.setTimer(time, REQUEST_TIMEOUT_MS);
         return req;
     }
 
@@ -219,12 +216,12 @@ public class DefaultBackgroundThreadTest {
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {
         return new NetworkClientDelegate.PollResult(
                 RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+                Collections.singletonList(findCoordinatorUnsentRequest(time)));
     }
 
     private NetworkClientDelegate.PollResult mockPollCommitResult() {
         return new NetworkClientDelegate.PollResult(
                 RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+                Collections.singletonList(findCoordinatorUnsentRequest(time)));
     }
 }
