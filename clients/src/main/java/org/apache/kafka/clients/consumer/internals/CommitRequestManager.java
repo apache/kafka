@@ -105,6 +105,7 @@ public class CommitRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
         }
 
+        pendingRequests.inflightOffsetFetches.forEach(System.out::println);
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE,
                 Collections.unmodifiableList(pendingRequests.drain(currentTimeMs)));
     }
