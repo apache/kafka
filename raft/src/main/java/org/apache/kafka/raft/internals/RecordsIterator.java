@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -208,8 +208,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             throw new IllegalStateException("Expected a record count for the records batch");
         }
 
-        DataInputStream input = new DataInputStream(batch.recordInputStream(bufferSupplier));
-
+        InputStream input = batch.recordInputStream(bufferSupplier);
         final Batch<T> result;
         try {
             if (batch.isControlBatch()) {
@@ -218,7 +217,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                     ControlRecord record = readRecord(input, batch.sizeInBytes(), RecordsIterator::decodeControlRecord);
                     records.add(record);
                 }
-
                 result = Batch.control(
                     batch.baseOffset(),
                     batch.partitionLeaderEpoch(),
@@ -242,14 +240,14 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 );
             }
         } finally {
-            Utils.closeQuietly(input, "DataInputStream");
+            Utils.closeQuietly(input, "BytesStream for input containing records");
         }
 
         return result;
     }
 
     private <U> U readRecord(
-        DataInputStream stream,
+        InputStream stream,
         int totalBatchSize,
         BiFunction<Optional<ByteBuffer>, Optional<ByteBuffer>, U> decoder
     ) {

@@ -71,15 +71,14 @@ public class ControllerMetricsTestUtils {
                 leader = -1;
                 break;
         }
-        return new PartitionRegistration(
-                new int[] {0, 1, 2},
-                new int[] {0, 1, 2},
-                new int[] {},
-                new int[] {},
-                leader,
-                LeaderRecoveryState.RECOVERED,
-                100,
-                200);
+        return new PartitionRegistration.Builder().
+            setReplicas(new int[] {0, 1, 2}).
+            setIsr(new int[] {0, 1, 2}).
+            setLeader(leader).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(100).
+            setPartitionEpoch(200).
+            build();
     }
 
     public static TopicImage fakeTopicImage(

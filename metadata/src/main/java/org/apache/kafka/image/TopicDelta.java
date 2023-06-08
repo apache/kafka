@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Represents changes to a topic in the metadata image.
@@ -47,6 +48,14 @@ public final class TopicDelta {
 
     public Map<Integer, PartitionRegistration> partitionChanges() {
         return partitionChanges;
+    }
+
+    public Map<Integer, PartitionRegistration> newPartitions() {
+        return partitionChanges
+            .entrySet()
+            .stream()
+            .filter(entry -> !image.partitions().containsKey(entry.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     public String name() {
@@ -90,6 +99,20 @@ public final class TopicDelta {
             }
         }
         return new TopicImage(image.name(), image.id(), newPartitions);
+    }
+
+    public boolean hasPartitionsWithAssignmentChanges() {
+        for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
+            int partitionId = entry.getKey();
+            // New Partition.
+            if (!image.partitions().containsKey(partitionId))
+                return true;
+            PartitionRegistration previousPartition = image.partitions().get(partitionId);
+            PartitionRegistration currentPartition = entry.getValue();
+            if (!previousPartition.hasSameAssignment(currentPartition))
+                return true;
+        }
+        return false;
     }
 
     /**

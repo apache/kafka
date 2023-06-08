@@ -113,24 +113,9 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
         zkClient.defaultAcls(path),
         CreateMode.PERSISTENT)
     }
-    val createPartitionsZNode = {
-      val path = TopicPartitionsZNode.path(topicName)
-      CreateRequest(
-        path,
-        null,
-        zkClient.defaultAcls(path),
-        CreateMode.PERSISTENT)
-    }
+    val createPartitionZNodeReqs = createTopicPartitionZNodesRequests(topicName, partitions, state)
 
-    val createPartitionZNodeReqs = partitions.asScala.flatMap { case (partitionId, partition) =>
-      val topicPartition = new TopicPartition(topicName, partitionId)
-      Seq(
-        createTopicPartition(topicPartition),
-        createTopicPartitionState(topicPartition, partition, state.kraftControllerEpoch())
-      )
-    }
-
-    val requests = Seq(createTopicZNode, createPartitionsZNode) ++ createPartitionZNodeReqs
+    val requests = Seq(createTopicZNode) ++ createPartitionZNodeReqs
     val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
     val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
     if (resultCodes(TopicZNode.path(topicName)).equals(Code.NODEEXISTS)) {
@@ -145,6 +130,31 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     }
   }
 
+  private def createTopicPartitionZNodesRequests(
+    topicName: String,
+    partitions: util.Map[Integer, PartitionRegistration],
+    state: ZkMigrationLeadershipState
+  ): Seq[CreateRequest] = {
+    val createPartitionsZNode = {
+      val path = TopicPartitionsZNode.path(topicName)
+      CreateRequest(
+        path,
+        null,
+        zkClient.defaultAcls(path),
+        CreateMode.PERSISTENT)
+    }
+
+    val createPartitionZNodeReqs = partitions.asScala.toSeq.flatMap { case (partitionId, partition) =>
+      val topicPartition = new TopicPartition(topicName, partitionId)
+      Seq(
+        createTopicPartition(topicPartition),
+        createTopicPartitionState(topicPartition, partition, state.kraftControllerEpoch())
+      )
+    }
+
+    Seq(createPartitionsZNode) ++ createPartitionZNodeReqs
+  }
+
   private def recursiveChildren(path: String, acc: ArrayBuffer[String]): Unit = {
     val topicChildZNodes = zkClient.retryRequestUntilConnected(GetChildrenRequest(path, registerWatch = false))
     topicChildZNodes.children.foreach { child =>
@@ -157,6 +167,30 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     val buffer = new ArrayBuffer[String]()
     recursiveChildren(path, buffer)
     buffer.toSeq
+  }
+
+  override def updateTopic(
+    topicName: String,
+    topicId: Uuid,
+    partitions: util.Map[Integer, PartitionRegistration],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = wrapZkException {
+    val assignments = partitions.asScala.map { case (partitionId, partition) =>
+      new TopicPartition(topicName, partitionId) ->
+        ReplicaAssignment(partition.replicas, partition.addingReplicas, partition.removingReplicas)
+    }
+    val request = SetDataRequest(
+      TopicZNode.path(topicName),
+      TopicZNode.encode(Some(topicId), assignments),
+      ZkVersion.MatchAnyVersion
+    )
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(Seq(request), state)
+    val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+    if (resultCodes.forall { case (_, code) => code.equals(Code.OK) } ) {
+      state.withMigrationZkVersion(migrationZkVersion)
+    } else {
+      throw new MigrationClientException(s"Failed to update topic metadata: $topicName. ZK transaction had results $resultCodes")
+    }
   }
 
   override def deleteTopic(
@@ -181,6 +215,21 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     }
   }
 
+  override def createTopicPartitions(topicPartitions: util.Map[String, util.Map[Integer, PartitionRegistration]], state: ZkMigrationLeadershipState)
+  :ZkMigrationLeadershipState = wrapZkException {
+    val requests = topicPartitions.asScala.toSeq.flatMap { case (topicName, partitions) =>
+      createTopicPartitionZNodesRequests(topicName, partitions, state)
+    }
+
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
+    val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+    if (resultCodes.forall { case (_, code) => code.equals(Code.OK) || code.equals(Code.NODEEXISTS) }) {
+      state.withMigrationZkVersion(migrationZkVersion)
+    } else {
+      throw new MigrationClientException(s"Failed to create partition states: $topicPartitions. ZK transaction had results $resultCodes")
+    }
+  }
+
   override def updateTopicPartitions(
     topicPartitions: util.Map[String, util.Map[Integer, PartitionRegistration]],
     state: ZkMigrationLeadershipState
@@ -200,6 +249,30 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
         state.withMigrationZkVersion(migrationZkVersion)
       } else {
         throw new MigrationClientException(s"Failed to update partition states: $topicPartitions. ZK transaction had results $resultCodes")
+      }
+    }
+  }
+
+  override def deleteTopicPartitions(
+    topicPartitions: util.Map[String, util.Set[Integer]],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = {
+    val requests = topicPartitions.asScala.flatMap { case (topicName, partitionIds) =>
+      partitionIds.asScala.map { partitionId =>
+        val topicPartition = new TopicPartition(topicName, partitionId)
+        val path = TopicPartitionZNode.path(topicPartition)
+        DeleteRequest(path, ZkVersion.MatchAnyVersion)
+      }
+    }
+    if (requests.isEmpty) {
+      state
+    } else {
+      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state)
+      val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+      if (resultCodes.forall { case (_, code) => code.equals(Code.OK) }) {
+        state.withMigrationZkVersion(migrationZkVersion)
+      } else {
+        throw new MigrationClientException(s"Failed to delete partition states: $topicPartitions. ZK transaction had results $resultCodes")
       }
     }
   }
