@@ -16,12 +16,19 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkConnector;
+
+import java.util.Map;
 
 
 public class IsolatedSinkConnector extends IsolatedConnector<SinkConnector> {
 
     IsolatedSinkConnector(Plugins plugins, SinkConnector delegate) {
         super(plugins, delegate, PluginType.SINK);
+    }
+
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<TopicPartition, Long> offsets) throws Exception {
+        return isolate(() -> delegate.alterOffsets(connectorConfig, offsets));
     }
 }

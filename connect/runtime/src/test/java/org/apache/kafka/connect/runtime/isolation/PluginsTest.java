@@ -401,7 +401,7 @@ public class PluginsTest {
 
     @Test
     public void newConnectorShouldInstantiateWithPluginClassLoader() {
-        Connector plugin = plugins.newConnector(TestPlugin.SAMPLING_CONNECTOR.className());
+        Connector plugin = plugins.newConnector(TestPlugin.SAMPLING_CONNECTOR.className()).delegate;
 
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();

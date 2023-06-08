@@ -927,12 +927,11 @@ public class StandaloneHerderTest {
 
     @Test
     public void testTargetStates() throws Exception {
-        connector = PowerMock.createMock(BogusSourceConnector.class);
+        connector = PowerMock.createMock(IsolatedSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SOURCE, connectorConfig);
 
         // We pause, then stop, the connector
         expectTargetState(CONNECTOR_NAME, TargetState.PAUSED);

@@ -53,6 +53,8 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.IsolatedConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSinkConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSourceConnector;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
@@ -69,10 +71,8 @@ import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -1151,8 +1151,8 @@ public class Worker {
         ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
 
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
-            Connector connector = plugins.newConnector(connectorClassOrAlias);
-            if (ConnectUtils.isSinkConnector(connector)) {
+            IsolatedConnector<?> connector = plugins.newConnector(connectorClassOrAlias);
+            if (connector.type() == PluginType.SINK) {
                 log.debug("Fetching offsets for sink connector: {}", connName);
                 sinkConnectorOffsets(connName, connector, connectorConfig, cb);
             } else {
@@ -1172,20 +1172,20 @@ public class Worker {
      * @param connectorConfig the sink connector's configurations
      * @param cb callback to invoke upon completion of the request
      */
-    void sinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+    void sinkConnectorOffsets(String connName, IsolatedConnector<?> connector, Map<String, String> connectorConfig,
                               Callback<ConnectorOffsets> cb) {
         Map<String, Object> adminConfig = adminConfigs(
                 connName,
                 "connector-worker-adminclient-" + connName,
                 config,
                 new SinkConnectorConfig(plugins, connectorConfig),
-                connector.getClass(),
+                connector.pluginClass(),
                 connectorClientConfigOverridePolicy,
                 kafkaClusterId,
                 ConnectorType.SINK);
         String groupId = (String) baseConsumerConfigs(
                 connName, "connector-consumer-", config, new SinkConnectorConfig(plugins, connectorConfig),
-                connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
+                connector.pluginClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
         Admin admin = adminFactory.apply(adminConfig);
         try {
             ListConsumerGroupOffsetsOptions listOffsetsOptions = new ListConsumerGroupOffsetsOptions()
@@ -1215,7 +1215,7 @@ public class Worker {
      * @param connectorConfig the source connector's configurations
      * @param cb callback to invoke upon completion of the request
      */
-    private void sourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+    private void sourceConnectorOffsets(String connName, IsolatedConnector<?> connector, Map<String, String> connectorConfig,
                                         Callback<ConnectorOffsets> cb) {
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorConfig, config.topicCreationEnable());
         ConnectorOffsetBackingStore offsetStore = config.exactlyOnceSourceEnabled()
@@ -1264,11 +1264,11 @@ public class Worker {
 
         String connectorClassOrAlias = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         ClassLoader connectorLoader = plugins.connectorLoader(connectorClassOrAlias);
-        Connector connector;
+        IsolatedConnector<?> connector;
 
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             connector = plugins.newConnector(connectorClassOrAlias);
-            if (ConnectUtils.isSinkConnector(connector)) {
+            if (connector.type() == PluginType.SINK) {
                 log.debug("Altering consumer group offsets for sink connector: {}", connName);
                 alterSinkConnectorOffsets(connName, connector, connectorConfig, offsets, connectorLoader, cb);
             } else {
@@ -1290,21 +1290,21 @@ public class Worker {
      * @param connectorLoader the connector plugin's classloader to be used as the thread context classloader
      * @param cb callback to invoke upon completion
      */
-    void alterSinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+    void alterSinkConnectorOffsets(String connName, IsolatedConnector<?> connector, Map<String, String> connectorConfig,
                                    Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
             try {
                 Map<TopicPartition, Long> parsedOffsets = SinkUtils.parseSinkConnectorOffsets(offsets);
                 boolean alterOffsetsResult;
                 try {
-                    alterOffsetsResult = ((SinkConnector) connector).alterOffsets(connectorConfig, parsedOffsets);
+                    alterOffsetsResult = ((IsolatedSinkConnector) connector).alterOffsets(connectorConfig, parsedOffsets);
                 } catch (UnsupportedOperationException e) {
                     throw new ConnectException("Failed to alter offsets for connector " + connName + " because it doesn't support external " +
                             "modification of offsets", e);
                 }
 
                 SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, connectorConfig);
-                Class<? extends Connector> sinkConnectorClass = connector.getClass();
+                Class<? extends Connector> sinkConnectorClass = connector.pluginClass();
                 Map<String, Object> adminConfig = adminConfigs(
                         connName,
                         "connector-worker-adminclient-" + connName,
@@ -1403,14 +1403,14 @@ public class Worker {
      * @param connectorLoader the connector plugin's classloader to be used as the thread context classloader
      * @param cb callback to invoke upon completion
      */
-    private void alterSourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+    private void alterSourceConnectorOffsets(String connName, IsolatedConnector<?> connector, Map<String, String> connectorConfig,
                                              Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorConfig, config.topicCreationEnable());
         Map<String, Object> producerProps = config.exactlyOnceSourceEnabled()
                 ? exactlyOnceSourceTaskProducerConfigs(new ConnectorTaskId(connName, 0), config, sourceConfig,
-                connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId)
+                connector.pluginClass(), connectorClientConfigOverridePolicy, kafkaClusterId)
                 : baseProducerConfigs(connName, "connector-offset-producer-" + connName, config, sourceConfig,
-                connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId);
+                connector.pluginClass(), connectorClientConfigOverridePolicy, kafkaClusterId);
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
         ConnectorOffsetBackingStore offsetStore = config.exactlyOnceSourceEnabled()
@@ -1423,7 +1423,7 @@ public class Worker {
     }
 
     // Visible for testing
-    void alterSourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+    void alterSourceConnectorOffsets(String connName, IsolatedConnector<?> connector, Map<String, String> connectorConfig,
                                      Map<Map<String, ?>, Map<String, ?>> offsets, ConnectorOffsetBackingStore offsetStore,
                                      KafkaProducer<byte[], byte[]> producer, OffsetStorageWriter offsetWriter,
                                      ClassLoader connectorLoader, Callback<Message> cb) {
@@ -1431,7 +1431,7 @@ public class Worker {
             try {
                 boolean alterOffsetsResult;
                 try {
-                    alterOffsetsResult = ((SourceConnector) connector).alterOffsets(connectorConfig, offsets);
+                    alterOffsetsResult = ((IsolatedSourceConnector) connector).alterOffsets(connectorConfig, offsets);
                 } catch (UnsupportedOperationException e) {
                     throw new ConnectException("Failed to alter offsets for connector " + connName + " because it doesn't support external " +
                             "modification of offsets", e);

@@ -1904,7 +1904,8 @@ public class WorkerTest {
     }
 
     @Test
-    public void testAlterOffsetsConnectorDoesNotSupportOffsetAlteration() {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void testAlterOffsetsConnectorDoesNotSupportOffsetAlteration() throws Exception {
         mockKafkaClusterId();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
@@ -1912,7 +1913,7 @@ public class WorkerTest {
         worker.start();
 
         mockGenericIsolation();
-        when(plugins.newConnector(anyString())).thenReturn(sourceConnector);
+        when(plugins.newConnector(anyString())).thenReturn((IsolatedConnector) sourceConnector);
         when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
         when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenThrow(new UnsupportedOperationException("This connector doesn't " +
                 "support altering of offsets"));

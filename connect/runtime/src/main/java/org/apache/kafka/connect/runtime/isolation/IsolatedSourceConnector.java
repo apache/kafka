@@ -36,4 +36,8 @@ public class IsolatedSourceConnector extends IsolatedConnector<SourceConnector> 
         return isolate(() -> delegate.canDefineTransactionBoundaries(connectorConfig));
     }
 
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) throws Exception {
+        return isolate(() -> delegate.alterOffsets(connectorConfig, offsets));
+    }
+
 }
