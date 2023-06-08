@@ -64,7 +64,7 @@ public class DefaultBackgroundThreadTest {
     private NetworkClientDelegate networkClient;
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
-    private ApplicationEventProcessor applicationEventProcessor;
+    private ApplicationEventProcessor processor;
     private CoordinatorRequestManager coordinatorManager;
     private ErrorEventHandler errorEventHandler;
     private int requestTimeoutMs = 500;
@@ -79,7 +79,7 @@ public class DefaultBackgroundThreadTest {
         this.networkClient = mock(NetworkClientDelegate.class);
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
-        this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
+        this.processor = mock(ApplicationEventProcessor.class);
         this.coordinatorManager = mock(CoordinatorRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
@@ -115,7 +115,7 @@ public class DefaultBackgroundThreadTest {
         ApplicationEvent e = new NoopApplicationEvent("noop event");
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
-        verify(applicationEventProcessor, times(1)).process(e);
+        verify(processor, times(1)).process(e);
         backgroundThread.close();
     }
 
@@ -123,7 +123,7 @@ public class DefaultBackgroundThreadTest {
     public void testMetadataUpdateEvent() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.backgroundEventsQueue = new LinkedBlockingQueue<>();
-        this.applicationEventProcessor = new ApplicationEventProcessor(this.backgroundEventsQueue, mockRequestManagerRegistry(),
+        this.processor = new ApplicationEventProcessor(this.backgroundEventsQueue, mockRequestManagerRegistry(),
             metadata);
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
@@ -145,7 +145,7 @@ public class DefaultBackgroundThreadTest {
         ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
-        verify(applicationEventProcessor).process(any(CommitApplicationEvent.class));
+        verify(processor).process(any(CommitApplicationEvent.class));
         backgroundThread.close();
     }
 
@@ -163,7 +163,7 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testPollResultTimer() {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
-        // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
+        // purposely setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
                 Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
@@ -182,8 +182,10 @@ public class DefaultBackgroundThreadTest {
         return registry;
     }
 
-    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(final Time time,
-                                                                                    final long timeout) {
+    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
+            final Time time,
+            final long timeout
+    ) {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
@@ -206,7 +208,7 @@ public class DefaultBackgroundThreadTest {
                 applicationEventsQueue,
                 backgroundEventsQueue,
                 this.errorEventHandler,
-                applicationEventProcessor,
+                processor,
                 this.metadata,
                 this.networkClient,
                 this.groupState,
