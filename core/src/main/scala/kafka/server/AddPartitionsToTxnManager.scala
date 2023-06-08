@@ -34,9 +34,14 @@ object AddPartitionsToTxnManager {
 }
 
 
+/*
+ * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
+ * will exist at a time in the map. If a given transactional ID exists in the map, and a new request with the same ID
+ * comes in, one request will be in the map and one will return to the producer with a response depending on the epoch.
+ */
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
-                                  val earliestAdditionMs: Long)
+                                  val startTimeMs: mutable.Map[String, Long])
 
 
 class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time: Time)
@@ -51,12 +56,13 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
 
   def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
     nodesToTransactions.synchronized {
+      val curTime = time.milliseconds()
       // Check if we have already have either node or individual transaction. Add the Node if it isn't there.
       val existingNodeAndTransactionData = nodesToTransactions.getOrElseUpdate(node,
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
           mutable.Map[String, AddPartitionsToTxnManager.AppendCallback](),
-          time.milliseconds()))
+          mutable.Map[String, Long]()))
 
       val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
@@ -72,16 +78,17 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
             Errors.NETWORK_EXCEPTION
           val oldCallback = existingNodeAndTransactionData.callbacks(transactionData.transactionalId)
           existingNodeAndTransactionData.transactionData.remove(transactionData)
-          oldCallback(topicPartitionsToError(existingTransactionData, error))
+          sendCallback(oldCallback, topicPartitionsToError(existingTransactionData, error), existingNodeAndTransactionData.startTimeMs(transactionData.transactionalId))
         } else {
           // If the incoming transactionData's epoch is lower, we can return with INVALID_PRODUCER_EPOCH immediately.
-          callback(topicPartitionsToError(transactionData, Errors.INVALID_PRODUCER_EPOCH))
+          sendCallback(callback, topicPartitionsToError(transactionData, Errors.INVALID_PRODUCER_EPOCH), curTime)
           return
         }
       }
 
       existingNodeAndTransactionData.transactionData.add(transactionData)
       existingNodeAndTransactionData.callbacks.put(transactionData.transactionalId, callback)
+      existingNodeAndTransactionData.startTimeMs.put(transactionData.transactionalId, curTime)
       wakeup()
     }
   }
@@ -97,28 +104,30 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     topicPartitionsToError.toMap
   }
 
+  private def sendCallback(callback: AddPartitionsToTxnManager.AppendCallback, errorMap: Map[TopicPartition, Errors], startTime: Long): Unit = {
+    verificationTimeMs.update(time.milliseconds() - startTime)
+    callback(errorMap)
+  }
+
   private class AddPartitionsToTxnHandler(node: Node, transactionDataAndCallbacks: TransactionDataAndCallbacks) extends RequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       // Note: Synchronization is not needed on inflightNodes since it is always accessed from this thread.
-      verificationTimeMs.update(time.milliseconds() - transactionDataAndCallbacks.earliestAdditionMs)
       inflightNodes.remove(node)
       if (response.authenticationException != null) {
         error(s"AddPartitionsToTxnRequest failed for node ${response.destination} with an " +
           "authentication exception.", response.authenticationException)
-        transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-          callback(buildErrorMap(txnId, Errors.forException(response.authenticationException).code))
-        }
+        sendCallbacksToAll(Errors.forException(response.authenticationException).code)
       } else if (response.versionMismatch != null) {
         // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it.
         // In this case, skip verification.
         warn(s"AddPartitionsToTxnRequest failed for node ${response.destination} with invalid version exception. This suggests verification is not supported." +
           s"Continuing handling the produce request.")
-        transactionDataAndCallbacks.callbacks.values.foreach(_(Map.empty))
+        transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
+          sendCallback(callback, Map.empty, transactionDataAndCallbacks.startTimeMs(txnId))
+        }
       } else if (response.wasDisconnected || response.wasTimedOut) {
         warn(s"AddPartitionsToTxnRequest failed for node ${response.destination} with a network exception.")
-        transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-          callback(buildErrorMap(txnId, Errors.NETWORK_EXCEPTION.code))
-        }
+        sendCallbacksToAll(Errors.NETWORK_EXCEPTION.code)
       } else {
         val addPartitionsToTxnResponseData = response.responseBody.asInstanceOf[AddPartitionsToTxnResponse].data
         if (addPartitionsToTxnResponseData.errorCode != 0) {
@@ -130,9 +139,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
           else
             addPartitionsToTxnResponseData.errorCode
 
-          transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
-            callback(buildErrorMap(txnId, finalError))
-          }
+          sendCallbacksToAll(finalError)
         } else {
           addPartitionsToTxnResponseData.resultsByTransaction.forEach { transactionResult =>
             val unverified = mutable.Map[TopicPartition, Errors]()
@@ -155,7 +162,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
             }
             verificationFailureRate.mark(unverified.size)
             val callback = transactionDataAndCallbacks.callbacks(transactionResult.transactionalId)
-            callback(unverified.toMap)
+            sendCallback(callback, unverified.toMap, transactionDataAndCallbacks.startTimeMs(transactionResult.transactionalId))
           }
         }
       }
@@ -165,6 +172,12 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     private def buildErrorMap(transactionalId: String, errorCode: Short): Map[TopicPartition, Errors] = {
       val transactionData = transactionDataAndCallbacks.transactionData.find(transactionalId)
       topicPartitionsToError(transactionData, Errors.forCode(errorCode))
+    }
+
+    private def sendCallbacksToAll(errorCode: Short): Unit = {
+      transactionDataAndCallbacks.callbacks.foreach { case (txnId, callback) =>
+        sendCallback(callback, buildErrorMap(txnId, errorCode), transactionDataAndCallbacks.startTimeMs(txnId))
+      }
     }
   }
 
