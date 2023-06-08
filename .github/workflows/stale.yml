@@ -15,14 +15,14 @@
 
 name: 'Close stale issues and PRs'
 on:
-  schedule:
-    - cron: '30 3 * * *'
+  #schedule:
+  #  - cron: '30 3 * * *'
   workflow_dispatch:
     inputs:
       dryRun:
         description: 'Dry Run'
         required: true
-        default: false
+        default: true
         type: boolean
       operationsPerRun:
         description: 'Max GitHub API operations'
