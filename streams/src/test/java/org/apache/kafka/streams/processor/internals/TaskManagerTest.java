@@ -1971,6 +1971,29 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldReAddRevivedTasksToStateUpdater() {
+        final StreamTask corruptedActiveTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final StandbyTask corruptedStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.task(taskId03)).thenReturn( corruptedActiveTask);
+        when(tasks.task(taskId02)).thenReturn( corruptedStandbyTask);
+        expect(consumer.assignment()).andReturn(emptySet());
+        replay(consumer);
+
+        taskManager.handleCorruption(mkSet(corruptedActiveTask.id(), corruptedStandbyTask.id()));
+
+        Mockito.verify(tasks).removeTask(corruptedActiveTask);
+        Mockito.verify(tasks).removeTask(corruptedStandbyTask);
+        Mockito.verify(tasks).addPendingTaskToInit(mkSet(corruptedActiveTask));
+        Mockito.verify(tasks).addPendingTaskToInit(mkSet(corruptedStandbyTask));
+    }
+
+    @Test
     public void shouldReviveCorruptTasks() {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
