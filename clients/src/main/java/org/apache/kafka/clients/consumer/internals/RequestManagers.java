@@ -33,21 +33,23 @@ public class RequestManagers {
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final ListOffsetsRequestManager listOffsetsRequestManager;
+    public final TopicMetadataRequestManager topicMetadataRequestManager;
     private final List<Optional<? extends RequestManager>> entries;
 
     public RequestManagers(ListOffsetsRequestManager listOffsetsRequestManager,
+                           TopicMetadataRequestManager topicMetadataRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager) {
-        this.listOffsetsRequestManager = requireNonNull(listOffsetsRequestManager,
-                "ListOffsetsRequestManager cannot be null");
+        this.listOffsetsRequestManager = requireNonNull(listOffsetsRequestManager, "ListOffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
-
+        this.topicMetadataRequestManager = topicMetadataRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
         list.add(Optional.of(listOffsetsRequestManager));
+        list.add(Optional.of(topicMetadataRequestManager));
         entries = Collections.unmodifiableList(list);
     }
 
