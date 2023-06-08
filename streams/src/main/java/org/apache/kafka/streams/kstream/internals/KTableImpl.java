@@ -570,7 +570,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             this
         );
 
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> storeBuilder;
+        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V, Change<V>>> storeBuilder;
 
         if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
             final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();

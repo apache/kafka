@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
 
@@ -44,7 +45,7 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
         final String expect = "3";
         final Map<String, String> logConfig = new HashMap<>();
         logConfig.put("min.insync.replicas", expect);
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder =
+        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object, Change<Object>>> builder =
             new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
                 .withLoggingEnabled(logConfig);
 
@@ -54,7 +55,7 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
 
     @Test
     public void bufferShouldAllowLoggingDisablement() {
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder
+        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object, Change<Object>>> builder
             = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
                 .withLoggingDisabled();
 
