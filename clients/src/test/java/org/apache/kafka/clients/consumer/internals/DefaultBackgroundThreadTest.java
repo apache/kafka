@@ -58,7 +58,6 @@ import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
     private static final long RETRY_BACKOFF_MS = 100;
-    private static final int REQUEST_TIMEOUT_MS = 500;
     private final Properties properties = new Properties();
     private MockTime time;
     private ConsumerMetadata metadata;
@@ -68,6 +67,7 @@ public class DefaultBackgroundThreadTest {
     private ApplicationEventProcessor applicationEventProcessor;
     private CoordinatorRequestManager coordinatorManager;
     private ErrorEventHandler errorEventHandler;
+    private int requestTimeoutMs = 500;
     private GroupState groupState;
     private CommitRequestManager commitManager;
 
@@ -166,7 +166,7 @@ public class DefaultBackgroundThreadTest {
         // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
-                Collections.singletonList(findCoordinatorUnsentRequest(time)));
+                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
         assertEquals(10, backgroundThread.handlePollResult(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
@@ -182,14 +182,15 @@ public class DefaultBackgroundThreadTest {
         return registry;
     }
 
-    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(final Time time) {
+    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(final Time time,
+                                                                                    final long timeout) {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
             Optional.empty());
-        req.setTimer(time, REQUEST_TIMEOUT_MS);
+        req.setTimer(time, timeout);
         return req;
     }
 
@@ -205,7 +206,7 @@ public class DefaultBackgroundThreadTest {
                 applicationEventsQueue,
                 backgroundEventsQueue,
                 this.errorEventHandler,
-            applicationEventProcessor,
+                applicationEventProcessor,
                 this.metadata,
                 this.networkClient,
                 this.groupState,
@@ -216,12 +217,12 @@ public class DefaultBackgroundThreadTest {
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {
         return new NetworkClientDelegate.PollResult(
                 RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time)));
+                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
     }
 
     private NetworkClientDelegate.PollResult mockPollCommitResult() {
         return new NetworkClientDelegate.PollResult(
                 RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time)));
+                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
     }
 }
