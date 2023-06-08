@@ -1265,7 +1265,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Optional<TimeOrderedKeyValueBuffer<K, V>> buffer = Optional.empty();
 
         if (joined.gracePeriod() != null) {
-            final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,  1).get();
+            final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,
+                joined.gracePeriod().toMillis()).get();
 
             buffer = Optional.of(new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name));
         }
