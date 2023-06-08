@@ -65,6 +65,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -128,6 +129,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -1980,13 +1982,19 @@ public class TaskManagerTest {
             .withInputPartitions(taskId02Partitions).build();
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(tasks.task(taskId03)).thenReturn( corruptedActiveTask);
-        when(tasks.task(taskId02)).thenReturn( corruptedStandbyTask);
+        when(tasks.task(taskId03)).thenReturn(corruptedActiveTask);
+        when(tasks.task(taskId02)).thenReturn(corruptedStandbyTask);
         expect(consumer.assignment()).andReturn(emptySet());
         replay(consumer);
 
         taskManager.handleCorruption(mkSet(corruptedActiveTask.id(), corruptedStandbyTask.id()));
 
+        final InOrder activeTaskOrder = inOrder(corruptedActiveTask);
+        activeTaskOrder.verify(corruptedActiveTask).closeDirty();
+        activeTaskOrder.verify(corruptedActiveTask).revive();
+        final InOrder standbyTaskOrder = inOrder(corruptedStandbyTask);
+        standbyTaskOrder.verify(corruptedStandbyTask).closeDirty();
+        standbyTaskOrder.verify(corruptedStandbyTask).revive();
         Mockito.verify(tasks).removeTask(corruptedActiveTask);
         Mockito.verify(tasks).removeTask(corruptedStandbyTask);
         Mockito.verify(tasks).addPendingTaskToInit(mkSet(corruptedActiveTask));
