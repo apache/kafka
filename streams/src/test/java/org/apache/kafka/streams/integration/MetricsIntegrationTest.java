@@ -258,7 +258,7 @@ public class MetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
     }
 
     @AfterEach
