@@ -106,11 +106,6 @@ public class ProducerIdsImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new ProducerIdsDelta((ProducerIdsImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((ProducerIdsDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 

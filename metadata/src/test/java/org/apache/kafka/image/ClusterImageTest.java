@@ -171,11 +171,6 @@ public class ClusterImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new ClusterDelta((ClusterImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((ClusterDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 

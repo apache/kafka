@@ -118,11 +118,6 @@ public class AclsImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new AclsDelta((AclsImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((AclsDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 

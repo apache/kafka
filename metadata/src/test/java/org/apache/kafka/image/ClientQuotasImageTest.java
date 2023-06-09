@@ -134,11 +134,6 @@ public class ClientQuotasImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new ClientQuotasDelta((ClientQuotasImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((ClientQuotasDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 

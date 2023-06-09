@@ -158,11 +158,6 @@ public class ScramImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new ScramDelta((ScramImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((ScramDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 

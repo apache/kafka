@@ -117,11 +117,6 @@ public class FeaturesImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new FeaturesDelta((FeaturesImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((FeaturesDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 

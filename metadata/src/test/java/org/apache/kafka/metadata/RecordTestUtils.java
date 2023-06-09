@@ -101,7 +101,20 @@ public class RecordTestUtils {
 
         Object createDeltaUponImage(Object image); // e.g. new AclsDelta((AclsImage) image)
 
-        Object createImageByApplyingDelta(Object delta); // e.g. ((AclsDelta) delta).apply()
+        default Object createImageByApplyingDelta(Object delta) {
+            try {
+                try {
+                    Method method = delta.getClass().getMethod("apply");
+                    return method.invoke(delta);
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e.getCause());
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
 
         default void test(Object finalImage, List<ApiMessageAndVersion> fromRecords) {
             for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {

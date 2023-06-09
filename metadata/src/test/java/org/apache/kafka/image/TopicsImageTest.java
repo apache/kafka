@@ -429,11 +429,6 @@ public class TopicsImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new TopicsDelta((TopicsImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((TopicsDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 

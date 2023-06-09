@@ -129,11 +129,6 @@ public class ConfigurationsImageTest {
             public Object createDeltaUponImage(Object image) {
                 return new ConfigurationsDelta((ConfigurationsImage) image);
             }
-
-            @Override
-            public Object createImageByApplyingDelta(Object delta) {
-                return ((ConfigurationsDelta) delta).apply();
-            }
         }.test(image, fromRecords);
     }
 
