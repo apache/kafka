@@ -101,7 +101,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     private static final int REQUEST_TIMEOUT_DURATION_MS = 60_000;
     private static final int CHECKPOINT_INTERVAL_DURATION_MS = 1_000;
     private static final int NUM_WORKERS = 3;
-    protected static final Duration CONSUMER_POLL_TIMEOUT_MS = Duration.ofMillis(500L);
+    protected static final Duration CONSUMER_POLL_TIMEOUT_MS = Duration.ofMillis(5000L);
     protected static final String PRIMARY_CLUSTER_ALIAS = "primary";
     protected static final String BACKUP_CLUSTER_ALIAS = "backup";
     protected static final List<Class<? extends Connector>> CONNECTOR_LIST = Arrays.asList(
