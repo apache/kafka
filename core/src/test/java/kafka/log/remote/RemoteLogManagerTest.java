@@ -55,6 +55,7 @@ import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -101,7 +102,9 @@ import static org.mockito.Mockito.when;
 public class RemoteLogManagerTest {
     Time time = new MockTime();
     int brokerId = 0;
-    String logDir = TestUtils.tempDirectory("kafka-").toString();
+    
+    @TempDir
+    File logDir;
 
     RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
@@ -137,7 +140,7 @@ public class RemoteLogManagerTest {
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
         Properties props = new Properties();
         remoteLogManagerConfig = createRLMConfig(props);
-        remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, tp -> Optional.of(mockLog)) {
+        remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir.toString(), time, tp -> Optional.of(mockLog)) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -198,7 +201,7 @@ public class RemoteLogManagerTest {
 
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
-        assertEquals(logDir, capture.getValue().get("log.dir"));
+        assertEquals(logDir.toString(), capture.getValue().get("log.dir"));
     }
 
     // This test creates 2 log segments, 1st one has start offset of 0, 2nd one (and active one) has start offset of 150.
@@ -209,7 +212,7 @@ public class RemoteLogManagerTest {
     // 4. The log segment got copied to remote storage has the expected metadata
     // 5. The highest remote offset is updated to the expected value
     @Test
-    void testCopyLogSegmentsToRemoteShouldCopyExpectedLogSegment() throws Exception {
+    void testCopyLogSegmentsToRemoteShouldCopyExpectedLogSegment(@TempDir final File tempDir) throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         long oldSegmentEndOffset = nextSegmentStartOffset - 1;
@@ -222,7 +225,6 @@ public class RemoteLogManagerTest {
 
         File tempFile = TestUtils.tempFile();
         File mockProducerSnapshotIndex = TestUtils.tempFile();
-        File tempDir = TestUtils.tempDirectory();
         // create 2 log segments, with 0 and 150 as log start offset
         LogSegment oldSegment = mock(LogSegment.class);
         LogSegment activeSegment = mock(LogSegment.class);
@@ -374,7 +376,7 @@ public class RemoteLogManagerTest {
     void testGetClassLoaderAwareRemoteStorageManager() throws Exception {
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
         RemoteLogManager remoteLogManager =
-            new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, t -> Optional.empty()) {
+            new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir.toString(), time, t -> Optional.empty()) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }
@@ -480,7 +482,7 @@ public class RemoteLogManagerTest {
         when(segmentMetadata.startOffset()).thenReturn(startOffset);
         when(segmentMetadata.endOffset()).thenReturn(startOffset + 2);
 
-        File tpDir = new File(logDir, tp.toString());
+        File tpDir = new File(logDir.toString(), tp.toString());
         Files.createDirectory(tpDir.toPath());
         File txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix());
         txnIdxFile.createNewFile();

@@ -17,11 +17,10 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,7 +41,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class DirectoryConfigProviderTest {
 
     private DirectoryConfigProvider provider;
-    private File parent;
     private File dir;
     private File bar;
     private File foo;
@@ -51,6 +49,8 @@ public class DirectoryConfigProviderTest {
     private File siblingDir;
     private File siblingDirFile;
     private File siblingFile;
+    @TempDir
+    private File parent;
 
     private static File writeFile(File file) throws IOException {
         Files.write(file.toPath(), file.getName().toUpperCase(Locale.ENGLISH).getBytes(StandardCharsets.UTF_8));
@@ -61,7 +61,6 @@ public class DirectoryConfigProviderTest {
     public void setup() throws IOException {
         provider = new DirectoryConfigProvider();
         provider.configure(Collections.emptyMap());
-        parent = TestUtils.tempDirectory();
         dir = new File(parent, "dir");
         dir.mkdir();
         foo = writeFile(new File(dir, "foo"));
@@ -78,7 +77,6 @@ public class DirectoryConfigProviderTest {
     @AfterEach
     public void close() throws IOException {
         provider.close();
-        Utils.delete(parent);
     }
 
     @Test

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.integration;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
@@ -60,6 +61,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.io.TempDir;
 
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
@@ -150,8 +152,8 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     }
 
     @BeforeEach
-    public void before(final TestInfo testInfo) throws IOException {
-        final String stateDirBasePath = TestUtils.tempDirectory().getPath();
+    public void before(final TestInfo testInfo, @TempDir final File stateDir) throws IOException {
+        final String stateDirBasePath = stateDir.getPath();
         final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamsConfig = getStreamsConfig(safeTestName);
         streamsConfigTwo = getStreamsConfig(safeTestName);

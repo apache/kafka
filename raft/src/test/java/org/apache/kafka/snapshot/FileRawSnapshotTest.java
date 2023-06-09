@@ -27,9 +27,8 @@ import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -46,17 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class FileRawSnapshotTest {
-    private Path tempDir = null;
-
-    @BeforeEach
-    public void setUp() {
-        tempDir = TestUtils.tempDirectory().toPath();
-    }
-
-    @AfterEach
-    public void tearDown() throws IOException {
-        Utils.delete(tempDir.toFile());
-    }
+    @TempDir
+    private Path tempDir;
 
     @Test
     public void testWritingSnapshot() throws IOException {
@@ -129,8 +119,7 @@ public final class FileRawSnapshotTest {
     }
 
     @Test
-    public void testPartialWriteReadSnapshot() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
+    public void testPartialWriteReadSnapshot(@TempDir final Path tempDir) throws IOException {
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
 
         ByteBuffer records = buildRecords(ByteBuffer.wrap(Utils.utf8("foo"))).buffer();

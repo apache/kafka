@@ -67,6 +67,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.After;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
@@ -77,6 +78,7 @@ import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.io.File;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
@@ -178,7 +180,7 @@ public class KafkaStreamsTest {
     }
 
     @Before
-    public void before() throws Exception {
+    public void before(@TempDir final File stateDir) throws Exception {
         time = new MockTime();
         adminClient = new MockAdminClient();
         supplier = new MockClientSupplier();
@@ -189,7 +191,7 @@ public class KafkaStreamsTest {
         props.put(StreamsConfig.CLIENT_ID_CONFIG, CLIENT_ID);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2018");
         props.put(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-        props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
 
         prepareStreams();

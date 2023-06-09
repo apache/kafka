@@ -23,8 +23,8 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.Collections;
@@ -36,13 +36,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class FileBasedRemoteLogMetadataCacheTest {
 
     @Test
-    public void testFileBasedRemoteLogMetadataCacheWithUnreferencedSegments() throws Exception {
+    public void testFileBasedRemoteLogMetadataCacheWithUnreferencedSegments(@TempDir final Path tempDirPath) throws Exception {
         TopicIdPartition partition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("test", 0));
         int brokerId = 0;
-        Path path = TestUtils.tempDirectory().toPath();
 
         // Create file based metadata cache.
-        FileBasedRemoteLogMetadataCache cache = new FileBasedRemoteLogMetadataCache(partition, path);
+        FileBasedRemoteLogMetadataCache cache = new FileBasedRemoteLogMetadataCache(partition, tempDirPath);
 
         // Add a segment with start offset as 0 for leader epoch 0.
         RemoteLogSegmentId segmentId1 = new RemoteLogSegmentId(partition, Uuid.randomUuid());
@@ -75,7 +74,7 @@ public class FileBasedRemoteLogMetadataCacheTest {
         cache.flushToFile(0, 0L);
 
         // Create a new cache with loading from the stored path.
-        FileBasedRemoteLogMetadataCache loadedCache = new FileBasedRemoteLogMetadataCache(partition, path);
+        FileBasedRemoteLogMetadataCache loadedCache = new FileBasedRemoteLogMetadataCache(partition, tempDirPath);
 
         // Fetch segment for leader epoch:0 and start offset:0, it should be metadata2.
         // This ensures that the ordering of metadata is taken care after loading from the stored snapshots.

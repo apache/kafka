@@ -28,6 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
@@ -51,7 +52,9 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
     private static final int SEG_SIZE = 1024 * 1024;
 
     private final Time time = new MockTime(1);
-    private final String logDir = TestUtils.tempDirectory("_rlmm_segs_").getAbsolutePath();
+    
+    @TempDir
+    private File logDir;
 
     private TopicBasedRemoteLogMetadataManagerHarness remoteLogMetadataManagerHarness;
 
@@ -61,7 +64,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         remoteLogMetadataManagerHarness = new TopicBasedRemoteLogMetadataManagerHarness() {
             protected Map<String, Object> overrideRemoteLogMetadataManagerProps() {
                 Map<String, Object> props = new HashMap<>();
-                props.put(LOG_DIR, logDir);
+                props.put(LOG_DIR, logDir.getAbsolutePath());
                 return props;
             }
         };
@@ -149,7 +152,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         Assertions.assertTrue(TestUtils.sameElementsWithoutOrder(Collections.singleton(followerSegmentMetadata).iterator(),
                                                                  topicBasedRlmm().listRemoteLogSegments(followerTopicIdPartition)));
         // Check whether the check-pointed consumer offsets are stored or not.
-        Path committedOffsetsPath = new File(logDir, COMMITTED_OFFSETS_FILE_NAME).toPath();
+        Path committedOffsetsPath = new File(logDir.getAbsolutePath(), COMMITTED_OFFSETS_FILE_NAME).toPath();
         Assertions.assertTrue(committedOffsetsPath.toFile().exists());
         CommittedOffsetsFile committedOffsetsFile = new CommittedOffsetsFile(committedOffsetsPath.toFile());
 

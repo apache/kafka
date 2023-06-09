@@ -59,6 +59,7 @@ import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -72,6 +73,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -196,11 +198,11 @@ public class NamedTopologyIntegrationTest {
     private NamedTopologyBuilder topology1Builder2;
     private NamedTopologyBuilder topology2Builder2;
 
-    private Properties configProps(final String appId, final String host) {
+    private Properties configProps(final String appId, final String host, final File stateDir) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
@@ -213,12 +215,12 @@ public class NamedTopologyIntegrationTest {
     }
 
     @BeforeEach
-    public void setup(final TestInfo testInfo) throws Exception {
+    public void setup(final TestInfo testInfo, @TempDir final File stateDir) throws Exception {
         appId = safeUniqueTestName(NamedTopologyIntegrationTest.class, testInfo);
         changelog1 = TOPIC_PREFIX + "-" + TOPOLOGY_1 + "-store-changelog";
         changelog2 = TOPIC_PREFIX + "-" + TOPOLOGY_2 + "-store-changelog";
         changelog3 = TOPIC_PREFIX + "-" + TOPOLOGY_3 + "-store-changelog";
-        props = configProps(appId, "host1");
+        props = configProps(appId, "host1", stateDir);
         streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
 
         topology1Builder = streams.newNamedTopologyBuilder(TOPOLOGY_1);
@@ -232,8 +234,8 @@ public class NamedTopologyIntegrationTest {
         CLUSTER.createTopic(OUTPUT_STREAM_3, 2, 1);
     }
 
-    private void setupSecondKafkaStreams() {
-        props2 = configProps(appId, "host2");
+    private void setupSecondKafkaStreams(final File stateDir) {
+        props2 = configProps(appId, "host2", stateDir);
         streams2 = new KafkaStreamsNamedTopologyWrapper(props2, clientSupplier);
         topology1Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_1);
         topology2Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_2);
@@ -294,7 +296,7 @@ public class NamedTopologyIntegrationTest {
 
         final String countTopicPrefix = TOPIC_PREFIX + "-" + countTopologyName;
         final String fkjTopicPrefix = TOPIC_PREFIX + "-" + fkjTopologyName;
-        final  Set<String> internalTopics = CLUSTER
+        final Set<String> internalTopics = CLUSTER
             .getAllTopicsInCluster().stream()
             .filter(t -> t.contains(TOPIC_PREFIX))
             .filter(t -> t.endsWith("-repartition") || t.endsWith("-changelog") || t.endsWith("-topic"))
@@ -345,7 +347,7 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldAddAndRemoveNamedTopologiesBeforeStartingAndRouteQueriesToCorrectTopology() throws Exception {
+    public void shouldAddAndRemoveNamedTopologiesBeforeStartingAndRouteQueriesToCorrectTopology(@TempDir final File stateDir) throws Exception {
         try {
             // for this test we have one of the topologies read from an input topic with just one partition so
             // that there's only one instance of that topology's store and thus should always have exactly one
@@ -397,7 +399,7 @@ public class NamedTopologyIntegrationTest {
             assertThat(partitionLags2.get(topology2Store).keySet(), equalTo(singleton(0))); // only one copy of the store in topology-2
 
             // Start up a second node with both topologies
-            setupSecondKafkaStreams();
+            setupSecondKafkaStreams(stateDir);
 
             topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
             topology2Builder2.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
@@ -470,8 +472,8 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldAddNamedTopologyToRunningApplicationWithMultipleNodes() throws Exception {
-        setupSecondKafkaStreams();
+    public void shouldAddNamedTopologyToRunningApplicationWithMultipleNodes(@TempDir final File stateDir) throws Exception {
+        setupSecondKafkaStreams(stateDir);
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
 
@@ -493,8 +495,8 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldAllowRemovingAndAddingNamedTopologyToRunningApplicationWithMultipleNodesAndResetsOffsets() throws Exception {
-        setupSecondKafkaStreams();
+    public void shouldAllowRemovingAndAddingNamedTopologyToRunningApplicationWithMultipleNodesAndResetsOffsets(@TempDir final File stateDir) throws Exception {
+        setupSecondKafkaStreams(stateDir);
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
 
@@ -708,11 +710,11 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldContinueProcessingOtherTopologiesWhenNewTopologyHasMissingInputTopics() throws Exception {
+    public void shouldContinueProcessingOtherTopologiesWhenNewTopologyHasMissingInputTopics(@TempDir final File stateDir) throws Exception {
         try {
             CLUSTER.createTopic(EXISTING_STREAM, 2, 1);
             produceToInputTopics(EXISTING_STREAM, STANDARD_INPUT_DATA);
-            setupSecondKafkaStreams();
+            setupSecondKafkaStreams(stateDir);
             topology1Builder.stream(EXISTING_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
             topology1Builder2.stream(EXISTING_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
 
@@ -770,8 +772,8 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldWaitForMissingInputTopicsToBeCreated() throws Exception {
-        setupSecondKafkaStreams();
+    public void shouldWaitForMissingInputTopicsToBeCreated(@TempDir final File stateDir) throws Exception {
+        setupSecondKafkaStreams(stateDir);
         topology1Builder.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology1Builder2.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
 
@@ -820,7 +822,7 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldBackOffTaskAndEmitDataWithinSameTopology() throws Exception {
+    public void shouldBackOffTaskAndEmitDataWithinSameTopology(@TempDir final File stateDir) throws Exception {
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_1, 2, 1);
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_2, 2, 1);
 
@@ -829,7 +831,7 @@ public class NamedTopologyIntegrationTest {
             final AtomicInteger outputExpected = new AtomicInteger(0);
             props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
             props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L);
-            props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
+            props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
             props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
             props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
