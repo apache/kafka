@@ -114,33 +114,30 @@ public class MetadataImageTest {
     }
 
     private static void testToImage(MetadataImage image, List<ApiMessageAndVersion> fromRecords) {
-        // test from empty image all the way to the final image
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-        RecordTestUtils.replayAll(delta, fromRecords);
-        MetadataImage nextImage = delta.apply(image.provenance());
-        assertEquals(image, nextImage);
         // test from empty image stopping each of the various intermediate images along the way
-        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
+
+            @Override
+            public Object getEmptyImage() {
+                return MetadataImage.EMPTY;
+            }
+
+            @Override
+            public Object createDeltaUponImage(Object image) {
+                return new MetadataDelta((MetadataImage) image);
+            }
+
+            @Override
+            public Object createImageByApplyingDelta(Object delta) {
+                MetadataDelta metadataDelta = (MetadataDelta) delta;
+                return metadataDelta.apply(image.provenance());
+            }
+        }.test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(MetadataImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder(image).build());
         return writer.records();
-    }
-
-    private static void testThroughAllIntermediateImagesLeadingToFinalImage(MetadataImage finalImage, List<ApiMessageAndVersion> fromRecords) {
-        for (int numRecordsForIntermediateImage = 1; numRecordsForIntermediateImage < fromRecords.size(); ++numRecordsForIntermediateImage) {
-            MetadataImage intermediateImage;
-            // create intermediate image from first numRecordsForIntermediateImage records
-            MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-            RecordTestUtils.replayInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            intermediateImage = delta.apply(finalImage.provenance());
-            // apply rest of records on top of intermediate image to obtain what should be the same final image
-            delta = new MetadataDelta(intermediateImage);
-            RecordTestUtils.replayAllButInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            MetadataImage receivedFinalImage = delta.apply(finalImage.provenance());
-            assertEquals(finalImage, receivedFinalImage);
-        }
     }
 }

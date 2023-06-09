@@ -159,33 +159,29 @@ public class ClusterImageTest {
     }
 
     private static void testToImage(ClusterImage image, List<ApiMessageAndVersion> fromRecords) {
-        // test from empty image all the way to the final image
-        ClusterDelta delta = new ClusterDelta(ClusterImage.EMPTY);
-        RecordTestUtils.replayAll(delta, fromRecords);
-        ClusterImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
         // test from empty image stopping each of the various intermediate images along the way
-        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
+
+            @Override
+            public Object getEmptyImage() {
+                return ClusterImage.EMPTY;
+            }
+
+            @Override
+            public Object createDeltaUponImage(Object image) {
+                return new ClusterDelta((ClusterImage) image);
+            }
+
+            @Override
+            public Object createImageByApplyingDelta(Object delta) {
+                return ((ClusterDelta) delta).apply();
+            }
+        }.test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(ClusterImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
-    }
-
-    private static void testThroughAllIntermediateImagesLeadingToFinalImage(ClusterImage finalImage, List<ApiMessageAndVersion> fromRecords) {
-        for (int numRecordsForIntermediateImage = 1; numRecordsForIntermediateImage < fromRecords.size(); ++numRecordsForIntermediateImage) {
-            ClusterImage intermediateImage;
-            // create intermediate image from first numRecordsForIntermediateImage records
-            ClusterDelta delta = new ClusterDelta(ClusterImage.EMPTY);
-            RecordTestUtils.replayInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            intermediateImage = delta.apply();
-            // apply rest of records on top of intermediate image to obtain what should be the same final image
-            delta = new ClusterDelta(intermediateImage);
-            RecordTestUtils.replayAllButInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            ClusterImage receivedFinalImage = delta.apply();
-            assertEquals(finalImage, receivedFinalImage);
-        }
     }
 }

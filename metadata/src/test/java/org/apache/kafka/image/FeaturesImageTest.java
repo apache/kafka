@@ -105,34 +105,30 @@ public class FeaturesImageTest {
     }
 
     private static void testToImage(FeaturesImage image, List<ApiMessageAndVersion> fromRecords) {
-        // test from empty image all the way to the final image
-        FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
-        RecordTestUtils.replayAll(delta, fromRecords);
-        FeaturesImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
         // test from empty image stopping each of the various intermediate images along the way
-        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
+
+            @Override
+            public Object getEmptyImage() {
+                return FeaturesImage.EMPTY;
+            }
+
+            @Override
+            public Object createDeltaUponImage(Object image) {
+                return new FeaturesDelta((FeaturesImage) image);
+            }
+
+            @Override
+            public Object createImageByApplyingDelta(Object delta) {
+                return ((FeaturesDelta) delta).apply();
+            }
+        }.test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(FeaturesImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
         return writer.records();
-    }
-
-    private static void testThroughAllIntermediateImagesLeadingToFinalImage(FeaturesImage finalImage, List<ApiMessageAndVersion> fromRecords) {
-        for (int numRecordsForIntermediateImage = 1; numRecordsForIntermediateImage < fromRecords.size(); ++numRecordsForIntermediateImage) {
-            FeaturesImage intermediateImage;
-            // create intermediate image from first numRecordsForIntermediateImage records
-            FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
-            RecordTestUtils.replayInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            intermediateImage = delta.apply();
-            // apply rest of records on top of intermediate image to obtain what should be the same final image
-            delta = new FeaturesDelta(intermediateImage);
-            RecordTestUtils.replayAllButInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            FeaturesImage receivedFinalImage = delta.apply();
-            assertEquals(finalImage, receivedFinalImage);
-        }
     }
 
     @Test

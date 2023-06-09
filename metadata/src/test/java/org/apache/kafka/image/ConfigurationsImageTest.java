@@ -117,33 +117,29 @@ public class ConfigurationsImageTest {
     }
 
     private static void testToImage(ConfigurationsImage image, List<ApiMessageAndVersion> fromRecords) {
-        // test from empty image all the way to the final image
-        ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
-        RecordTestUtils.replayAll(delta, fromRecords);
-        ConfigurationsImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
         // test from empty image stopping each of the various intermediate images along the way
-        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
+
+            @Override
+            public Object getEmptyImage() {
+                return ConfigurationsImage.EMPTY;
+            }
+
+            @Override
+            public Object createDeltaUponImage(Object image) {
+                return new ConfigurationsDelta((ConfigurationsImage) image);
+            }
+
+            @Override
+            public Object createImageByApplyingDelta(Object delta) {
+                return ((ConfigurationsDelta) delta).apply();
+            }
+        }.test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(ConfigurationsImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
-    }
-
-    private static void testThroughAllIntermediateImagesLeadingToFinalImage(ConfigurationsImage finalImage, List<ApiMessageAndVersion> fromRecords) {
-        for (int numRecordsForIntermediateImage = 1; numRecordsForIntermediateImage < fromRecords.size(); ++numRecordsForIntermediateImage) {
-            ConfigurationsImage intermediateImage;
-            // create intermediate image from first numRecordsForIntermediateImage records
-            ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
-            RecordTestUtils.replayInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            intermediateImage = delta.apply();
-            // apply rest of records on top of intermediate image to obtain what should be the same final image
-            delta = new ConfigurationsDelta(intermediateImage);
-            RecordTestUtils.replayAllButInitialRecords(delta, fromRecords, numRecordsForIntermediateImage);
-            ConfigurationsImage receivedFinalImage = delta.apply();
-            assertEquals(finalImage, receivedFinalImage);
-        }
     }
 }

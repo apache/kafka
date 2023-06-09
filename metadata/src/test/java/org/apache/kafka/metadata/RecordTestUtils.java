@@ -95,30 +95,43 @@ public class RecordTestUtils {
         replayAll(target, Collections.singletonList(recordAndVersion));
     }
 
-    public static void replayInitialRecords(
-        Object target,
-        List<ApiMessageAndVersion> imageRecords,
-        int numRecordstoReplay
-    ) {
-        int recordNumber = 0;
-        for (ApiMessageAndVersion record : imageRecords) {
-            if (recordNumber++ < numRecordstoReplay) {
-                replayOne(target, record);
-            } else {
-                break;
-            }
-        }
-    }
+    public static interface TestThroughAllIntermediateImagesLeadingToFinalImageHelper {
 
-    public static void replayAllButInitialRecords(
-        Object target,
-        List<ApiMessageAndVersion> imageRecords,
-        int numRecordsToSkipBeforeReplaying
-    ) {
-        int recordNumber = 0;
-        for (ApiMessageAndVersion record : imageRecords) {
-            if (recordNumber++ >= numRecordsToSkipBeforeReplaying) {
-                replayOne(target, record);
+        Object getEmptyImage(); // AclsImage.EMPTY
+
+        Object createDeltaUponImage(Object image); // new AclsDelta((AclsImage)image)
+
+        Object createImageByApplyingDelta(Object delta); // ((AclsDelta)delta).apply()
+
+        default void test(Object finalImage, List<ApiMessageAndVersion> fromRecords) {
+            for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {
+                // create first image from first numRecordsForfirstImage records
+                Object delta = createDeltaUponImage(getEmptyImage());
+                RecordTestUtils.replayAll(delta, fromRecords.subList(0, numRecordsForfirstImage));
+                Object firstImage = createImageByApplyingDelta(delta);
+                // for all possible further batch sizes, apply as many batches as it takes to get to the final image
+                int remainingRecords = fromRecords.size() - numRecordsForfirstImage;
+                if (remainingRecords == 0) {
+                    assertEquals(finalImage, firstImage);
+                } else {
+                    // for all possible further batch sizes...
+                    for (int maxRecordsForSuccessiveBatches = 1; maxRecordsForSuccessiveBatches <= remainingRecords; ++maxRecordsForSuccessiveBatches) {
+                        Object latestIntermediateImage = firstImage;
+                        // ... apply as many batches as it takes to get to the final image
+                        int numAdditionalBatches = (int) Math.ceil(remainingRecords * 1.0 / maxRecordsForSuccessiveBatches);
+                        for (int additionalBatchNum = 0; additionalBatchNum < numAdditionalBatches; ++additionalBatchNum) {
+                            // apply up to maxRecordsForSuccessiveBatches records on top of the latest intermediate image
+                            // to obtain the next intermediate image.
+                            delta = createDeltaUponImage(latestIntermediateImage);
+                            int applyFromIndex = numRecordsForfirstImage + additionalBatchNum * maxRecordsForSuccessiveBatches;
+                            int applyToIndex = Math.min(fromRecords.size(), applyFromIndex + maxRecordsForSuccessiveBatches);
+                            RecordTestUtils.replayAll(delta, fromRecords.subList(applyFromIndex, applyToIndex));
+                            latestIntermediateImage = createImageByApplyingDelta(delta);
+                        }
+                        // The final intermediate image received should be the expected final image
+                        assertEquals(finalImage, latestIntermediateImage);
+                    }
+                }
             }
         }
     }
