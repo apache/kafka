@@ -518,6 +518,8 @@ public class OffsetFetcher {
         }
     }
 
+
+
     /**
      * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then
      * we should check that all the assignments have a valid position.
