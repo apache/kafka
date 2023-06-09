@@ -44,7 +44,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(10)
+            .setTargetMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)))
@@ -65,7 +65,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.REVOKING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(10, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 3),
             mkTopicAssignment(topicId2, 6)
@@ -88,7 +88,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(10)
+            .setTargetMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)))
@@ -109,7 +109,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
@@ -129,7 +129,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(10)
+            .setTargetMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)))
@@ -150,7 +150,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
@@ -179,7 +179,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
@@ -207,7 +207,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.REVOKING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(10, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 3),
             mkTopicAssignment(topicId2, 6)
@@ -230,7 +230,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
@@ -260,7 +260,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 3),
             mkTopicAssignment(topicId2, 6)
@@ -280,7 +280,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
@@ -310,7 +310,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
@@ -327,7 +327,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
@@ -358,7 +358,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(12, updatedMember.memberEpoch());
-        assertEquals(12, updatedMember.nextMemberEpoch());
+        assertEquals(12, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
@@ -375,7 +375,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(11)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
@@ -404,7 +404,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6)
@@ -423,7 +423,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(11)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
@@ -447,7 +447,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
@@ -464,7 +464,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3, 4, 5),
                 mkTopicAssignment(topicId2, 6, 7, 8)))
@@ -485,7 +485,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(11, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
-        assertEquals(11, updatedMember.nextMemberEpoch());
+        assertEquals(11, updatedMember.targetMemberEpoch());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
@@ -502,7 +502,7 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .setNextMemberEpoch(11)
+            .setTargetMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
@@ -529,7 +529,7 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(ConsumerGroupMember.MemberState.REVOKING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(10, updatedMember.memberEpoch());
-        assertEquals(12, updatedMember.nextMemberEpoch());
+        assertEquals(12, updatedMember.targetMemberEpoch());
         assertEquals(Collections.emptyMap(), updatedMember.assignedPartitions());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),

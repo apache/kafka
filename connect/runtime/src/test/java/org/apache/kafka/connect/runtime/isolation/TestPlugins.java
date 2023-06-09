@@ -69,7 +69,7 @@ public class TestPlugins {
         /**
          * A plugin which will always throw an exception during loading
          */
-        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException"),
+        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException", false),
         /**
          * A plugin which samples information about its initialization.
          */
@@ -146,9 +146,17 @@ public class TestPlugins {
          */
         BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
         /**
-         * A plugin which is incorrectly packaged, which has a private default constructor.
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
          */
         BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("bad-packaging", "test.plugins.NoDefaultConstructorConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
+         */
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONVERTER("bad-packaging", "test.plugins.NoDefaultConstructorConverter", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
+         */
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_OVERRIDE_POLICY("bad-packaging", "test.plugins.NoDefaultConstructorOverridePolicy", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */

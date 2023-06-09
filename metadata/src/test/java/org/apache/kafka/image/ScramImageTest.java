@@ -44,9 +44,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(value = 40)
 public class ScramImageTest {
-    final static ScramImage IMAGE1;
+    public final static ScramImage IMAGE1;
 
-    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
 
     final static ScramDelta DELTA1;
 

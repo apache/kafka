@@ -37,7 +37,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -3865,6 +3865,7 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3900,6 +3901,7 @@ class GroupCoordinatorTest {
       any[Option[ReentrantLock]],
       any(),
       any(), 
+      any(),
       any(),
       any())).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4047,6 +4049,7 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
+      any(),
       any())
     ).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -4079,6 +4082,7 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any(),

@@ -3350,8 +3350,17 @@ public class DistributedHerderTest {
 
         expectAnyTicks();
 
+        // There's a race condition in DistributedHerder::addRequest that isn't triggered
+        // often under normal circumstances, but becomes more likely during this test
+        // because we mock out member::poll and the herder no longer blocks when invoking
+        // that method
+        // This can cause the herder to skip a call to member::wakeup during that method, and
+        // since the number of calls to that method isn't vital to our testing coverage, we permit
+        // any number of calls
+        // The race condition itself is benign and should have no negative impact on herder logic;
+        // see DistributedHerder::addRequest for more detail
         member.wakeup();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().anyTimes();
 
         org.easymock.IExpectationSetters<RestClient.HttpResponse<Object>> expectRequest = EasyMock.expect(
                 restClient.httpRequest(
@@ -3370,7 +3379,7 @@ public class DistributedHerderTest {
             return null;
         });
 
-        expectHerderShutdown(true);
+        expectHerderShutdown();
         forwardRequestExecutor.shutdown();
         EasyMock.expectLastCall();
         EasyMock.expect(forwardRequestExecutor.awaitTermination(anyLong(), anyObject())).andReturn(true);
@@ -3455,7 +3464,7 @@ public class DistributedHerderTest {
             EasyMock.expectLastCall();
         }
 
-        expectHerderShutdown(false);
+        expectHerderShutdown();
 
         PowerMock.replayAll();
 
@@ -3490,7 +3499,7 @@ public class DistributedHerderTest {
         expectAnyTicks();
 
         member.wakeup();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().anyTimes();
 
         ClusterConfigState configState = exactlyOnceSnapshot(
                 sessionKey,
@@ -3528,7 +3537,7 @@ public class DistributedHerderTest {
         configBackingStore.putTaskCountRecord(CONN1, 1);
         EasyMock.expectLastCall();
 
-        expectHerderShutdown(true);
+        expectHerderShutdown();
 
         PowerMock.replayAll(workerFencingFuture, herderFencingFuture);
 
@@ -3561,7 +3570,7 @@ public class DistributedHerderTest {
         expectAnyTicks();
 
         member.wakeup();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().anyTimes();
 
         ClusterConfigState configState = exactlyOnceSnapshot(
                 sessionKey,
@@ -3576,7 +3585,7 @@ public class DistributedHerderTest {
         EasyMock.expect(worker.fenceZombies(EasyMock.eq(CONN1), EasyMock.eq(2), EasyMock.eq(CONN1_CONFIG)))
                 .andThrow(fencingException);
 
-        expectHerderShutdown(true);
+        expectHerderShutdown();
 
         PowerMock.replayAll();
 
@@ -3611,7 +3620,7 @@ public class DistributedHerderTest {
         expectAnyTicks();
 
         member.wakeup();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().anyTimes();
 
         ClusterConfigState configState = exactlyOnceSnapshot(
                 sessionKey,
@@ -3643,7 +3652,7 @@ public class DistributedHerderTest {
             });
         }
 
-        expectHerderShutdown(true);
+        expectHerderShutdown();
 
         PowerMock.replayAll(workerFencingFuture, herderFencingFuture);
 
@@ -3765,7 +3774,7 @@ public class DistributedHerderTest {
             EasyMock.expectLastCall();
         });
 
-        expectHerderShutdown(false);
+        expectHerderShutdown();
 
         PowerMock.replayAll();
 
@@ -4665,11 +4674,7 @@ public class DistributedHerderTest {
         EasyMock.expectLastCall();
     }
 
-    private void expectHerderShutdown(boolean wakeup) {
-        if (wakeup) {
-            member.wakeup();
-            EasyMock.expectLastCall();
-        }
+    private void expectHerderShutdown() {
         worker.stopAndAwaitConnectors();
         EasyMock.expectLastCall();
         worker.stopAndAwaitTasks();
