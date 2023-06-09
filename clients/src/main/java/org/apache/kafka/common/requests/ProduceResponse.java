@@ -131,6 +131,7 @@ public class ProduceResponse extends AbstractResponse {
     public static final class PartitionResponse {
         public Errors error;
         public long baseOffset;
+        public long lastOffset;
         public long logAppendTime;
         public long logStartOffset;
         public List<RecordError> recordErrors;
@@ -153,8 +154,21 @@ public class ProduceResponse extends AbstractResponse {
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
+            this(error, baseOffset, INVALID_OFFSET, logAppendTime, logStartOffset, recordErrors, errorMessage);
+        }
+
+        public PartitionResponse(
+            Errors error,
+            long baseOffset,
+            long lastOffset,
+            long logAppendTime,
+            long logStartOffset,
+            List<RecordError> recordErrors,
+            String errorMessage
+        ) {
             this.error = error;
             this.baseOffset = baseOffset;
+            this.lastOffset = lastOffset;
             this.logAppendTime = logAppendTime;
             this.logStartOffset = logStartOffset;
             this.recordErrors = recordErrors;
@@ -167,6 +181,7 @@ public class ProduceResponse extends AbstractResponse {
             if (o == null || getClass() != o.getClass()) return false;
             PartitionResponse that = (PartitionResponse) o;
             return baseOffset == that.baseOffset &&
+                    lastOffset == that.lastOffset &&
                     logAppendTime == that.logAppendTime &&
                     logStartOffset == that.logStartOffset &&
                     error == that.error &&
@@ -176,7 +191,7 @@ public class ProduceResponse extends AbstractResponse {
 
         @Override
         public int hashCode() {
-            return Objects.hash(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage);
+            return Objects.hash(error, baseOffset, lastOffset, logAppendTime, logStartOffset, recordErrors, errorMessage);
         }
 
         @Override
@@ -187,6 +202,8 @@ public class ProduceResponse extends AbstractResponse {
             b.append(error);
             b.append(",offset: ");
             b.append(baseOffset);
+            b.append(",lastOffset: ");
+            b.append(lastOffset);
             b.append(",logAppendTime: ");
             b.append(logAppendTime);
             b.append(", logStartOffset: ");

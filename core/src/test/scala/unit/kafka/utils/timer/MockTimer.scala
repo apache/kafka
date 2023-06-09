@@ -16,7 +16,7 @@
   */
 package kafka.utils.timer
 
-import kafka.utils.MockTime
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.util.timer.{Timer, TimerTask, TimerTaskEntry}
 
 import scala.collection.mutable
