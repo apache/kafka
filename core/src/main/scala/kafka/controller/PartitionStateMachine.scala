@@ -33,6 +33,22 @@ import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, mutable}
 //负责定义 Kafka 分区状态、合法的状态转换，以及管理状态之间的转换。
+/**
+ * PartitionStateMachine：分区状态机抽象类。
+ * 它定义了诸如 startup、shutdown 这样的公共方法，同时也给出了处理分区状态转换入口方法 handleStateChanges 的签名。
+ *
+ * ZkPartitionStateMachine：PartitionStateMachine 唯一的继承子类。它实现了分区状态机的主体逻辑功能。
+ * 和 ZkReplicaStateMachine 类似，ZkPartitionStateMachine 重写了父类的 handleStateChanges 方法，
+ * 并配以私有的 doHandleStateChanges 方法，共同实现分区状态转换的操作。
+ *
+ * PartitionState 接口及其实现对象：定义 4 类分区状态，分别是 NewPartition、OnlinePartition、OfflinePartition 和 NonExistentPartition。
+ * 除此之外，还定义了它们之间的流转关系。
+ *
+ * PartitionLeaderElectionStrategy 接口及其实现对象：定义 4 类分区 Leader 选举策略。你可以认为它们是发生 Leader 选举的 4 种场景。
+ *
+ * PartitionLeaderElectionAlgorithms：分区 Leader 选举的算法实现。既然定义了 4 类选举策略，就一定有相应的实现代码，PartitionLeaderElectionAlgorithms 就提供了这 4 类选举策略的实现代码。
+ * @param controllerContext
+ */
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
    * Invoked on successful controller election.
@@ -106,6 +122,13 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
     handleStateChanges(partitions, targetState, None)
   }
 
+  /**
+   * 一句话概括 handleStateChanges 的作用，应该这样说：handleStateChanges 把 partitions 的状态设置为 targetState，
+   * 同时，还可能需要用 leaderElectionStrategy 策略为 partitions 选举新的 Leader，最终将 partitions 的 Leader 信息返回。
+   * 其中，partitions 是待执行状态变更的目标分区列表，
+   * targetState 是目标状态，
+   * leaderElectionStrategy 是一个可选项，如果传入了，就表示要执行 Leader 选举。
+   */
   def handleStateChanges(
     partitions: Seq[TopicPartition],
     targetState: PartitionState,
@@ -125,7 +148,14 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
  *                          Valid previous states are NewPartition/OfflinePartition
  * 4. OfflinePartition    : If, after successful leader election, the leader for partition dies, then the partition
  *                          moves to the OfflinePartition state. Valid previous states are NewPartition/OnlinePartition
+ *
+ * 目前，Kafka 为分区定义了 4 类状态。
+ * NewPartition：分区被创建后被设置成这个状态，表明它是一个全新的分区对象。处于这个状态的分区，被 Kafka 认为是“未初始化”，因此，不能选举 Leader。
+ * OnlinePartition：分区正式提供服务时所处的状态。
+ * OfflinePartition：分区下线后所处的状态。
+ * NonExistentPartition：分区被删除，并且从分区状态机移除后所处的状态。
  */
+// ZkPartitionStateMachine继承子类定义
 class ZkPartitionStateMachine(config: KafkaConfig,
                               stateChangeLogger: StateChangeLogger,
                               controllerContext: ControllerContext,
@@ -148,6 +178,10 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    *         topic partitions and the corresponding values are either the exception that was thrown or new
    *         leader & ISR.
    */
+    //整个方法就两步：
+    // 第 1 步是，调用 doHandleStateChanges 方法执行分区状态转换；
+    // 第 2 步是，Controller 给相关 Broker 发送请求，告知它们这些分区的状态变更。
+    // 至于哪些 Broker 属于相关 Broker，以及给 Broker 发送哪些请求，实际上是在第 1 步中被确认的
   override def handleStateChanges(
     partitions: Seq[TopicPartition],
     targetState: PartitionState,
@@ -155,23 +189,30 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
     if (partitions.nonEmpty) {
       try {
+        // 清空Controller待发送请求集合，准备本次请求发送
         controllerBrokerRequestBatch.newBatch()
+        // 调用doHandleStateChanges方法执行真正的状态变更逻辑
         val result = doHandleStateChanges(
           partitions,
           targetState,
           partitionLeaderElectionStrategyOpt
         )
+        // Controller给相关Broker发送请求通知状态变化
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
+        // 返回状态变更处理结果
         result
       } catch {
+        // 如果Controller易主，则记录错误日志，然后重新抛出异常
+        // 上层代码会捕获该异常并执行maybeResign方法执行卸任逻辑
         case e: ControllerMovedException =>
           error(s"Controller moved to another broker when moving some partitions to $targetState state", e)
           throw e
+        // 如果是其他异常，记录错误日志，封装错误返回
         case e: Throwable =>
           error(s"Error while moving some partitions to $targetState state", e)
           partitions.iterator.map(_ -> Left(e)).toMap
       }
-    } else {
+    } else {// 如果partitions为空，什么都不用做
       Map.empty
     }
   }
@@ -205,6 +246,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    *         topic partitions and the corresponding values are either the exception that was thrown or new
    *         leader & ISR.
    */
+    // 这个方法首先会做状态初始化的工作，在方法调用时，不在元数据缓存中的所有分区的状态，会被初始化为 NonExistentPartition。
+    // 接着，检查哪些分区执行的状态转换不合法，并为这些分区记录相应的错误日志。
+    // 之后，代码携合法状态转换的分区列表进入到 case 分支。由于分区状态只有 4 个，
+    // 因此，它的 case 分支代码远比 ReplicaStateMachine 中的简单，
+    // 而且，只有 OnlinePartition 这一路的分支逻辑相对复杂，其他 3 路仅仅是将分区状态设置成目标状态而已。
   private def doHandleStateChanges(
     partitions: Seq[TopicPartition],
     targetState: PartitionState,
@@ -212,10 +258,12 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
     val traceEnabled = stateChangeLog.isTraceEnabled
+    // 初始化新分区的状态为NonExistentPartition
     partitions.foreach(partition => controllerContext.putPartitionStateIfNotExists(partition, NonExistentPartition))
+    // 找出要执行非法状态转换的分区，记录错误日志
     val (validPartitions, invalidPartitions) = controllerContext.checkValidPartitionStateChange(partitions, targetState)
     invalidPartitions.foreach(partition => logInvalidTransition(partition, targetState))
-
+    // 根据targetState进入到不同的case分支
     targetState match {
       case NewPartition =>
         validPartitions.foreach { partition =>
@@ -225,8 +273,16 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         }
         Map.empty
       case OnlinePartition =>
+        // 第 1 步是为 NewPartition 状态的分区做初始化操作，也就是在 ZooKeeper 中，创建并写入分区节点数据。
+        // 节点的位置是/brokers/topics/<topic>/partitions/<partition>，每个节点都要包含分区的 Leader 和 ISR 等数据。
+        // 而 Leader 和 ISR 的确定规则是：选择存活副本列表的第一个副本作为 Leader；选择存活副本列表作为 ISR。
+
+        // 获取未初始化分区列表，也就是NewPartition状态下的所有分区
         val uninitializedPartitions = validPartitions.filter(partition => partitionState(partition) == NewPartition)
+        // 获取具备Leader选举资格的分区列表
+        // 只能为OnlinePartition和OfflinePartition状态的分区选举Leader
         val partitionsToElectLeader = validPartitions.filter(partition => partitionState(partition) == OfflinePartition || partitionState(partition) == OnlinePartition)
+        // 初始化NewPartition状态分区，在ZooKeeper中写入Leader和ISR数据
         if (uninitializedPartitions.nonEmpty) {
           val successfulInitializations = initializeLeaderAndIsrForPartitions(uninitializedPartitions)
           successfulInitializations.foreach { partition =>
@@ -235,6 +291,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
             controllerContext.putPartitionState(partition, OnlinePartition)
           }
         }
+        // 第 2 步是为具备 Leader 选举资格的分区推选 Leader，代码调用 electLeaderForPartitions 方法实现。
+        // 这个方法会不断尝试为多个分区选举 Leader，直到所有分区都成功选出 Leader。
         if (partitionsToElectLeader.nonEmpty) {
           val electionResults = electLeaderForPartitions(
             partitionsToElectLeader,
@@ -248,10 +306,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
               stateChangeLog.info(
                 s"Changed partition $partition from ${partitionState(partition)} to $targetState with state $leaderAndIsr"
               )
+              // 将成功选举Leader后的分区设置成OnlinePartition状态
               controllerContext.putPartitionState(partition, OnlinePartition)
-            case (_, Left(_)) => // Ignore; no need to update partition state on election error
+            case (_, Left(_)) => // // 如果选举失败，忽略之。Ignore; no need to update partition state on election error
           }
-
+          // 返回Leader选举结果
           electionResults
         } else {
           Map.empty
@@ -273,11 +332,14 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    */
   private def initializeLeaderAndIsrForPartitions(partitions: Seq[TopicPartition]): Seq[TopicPartition] = {
     val successfulInitializations = mutable.Buffer.empty[TopicPartition]
+    // 获取每个分区的副本列表
     val replicasPerPartition = partitions.map(partition => partition -> controllerContext.partitionReplicaAssignment(partition))
+    // 获取每个分区的所有存活副本
     val liveReplicasPerPartition = replicasPerPartition.map { case (partition, replicas) =>
         val liveReplicasForPartition = replicas.filter(replica => controllerContext.isReplicaOnline(replica, partition))
         partition -> liveReplicasForPartition
     }
+    // 按照有无存活副本对分区进行分组  分为两组：有存活副本的分区；无任何存活副本的分区
     val (partitionsWithoutLiveReplicas, partitionsWithLiveReplicas) = liveReplicasPerPartition.partition { case (_, liveReplicas) => liveReplicas.isEmpty }
 
     partitionsWithoutLiveReplicas.foreach { case (partition, _) =>
@@ -287,6 +349,9 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         "replica is alive."
       logFailedStateChange(partition, NewPartition, OnlinePartition, new StateChangeFailedException(failMsg))
     }
+    // 为"有存活副本的分区"确定Leader和ISR
+    // Leader确认依据：存活副本列表的首个副本被认定为Leader
+    // ISR确认依据：存活副本列表被认定为ISR
     val leaderIsrAndControllerEpochs = partitionsWithLiveReplicas.map { case (partition, liveReplicas) =>
       val leaderAndIsr = LeaderAndIsr(liveReplicas.head, liveReplicas.toList)
       val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
@@ -529,15 +594,50 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 }
 
 object PartitionLeaderElectionAlgorithms {
+  /**
+   *
+   * @param assignment 1.assignments这是分区的副本列表。该列表有个专属的名称，叫 Assigned Replicas，简称 AR。
+   *                   当我们创建主题之后，使用 kafka-topics 脚本查看主题时，应该可以看到名为 Replicas 的一列数据。
+   *                   这列数据显示的，就是主题下每个分区的 AR。assignments 参数类型是 Seq[Int]。
+   *                   因此：AR 是有顺序的，而且不一定和 ISR 的顺序相同！
+   *
+   * @param isr 2.isrISR 在 Kafka 中很有名气，它保存了分区所有与 Leader 副本保持同步的副本列表。
+   *            注意，Leader 副本自己也在 ISR 中。另外，作为 Seq[Int]类型的变量，isr 自身也是有顺序的。
+   *
+   * @param liveReplicas 3.liveReplicas从名字可以推断出，它保存了该分区下所有处于存活状态的副本。
+   *                     怎么判断副本是否存活呢？可以根据 Controller 元数据缓存中的数据来判定。
+   *                     简单来说，所有在运行中的 Broker 上的副本，都被认为是存活的。
+   * @param uncleanLeaderElectionEnabled 4.uncleanLeaderElectionEnabled在默认配置下，只要不是由 AdminClient 发起的Leader
+   *                                     选举，这个参数的值一般是 false，即 Kafka 不允许执行 Unclean Leader 选举。
+   *                                     所谓的 Unclean Leader 选举，是指在 ISR 列表为空的情况下，Kafka 选择一个非 ISR 副本
+   *                                     作为新的 Leader。由于存在丢失数据的风险，目前，社区已经通过把 Broker 端参数
+   *                                     unclean.leader.election.enable 的默认值设置为 false 的方式，禁止 Unclean Leader 选举了。
+   * @param controllerContext
+   * @return
+   *
+   * 社区于 2.4.0.0 版本正式支持在 AdminClient 端为给定分区选举 Leader。目前的设计是，如果 Leader 选举是由 AdminClient 端触发的，
+   * 那就默认开启 Unclean Leader 选举。不过，在学习 offlinePartitionLeaderElection 方法时，你可以认为 uncleanLeaderElectionEnabled=false，
+   * 这并不会影响你对该方法的理解。
+   *
+   * 代码逻辑：首先会顺序搜索 AR 列表，并把第一个同时满足以下两个条件的副本作为新的 Leader 返回：该副本是存活状态，即副本所在的 Broker 依然在运行中；
+   * 该副本在 ISR 列表中。倘若无法找到这样的副本，代码会检查是否开启了 Unclean Leader 选举：如果开启了，则降低标准，只要满足上面第一个条件即可；
+   * 如果未开启，则本次 Leader 选举失败，没有新 Leader 被选出。
+   *
+   * Kafka 为分区选举 Leader 的大体思路：基本上就是，找出 AR 列表（或给定副本列表）中首个处于存活状态，且在 ISR 列表的副本，将其作为新 Leader。
+   */
   def offlinePartitionLeaderElection(assignment: Seq[Int], isr: Seq[Int], liveReplicas: Set[Int], uncleanLeaderElectionEnabled: Boolean, controllerContext: ControllerContext): Option[Int] = {
+    // 从当前分区副本列表中寻找首个处于存活状态的ISR副本
     assignment.find(id => liveReplicas.contains(id) && isr.contains(id)).orElse {
+      // 如果找不到满足条件的副本，查看是否允许Unclean Leader选举
+      // 即Broker端参数unclean.leader.election.enable是否等于true
       if (uncleanLeaderElectionEnabled) {
+        // 选择当前副本列表中的第一个存活副本作为Leader
         val leaderOpt = assignment.find(liveReplicas.contains)
         if (leaderOpt.isDefined)
           controllerContext.stats.uncleanLeaderElectionRate.mark()
         leaderOpt
       } else {
-        None
+        None // 如果不允许Unclean Leader选举，则返回None表示无法选举Leader
       }
     }
   }
@@ -555,15 +655,27 @@ object PartitionLeaderElectionAlgorithms {
   }
 }
 
+/**
+ * 当前，分区 Leader 选举有 4 类场景。
+ * OfflinePartitionLeaderElectionStrategy：因为 Leader 副本下线而引发的分区 Leader 选举。
+ * ReassignPartitionLeaderElectionStrategy：因为执行分区副本重分配操作而引发的分区 Leader 选举。
+ * PreferredReplicaPartitionLeaderElectionStrategy：因为执行 Preferred 副本 Leader 选举而引发的分区 Leader 选举。
+ * ControlledShutdownPartitionLeaderElectionStrategy：因为正常关闭 Broker 而引发的分区 Leader 选举。
+ */
+// 分区Leader选举策略接口
 sealed trait PartitionLeaderElectionStrategy
+// 离线分区Leader选举策略
 final case class OfflinePartitionLeaderElectionStrategy(allowUnclean: Boolean) extends PartitionLeaderElectionStrategy
+// 分区副本重分配Leader选举策略
 final case object ReassignPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+// 分区Preferred副本Leader选举策略
 final case object PreferredReplicaPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+// Broker Controlled关闭时Leader选举策略
 final case object ControlledShutdownPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 
-sealed trait PartitionState {
+sealed trait PartitionState {// 状态序号，无实际用途
   def state: Byte
-  def validPreviousStates: Set[PartitionState]
+  def validPreviousStates: Set[PartitionState]// 合法前置状态集合
 }
 
 case object NewPartition extends PartitionState {
