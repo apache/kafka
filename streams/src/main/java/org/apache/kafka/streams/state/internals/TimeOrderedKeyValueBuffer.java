@@ -26,6 +26,12 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+/** An interface for a time ordered buffer.
+ *
+ * @param <K> Key type
+ * @param <V> Value type
+ * @param <T> Store type
+ */
 public interface TimeOrderedKeyValueBuffer<K, V, T> extends StateStore {
 
     final class Eviction<K, T> {
