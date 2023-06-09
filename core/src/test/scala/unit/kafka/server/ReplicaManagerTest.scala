@@ -2148,7 +2148,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
       appendRecordsToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> idempotentRecords2), transactionalId, Some(0))
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
-      assertNotEquals(null, getVerificationGuard(replicaManager, tp0, producerId))
+      assertNotNull(getVerificationGuard(replicaManager, tp0, producerId))
       assertNull(getVerificationGuard(replicaManager, tp1, producerId))
     } finally {
       replicaManager.shutdown()

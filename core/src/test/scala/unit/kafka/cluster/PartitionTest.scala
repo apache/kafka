@@ -3286,7 +3286,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-null verification object.
     val verificationGuard = partition.maybeStartTransactionVerification(producerId)
-    assertTrue(verificationGuard != null)
+    assertNotNull(verificationGuard)
 
     // With the wrong verification guard, append should fail.
     assertThrows(classOf[InvalidRecordException], () => partition.appendRecordsToLeader(transactionRecords(),
@@ -3299,7 +3299,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should no longer need a verification object. Future appends without verification guard will also succeed.
     val verificationGuard3 = partition.maybeStartTransactionVerification(producerId)
-    assertEquals(null, verificationGuard3)
+    assertNull(verificationGuard3)
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
   }
 

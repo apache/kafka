@@ -1109,7 +1109,7 @@ class ProducerStateManagerTest {
     // Add the transactional data and clear the entry.
     append(stateManager, producerId, 0, 0, offset = 0, isTransactional = true)
     stateManager.clearVerificationStateEntry(producerId)
-    assertEquals(null, stateManager.verificationStateEntry(producerId, false))
+    assertNull(stateManager.verificationStateEntry(producerId, false))
   }
 
   @Test
@@ -1123,7 +1123,7 @@ class ProducerStateManagerTest {
 
     time.sleep((producerStateManagerConfig.producerIdExpirationMs / 2) + 1)
     stateManager.removeExpiredProducers(time.milliseconds())
-    assertEquals(null, stateManager.verificationStateEntry(producerId, false))
+    assertNull(stateManager.verificationStateEntry(producerId, false))
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
