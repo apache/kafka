@@ -29,6 +29,7 @@ import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.NetworkClient
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -101,7 +102,7 @@ class BrokerServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   var logManager: LogManager = _
-  var remoteLogManager: Option[RemoteLogManager] = None
+  var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
 
@@ -199,8 +200,7 @@ class BrokerServer(
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
-      val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
-      remoteLogManager = createRemoteLogManager(remoteLogManagerConfig)
+      remoteLogManagerOpt = createRemoteLogManager()
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -264,7 +264,7 @@ class BrokerServer(
         time = time,
         scheduler = kafkaScheduler,
         logManager = logManager,
-        remoteLogManager = remoteLogManager,
+        remoteLogManager = remoteLogManagerOpt,
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
@@ -476,15 +476,15 @@ class BrokerServer(
       // contain the original configuration values.
       new KafkaConfig(config.originals(), true)
 
-      remoteLogManager.foreach(rlm => {
-        val listenerName = ListenerName.normalised(remoteLogManagerConfig.remoteLogMetadataManagerListenerName())
-        val endpoint = endpoints.stream.filter(e => e.listenerName.equals(listenerName))
-          .findAny().orElse(endpoints.get(0))
-        rlm.endPoint(Optional.of(EndPoint.fromJava(endpoint)))
-      })
-
       // Start RemoteLogManager before broker start serving the requests.
-      remoteLogManager.foreach(_.startup())
+      remoteLogManagerOpt.foreach(rlm => {
+        val listenerName = ListenerName.normalised(config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName())
+        val endpoint = endpoints.stream.filter(e => e.listenerName.equals(listenerName))
+          .findAny().orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
+          " should be set as a listener name within valid broker listener name list."))
+        rlm.endPoint(Optional.of(EndPoint.fromJava(endpoint)))
+        rlm.startup()
+      })
 
       // If we are using a ClusterMetadataAuthorizer which stores its ACLs in the metadata log,
       // notify it that the loading process is complete.
@@ -524,13 +524,13 @@ class BrokerServer(
     }
   }
 
-  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
-    if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+  protected def createRemoteLogManager(): Option[RemoteLogManager] = {
+    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
       }
 
-      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head, time,
+      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava));
     } else {
       None
@@ -607,7 +607,7 @@ class BrokerServer(
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
-      CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)
+      CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)

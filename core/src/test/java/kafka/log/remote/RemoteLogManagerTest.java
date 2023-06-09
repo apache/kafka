@@ -140,7 +140,7 @@ public class RemoteLogManagerTest {
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
         Properties props = new Properties();
         remoteLogManagerConfig = createRLMConfig(props);
-        remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, tp -> Optional.of(mockLog)) {
+        remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, "clusterId", time, tp -> Optional.of(mockLog)) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -407,7 +407,7 @@ public class RemoteLogManagerTest {
     void testGetClassLoaderAwareRemoteStorageManager() throws Exception {
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
         RemoteLogManager remoteLogManager =
-            new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, time, t -> Optional.empty()) {
+            new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, "clusterId", time, t -> Optional.empty()) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }

@@ -137,6 +137,7 @@ public class RemoteLogManager implements Closeable {
 
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicPartitionIds = new ConcurrentHashMap<>();
+    private final String clusterId;
 
     // The endpoint for remote log metadata manager to connect to
     private Optional<EndPoint> endpoint = Optional.empty();
@@ -149,17 +150,19 @@ public class RemoteLogManager implements Closeable {
      * @param brokerId  id of the current broker.
      * @param logDir    directory of Kafka log segments.
      * @param time      Time instance.
+     * @param clusterId The cluster id.
      * @param fetchLog  function to get UnifiedLog instance for a given topic.
      */
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,
                             String logDir,
+                            String clusterId,
                             Time time,
                             Function<TopicPartition, Optional<UnifiedLog>> fetchLog) {
-
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
+        this.clusterId = clusterId;
         this.time = time;
         this.fetchLog = fetchLog;
 
@@ -232,6 +235,7 @@ public class RemoteLogManager implements Closeable {
 
         rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
         rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
+        rlmmProps.put("cluster.id", clusterId);
         endpoint.ifPresent(e -> {
             rlmmProps.put("bootstrap.servers", e.host() + ":" + e.port());
             rlmmProps.put("security.protocol", e.securityProtocol().name);
