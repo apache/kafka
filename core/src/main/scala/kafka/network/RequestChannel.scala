@@ -240,22 +240,17 @@ object RequestChannel extends Logging {
       val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
       val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
-      val prefixMetricNames =
+      val metricNames =
         if (header.apiKey == ApiKeys.FETCH) {
-          val isFromFollower = body[FetchRequest].isFromFollower
-          Seq(
-            if (isFromFollower) RequestMetrics.followFetchMetricName
+          val specifiedMetricName =
+            if (body[FetchRequest].isFromFollower) RequestMetrics.followFetchMetricName
             else RequestMetrics.consumerFetchMetricName
-          )
-        } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN) {
-          val request = body[AddPartitionsToTxnRequest]
-          if (request.version > 3 && request.data.transactions.asScala.filter(_.verifyOnly).size == request.data.transactions.size)
+          Seq(specifiedMetricName, header.apiKey.name)
+        } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].verifyOnlyRequest()) {
             Seq(RequestMetrics.verifyPartitionsInTxnMetricName)
-          else
-            Seq.empty
+        } else {
+          Seq(header.apiKey.name)
         }
-        else Seq.empty
-      val metricNames = prefixMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
@@ -523,7 +518,7 @@ object RequestMetrics {
   val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
   val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
 
-  val verifyPartitionsInTxnMetricName = "Verification"
+  val verifyPartitionsInTxnMetricName = ApiKeys.ADD_PARTITIONS_TO_TXN.name + "Verification"
 
   val RequestsPerSec = "RequestsPerSec"
   val RequestQueueTimeMs = "RequestQueueTimeMs"

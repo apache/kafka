@@ -154,6 +154,11 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version());
     }
 
+    public boolean verifyOnlyRequest() {
+        return version() > 3 &&
+            data.transactions().stream().filter(transaction -> transaction.verifyOnly()).toArray().length == data.transactions().size();
+    }
+
     private AddPartitionsToTxnTransactionCollection singletonTransaction() {
         AddPartitionsToTxnTransactionCollection singleTxn = new AddPartitionsToTxnTransactionCollection();
         singleTxn.add(new AddPartitionsToTxnTransaction()
