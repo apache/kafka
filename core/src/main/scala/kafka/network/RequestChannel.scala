@@ -69,7 +69,7 @@ object RequestChannel extends Logging {
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
     (enabledApis.map(_.name) ++
-      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
+      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName, RequestMetrics.verifyPartitionsInTxnMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
 
@@ -240,16 +240,22 @@ object RequestChannel extends Logging {
       val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
       val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
-      val fetchMetricNames =
+      val prefixMetricNames =
         if (header.apiKey == ApiKeys.FETCH) {
           val isFromFollower = body[FetchRequest].isFromFollower
           Seq(
             if (isFromFollower) RequestMetrics.followFetchMetricName
             else RequestMetrics.consumerFetchMetricName
           )
+        } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN) {
+          val request = body[AddPartitionsToTxnRequest]
+          if (request.version > 3 && request.data.transactions.asScala.filter(_.verifyOnly).size == request.data.transactions.size)
+            Seq(RequestMetrics.verifyPartitionsInTxnMetricName)
+          else
+            Seq.empty
         }
         else Seq.empty
-      val metricNames = fetchMetricNames :+ header.apiKey.name
+      val metricNames = prefixMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
@@ -516,6 +522,8 @@ class RequestChannel(val queueSize: Int,
 object RequestMetrics {
   val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
   val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
+
+  val verifyPartitionsInTxnMetricName = "Verification"
 
   val RequestsPerSec = "RequestsPerSec"
   val RequestQueueTimeMs = "RequestQueueTimeMs"
