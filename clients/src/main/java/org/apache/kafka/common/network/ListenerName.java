@@ -36,6 +36,7 @@ public final class ListenerName {
      * Create an instance with the provided value converted to uppercase.
      */
     public static ListenerName normalised(String value) {
+        Objects.requireNonNull(value);
         return new ListenerName(value.toUpperCase(Locale.ROOT));
     }
 

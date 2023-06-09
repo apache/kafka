@@ -61,7 +61,6 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
-import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
@@ -512,7 +511,7 @@ class KafkaServer(
           val endpoint = brokerInfo.broker.endPoints.find(e => e.listenerName.equals(listenerName))
             .getOrElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
               " should be set as a listener name within valid broker listener name list."))
-          rlm.endPoint(Optional.of(endpoint))
+          rlm.endPoint(endpoint)
           rlm.startup()
         })
 

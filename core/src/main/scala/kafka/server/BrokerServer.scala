@@ -53,7 +53,6 @@ import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
 import java.net.InetAddress
 import java.util
-import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
@@ -482,7 +481,7 @@ class BrokerServer(
         val endpoint = endpoints.stream.filter(e => e.listenerName.equals(listenerName))
           .findAny().orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
           " should be set as a listener name within valid broker listener name list."))
-        rlm.endPoint(Optional.of(EndPoint.fromJava(endpoint)))
+        rlm.endPoint(EndPoint.fromJava(endpoint))
         rlm.startup()
       })
 

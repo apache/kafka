@@ -213,7 +213,7 @@ public class RemoteLogManagerTest {
         String securityProtocol = "PLAINTEXT";
         EndPoint endPoint = new EndPoint(host, Integer.parseInt(port), new ListenerName(securityProtocol),
                 SecurityProtocol.PLAINTEXT);
-        remoteLogManager.endPoint(Optional.of(endPoint));
+        remoteLogManager.endPoint(endPoint);
         remoteLogManager.startup();
 
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);

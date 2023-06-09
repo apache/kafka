@@ -140,7 +140,7 @@ public class RemoteLogManager implements Closeable {
     private final String clusterId;
 
     // The endpoint for remote log metadata manager to connect to
-    private Optional<EndPoint> endpoint = Optional.empty();
+    private EndPoint endpoint;
     private boolean closed = false;
 
     /**
@@ -226,7 +226,7 @@ public class RemoteLogManager implements Closeable {
         });
     }
 
-    public void endPoint(Optional<EndPoint> endpoint) {
+    public void endPoint(EndPoint endpoint) {
         this.endpoint = endpoint;
     }
 
@@ -236,10 +236,8 @@ public class RemoteLogManager implements Closeable {
         rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
         rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
         rlmmProps.put("cluster.id", clusterId);
-        endpoint.ifPresent(e -> {
-            rlmmProps.put("bootstrap.servers", e.host() + ":" + e.port());
-            rlmmProps.put("security.protocol", e.securityProtocol().name);
-        });
+        rlmmProps.put("bootstrap.servers", endpoint.host() + ":" + endpoint.port());
+        rlmmProps.put("security.protocol", endpoint.securityProtocol().name);
 
         remoteLogMetadataManager.configure(rlmmProps);
     }
