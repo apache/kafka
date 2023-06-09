@@ -32,6 +32,8 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
@@ -776,6 +778,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
     private final CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
 
     /**
+     * Atomic boolean indicating whether the runtime is running.
+     */
+    private final AtomicBoolean isRunning = new AtomicBoolean(true);
+
+    /**
      * Constructor.
      *
      * @param logContext                    The log context.
@@ -799,6 +806,30 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         this.highWatermarklistener = new HighWatermarkListener();
         this.loader = loader;
         this.coordinatorBuilderSupplier = coordinatorBuilderSupplier;
+    }
+
+    /**
+     * Throws a NotCoordinatorException exception if the runtime is not
+     * running.
+     */
+    private void throwIfNotRunning() {
+        if (!isRunning.get()) {
+            throw Errors.NOT_COORDINATOR.exception();
+        }
+    }
+
+    /**
+     * Enqueues a new event.
+     *
+     * @param event The event.
+     * @throws NotCoordinatorException If the event processor is closed.
+     */
+    private void enqueue(CoordinatorEvent event) {
+        try {
+            processor.enqueue(event);
+        } catch (RejectedExecutionException ex) {
+            throw new NotCoordinatorException("Can't accept an event because the processor is closed", ex);
+        }
     }
 
     /**
@@ -866,9 +897,10 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         TopicPartition tp,
         CoordinatorWriteOperation<S, T, U> op
     ) {
+        throwIfNotRunning();
         log.debug("Scheduled execution of write operation {}.", name);
         CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, op);
-        processor.enqueue(event);
+        enqueue(event);
         return event.future;
     }
 
@@ -889,9 +921,10 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         TopicPartition tp,
         CoordinatorReadOperation<S, T> op
     ) {
+        throwIfNotRunning();
         log.debug("Scheduled execution of read operation {}.", name);
         CoordinatorReadEvent<T> event = new CoordinatorReadEvent<>(name, tp, op);
-        processor.enqueue(event);
+        enqueue(event);
         return event.future;
     }
 
@@ -908,7 +941,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         Runnable op
     ) {
         log.debug("Scheduled execution of internal operation {}.", name);
-        processor.enqueue(new CoordinatorInternalEvent(name, tp, op));
+        enqueue(new CoordinatorInternalEvent(name, tp, op));
     }
 
     /**
@@ -916,6 +949,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
      * runtime.
      */
     public Set<TopicPartition> partitions() {
+        throwIfNotRunning();
         return new HashSet<>(coordinators.keySet());
     }
 
@@ -931,6 +965,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         TopicPartition tp,
         int partitionEpoch
     ) {
+        throwIfNotRunning();
         log.info("Scheduling loading of metadata from {} with epoch {}", tp, partitionEpoch);
         // Touch the state to make the runtime immediately aware of the new coordinator.
         getOrCreateContext(tp);
@@ -1003,6 +1038,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         TopicPartition tp,
         int partitionEpoch
     ) {
+        throwIfNotRunning();
         log.info("Scheduling unloading of metadata for {} with epoch {}", tp, partitionEpoch);
 
         scheduleInternalOperation("UnloadCoordinator(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
@@ -1026,6 +1062,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
      * @throws Exception
      */
     public void close() throws Exception {
+        if (!isRunning.compareAndSet(true, false)) {
+            log.warn("Coordinator runtime is already shutting down.");
+            return;
+        }
+
         log.info("Closing coordinator runtime.");
         // This close the processor, drain all the pending events and
         // reject any new events.

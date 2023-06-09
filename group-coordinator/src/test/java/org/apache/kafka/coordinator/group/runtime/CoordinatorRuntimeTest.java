@@ -83,7 +83,7 @@ public class CoordinatorRuntimeTest {
      * An in-memory partition writer that accepts a maximum number of writes.
      */
     private static class MockPartitionWriter extends InMemoryPartitionWriter<String> {
-        private int allowedWrites = 1;
+        private int allowedWrites;
 
         public MockPartitionWriter() {
             this(Integer.MAX_VALUE);
@@ -219,6 +219,7 @@ public class CoordinatorRuntimeTest {
 
     @Test
     public void testScheduleLoadingWithFailure() {
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
         MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
         MockCoordinatorBuilderSupplier supplier = mock(MockCoordinatorBuilderSupplier.class);
         MockCoordinatorBuilder builder = mock(MockCoordinatorBuilder.class);
@@ -228,7 +229,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
                 .withLoader(loader)
                 .withEventProcessor(new MockEventProcessor())
-                .withPartitionWriter(new MockPartitionWriter())
+                .withPartitionWriter(writer)
                 .withCoordinatorBuilderSupplier(supplier)
                 .build();
 
@@ -253,6 +254,12 @@ public class CoordinatorRuntimeTest {
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
+
+        // Verify that the listener is deregistered.
+        verify(writer, times(1)).deregisterListener(
+            eq(TP),
+            any(PartitionWriter.Listener.class)
+        );
     }
 
     @Test
@@ -383,6 +390,7 @@ public class CoordinatorRuntimeTest {
 
         // Schedule the unloading.
         runtime.scheduleUnloadOperation(TP, ctx.epoch + 1);
+        assertEquals(CoordinatorRuntime.CoordinatorState.CLOSED, ctx.state);
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
@@ -453,7 +461,7 @@ public class CoordinatorRuntimeTest {
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
 
-        // Verify that the write is not completed yet.
+        // Verify that the write is not committed yet.
         assertFalse(write1.isDone());
 
         // The last written offset is updated.
@@ -471,7 +479,7 @@ public class CoordinatorRuntimeTest {
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(Arrays.asList("record3"), "response2"));
 
-        // Verify that the write is not completed yet.
+        // Verify that the write is not committed yet.
         assertFalse(write2.isDone());
 
         // The last written offset is updated.
@@ -489,7 +497,7 @@ public class CoordinatorRuntimeTest {
         CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(Collections.emptyList(), "response3"));
 
-        // Verify that the write is not completed yet.
+        // Verify that the write is not committed yet.
         assertFalse(write3.isDone());
 
         // The state does not change.
@@ -532,6 +540,7 @@ public class CoordinatorRuntimeTest {
         // It is completed immediately because the state is fully commited.
         assertTrue(write4.isDone());
         assertEquals("response4", write4.get(5, TimeUnit.SECONDS));
+        assertEquals(Collections.singletonList(3L), ctx.snapshotRegistry.epochsList());
     }
 
     @Test
@@ -643,7 +652,8 @@ public class CoordinatorRuntimeTest {
         assertEquals(Arrays.asList(0L, 2L), ctx.snapshotRegistry.epochsList());
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.records());
 
-        // Write #2. It should fail.
+        // Write #2. It should fail because the writer is configured to only
+        // accept one call to PartitionWriter#append.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response2"));
         assertFutureThrows(write2, KafkaException.class);

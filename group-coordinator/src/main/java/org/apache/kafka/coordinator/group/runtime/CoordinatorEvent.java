@@ -32,7 +32,7 @@ public interface CoordinatorEvent extends EventAccumulator.Event<TopicPartition>
     /**
      * Completes the event with the provided exception.
      *
-     * @param exception An exception if the processing of the event failed or null.
+     * @param exception An exception if the processing of the event failed or null otherwise.
      */
     void complete(Throwable exception);
 }
