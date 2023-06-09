@@ -67,13 +67,14 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import com.yammer.metrics.core.Gauge
+import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
+import org.mockito.ArgumentMatchers.{any, anyInt, anyMap, anySet, anyString}
 import org.mockito.Mockito.{doReturn, mock, mockConstruction, never, reset, times, verify, verifyNoMoreInteractions, when}
 
 import scala.collection.{Map, Seq, mutable}
@@ -92,6 +93,7 @@ class ReplicaManagerTest {
   var alterPartitionManager: AlterPartitionManager = _
   var config: KafkaConfig = _
   var quotaManager: QuotaManagers = _
+  var mockRemoteLogManager: RemoteLogManager = _
 
   // Constants defined for readability
   val zkVersion = 0
@@ -105,6 +107,7 @@ class ReplicaManagerTest {
     config = KafkaConfig.fromProps(props)
     alterPartitionManager = mock(classOf[AlterPartitionManager])
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
+    mockRemoteLogManager = mock(classOf[RemoteLogManager])
   }
 
   @AfterEach
@@ -2742,7 +2745,8 @@ class ReplicaManagerTest {
     propsModifier: Properties => Unit = _ => {},
     mockReplicaFetcherManager: Option[ReplicaFetcherManager] = None,
     mockReplicaAlterLogDirsManager: Option[ReplicaAlterLogDirsManager] = None,
-    isShuttingDown: AtomicBoolean = new AtomicBoolean(false)
+    isShuttingDown: AtomicBoolean = new AtomicBoolean(false),
+    enableRemoteStorage: Boolean = false
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     props.put("log.dirs", TestUtils.tempRelativeDir("data").getAbsolutePath + "," + TestUtils.tempRelativeDir("data2").getAbsolutePath)
@@ -2782,7 +2786,8 @@ class ReplicaManagerTest {
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedElectLeaderPurgatoryParam = Some(mockDelayedElectLeaderPurgatory),
-      threadNamePrefix = Option(this.getClass.getName)) {
+      threadNamePrefix = Option(this.getClass.getName),
+      remoteLogManager = if (enableRemoteStorage) Some(mockRemoteLogManager) else None) {
 
       override protected def createReplicaFetcherManager(
         metrics: Metrics,
@@ -3677,13 +3682,27 @@ class ReplicaManagerTest {
     assertEquals(None, replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID))
   }
 
-  @Test
-  def testDeltaFromLeaderToFollower(): Unit = {
+  private def verifyRLMOnLeadershipChange(leaderPartitions: util.Set[Partition], followerPartitions: util.Set[Partition]): Unit = {
+    val leaderCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
+    val followerCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
+    val topicIdsCapture: ArgumentCaptor[util.Map[String, Uuid]] = ArgumentCaptor.forClass(classOf[util.Map[String, Uuid]])
+    verify(mockRemoteLogManager).onLeadershipChange(leaderCapture.capture(), followerCapture.capture(), topicIdsCapture.capture())
+
+    val actualLeaderPartitions = leaderCapture.getValue
+    val actualFollowerPartitions = followerCapture.getValue
+
+    assertEquals(leaderPartitions, actualLeaderPartitions)
+    assertEquals(followerPartitions, actualFollowerPartitions)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaFromLeaderToFollower(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val numOfRecords = 3
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the leader
@@ -3691,6 +3710,7 @@ class ReplicaManagerTest {
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
       val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
       val topicIdPartition = new TopicIdPartition(topicId, topicPartition)
+
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
@@ -3700,6 +3720,11 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        reset(mockRemoteLogManager)
+      }
 
       // Send a produce request and advance the highwatermark
       val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
@@ -3725,6 +3750,10 @@ class ReplicaManagerTest {
       assertFalse(followerPartition.isLeader)
       assertEquals(1, followerPartition.getLeaderEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+      }
+
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
     } finally {
@@ -3734,13 +3763,14 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaFromFollowerToLeader(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaFromFollowerToLeader(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val numOfRecords = 3
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the follower
@@ -3752,6 +3782,11 @@ class ReplicaManagerTest {
       val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
@@ -3781,6 +3816,9 @@ class ReplicaManagerTest {
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(1, leaderPartition.getLeaderEpoch)
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+      }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
     } finally {
@@ -3790,12 +3828,13 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaFollowerWithNoChange(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaFollowerWithNoChange(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the follower
@@ -3807,6 +3846,11 @@ class ReplicaManagerTest {
       val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
@@ -3819,6 +3863,10 @@ class ReplicaManagerTest {
       assertFalse(noChangePartition.isLeader)
       assertEquals(0, noChangePartition.getLeaderEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+      }
+
       val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.leader.brokerEndPoint()))
     } finally {
@@ -3828,12 +3876,13 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaFollowerToNotReplica(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaFollowerToNotReplica(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the follower
@@ -3845,6 +3894,11 @@ class ReplicaManagerTest {
       val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
@@ -3854,6 +3908,8 @@ class ReplicaManagerTest {
       val notReplicaMetadataImage = imageFromTopics(notReplicaTopicsDelta.apply())
       replicaManager.applyDelta(notReplicaTopicsDelta, notReplicaMetadataImage)
 
+      verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
+
       // Check that the partition was removed
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
@@ -3865,12 +3921,13 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaFollowerRemovedTopic(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaFollowerRemovedTopic(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the follower
@@ -3883,6 +3940,11 @@ class ReplicaManagerTest {
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
 
@@ -3890,6 +3952,7 @@ class ReplicaManagerTest {
       val removeTopicsDelta = topicsDeleteDelta(followerMetadataImage.topics())
       val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply())
       replicaManager.applyDelta(removeTopicsDelta, removeMetadataImage)
+      verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
 
       // Check that the partition was removed
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
@@ -3902,12 +3965,13 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaLeaderToNotReplica(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaLeaderToNotReplica(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the leader
@@ -3920,6 +3984,11 @@ class ReplicaManagerTest {
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        reset(mockRemoteLogManager)
+      }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
@@ -3927,6 +3996,7 @@ class ReplicaManagerTest {
       val notReplicaTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), otherId, true)
       val notReplicaMetadataImage = imageFromTopics(notReplicaTopicsDelta.apply())
       replicaManager.applyDelta(notReplicaTopicsDelta, notReplicaMetadataImage)
+      verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
 
       // Check that the partition was removed
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
@@ -3939,12 +4009,13 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaLeaderToRemovedTopic(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaLeaderToRemovedTopic(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the leader
@@ -3957,6 +4028,11 @@ class ReplicaManagerTest {
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        reset(mockRemoteLogManager)
+      }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
@@ -3964,6 +4040,7 @@ class ReplicaManagerTest {
       val removeTopicsDelta = topicsDeleteDelta(leaderMetadataImage.topics())
       val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply())
       replicaManager.applyDelta(removeTopicsDelta, removeMetadataImage)
+      verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
 
       // Check that the partition was removed
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
@@ -3976,13 +4053,14 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaToFollowerCompletesProduce(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaToFollowerCompletesProduce(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val numOfRecords = 3
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the leader
@@ -3995,6 +4073,11 @@ class ReplicaManagerTest {
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        reset(mockRemoteLogManager)
+      }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
@@ -4006,6 +4089,15 @@ class ReplicaManagerTest {
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(1, followerPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Check that the produce failed because it changed to follower before replicating
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, leaderResponse.get.error)
     } finally {
@@ -4015,12 +4107,13 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testDeltaToFollowerCompletesFetch(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaToFollowerCompletesFetch(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
       // Make the local replica the leader
@@ -4035,6 +4128,11 @@ class ReplicaManagerTest {
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        reset(mockRemoteLogManager)
+      }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
@@ -4054,6 +4152,15 @@ class ReplicaManagerTest {
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(1, followerPartition.getLeaderEpoch)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Check that the produce failed because it changed to follower before replicating
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchCallback.assertFired.error)
     } finally {
@@ -4072,7 +4179,8 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath)
+      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath),
+      enableRemoteStorage = true
     )
 
     try {
@@ -4083,6 +4191,7 @@ class ReplicaManagerTest {
       val topicsDelta = topicsCreateDelta(localId, isStartIdLeader)
       val leaderMetadataImage = imageFromTopics(topicsDelta.apply())
       replicaManager.applyDelta(topicsDelta, leaderMetadataImage)
+      verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.emptySet())
 
       assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
     } finally {
@@ -4090,8 +4199,9 @@ class ReplicaManagerTest {
     }
   }
 
-  @Test
-  def testDeltaFollowerStopFetcherBeforeCreatingInitialFetchOffset(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaFollowerStopFetcherBeforeCreatingInitialFetchOffset(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
@@ -4100,7 +4210,8 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
+      enableRemoteStorage = enableRemoteStorage
     )
 
     try {
@@ -4119,6 +4230,10 @@ class ReplicaManagerTest {
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(0, followerPartition.localLogOrException.logEndOffset)
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
 
       // Verify that addFetcherForPartitions was called with the correct
       // init offset.
@@ -4159,6 +4274,10 @@ class ReplicaManagerTest {
       assertFalse(followerPartition.isLeader)
       assertEquals(1, followerPartition.getLeaderEpoch)
       assertEquals(1, followerPartition.localLogOrException.logEndOffset)
+
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+      }
 
       // Verify that addFetcherForPartitions was called with the correct
       // init offset.
@@ -4289,8 +4408,9 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumpedWithKRaftPath(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFetcherAreNotRestartedIfLeaderEpochIsNotBumpedWithKRaftPath(enableRemoteStorage: Boolean): Unit = {
     val localId = 0
     val topicPartition = new TopicPartition("foo", 0)
 
@@ -4298,7 +4418,8 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
+      enableRemoteStorage = enableRemoteStorage
     )
 
     try {
@@ -4329,6 +4450,11 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(0, followerPartition.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Verify that the partition was removed and added back.
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
@@ -4355,6 +4481,11 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(1, followerPartition.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Verify that partition's fetcher was not impacted.
       verify(mockReplicaFetcherManager, never()).removeFetcherForPartitions(any())
       verify(mockReplicaFetcherManager, never()).addFetcherForPartitions(any())
@@ -4378,6 +4509,11 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
       assertEquals(2, followerPartition.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        reset(mockRemoteLogManager)
+      }
+
       // Verify that the partition was removed and added back.
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
@@ -4393,8 +4529,9 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testReplicasAreStoppedWhileInControlledShutdownWithKRaft(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testReplicasAreStoppedWhileInControlledShutdownWithKRaft(enableRemoteStorage: Boolean): Unit = {
     val localId = 0
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
@@ -4406,7 +4543,8 @@ class ReplicaManagerTest {
       timer = new MockTimer(time),
       brokerId = localId,
       mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
-      isShuttingDown = isShuttingDown
+      isShuttingDown = isShuttingDown,
+      enableRemoteStorage = enableRemoteStorage
     )
 
     try {
@@ -4473,6 +4611,14 @@ class ReplicaManagerTest {
       assertEquals(0, fooPartition2.getLeaderEpoch)
       assertEquals(0, fooPartition2.getPartitionEpoch)
 
+      if (enableRemoteStorage) {
+        val followers: util.Set[Partition] = new util.HashSet[Partition]()
+        followers.add(fooPartition0)
+        followers.add(fooPartition2)
+        verifyRLMOnLeadershipChange(Collections.singleton(fooPartition1), followers)
+        reset(mockRemoteLogManager)
+      }
+
       reset(mockReplicaFetcherManager)
 
       // The broker transitions to SHUTTING_DOWN state. This should not have
@@ -4517,6 +4663,14 @@ class ReplicaManagerTest {
       assertFalse(fooPartition2.isLeader)
       assertEquals(0, fooPartition2.getLeaderEpoch)
       assertEquals(0, fooPartition2.getPartitionEpoch)
+
+      if (enableRemoteStorage) {
+        val followers: util.Set[Partition] = new util.HashSet[Partition]()
+        followers.add(fooPartition0)
+        followers.add(fooPartition1)
+        verifyRLMOnLeadershipChange(Collections.emptySet(), followers)
+        reset(mockRemoteLogManager)
+      }
 
       // Fetcher for foo0 and foo1 are stopped.
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(foo0, foo1))
