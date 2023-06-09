@@ -123,44 +123,28 @@ public class ClientQuotasImageTest {
 
     private static void testToImage(ClientQuotasImage image, List<ApiMessageAndVersion> fromRecords) {
         // test from empty image stopping each of the various intermediate images along the way
-        testThroughAllIntermediateImagesLeadingToFinalImage(image, fromRecords);
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper() {
+
+            @Override
+            public Object getEmptyImage() {
+                return ClientQuotasImage.EMPTY;
+            }
+
+            @Override
+            public Object createDeltaUponImage(Object image) {
+                return new ClientQuotasDelta((ClientQuotasImage) image);
+            }
+
+            @Override
+            public Object createImageByApplyingDelta(Object delta) {
+                return ((ClientQuotasDelta) delta).apply();
+            }
+        }.test(image, fromRecords);
     }
 
     private static List<ApiMessageAndVersion> getImageRecords(ClientQuotasImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
-    }
-
-    private static void testThroughAllIntermediateImagesLeadingToFinalImage(ClientQuotasImage finalImage, List<ApiMessageAndVersion> fromRecords) {
-        for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {
-            // create first image from first numRecordsForfirstImage records
-            ClientQuotasDelta delta = new ClientQuotasDelta(ClientQuotasImage.EMPTY);
-            RecordTestUtils.replayAll(delta, fromRecords.subList(0, numRecordsForfirstImage));
-            ClientQuotasImage firstImage = delta.apply();
-            // for all possible further batch sizes, apply as many batches as it takes to get to the final image
-            int remainingRecords = fromRecords.size() - numRecordsForfirstImage;
-            if (remainingRecords == 0) {
-                assertEquals(finalImage, firstImage);
-            } else {
-                // for all possible further batch sizes...
-                for (int maxRecordsForSuccessiveBatches = 1; maxRecordsForSuccessiveBatches <= remainingRecords; ++maxRecordsForSuccessiveBatches) {
-                    ClientQuotasImage latestIntermediateImage = firstImage;
-                    // ... apply as many batches as it takes to get to the final image
-                    int numAdditionalBatches = (int) Math.ceil(remainingRecords * 1.0 / maxRecordsForSuccessiveBatches);
-                    for (int additionalBatchNum = 0; additionalBatchNum < numAdditionalBatches; ++additionalBatchNum) {
-                        // apply up to maxRecordsForSuccessiveBatches records on top of the latest intermediate image
-                        // to obtain the next intermediate image.
-                        delta = new ClientQuotasDelta(latestIntermediateImage);
-                        int applyFromIndex = numRecordsForfirstImage + additionalBatchNum * maxRecordsForSuccessiveBatches;
-                        int applyToIndex = Math.min(fromRecords.size(), applyFromIndex + maxRecordsForSuccessiveBatches);
-                        RecordTestUtils.replayAll(delta, fromRecords.subList(applyFromIndex, applyToIndex));
-                        latestIntermediateImage = delta.apply();
-                    }
-                    // The final intermediate image received should be the expected final image
-                    assertEquals(finalImage, latestIntermediateImage);
-                }
-            }
-        }
     }
 }

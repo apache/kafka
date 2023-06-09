@@ -131,36 +131,4 @@ public class AclsImageTest {
         image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
     }
-
-    private static void testThroughAllIntermediateImagesLeadingToFinalImage(AclsImage finalImage, List<ApiMessageAndVersion> fromRecords) {
-        for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {
-            // create first image from first numRecordsForfirstImage records
-            AclsDelta delta = new AclsDelta(AclsImage.EMPTY);
-            RecordTestUtils.replayAll(delta, fromRecords.subList(0, numRecordsForfirstImage));
-            AclsImage firstImage = delta.apply();
-            // for all possible further batch sizes, apply as many batches as it takes to get to the final image
-            int remainingRecords = fromRecords.size() - numRecordsForfirstImage;
-            if (remainingRecords == 0) {
-                assertEquals(finalImage, firstImage);
-            } else {
-                // for all possible further batch sizes...
-                for (int maxRecordsForSuccessiveBatches = 1; maxRecordsForSuccessiveBatches <= remainingRecords; ++maxRecordsForSuccessiveBatches) {
-                    AclsImage latestIntermediateImage = firstImage;
-                    // ... apply as many batches as it takes to get to the final image
-                    int numAdditionalBatches = (int) Math.ceil(remainingRecords * 1.0 / maxRecordsForSuccessiveBatches);
-                    for (int additionalBatchNum = 0; additionalBatchNum < numAdditionalBatches; ++additionalBatchNum) {
-                        // apply up to maxRecordsForSuccessiveBatches records on top of the latest intermediate image
-                        // to obtain the next intermediate image.
-                        delta = new AclsDelta(latestIntermediateImage);
-                        int applyFromIndex = numRecordsForfirstImage + additionalBatchNum * maxRecordsForSuccessiveBatches;
-                        int applyToIndex = Math.min(fromRecords.size(), applyFromIndex + maxRecordsForSuccessiveBatches);
-                        RecordTestUtils.replayAll(delta, fromRecords.subList(applyFromIndex, applyToIndex));
-                        latestIntermediateImage = delta.apply();
-                    }
-                    // The final intermediate image received should be the expected final image
-                    assertEquals(finalImage, latestIntermediateImage);
-                }
-            }
-        }
-    }
 }
