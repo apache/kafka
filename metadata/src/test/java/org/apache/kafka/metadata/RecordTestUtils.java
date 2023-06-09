@@ -97,11 +97,11 @@ public class RecordTestUtils {
 
     public static interface TestThroughAllIntermediateImagesLeadingToFinalImageHelper {
 
-        Object getEmptyImage(); // AclsImage.EMPTY
+        Object getEmptyImage(); // e.g. AclsImage.EMPTY
 
-        Object createDeltaUponImage(Object image); // new AclsDelta((AclsImage)image)
+        Object createDeltaUponImage(Object image); // e.g. new AclsDelta((AclsImage) image)
 
-        Object createImageByApplyingDelta(Object delta); // ((AclsDelta)delta).apply()
+        Object createImageByApplyingDelta(Object delta); // e.g. ((AclsDelta) delta).apply()
 
         default void test(Object finalImage, List<ApiMessageAndVersion> fromRecords) {
             for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {

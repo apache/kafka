@@ -129,8 +129,7 @@ public class MetadataImageTest {
 
             @Override
             public Object createImageByApplyingDelta(Object delta) {
-                MetadataDelta metadataDelta = (MetadataDelta) delta;
-                return metadataDelta.apply(image.provenance());
+                return ((MetadataDelta) delta).apply(image.provenance());
             }
         }.test(image, fromRecords);
     }
