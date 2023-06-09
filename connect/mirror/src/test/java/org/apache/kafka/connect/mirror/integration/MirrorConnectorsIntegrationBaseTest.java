@@ -19,11 +19,13 @@ package org.apache.kafka.connect.mirror.integration;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -55,7 +57,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -1187,13 +1191,25 @@ public class MirrorConnectorsIntegrationBaseTest {
      * Generate some consumer activity on both clusters to ensure the checkpoint connector always starts promptly
      */
     protected void warmUpConsumer(Map<String, Object> consumerProps) {
-        try (Consumer<byte[], byte[]> dummyConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
-            dummyConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-            dummyConsumer.commitSync();
-        }
-        try (Consumer<byte[], byte[]> dummyConsumer = backup.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
-            dummyConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-            dummyConsumer.commitSync();
+        warmUpConsumer(primary.kafka(), consumerProps, "test-topic-1");
+        warmUpConsumer(backup.kafka(), consumerProps, "test-topic-1");
+    }
+
+    private void warmUpConsumer(EmbeddedKafkaCluster cluster, Map<String, Object> consumerProps, String topic) {
+        try (Admin client = cluster.createAdminClient()) {
+            Map<String, TopicDescription> topics = client.describeTopics(Collections.singleton(topic))
+                    .allTopicNames()
+                    .get(REQUEST_TIMEOUT_DURATION_MS, TimeUnit.MILLISECONDS);
+            Map<TopicPartition, OffsetAndMetadata> collect = topics.get(topic)
+                    .partitions()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            tpi -> new TopicPartition(topic, tpi.partition()),
+                            ignored -> new OffsetAndMetadata(0L)));
+            AlterConsumerGroupOffsetsResult alterResult = client.alterConsumerGroupOffsets((String) consumerProps.get("group.id"), collect);
+            alterResult.all().get(REQUEST_TIMEOUT_DURATION_MS, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException | InterruptedException | TimeoutException e) {
+            throw new RuntimeException(e);
         }
     }
 
