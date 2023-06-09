@@ -95,7 +95,7 @@ public class RecordTestUtils {
         replayAll(target, Collections.singletonList(recordAndVersion));
     }
 
-    public static interface TestThroughAllIntermediateImagesLeadingToFinalImageHelper {
+    public interface TestThroughAllIntermediateImagesLeadingToFinalImageHelper {
 
         Object getEmptyImage(); // e.g. AclsImage.EMPTY
 
