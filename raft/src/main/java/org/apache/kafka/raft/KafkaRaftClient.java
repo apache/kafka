@@ -308,8 +308,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void updateListenersProgress(long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
-                // Send snapshot if the listener is at the beging of the log and there is a snapshot or
-                // the listener is trying to read an offset for which there isn't a segment in the log.
+                // Send snapshot to the listener, if the listener is at the beginning of the log and there is a snapshot,
+                // or the listener is trying to read an offset for which there isn't a segment in the log.
                 if (nextExpectedOffset < highWatermark &&
                     ((nextExpectedOffset == 0 && latestSnapshot().isPresent()) ||
                      nextExpectedOffset < log.startOffset())
