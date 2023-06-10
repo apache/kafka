@@ -169,6 +169,8 @@ public enum CompressionType {
 
     };
 
+    // compression type is represented by two bits in the attributes field of the record batch header, so `byte` is
+    // large enough
     public final byte id;
     public final String name;
     public final float rate;
