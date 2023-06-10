@@ -156,7 +156,7 @@ public class OffsetsApiIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", 5, 10,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, 5, 10,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
 
         // Produce 10 more messages to each partition
@@ -166,7 +166,7 @@ public class OffsetsApiIntegrationTest {
             }
         }
 
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", 5, 20,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, 5, 20,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
     }
 
@@ -310,7 +310,7 @@ public class OffsetsApiIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions, numMessages,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, numPartitions, numMessages,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
 
         connect.stopConnector(CONNECTOR_NAME);
@@ -337,7 +337,7 @@ public class OffsetsApiIntegrationTest {
         assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually altered in the system that the connector uses."));
 
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions - 1, 5,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, numPartitions - 1, 5,
                 "Sink connector consumer group offsets should reflect the altered offsets");
 
         // Update the connector's configs; this time expect SinkConnector::alterOffsets to return true
@@ -356,7 +356,7 @@ public class OffsetsApiIntegrationTest {
         response = connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter));
         assertThat(response, containsString("The offsets for this connector have been altered successfully"));
 
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions - 1, 3,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, numPartitions - 1, 3,
                 "Sink connector consumer group offsets should reflect the altered offsets");
 
         // Resume the connector and expect its offsets to catch up to the latest offsets
@@ -366,7 +366,7 @@ public class OffsetsApiIntegrationTest {
                 NUM_TASKS,
                 "Connector tasks did not resume in time"
         );
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions, 10,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, numPartitions, 10,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
     }
 
@@ -688,7 +688,7 @@ public class OffsetsApiIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions, numMessages,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, numPartitions, numMessages,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
 
         connect.stopConnector(CONNECTOR_NAME);
@@ -718,7 +718,7 @@ public class OffsetsApiIntegrationTest {
                 NUM_TASKS,
                 "Connector tasks did not resume in time"
         );
-        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, "test-topic", numPartitions, 10,
+        waitForExpectedSinkConnectorOffsets(CONNECTOR_NAME, TOPIC, numPartitions, 10,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
     }
 
