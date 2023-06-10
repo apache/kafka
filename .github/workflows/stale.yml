@@ -45,4 +45,8 @@ jobs:
           days-before-stale: 90
           days-before-close: -1
           stale-issue-label: 'stale'
-          stale-pr-message: 'This PR is stale because it has been open 90 days with no activity.'
+          stale-pr-message: >
+            This PR is being marked as stale since it has not had any activity in 90 days. If you
+            would like to keep this PR alive, please update it with the latest from trunk and ask
+            a committer for a review.
+            
