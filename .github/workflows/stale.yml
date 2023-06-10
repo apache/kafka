@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: 'Close stale issues and PRs'
+name: 'Handle stale PRs'
 on:
-  #schedule:
-  #  - cron: '30 3 * * *'
+  schedule:
+    - cron: '30 3 * * *'    # Run at 3:30 UTC nightly
   workflow_dispatch:
     inputs:
       dryRun:
@@ -40,13 +40,16 @@ jobs:
     steps:
       - uses: actions/stale@v8
         with:
-          debug-only: ${{ inputs.dryRun }}
-          operations-per-run: ${{ inputs.operationsPerRun }}
+          debug-only: ${{ inputs.dryRun || false }}
+          operations-per-run: ${{ inputs.operationsPerRun || 30 }}
           days-before-stale: 90
           days-before-close: -1
-          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
           stale-pr-message: >
             This PR is being marked as stale since it has not had any activity in 90 days. If you
             would like to keep this PR alive, please ask a committer for review. If the PR has 
             merge conflicts, please update it with the latest from trunk (or appropriate release branch)
             
+            If this PR is no longer valid or desired, please feel free to close it. If no activity
+            occurrs in the next 30 days, it will be automatically closed.
+          
