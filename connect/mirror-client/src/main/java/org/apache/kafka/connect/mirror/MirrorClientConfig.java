@@ -119,7 +119,8 @@ public class MirrorClientConfig extends AbstractConfig {
         // security support
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
             Type.STRING,
-            CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL, in(Utils.enumOptions(SecurityProtocol.class)),
+            CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+            in(Utils.enumOptions(SecurityProtocol.class)),
             Importance.MEDIUM,
             CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .withClientSslSupport()
@@ -151,7 +152,8 @@ public class MirrorClientConfig extends AbstractConfig {
                 FORWARDING_ADMIN_CLASS_DOC)
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
-                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL, in(Utils.enumOptions(SecurityProtocol.class)),
+                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                in(Utils.enumOptions(SecurityProtocol.class)),
                 Importance.MEDIUM,
                 CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .withClientSslSupport()
