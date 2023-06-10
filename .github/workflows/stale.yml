@@ -50,3 +50,6 @@ jobs:
             would like to keep this PR alive, please ask a committer for review. If the PR has 
             merge conflicts, please update it with the latest from trunk (or appropriate release branch)
             
+            If this PR is no longer valid or desired, please feel free to close it. If no activity
+            occurrs in the next 30 days, it will be automatically closed.
+          
