@@ -91,6 +91,7 @@ import scala.util.control.ControlThrowable
  * @param initialConfig Initial configuration parameters for the cleaner. Actual config may be dynamically updated.
  * @param logDirs The directories where offset checkpoints reside
  * @param logs The pool of logs
+ * @param logDirFailureChannel The channel used to add offline log dirs that may occur when cleaning the log
  * @param time A way to control the passage of time
  */
 class LogCleaner(initialConfig: CleanerConfig,
@@ -667,6 +668,8 @@ private[log] class Cleaner(val id: Int,
    * @param retainLegacyDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
    * @param deleteRetentionMs Defines how long a tombstone should be kept as defined by log configuration
    * @param maxLogMessageSize The maximum message size of the corresponding topic
+   * @param transactionMetadata The state of ongoing transactions which is carried between the cleaning of the grouped segments
+   * @param lastRecordsOfActiveProducers The active producers and its last data offset
    * @param stats Collector for cleaning statistics
    * @param currentTime The time at which the clean was initiated
    */
@@ -876,6 +879,7 @@ private[log] class Cleaner(val id: Int,
    * @param segments The log segments to group
    * @param maxSize the maximum size in bytes for the total of all log data in a group
    * @param maxIndexSize the maximum size in bytes for the total of all index data in a group
+   * @param firstUncleanableOffset The upper(exclusive) offset to clean to
    *
    * @return A list of grouped segments
    */
@@ -915,7 +919,8 @@ private[log] class Cleaner(val id: Int,
     * the base offset of the next segment in the list.
     * If the next segment doesn't exist, first Uncleanable Offset will be used.
     *
-    * @param segs - remaining segments to group.
+    * @param segs Remaining segments to group.
+   *  @param firstUncleanableOffset The upper(exclusive) offset to clean to
     * @return The estimated last offset for the first segment in segs
     */
   private def lastOffsetForFirstSegment(segs: List[LogSegment], firstUncleanableOffset: Long): Long = {
@@ -972,8 +977,13 @@ private[log] class Cleaner(val id: Int,
   /**
    * Add the messages in the given segment to the offset map
    *
+   * @param topicPartition The topic and partition of the log segment to build offset
    * @param segment The segment to index
    * @param map The map in which to store the key=>offset mapping
+   * @param startOffset The offset at which dirty messages begin
+   * @param nextSegmentStartOffset The base offset for next segment when building current segment
+   * @param maxLogMessageSize The maximum size in bytes for record batch allowed
+   * @param transactionMetadata The state of ongoing transactions for the log between offset range to build
    * @param stats Collector for cleaning statistics
    *
    * @return If the map was filled whilst loading from this segment
