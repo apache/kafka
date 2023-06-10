@@ -1294,8 +1294,7 @@ public class StreamsConfigTest {
         final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
         props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(saslSslLowerCase, config.originalsStrings()
-                .get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test

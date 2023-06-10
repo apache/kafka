@@ -19,9 +19,11 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -173,6 +175,14 @@ public class MirrorConnectorConfigTest {
         ConfigException ce = assertThrows(ConfigException.class,
                 () -> new TestMirrorConnectorConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testCaseInsensitiveSecurityProtocol() {
+        final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
+        final TestMirrorConnectorConfig config = new TestMirrorConnectorConfig(makeProps(
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase));
+        assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test
