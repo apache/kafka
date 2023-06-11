@@ -1,0 +1,24 @@
+name: Refresh asf.yaml collaborators every 3 months
+
+on:
+  schedule:
+    - cron: '0 0 1 */3 *'  # Runs on the 1st day of every 3rd month at midnight UTC
+
+jobs:
+  refresh-collaborators:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install PyGithub BeautifulSoup4 PyYAML
+
+      - name: Run refresh-collaborators.py script
+        run: python refresh-collaborators.py
