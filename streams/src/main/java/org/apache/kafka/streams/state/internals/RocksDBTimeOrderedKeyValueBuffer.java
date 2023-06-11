@@ -19,8 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -37,14 +35,14 @@ import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
 
-public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<RocksDBTimeOrderedKeyValueSegmentedBytesStore, Object, Object> implements TimeOrderedKeyValueBuffer<K, V> {
+public class RocksDBTimeOrderedKeyValueBuffer<K, V, T> extends WrappedStateStore<RocksDBTimeOrderedKeyValueSegmentedBytesStore, Object, Object> implements TimeOrderedKeyValueBuffer<K, V, V> {
 
     private final long gracePeriod;
     private long bufferSize;
     private long minTimestamp;
     private int numRecords;
     private Serde<K> keySerde;
-    private FullChangeSerde<V> valueSerde;
+    private Serde<V> valueSerde;
     private final String topic;
     private int seqnum;
 
@@ -64,7 +62,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     @Override
     public void setSerdesIfNull(final SerdeGetter getter) {
         keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
-        valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
+        valueSerde = valueSerde == null ? getter.valueSerde() : valueSerde;
     }
 
     @Deprecated
@@ -97,10 +95,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                         return;
                     }
 
-                    Change<V> value = valueSerde.deserializeParts(
-                        topic,
-                        new Change<>(bufferValue.newValue(), bufferValue.oldValue())
-                    );
+                    V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
 
                     if (bufferValue.context().timestamp() != minTimestamp) {
                         throw new IllegalStateException(
@@ -109,7 +104,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                         );
                     }
 
-                    callback.accept(new Eviction<>(key, value, bufferValue.context()));
+                    callback.accept(new Eviction<K, V>(key, value, bufferValue.context()));
 
                     wrapped().remove(keyValue.key);
                     numRecords--;
@@ -129,7 +124,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     }
 
     @Override
-    public void put(final long time, final Record<K, Change<V>> record, final ProcessorRecordContext recordContext) {
+    public void put(final long time, final Record<K, V> record, final ProcessorRecordContext recordContext) {
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
         if (wrapped().observedStreamTime - gracePeriod > record.timestamp()) {
@@ -139,8 +134,8 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
             PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.key()),
                 record.timestamp(),
                 seqnum++).get());
-        final Change<byte[]> serialChange = valueSerde.serializeParts(topic, record.value());
-        final BufferValue buffered = new BufferValue(serialChange.oldValue, serialChange.oldValue, serialChange.newValue, recordContext);
+        final byte[] serialChange = valueSerde.serializer().serialize(topic, record.value());
+        final BufferValue buffered = new BufferValue(serialChange, serialChange, serialChange, recordContext);
         wrapped().put(serializedKey, buffered.serialize(0).array());
         bufferSize += computeRecordSize(serializedKey, buffered);
         numRecords++;

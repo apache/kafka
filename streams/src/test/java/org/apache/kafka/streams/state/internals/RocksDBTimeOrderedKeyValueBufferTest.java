@@ -47,7 +47,7 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBTimeOrderedKeyValueBufferTest {
-    public RocksDBTimeOrderedKeyValueBuffer<String, String> buffer;
+    public RocksDBTimeOrderedKeyValueBuffer<String, String, String > buffer;
     @Mock
     public SerdeGetter serdeGetter;
     public InternalProcessorContext<String, String> context;
@@ -75,7 +75,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     private void pipeRecord(final String key, final String value, final long time) {
-        final Record<String, Change<String>> record = new Record<>(key, new Change<>(value, value), time);
+        final Record<String, String> record = new Record<>(key, value, time);
         context.setRecordContext(new ProcessorRecordContext(time, offset++, 0, "testing", new RecordHeaders()));
         buffer.put(time, record, context.recordContext());
     }
