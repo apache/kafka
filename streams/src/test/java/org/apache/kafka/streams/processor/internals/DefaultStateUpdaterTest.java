@@ -1274,6 +1274,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(task3);
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
+        verify(changelogReader).unregister(mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0));
     }
 
     @Test
