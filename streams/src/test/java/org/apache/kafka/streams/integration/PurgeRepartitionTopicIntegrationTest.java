@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -86,7 +87,7 @@ public class PurgeRepartitionTopicIntegrationTest {
     }
 
 
-    private final Time time = CLUSTER.time;
+    private final Time time = new MockTime(1);
 
     private class RepartitionTopicCreatedWithExpectedConfigs implements TestCondition {
         @Override
