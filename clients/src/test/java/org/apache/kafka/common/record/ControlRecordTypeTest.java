@@ -38,7 +38,7 @@ public class ControlRecordTypeTest {
     public void testParseUnknownVersion() {
         ByteBuffer buffer = ByteBuffer.allocate(32);
         buffer.putShort((short) 5);
-        buffer.putShort(ControlRecordType.ABORT.type);
+        buffer.putShort(ControlRecordType.ABORT.type());
         buffer.putInt(23432); // some field added in version 5
         buffer.flip();
         ControlRecordType type = ControlRecordType.parse(buffer);

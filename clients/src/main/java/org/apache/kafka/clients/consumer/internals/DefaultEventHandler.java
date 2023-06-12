@@ -127,6 +127,7 @@ public class DefaultEventHandler implements EventHandler {
             this.backgroundEventQueue,
             metadata,
             networkClient);
+        this.backgroundThread.start();
     }
 
     // VisibleForTesting

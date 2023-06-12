@@ -202,7 +202,7 @@ class Benchmark(Test):
 
         Return aggregate throughput statistics for both producer and consumer.
 
-        (Under the hood, this runs ProducerPerformance.java, and ConsumerPerformance.scala)
+        (Under the hood, this runs ProducerPerformance.java, and ConsumerPerformance.java)
         """
         client_version = KafkaVersion(client_version)
         broker_version = KafkaVersion(broker_version)
