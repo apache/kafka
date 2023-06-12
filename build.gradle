@@ -106,7 +106,7 @@ ext {
     throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
-  repo = file("$rootDir/.git").exists() ? Grgit.open(currentDir: project.getRootDir()) : null
+  repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
 }
