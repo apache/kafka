@@ -17,19 +17,18 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
-import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 public class AdminClientTestUtils {
@@ -79,6 +78,30 @@ public class AdminClientTestUtils {
     }
 
     /**
+     * Helper to create a AlterConfigsResult instance for a given Throwable.
+     * AlterConfigsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static AlterConfigsResult alterConfigsResult(ConfigResource cr, Throwable t) {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        Map<ConfigResource, KafkaFuture<Void>> futures = Collections.singletonMap(cr, future);
+        future.completeExceptionally(t);
+        return new AlterConfigsResult(futures);
+    }
+
+    /**
+     * Helper to create a AlterConfigsResult instance for a given ConfigResource.
+     * AlterConfigsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static AlterConfigsResult alterConfigsResult(ConfigResource cr) {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        Map<ConfigResource, KafkaFuture<Void>> futures = Collections.singletonMap(cr, future);
+        future.complete(null);
+        return new AlterConfigsResult(futures);
+    }
+
+    /**
      * Helper to create a CreatePartitionsResult instance for a given Throwable.
      * CreatePartitionsResult's constructor is only accessible from within the
      * admin package.
@@ -116,17 +139,6 @@ public class AdminClientTestUtils {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
         future.completeExceptionally(exception);
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
-    }
-
-    /**
-     * Used for benchmark. KafkaAdminClient.getListOffsetsCalls is only accessible
-     * from within the admin package.
-     */
-    public static List<KafkaAdminClient.Call> getListOffsetsCalls(KafkaAdminClient adminClient, 
-                                                                  MetadataOperationContext<ListOffsetsResult.ListOffsetsResultInfo, ListOffsetsOptions> context,
-                                                                  Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                                                  Map<TopicPartition, KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo>> futures) {
-        return adminClient.getListOffsetsCalls(context, topicPartitionOffsets, futures); 
     }
 
     /**

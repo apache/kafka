@@ -126,6 +126,12 @@ public class Serdes {
         }
     }
 
+    static public final class BooleanSerde extends WrapperSerde<Boolean> {
+        public BooleanSerde() {
+            super(new BooleanSerializer(), new BooleanDeserializer());
+        }
+    }
+
     static public final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
 
         final static int NULL_ENTRY_VALUE = -1;
@@ -189,9 +195,13 @@ public class Serdes {
             return (Serde<T>) UUID();
         }
 
+        if (Boolean.class.isAssignableFrom(type)) {
+            return (Serde<T>) Boolean();
+        }
+
         // TODO: we can also serializes objects of type T using generic Java serialization by default
         throw new IllegalArgumentException("Unknown class for built-in serializer. Supported types are: " +
-            "String, Short, Integer, Long, Float, Double, ByteArray, ByteBuffer, Bytes, UUID");
+            "String, Short, Integer, Long, Float, Double, ByteArray, ByteBuffer, Bytes, UUID, Boolean");
     }
 
     /**
@@ -272,6 +282,13 @@ public class Serdes {
      */
     static public Serde<UUID> UUID() {
         return new UUIDSerde();
+    }
+
+    /**
+     * A serde for nullable {@code Boolean} type.
+     */
+    static public Serde<Boolean> Boolean() {
+        return new BooleanSerde();
     }
 
     /**

@@ -66,6 +66,10 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
     }
 
     static byte[] rawValue(final byte[] rawValueAndTimestamp) {
+        if (rawValueAndTimestamp == null) {
+            return null;
+        }
+
         final int rawValueLength = rawValueAndTimestamp.length - 8;
         return ByteBuffer
             .allocate(rawValueLength)

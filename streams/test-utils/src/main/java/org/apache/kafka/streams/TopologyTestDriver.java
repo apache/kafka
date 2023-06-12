@@ -81,6 +81,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
@@ -876,6 +877,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
@@ -906,6 +908,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
@@ -941,6 +944,10 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void throwIfBuiltInStore(final StateStore stateStore) {
+        if (stateStore instanceof VersionedKeyValueStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                                                   + " is a versioned key-value store and should be accessed via `getVersionedKeyValueStore()`");
+        }
         if (stateStore instanceof TimestampedKeyValueStore) {
             throw new IllegalArgumentException("Store " + stateStore.name()
                                                    + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
@@ -980,6 +987,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
@@ -1006,6 +1014,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
@@ -1014,6 +1023,29 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
         final StateStore store = getStateStore(name, false);
         return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link VersionedKeyValueStore} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link VersionedKeyValueStore} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> VersionedKeyValueStore<K, V> getVersionedKeyValueStore(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof VersionedKeyValueStore ? (VersionedKeyValueStore<K, V>) store : null;
     }
 
     /**
@@ -1034,6 +1066,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
@@ -1060,6 +1093,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
@@ -1082,6 +1116,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      */

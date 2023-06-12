@@ -65,11 +65,6 @@ public class InternalSinkRecord extends SinkRecord {
         return super.hashCode();
     }
 
-    @Override
-    public String toString() {
-        return super.toString();
-    }
-
     /**
     * Return the original consumer record that this sink record represents.
     *

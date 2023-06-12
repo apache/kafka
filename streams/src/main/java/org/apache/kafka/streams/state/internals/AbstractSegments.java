@@ -79,16 +79,12 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
         final long minLiveTimestamp = streamTime - retentionPeriod;
         final long minLiveSegment = segmentId(minLiveTimestamp);
 
-        final S toReturn;
         if (segmentId >= minLiveSegment) {
             // The segment is live. get it, ensure it's open, and return it.
-            toReturn = getOrCreateSegment(segmentId, context);
+            return getOrCreateSegment(segmentId, context);
         } else {
-            toReturn = null;
+            return null;
         }
-
-        cleanupEarlierThan(minLiveSegment);
-        return toReturn;
     }
 
     @Override
@@ -113,8 +109,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
             // ignore
         }
 
-        final long minLiveSegment = segmentId(streamTime - retentionPeriod);
-        cleanupEarlierThan(minLiveSegment);
+        cleanupExpiredSegments(streamTime);
     }
 
     @Override
@@ -172,7 +167,8 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
         segments.clear();
     }
 
-    private void cleanupEarlierThan(final long minLiveSegment) {
+    protected void cleanupExpiredSegments(final long streamTime) {
+        final long minLiveSegment = segmentId(streamTime - retentionPeriod);
         final Iterator<Map.Entry<Long, S>> toRemove =
             segments.headMap(minLiveSegment, false).entrySet().iterator();
 

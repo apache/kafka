@@ -31,17 +31,17 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.44.0'
+  id 'com.github.ben-manes.versions' version '0.46.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '8.0.2'
+  id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.0"
-  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
 
   id "com.github.spotbugs" version '5.0.13' apply false
-  id 'org.gradle.test-retry' version '1.5.1' apply false
+  id 'org.gradle.test-retry' version '1.5.2' apply false
   id 'org.scoverage' version '7.0.1' apply false
-  id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
+  id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
 }
 
@@ -148,7 +148,9 @@ allprojects {
           // be explicit about the Netty dependency version instead of relying on the version set by
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
-          libs.nettyTransportNativeEpoll
+          libs.nettyTransportNativeEpoll,
+	  // be explicit about the reload4j version instead of relying on the transitive versions
+	  libs.log4j
         )
       }
     }
@@ -262,7 +264,7 @@ subprojects {
     if (JavaVersion.current().isJava9Compatible())
       options.release = minJavaVersion
   }
-  
+
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
   sourceCompatibility = minJavaVersion
@@ -430,11 +432,6 @@ subprojects {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
     }
-
-    // Allows devs to run tests in a loop to debug flaky tests. See README.
-    if (project.hasProperty("rerun-tests")) {
-      outputs.upToDateWhen { false }
-    }
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -479,11 +476,6 @@ subprojects {
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
-    }
-
-    // Allows devs to run tests in a loop to debug flaky tests. See README.
-    if (project.hasProperty("rerun-tests")) {
-      outputs.upToDateWhen { false }
     }
   }
 
@@ -563,6 +555,7 @@ subprojects {
     options.charSet = 'UTF-8'
     options.docEncoding = 'UTF-8'
     options.encoding = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
     options.addStringOption('Xdoclint:none', '-quiet')
 
@@ -669,11 +662,8 @@ subprojects {
     }
 
     // Scalac 2.12 `-release` requires Java 9 or higher, but Scala 2.13 doesn't have that restriction
-    if (versions.baseScala == "2.13")
-      scalaCompileOptions.additionalParameters += ["-release:" + minJavaVersion] // Use `:` here to workaround Gradle bug (see https://github.com/gradle/gradle/issues/23962#issuecomment-1437348400)
-    else if (JavaVersion.current().isJava9Compatible())
-      scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)] // Don't use `:` here as it breaks compilation with Scala 2.12
-
+    if (versions.baseScala == "2.13" || JavaVersion.current().isJava9Compatible())
+      scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
@@ -864,11 +854,13 @@ project(':core') {
     implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':storage:api')
+    implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
 
 
     implementation libs.argparse4j
+    implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
@@ -902,6 +894,7 @@ project(':core') {
     testImplementation project(':storage:api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -975,6 +968,7 @@ project(':core') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
@@ -1111,6 +1105,8 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':tools:tools-api').jar) { into("libs/") }
+    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -1206,6 +1202,7 @@ project(':metadata') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   sourceSets {
     main {
@@ -1223,6 +1220,10 @@ project(':metadata') {
   javadoc {
     enabled = false
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-metadata.xml")
+  }
 }
 
 project(':group-coordinator') {
@@ -1235,6 +1236,7 @@ project(':group-coordinator') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':metadata')
     implementation libs.slf4jApi
 
     testImplementation project(':clients').sourceSets.test.output
@@ -1280,6 +1282,7 @@ project(':group-coordinator') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 }
 
 project(':examples') {
@@ -1287,7 +1290,6 @@ project(':examples') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':server-common')
   }
 
   javadoc {
@@ -1418,6 +1420,7 @@ project(':clients') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   compileTestJava.dependsOn 'processTestMessages'
 
@@ -1520,6 +1523,7 @@ project(':raft') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   jar {
     dependsOn createVersionFile
@@ -1551,11 +1555,13 @@ project(':server-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.joptSimple
+    implementation libs.pcollections
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
@@ -1601,6 +1607,10 @@ project(':server-common') {
 
   clean.doFirst {
     delete "$buildDir/kafka/"
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-server-common.xml")
   }
 }
 
@@ -1742,6 +1752,7 @@ project(':storage') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   jar {
     dependsOn createVersionFile
@@ -1765,6 +1776,61 @@ project(':storage') {
   }
 }
 
+project(':tools:tools-api') {
+  archivesBaseName = "kafka-tools-api"
+
+  dependencies {
+    implementation project(':clients')
+    testImplementation libs.junitJupiter
+  }
+
+  task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/tools/api/*"
+  }
+}
+
 project(':tools') {
   archivesBaseName = "kafka-tools"
 
@@ -1772,6 +1838,7 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':server-common')
     implementation project(':log4j-appender')
+    implementation project(':tools:tools-api')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
@@ -1933,6 +2000,7 @@ project(':streams') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
@@ -1944,6 +2012,7 @@ project(':streams') {
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
@@ -1980,6 +2049,7 @@ project(':streams') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   javadoc {
     include "**/org/apache/kafka/streams/**"
@@ -2460,8 +2530,11 @@ project(':jmh-benchmarks') {
     implementation project(':storage')
     implementation project(':streams')
     implementation project(':core')
+    implementation project(':connect:api')
+    implementation project(':connect:transforms')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
+    implementation project(':server-common').sourceSets.test.output
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
@@ -2879,6 +2952,7 @@ project(':connect:mirror') {
     implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter
+    testImplementation libs.log4j
     testImplementation libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output

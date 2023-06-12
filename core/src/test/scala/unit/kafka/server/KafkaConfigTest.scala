@@ -208,6 +208,51 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testIPv4AndIPv6SamePortListeners(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://[::1]:9092,SSL://[::1]:9092")
+    var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9092")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
+
+    props.put(KafkaConfig.ListenersProp, "SSL://[::1]:9096,PLAINTEXT://127.0.0.1:9096,SASL_SSL://:9096")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,PLAINTEXT://127.0.0.1:9092")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different name"))
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9092,SASL_SSL://127.0.0.1:9092")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different port"))
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://apache.org:9092,SSL://[::1]:9092")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different port"))
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://apache.org:9092,SSL://127.0.0.1:9092")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different port"))
+
+    // Happy case
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092")
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://[::1]:9093,SSL://127.0.0.1:9093")
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9094,SSL://[::1]:9094,SASL_SSL://127.0.0.1:9095,SASL_PLAINTEXT://[::1]:9095")
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://[::1]:9096,SSL://127.0.0.1:9096,SASL_SSL://[::1]:9097,SASL_PLAINTEXT://127.0.0.1:9097")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testControlPlaneListenerName(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
@@ -976,6 +1021,20 @@ class KafkaConfigTest {
         case RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
 
+        /** New group coordinator configs */
+        case KafkaConfig.NewGroupCoordinatorEnableProp => // ignore
+        case KafkaConfig.GroupCoordinatorNumThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+
+        /** Consumer groups configs */
+        case KafkaConfig.ConsumerGroupSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupAssignorsProp => // ignore string
+
         case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
         case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
 
@@ -1689,5 +1748,43 @@ class KafkaConfigTest {
 
     props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
     KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testConsumerGroupSessionTimeoutValidation(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Max should be greater than or equals to min.
+    props.put(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp, "10")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+
+    // The timeout should be within the min-max range.
+    props.put(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp, "10")
+    props.put(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupSessionTimeoutMsProp, "5")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    props.put(KafkaConfig.ConsumerGroupSessionTimeoutMsProp, "25")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testConsumerGroupHeartbeatIntervalValidation(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Max should be greater than or equals to min.
+    props.put(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp, "10")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+
+    // The timeout should be within the min-max range.
+    props.put(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp, "10")
+    props.put(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "5")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "25")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 }

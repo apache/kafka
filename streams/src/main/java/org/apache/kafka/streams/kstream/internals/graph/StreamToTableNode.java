@@ -20,11 +20,10 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 /**
  * Represents a KTable convert From KStream
@@ -53,8 +52,8 @@ public class StreamToTableNode<K, V> extends GraphNode {
     @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder =
-            new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
+        final StoreBuilder<?> storeBuilder =
+            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         final String processorName = processorParameters.processorName();
         final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?

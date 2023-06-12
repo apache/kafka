@@ -20,6 +20,8 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
@@ -36,6 +38,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -89,7 +92,8 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
                                   ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                   RestServer restServer, RestClient restClient) {
 
-        OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore();
+        OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore(plugins.newInternalConverter(
+                true, JsonConverter.class.getName(), Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
         Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore,

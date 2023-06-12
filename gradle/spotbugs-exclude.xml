@@ -303,7 +303,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.connect.runtime.WorkerConnector"/>
         <Or>
             <Method name="doStart"/>
-            <Method name="pause"/>
         </Or>
         <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
     </Match>
@@ -490,7 +489,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Boolean deserializer intentionally returns null on null input. -->
-        <Class name="org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde$BooleanSerde$BooleanDeserializer"/>
+        <Class name="org.apache.kafka.common.serialization.BooleanDeserializer"/>
         <Method name="deserialize"/>
         <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
@@ -522,6 +521,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <Package name="org.apache.kafka.common.security.oauthbearer.secured" />
         <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
+    </Match>
+
+    <Match>
+        <Class name="org.apache.kafka.jmh.util.ByteUtilsBenchmark$BaseBenchmarkState" />
+        <!-- Suppress warning because JMH code is used to instantiate Random() once per Trial. This is done to ensure
+             that all benchmarks run with same seed for Random. -->
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
 
 </FindBugsFilter>

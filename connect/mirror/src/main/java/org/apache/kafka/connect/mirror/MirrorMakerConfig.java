@@ -199,6 +199,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
 
         // fill in reasonable defaults
+        props.putIfAbsent(CommonClientConfigs.CLIENT_ID_CONFIG, sourceAndTarget.toString());
         props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
         props.putIfAbsent(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
                 + sourceAndTarget.source() + ".internal");

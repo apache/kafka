@@ -1371,7 +1371,7 @@ class AbstractFetcherThreadTest {
               1024 * 1024, Optional.of[Integer](state.currentLeaderEpoch), lastFetchedEpoch))
         }
       }
-      val fetchRequest = FetchRequest.Builder.forReplica(version, replicaId, 0, 1, fetchData.asJava)
+      val fetchRequest = FetchRequest.Builder.forReplica(version, replicaId, 1, 0, 1, fetchData.asJava)
       val fetchRequestOpt =
         if (fetchData.isEmpty)
           None

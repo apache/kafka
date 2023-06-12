@@ -17,11 +17,10 @@
 
 package kafka.server
 
-import kafka.log.LeaderOffsetIncremented
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.server.common.OffsetAndEpoch
-import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 
 import scala.collection.{Map, Set}
 
@@ -75,7 +74,7 @@ class ReplicaAlterLogDirsThread(name: String,
       None
 
     futureLog.updateHighWatermark(partitionData.highWatermark)
-    futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset, LeaderOffsetIncremented)
+    futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
 
     if (partition.maybeReplaceCurrentWithFutureReplica())
       removePartitions(Set(topicPartition))

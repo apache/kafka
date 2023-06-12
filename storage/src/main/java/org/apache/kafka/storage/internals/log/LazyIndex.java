@@ -166,20 +166,25 @@ public class LazyIndex<T extends AbstractIndex> {
 
     @SuppressWarnings("unchecked")
     public T get() throws IOException {
-        if (indexWrapper instanceof IndexValue<?>)
-            return ((IndexValue<T>) indexWrapper).index;
-        else if (indexWrapper instanceof IndexFile) {
+        IndexWrapper wrapper = indexWrapper;
+        if (wrapper instanceof IndexValue<?>)
+            return ((IndexValue<T>) wrapper).index;
+        else {
             lock.lock();
             try {
-                IndexFile indexFile = (IndexFile) indexWrapper;
-                IndexValue<T> indexValue = new IndexValue<>(loadIndex(indexFile.file));
-                indexWrapper = indexValue;
-                return indexValue.index;
+                if (indexWrapper instanceof IndexValue<?>)
+                    return ((IndexValue<T>) indexWrapper).index;
+                else if (indexWrapper instanceof IndexFile) {
+                    IndexFile indexFile = (IndexFile) indexWrapper;
+                    IndexValue<T> indexValue = new IndexValue<>(loadIndex(indexFile.file));
+                    indexWrapper = indexValue;
+                    return indexValue.index;
+                } else
+                    throw new IllegalStateException("Unexpected type for indexWrapper " + indexWrapper.getClass());
             } finally {
                 lock.unlock();
             }
-        } else
-            throw new IllegalStateException("Unexpected type for indexWrapper " + indexWrapper.getClass());
+        }
     }
 
     public void updateParentDir(File parentDir) {

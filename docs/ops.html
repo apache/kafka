@@ -1605,6 +1605,11 @@ $ bin/kafka-acls.sh \
         <td>0</td>
       </tr>
       <tr>
+        <td>Producer Id counts</td>
+        <td>kafka.server:type=ReplicaManager,name=ProducerIdCount</td>
+        <td>Count of all producer ids created by transactional and idempotent producers in each replica on the broker</td>
+      </tr>
+      <tr>
         <td>Partition counts</td>
         <td>kafka.server:type=ReplicaManager,name=PartitionCount</td>
         <td>mostly even across brokers</td>
@@ -1829,7 +1834,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Current State</td>
-    <td>The current state of this member; possible values are leader, candidate, voted, follower, unattached.</td>
+    <td>The current state of this member; possible values are leader, candidate, voted, follower, unattached, observer.</td>
     <td>kafka.server:type=raft-metrics,name=current-state</td>
   </tr>
   <tr>
