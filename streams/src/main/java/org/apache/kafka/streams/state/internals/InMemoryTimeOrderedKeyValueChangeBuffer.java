@@ -65,7 +65,7 @@ import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV3;
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.duckTypeV2;
 
-public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyValueBuffer<K, V> {
+public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements TimeOrderedKeyValueBuffer<K, V, Change<V>> {
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private static final byte[] V_1_CHANGELOG_HEADER_VALUE = {(byte) 1};
@@ -98,7 +98,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     private int partition;
 
-    public static class Builder<K, V> implements StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> {
+    public static class Builder<K, V> implements StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> {
 
         private final String storeName;
         private final Serde<K> keySerde;
@@ -120,7 +120,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
          * It's currently a no-op.
          */
         @Override
-        public StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> withCachingEnabled() {
+        public StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> withCachingEnabled() {
             return this;
         }
 
@@ -132,25 +132,25 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
          * It's currently a no-op.
          */
         @Override
-        public StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> withCachingDisabled() {
+        public StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> withCachingDisabled() {
             return this;
         }
 
         @Override
-        public StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> withLoggingEnabled(final Map<String, String> config) {
+        public StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> withLoggingEnabled(final Map<String, String> config) {
             logConfig = config;
             return this;
         }
 
         @Override
-        public StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> withLoggingDisabled() {
+        public StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> withLoggingDisabled() {
             loggingEnabled = false;
             return this;
         }
 
         @Override
-        public InMemoryTimeOrderedKeyValueBuffer<K, V> build() {
-            return new InMemoryTimeOrderedKeyValueBuffer<>(storeName, loggingEnabled, keySerde, valueSerde);
+        public InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>> build() {
+            return new InMemoryTimeOrderedKeyValueChangeBuffer<>(storeName, loggingEnabled, keySerde, valueSerde);
         }
 
         @Override
@@ -169,10 +169,10 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         }
     }
 
-    private InMemoryTimeOrderedKeyValueBuffer(final String storeName,
-                                              final boolean loggingEnabled,
-                                              final Serde<K> keySerde,
-                                              final Serde<V> valueSerde) {
+    private InMemoryTimeOrderedKeyValueChangeBuffer(final String storeName,
+                                                    final boolean loggingEnabled,
+                                                    final Serde<K> keySerde,
+                                                    final Serde<V> valueSerde) {
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
         this.keySerde = keySerde;
@@ -394,7 +394,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
-                           final Consumer<Eviction<K, V>> callback) {
+                           final Consumer<Eviction<K, Change<V>>> callback) {
         final Iterator<Map.Entry<BufferKey, BufferValue>> delegate = sortedMap.entrySet().iterator();
         int evictions = 0;
 
@@ -418,7 +418,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     changelogTopic,
                     new Change<>(bufferValue.newValue(), bufferValue.oldValue())
                 );
-                callback.accept(new Eviction<>(key, value, bufferValue.context()));
+                callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
 
                 delegate.remove();
                 index.remove(next.getKey().key());
@@ -563,7 +563,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     @Override
     public String toString() {
-        return "InMemoryTimeOrderedKeyValueBuffer{" +
+        return "InMemoryTimeOrderedKeyValueChangeBuffer{" +
             "storeName='" + storeName + '\'' +
             ", changelogTopic='" + changelogTopic + '\'' +
             ", open=" + open +

@@ -22,7 +22,7 @@ import java.nio.file.Files
 import java.util.{HashMap, Optional, Map => JMap}
 import java.time.Duration
 import kafka.tools.ConsoleConsumer.ConsumerWrapper
-import kafka.utils.{Exit, MockTime, TestUtils}
+import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.record.TimestampType
@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.header.internals.RecordHeaders
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
