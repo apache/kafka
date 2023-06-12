@@ -95,7 +95,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                         return;
                     }
 
-                    V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
+                    final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
 
                     if (bufferValue.context().timestamp() != minTimestamp) {
                         throw new IllegalStateException(
