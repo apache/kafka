@@ -20,6 +20,7 @@ import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
+import kafka.server.KafkaConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -105,6 +106,7 @@ public class RemoteLogManagerTest {
     Time time = new MockTime();
     int brokerId = 0;
     String logDir = TestUtils.tempDirectory("kafka-").toString();
+    String clusterId = "dummyId";
 
     RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
@@ -140,7 +142,7 @@ public class RemoteLogManagerTest {
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
         Properties props = new Properties();
         remoteLogManagerConfig = createRLMConfig(props);
-        remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, "clusterId", time, tp -> Optional.of(mockLog)) {
+        remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time, tp -> Optional.of(mockLog)) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -220,6 +222,8 @@ public class RemoteLogManagerTest {
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(host + ":" + port, capture.getValue().get("bootstrap.servers"));
         assertEquals(securityProtocol, capture.getValue().get("security.protocol"));
+        assertEquals(clusterId, capture.getValue().get("cluster.id"));
+        assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
     }
 
     @Test
@@ -407,7 +411,7 @@ public class RemoteLogManagerTest {
     void testGetClassLoaderAwareRemoteStorageManager() throws Exception {
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
         RemoteLogManager remoteLogManager =
-            new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, "clusterId", time, t -> Optional.empty()) {
+            new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time, t -> Optional.empty()) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }
