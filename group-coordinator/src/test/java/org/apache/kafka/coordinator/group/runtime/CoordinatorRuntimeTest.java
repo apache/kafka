@@ -83,15 +83,15 @@ public class CoordinatorRuntimeTest {
      * An in-memory partition writer that accepts a maximum number of writes.
      */
     private static class MockPartitionWriter extends InMemoryPartitionWriter<String> {
-        private int allowedWrites;
+        private final int maxRecordsInBatch;
 
         public MockPartitionWriter() {
             this(Integer.MAX_VALUE);
         }
 
-        public MockPartitionWriter(int allowedWrites) {
+        public MockPartitionWriter(int maxRecordsInBatch) {
             super(false);
-            this.allowedWrites = allowedWrites;
+            this.maxRecordsInBatch = maxRecordsInBatch;
         }
 
         @Override
@@ -106,10 +106,11 @@ public class CoordinatorRuntimeTest {
 
         @Override
         public long append(TopicPartition tp, List<String> records) throws KafkaException {
-            if (allowedWrites-- > 0) {
+            if (records.size() <= maxRecordsInBatch) {
                 return super.append(tp, records);
             } else {
-                throw new KafkaException("append failed.");
+                throw new KafkaException(String.format("Number of records %d greater than the maximum allowed %d.",
+                    records.size(), maxRecordsInBatch));
             }
         }
     }
@@ -623,7 +624,7 @@ public class CoordinatorRuntimeTest {
     @Test
     public void testScheduleWriteOpWhenWriteFails() {
         // The partition writer only accept on write.
-        MockPartitionWriter writer = new MockPartitionWriter(1);
+        MockPartitionWriter writer = new MockPartitionWriter(2);
 
         CoordinatorRuntime<MockCoordinator, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinator, String>()
@@ -653,9 +654,9 @@ public class CoordinatorRuntimeTest {
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.records());
 
         // Write #2. It should fail because the writer is configured to only
-        // accept one call to PartitionWriter#append.
+        // accept 2 records per batch.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response2"));
+            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4", "record5"), "response2"));
         assertFutureThrows(write2, KafkaException.class);
 
         // Verify that the state has not changed.
