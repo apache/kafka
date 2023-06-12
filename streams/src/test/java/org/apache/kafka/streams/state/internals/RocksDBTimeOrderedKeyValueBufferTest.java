@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
@@ -47,7 +46,7 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBTimeOrderedKeyValueBufferTest {
-    public RocksDBTimeOrderedKeyValueBuffer<String, String, String > buffer;
+    public RocksDBTimeOrderedKeyValueBuffer<String, String> buffer;
     @Mock
     public SerdeGetter serdeGetter;
     public InternalProcessorContext<String, String> context;
@@ -85,7 +84,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         createJoin(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
     }
 
