@@ -52,7 +52,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * is thread-safe, but provides no synchronization for response callbacks. This guarantees that no locks
  * are held when they are invoked.
  */
-public class ConsumerNetworkClient implements Closeable {
+public class ConsumerNetworkClient implements NodeStatusDetector, Closeable {
     private static final int MAX_POLL_TIMEOUT_MS = 5000;
 
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
@@ -556,6 +556,7 @@ public class ConsumerNetworkClient implements Closeable {
      * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
      * reconnect backoff window following the disconnect).
      */
+    @Override
     public boolean isUnavailable(Node node) {
         lock.lock();
         try {
@@ -568,10 +569,11 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Check for an authentication error on a given node and raise the exception if there is one.
      */
+    @Override
     public void maybeThrowAuthFailure(Node node) {
         lock.lock();
         try {
-            NetworkClientUtils.maybeThrowAuthenticationException(client, node);
+            NetworkClientUtils.maybeThrowAuthFailure(client, node);
         } finally {
             lock.unlock();
         }

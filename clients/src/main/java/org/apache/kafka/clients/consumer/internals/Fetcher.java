@@ -56,6 +56,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
 
     private final Logger log;
     private final FetchCollector<K, V> fetchCollector;
+    private final ConsumerNetworkClient client;
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
@@ -72,6 +73,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
                 fetchConfig,
                 metricsManager,
                 time);
+        this.client = client;
     }
 
     public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {

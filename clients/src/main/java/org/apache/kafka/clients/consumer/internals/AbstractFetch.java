@@ -55,7 +55,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
     private final Logger log;
     protected final LogContext logContext;
-    protected final ConsumerNetworkClient client;
+    protected final NodeStatusDetector nodeStatusDetector;
     protected final ConsumerMetadata metadata;
     protected final SubscriptionState subscriptions;
     protected final FetchConfig<K, V> fetchConfig;
@@ -69,7 +69,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     public AbstractFetch(final LogContext logContext,
-                         final ConsumerNetworkClient client,
+                         final NodeStatusDetector nodeStatusDetector,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
                          final FetchConfig<K, V> fetchConfig,
@@ -77,7 +77,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                          final Time time) {
         this.log = logContext.logger(AbstractFetch.class);
         this.logContext = logContext;
-        this.client = client;
+        this.nodeStatusDetector = nodeStatusDetector;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
@@ -313,7 +313,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                 // skip sending the close request.
                 final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
 
-                if (fetchTarget == null || client.isUnavailable(fetchTarget)) {
+                if (fetchTarget == null || nodeStatusDetector.isUnavailable(fetchTarget)) {
                     log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
                     return;
                 }
@@ -360,8 +360,8 @@ public abstract class AbstractFetch<K, V> implements Closeable {
             // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
 
-            if (client.isUnavailable(node)) {
-                client.maybeThrowAuthFailure(node);
+            if (nodeStatusDetector.isUnavailable(node)) {
+                nodeStatusDetector.maybeThrowAuthFailure(node);
 
                 // If we try to send during the reconnect backoff window, then the request is just
                 // going to be failed anyway before being sent, so skip sending the request for now

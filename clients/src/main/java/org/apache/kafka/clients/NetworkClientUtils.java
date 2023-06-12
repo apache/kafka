@@ -127,7 +127,7 @@ public final class NetworkClientUtils {
     /**
      * Check for an authentication error on a given node and raise the exception if there is one.
      */
-    public static void maybeThrowAuthenticationException(KafkaClient client, Node node) {
+    public static void maybeThrowAuthFailure(KafkaClient client, Node node) {
         AuthenticationException exception = client.authenticationException(node);
         if (exception != null)
             throw exception;
