@@ -1500,7 +1500,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     deleteOldSegments(shouldDelete, RetentionMsBreach(this))
   }
 
-
   private def deleteRetentionSizeBreachedSegments(): Int = {
     val retentionSize: Long = localRetentionSize(config)
     if (retentionSize < 0 || size < retentionSize) return 0
