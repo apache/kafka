@@ -93,10 +93,10 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         createJoin(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
         pipeRecord("2", "0", 1L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(2));
     }
 
@@ -105,10 +105,10 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         createJoin(Duration.ofMillis(1));
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
         pipeRecord("2", "0", 1L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
     }
 
@@ -117,10 +117,10 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         createJoin(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 1, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
         pipeRecord("2", "0", 1L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(2));
     }
 
@@ -129,10 +129,10 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         createJoin(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 1L);
-        buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 1, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
         pipeRecord("2", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
     }
 
@@ -141,13 +141,13 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         createJoin(Duration.ofMillis(1));
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 2L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
         pipeRecord("2", "0", 1L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
         pipeRecord("2", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(1));
     }
 
@@ -156,13 +156,13 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         createJoin(Duration.ofMillis(1));
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("2", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
         pipeRecord("2", "2", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
         pipeRecord("1", "0", 7L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        buffer.evictWhile(() -> buffer.numRecords()> 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(2));
     }
 }
