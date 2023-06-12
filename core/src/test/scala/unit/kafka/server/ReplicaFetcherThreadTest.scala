@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMeta
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -764,7 +764,7 @@ class ReplicaFetcherThreadTest {
 
     when(partition.localLogOrException).thenReturn(log)
     when(partition.appendRecordsToFollowerOrFutureReplica(any(), any())).thenReturn(Some(new LogAppendInfo(
-      Optional.empty,
+      Optional.empty[LogOffsetMetadata],
       0,
       OptionalInt.empty,
       RecordBatch.NO_TIMESTAMP,
