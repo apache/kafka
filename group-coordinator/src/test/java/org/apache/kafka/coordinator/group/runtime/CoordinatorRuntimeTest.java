@@ -190,7 +190,7 @@ public class CoordinatorRuntimeTest {
         when(loader.load(TP, coordinator)).thenReturn(future);
 
         // Getting the coordinator context fails because the coordinator
-        // is not loaded yet.
+        // does not exist until scheduleLoadOperation is called.
         assertThrows(NotCoordinatorException.class, () -> runtime.contextOrThrow(TP));
 
         // Schedule the loading.
