@@ -159,7 +159,7 @@ class RemoteIndexCacheTest {
 
     // getting index for last expired entry should call rsm#fetchIndex as that entry was expired earlier
     val missingEntryOpt = {
-      metadataList.findLast(segmentMetadata => {
+      metadataList.find(segmentMetadata => {
         val segmentId = segmentMetadata.remoteLogSegmentId().id()
         !cache.internalCache.asMap().containsKey(segmentId)
       })
