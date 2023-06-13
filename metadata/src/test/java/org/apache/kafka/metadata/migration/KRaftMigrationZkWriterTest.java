@@ -444,7 +444,8 @@ public class KRaftMigrationZkWriterTest {
                 (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
             Map<Uuid, String> emptyTopicNames = Collections.emptyMap();
             assertThrows(RuntimeException.class,
-                () -> writer.handleTopicsDelta(emptyTopicNames::get, newTopicsImage, topicsDelta, consumer));
+                () -> writer.handleTopicsDelta(emptyTopicNames::get, newTopicsImage, topicsDelta, consumer),
+                "Should throw if we encounter an unknown topic name");
 
             Map<Uuid, String> topicNames = Collections.singletonMap(topicId, "spam");
             writer.handleTopicsDelta(topicNames::get, newTopicsImage, topicsDelta, consumer);
@@ -632,7 +633,7 @@ public class KRaftMigrationZkWriterTest {
             ProducerIdsImage image = new ProducerIdsImage(1100);
             Map<String, Integer> opCounts = new HashMap<>();
             KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
-                    (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
             writer.handleProducerIdSnapshot(image, consumer);
             assertEquals(0, opCounts.size());
         }
@@ -642,10 +643,21 @@ public class KRaftMigrationZkWriterTest {
             ProducerIdsImage image = new ProducerIdsImage(2000);
             Map<String, Integer> opCounts = new HashMap<>();
             KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
-                    (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
             writer.handleProducerIdSnapshot(image, consumer);
             assertEquals(1, opCounts.size());
             assertEquals(2000, migrationClient.capturedProducerId);
+        }
+
+        {
+            // KRaft is less than ZK (unexpected, but we should still take KRaft value)
+            ProducerIdsImage image = new ProducerIdsImage(50);
+            Map<String, Integer> opCounts = new HashMap<>();
+            KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+            writer.handleProducerIdSnapshot(image, consumer);
+            assertEquals(1, opCounts.size());
+            assertEquals(50, migrationClient.capturedProducerId);
         }
 
         {
@@ -666,7 +678,7 @@ public class KRaftMigrationZkWriterTest {
             migrationClient.setReadProducerId(null);
             Map<String, Integer> opCounts = new HashMap<>();
             KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
-                    (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
+                (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
             writer.handleProducerIdSnapshot(image, consumer);
             assertEquals(1, opCounts.size());
             assertEquals(2000, migrationClient.capturedProducerId);
@@ -682,7 +694,6 @@ public class KRaftMigrationZkWriterTest {
 
         migrationClient.setReadProducerId(new ProducerIdsBlock(0, 100L, 1000));
 
-        // No change
         ProducerIdsDelta delta = new ProducerIdsDelta(ProducerIdsImage.EMPTY);
         delta.replay(new ProducerIdsRecord().setBrokerId(0).setBrokerEpoch(20).setNextProducerId(2000));
 
@@ -763,7 +774,7 @@ public class KRaftMigrationZkWriterTest {
     }
 
 
-    byte[] randomBuffer(MockRandom random, int length) {
+    private byte[] randomBuffer(MockRandom random, int length) {
         byte[] buf = new byte[length];
         random.nextBytes(buf);
         return buf;
@@ -803,24 +814,6 @@ public class KRaftMigrationZkWriterTest {
         KRaftMigrationOperationConsumer consumer = KRaftMigrationDriver.countingOperationConsumer(opCounts,
             (logMsg, operation) -> operation.apply(ZkMigrationLeadershipState.EMPTY));
 
-        ClientQuotasDelta clientQuotasDelta = new ClientQuotasDelta(ClientQuotasImage.EMPTY);
-        clientQuotasDelta.replay(new ClientQuotaRecord()
-            .setEntity(user2Entity)
-            .setKey("request_percentage")
-            .setValue(58.58)
-            .setRemove(false));
-        ClientQuotasImage clientQuotasImage = clientQuotasDelta.apply();
-
-        ScramDelta scramDelta = new ScramDelta(ScramImage.EMPTY);
-        scramDelta.replay(new UserScramCredentialRecord()
-            .setName("george")
-            .setMechanism(ScramMechanism.SCRAM_SHA_256.type())
-            .setSalt(credential.salt())
-            .setStoredKey(credential.storedKey())
-            .setServerKey(credential.serverKey())
-            .setIterations(credential.iterations()));
-        ScramImage scramImage = scramDelta.apply();
-
         // Empty image, should remove things from ZK (write an empty map)
         writer.handleClientQuotasSnapshot(ClientQuotasImage.EMPTY, ScramImage.EMPTY, consumer);
         assertEquals(3, opCounts.remove("UpdateClientQuotas"));
@@ -844,6 +837,13 @@ public class KRaftMigrationZkWriterTest {
             configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
 
         // With only client quota image, should write user2, clear alice, and clear ip
+        ClientQuotasDelta clientQuotasDelta = new ClientQuotasDelta(ClientQuotasImage.EMPTY);
+        clientQuotasDelta.replay(new ClientQuotaRecord()
+                .setEntity(user2Entity)
+                .setKey("request_percentage")
+                .setValue(58.58)
+                .setRemove(false));
+        ClientQuotasImage clientQuotasImage = clientQuotasDelta.apply();
         configClient.reset();
         writer.handleClientQuotasSnapshot(clientQuotasImage, ScramImage.EMPTY, consumer);
         assertEquals(3, opCounts.remove("UpdateClientQuotas"));
@@ -858,6 +858,16 @@ public class KRaftMigrationZkWriterTest {
             configClient.writtenQuotas.get(Collections.singletonMap("user", "alice")));
 
         // With only scram image, should update george, clear alice, clear user2, clear ip
+        ScramDelta scramDelta = new ScramDelta(ScramImage.EMPTY);
+        scramDelta.replay(new UserScramCredentialRecord()
+                .setName("george")
+                .setMechanism(ScramMechanism.SCRAM_SHA_256.type())
+                .setSalt(credential.salt())
+                .setStoredKey(credential.storedKey())
+                .setServerKey(credential.serverKey())
+                .setIterations(credential.iterations()));
+        ScramImage scramImage = scramDelta.apply();
+
         configClient.reset();
         writer.handleClientQuotasSnapshot(ClientQuotasImage.EMPTY, scramImage, consumer);
         assertEquals(4, opCounts.remove("UpdateClientQuotas"));
