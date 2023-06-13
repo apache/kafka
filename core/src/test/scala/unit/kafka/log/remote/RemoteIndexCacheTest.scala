@@ -128,7 +128,8 @@ class RemoteIndexCacheTest {
 
   @Test
   def testCacheEntryExpiry(): Unit = {
-    cache.close()
+    // close exiting cache created in test setup before creating a new one
+    Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
@@ -148,26 +149,32 @@ class RemoteIndexCacheTest {
     assertCacheSize(2)
     verifyFetchIndexInvocation(count = 2)
 
-    // getting index for metadataList.last should call rsm#fetchIndex, but metadataList(1) is already in cache.
-    cache.getIndexEntry(metadataList.last)
-    cache.getIndexEntry(metadataList(1))
+    // Getting index for metadataList.last should call rsm#fetchIndex
+    // to populate this entry one of the other 2 entries will be evicted. We don't know which one since it's based on
+    // a probabilistic formula for Window TinyLfu. See docs for RemoteIndexCache
+    assertNotNull(cache.getIndexEntry(metadataList.last))
+    assertAtLeastOnePresent(cache, metadataList(1).remoteLogSegmentId().id(), metadataList.head.remoteLogSegmentId().id())
     assertCacheSize(2)
-    assertNotNull(cache.internalCache.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
-    assertNotNull(cache.internalCache.getIfPresent(metadataList(1).remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 3)
 
-    // getting index for metadataList.head should call rsm#fetchIndex as that entry was expired earlier,
-    // but metadataList(1) is already in cache.
-    cache.getIndexEntry(metadataList(1))
-    cache.getIndexEntry(metadataList.head)
+    // getting index for last expired entry should call rsm#fetchIndex as that entry was expired earlier
+    val missingEntryOpt = {
+      metadataList.findLast(segmentMetadata => {
+        val segmentId = segmentMetadata.remoteLogSegmentId().id()
+        !cache.internalCache.asMap().containsKey(segmentId)
+      })
+    }
+    assertFalse(missingEntryOpt.isEmpty)
+    cache.getIndexEntry(missingEntryOpt.get)
     assertCacheSize(2)
-    assertNull(cache.internalCache.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 4)
   }
 
   @Test
   def testGetIndexAfterCacheClose(): Unit = {
-    cache.close()
+    // close exiting cache created in test setup before creating a new one
+    Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
+
     cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
@@ -296,7 +303,8 @@ class RemoteIndexCacheTest {
 
   @Test
   def testReloadCacheAfterClose(): Unit = {
-    cache.close()
+    // close exiting cache created in test setup before creating a new one
+    Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
@@ -338,11 +346,20 @@ class RemoteIndexCacheTest {
     verifyNoMoreInteractions(rsm)
   }
 
+  private def assertAtLeastOnePresent(cache: RemoteIndexCache, uuids: Uuid*): Unit = {
+    uuids.foreach {
+      uuid => {
+        if (cache.internalCache.getIfPresent(uuid) != null) return
+      }
+    }
+    fail("all uuids are not present in cache")
+  }
+
   private def assertCacheSize(expectedSize: Int): Unit = {
     // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
     // that cache reaches correct state eventually
     TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == expectedSize,
-      msg = s"cache did not adhere to max size of $expectedSize")
+      msg = s"cache did not adhere to expected size of $expectedSize")
   }
 
   private def verifyFetchIndexInvocation(count: Int,

@@ -100,6 +100,9 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
  * the cache.
  *
  * Note that closing this cache does not delete the index files on disk.
+ * Note that this cache is not strictly based on a LRU policy. It is based on the default implementation of Caffeine i.e.
+ * <a href="https://github.com/ben-manes/caffeine/wiki/Efficiency">Window TinyLfu</a>. TinyLfu relies on a frequency
+ * sketch to probabilistically estimate the historic usage of an entry.
  *
  * @param maxSize              maximum number of segment index entries to be cached.
  * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
