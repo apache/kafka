@@ -508,7 +508,7 @@ class KafkaServer(
           val listenerName = ListenerName.normalised(config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName())
           brokerInfo.broker.endPoints
             .find(e => e.listenerName.equals(listenerName))
-            .foreach(e => rlm.endPoint(e))
+            .foreach(e => rlm.onEndPointCreated(e))
 
           rlm.startup()
         })

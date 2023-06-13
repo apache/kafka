@@ -226,7 +226,7 @@ public class RemoteLogManager implements Closeable {
         });
     }
 
-    public void endPoint(EndPoint endpoint) {
+    public void onEndPointCreated(EndPoint endpoint) {
         this.endpoint = Optional.of(endpoint);
     }
 

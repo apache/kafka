@@ -477,8 +477,8 @@ class BrokerServer(
       remoteLogManagerOpt.foreach(rlm => {
         val listenerName = ListenerName.normalised(config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName())
         endpoints.stream.filter(e => e.listenerName.equals(listenerName))
-          .findAny()
-          .ifPresent(e => rlm.endPoint(EndPoint.fromJava(e)))
+          .findFirst()
+          .ifPresent(e => rlm.onEndPointCreated(EndPoint.fromJava(e)))
 
         rlm.startup()
       })
