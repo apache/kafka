@@ -671,35 +671,14 @@ class ReplicaManager(val config: KafkaConfig,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
-      
-      val transactionalProducerIds = mutable.HashSet[Long]()
+
       val verificationGuards: mutable.Map[TopicPartition, Object] = mutable.Map[TopicPartition, Object]()
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition) =
         if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
           (entriesPerPartition, Map.empty)
         else {
-          entriesPerPartition.partition { case (topicPartition, records) =>
-            // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
-            val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
-            transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
-            if (transactionalBatches.nonEmpty) {
-              // We return verification guard if the partition needs to be verified. If no state is present, no need to verify.
-              val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(records.firstBatch.producerId)
-              if (verificationGuard == null) {
-                verificationGuards.put(topicPartition, verificationGuard)
-                false
-              } else
-                true
-            } else {
-              // If there is no producer ID or transactional records in the batches, no need to verify.
-              true
-            }
-          }
+          partitionEntriesForVerification(verificationGuards, entriesPerPartition)
         }
-      // We should have exactly one producer ID for transactional records
-      if (transactionalProducerIds.size > 1) {
-        throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
-      }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
         val verifiedEntries = 
@@ -822,6 +801,36 @@ class ReplicaManager(val config: KafkaConfig,
       }
       responseCallback(responseStatus)
     }
+  }
+
+  private def partitionEntriesForVerification(verificationGuards: mutable.Map[TopicPartition, Object],
+                                              entriesPerPartition: Map[TopicPartition, MemoryRecords]): (Map[TopicPartition, MemoryRecords], Map[TopicPartition, MemoryRecords]) = {
+    val transactionalProducerIds = mutable.HashSet[Long]()
+    val (verifiedEntries, unverifiedEntries) = entriesPerPartition.partition { case (topicPartition, records) =>
+      // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
+      val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
+      transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
+
+      if (transactionalBatches.nonEmpty) {
+        // We return verification guard if the partition needs to be verified. If no state is present, no need to verify.
+        val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(records.firstBatch.producerId)
+        if (verificationGuard != null) {
+          verificationGuards.put(topicPartition, verificationGuard)
+          false
+        } else
+          true
+      } else {
+        // If there is no producer ID or transactional records in the batches, no need to verify.
+        true
+      }
+    }
+
+    // We should have exactly one producer ID for transactional records
+    if (transactionalProducerIds.size > 1) {
+      throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
+    }
+
+    (verifiedEntries, unverifiedEntries)
   }
 
   /**
@@ -1107,7 +1116,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
-          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal, verificationGuards.get(topicPartition))
+          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal, verificationGuards.getOrElse(topicPartition, null))
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
