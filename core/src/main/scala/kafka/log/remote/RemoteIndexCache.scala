@@ -65,18 +65,26 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
         markedForCleanup = true
         Array(offsetIndex, timeIndex).foreach(index =>
           index.renameTo(new File(Utils.replaceSuffix(index.file.getPath, "", LogFileUtils.DELETED_FILE_SUFFIX))))
+        // txn index needs to be renamed separately since it's not of type AbstractIndex
         txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file.getPath, "",
           LogFileUtils.DELETED_FILE_SUFFIX)))
       }
     }
   }
 
+  /**
+   * Calls the underlying close method for each index which may lead to releasing resources such as mmap.
+   * This function does not delete the index files.
+   */
   def close(): Unit = {
-    Utils.closeQuietly(offsetIndex, s"Closing the offset index.")
+    Utils.closeQuietly(offsetIndex, "Closing the offset index.")
     Utils.closeQuietly(timeIndex, "Closing the time index.")
     Utils.closeQuietly(txnIndex, "Closing the transaction index.")
   }
 
+  /**
+   * Deletes the index files from the disk. Invoking #close is not required prior to this function.
+   */
   def cleanup(): Unit = {
     CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists(), () => txnIndex.deleteIfExists()))
   }
@@ -87,6 +95,9 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
  * re-fetching the index files like offset, time indexes from the remote storage for every fetch call. The cache is
  * re-initialized from the index files on disk on startup, if the index files are available.
  *
+ * The cache contains a garbage collection thread which will delete the files for entries that have been removed from
+ * the cache.
+ *
  * Note that closing this cache does not delete the index files on disk.
  *
  * @param maxSize              maximum number of segment index entries to be cached.
@@ -96,17 +107,37 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
 @threadsafe
 class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageManager, logDir: String)
   extends Logging with AutoCloseable {
-
-  val cacheDir = new File(logDir, DirName)
-  var closed: AtomicBoolean = new AtomicBoolean(false)
-
-  val expiredIndexes = new LinkedBlockingQueue[Entry]()
-  val entries: Cache[Uuid, Entry] = Caffeine.newBuilder()
+  /**
+   * Directory where the index files will be stored on disk.
+   */
+  private val cacheDir = new File(logDir, DirName)
+  /**
+   * Represents if the cache is closed or not. Closing the cache is an irreversible operation.
+   */
+  private val closed: AtomicBoolean = new AtomicBoolean(false)
+  /**
+   * Unbounded queue containing the removed entries from the cache which are waiting to be garbage collected.
+   */
+  private val expiredIndexes = new LinkedBlockingQueue[Entry]()
+  /**
+   * Actual cache implementation that this file wraps around.
+   *
+   * The requirements for this internal cache is as follows:
+   * 1. Multiple threads should be able to read concurrently.
+   * 2. Fetch for missing keys should not block read for available keys.
+   * 3. Only one thread should fetch for a specific key.
+   * 4. Should support LRU policy.
+   *
+   * We use [[Caffeine]] cache instead of implementing a thread safe LRU cache on our own.
+   *
+   * Visible for testing.
+   */
+  private[remote] var internalCache: Cache[Uuid, Entry] = Caffeine.newBuilder()
     .maximumSize(maxSize)
     // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
     // evicted (means removal due to the policy)
-    .removalListener((k: Uuid, entry: Entry, _: RemovalCause) => {
-      // Mark the entries for cleanup, background thread will clean them later.
+    .removalListener((_: Uuid, entry: Entry, _: RemovalCause) => {
+      // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
       entry.markForCleanup()
       expiredIndexes.add(entry)
     })
@@ -141,12 +172,14 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       val offset = name.substring(0, firstIndex).toInt
       val uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')))
 
-      if(entries.getIfPresent(uuid) != null) {
+      if (internalCache.getIfPresent(uuid) != null) {
         val offsetIndexFile = new File(cacheDir, name + UnifiedLog.IndexFileSuffix)
         val timestampIndexFile = new File(cacheDir, name + UnifiedLog.TimeIndexFileSuffix)
         val txnIndexFile = new File(cacheDir, name + UnifiedLog.TxnIndexFileSuffix)
 
-        if (Files.exists(offsetIndexFile.toPath) && Files.exists(timestampIndexFile.toPath) && Files.exists(txnIndexFile.toPath)) {
+        if (Files.exists(offsetIndexFile.toPath) &&
+            Files.exists(timestampIndexFile.toPath) &&
+            Files.exists(txnIndexFile.toPath)) {
 
           val offsetIndex = new OffsetIndex(offsetIndexFile, offset, Int.MaxValue, false)
           offsetIndex.sanityCheck()
@@ -157,8 +190,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
           val txnIndex = new TransactionIndex(offset, txnIndexFile)
           txnIndex.sanityCheck()
 
-          val entry = new Entry(offsetIndex, timeIndex, txnIndex)
-          entries.put(uuid, entry)
+          internalCache.put(uuid, new Entry(offsetIndex, timeIndex, txnIndex))
         } else {
           // Delete all of them if any one of those indexes is not available for a specific segment id
           Files.deleteIfExists(offsetIndexFile.toPath)
@@ -172,14 +204,14 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   init()
 
   // Start cleaner thread that will clean the expired entries
-  val cleanerThread: ShutdownableThread = new ShutdownableThread("remote-log-index-cleaner") {
+  private[remote] var cleanerThread: ShutdownableThread = new ShutdownableThread("remote-log-index-cleaner") {
     setDaemon(true)
 
     override def doWork(): Unit = {
       while (!closed.get()) {
         try {
           val entry = expiredIndexes.take()
-          info(s"Cleaning up index entry $entry")
+          debug(s"Cleaning up index entry $entry")
           entry.cleanup()
         } catch {
           case ex: InterruptedException => info("Cleaner thread was interrupted", ex)
@@ -191,12 +223,13 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   cleanerThread.start()
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
-    if (closed.get()) throw new IllegalStateException("Instance is already closed.")
+    if (closed.get()) {
+      throw new IllegalStateException(s"Unable to fetch index for " +
+        s"segment id=s{${remoteLogSegmentMetadata.remoteLogSegmentId().id()}}. Index instance is already closed.")
+    }
+
     val cacheKey = remoteLogSegmentMetadata.remoteLogSegmentId().id()
-    // We want to ensure that reading other entries from the cache is not blocked while one entry is being updated.
-    // Therefore, we will first try to fetch the desired entry with a read lock so that multiple threads can read
-    // existing entries concurrently. On a cache miss, the code proceeds ahead
-    entries.get(cacheKey, (uuid: Uuid) => {
+    internalCache.get(cacheKey, (uuid: Uuid) => {
       def loadIndexFile[T](fileName: String,
                            suffix: String,
                            fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
@@ -219,7 +252,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
           readIndex(indexFile)
         }
 
-        if (indexFile.exists()) {
+        if (Files.exists(indexFile.toPath)) {
           try {
             readIndex(indexFile)
           } catch {
@@ -282,9 +315,9 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       // Initiate shutdown for cleaning thread
       val shutdownRequired = cleanerThread.initiateShutdown()
       // Close all the opened indexes to force unload mmap memory. This does not delete the index files from disk.
-      entries.asMap().forEach((_, entry) => entry.close())
+      internalCache.asMap().forEach((_, entry) => entry.close())
       // Perform any pending activities required by the cache for cleanup
-      entries.cleanUp()
+      internalCache.cleanUp()
       // wait for cleaner thread to shutdown
       if (shutdownRequired) cleanerThread.awaitShutdown()
     }

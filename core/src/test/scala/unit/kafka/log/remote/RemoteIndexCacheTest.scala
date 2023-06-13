@@ -28,7 +28,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{File, FileInputStream}
 import java.nio.file.Files
@@ -37,7 +37,7 @@ import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
 
 class RemoteIndexCacheTest {
-  val logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
+  val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
   val time = new MockTime()
   val partition = new TopicPartition("foo", 0)
   val idPartition = new TopicIdPartition(Uuid.randomUuid(), partition)
@@ -83,7 +83,7 @@ class RemoteIndexCacheTest {
   def cleanup(): Unit = {
     reset(rsm)
     // delete the files on the disk after every test
-    cache.entries.asMap().forEach((_, entry) => entry.cleanup())
+    cache.internalCache.asMap().forEach((_, entry) => entry.cleanup())
     cache.close()
   }
 
@@ -124,19 +124,19 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.entries.estimatedSize())
+    assertEquals(0, cache.internalCache.estimatedSize())
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.entries.estimatedSize())
+    assertEquals(1, cache.internalCache.estimatedSize())
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.entries.estimatedSize())
+    assertEquals(1, cache.internalCache.estimatedSize())
     verifyFetchIndexInvocation(count = 1)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList.head)
     cache.getIndexEntry(metadataList(1))
-    assertEquals(2, cache.entries.estimatedSize())
+    assertEquals(2, cache.internalCache.estimatedSize())
     verifyFetchIndexInvocation(count = 2)
 
     // getting index for metadataList.last should call rsm#fetchIndex, but metadataList(1) is already in cache.
@@ -144,9 +144,9 @@ class RemoteIndexCacheTest {
     cache.getIndexEntry(metadataList(1))
     // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
     // that cache reaches correct state eventually
-    TestUtils.waitUntilTrue(() => cache.entries.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
-    assertNotNull(cache.entries.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
-    assertNotNull(cache.entries.getIfPresent(metadataList(1).remoteLogSegmentId().id()))
+    TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
+    assertNotNull(cache.internalCache.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
+    assertNotNull(cache.internalCache.getIfPresent(metadataList(1).remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 3)
 
     // getting index for metadataList.head should call rsm#fetchIndex as that entry was expired earlier,
@@ -155,8 +155,8 @@ class RemoteIndexCacheTest {
     cache.getIndexEntry(metadataList.head)
     // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
     // that cache reaches correct state eventually
-    TestUtils.waitUntilTrue(() => cache.entries.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
-    assertNull(cache.entries.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
+    TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
+    assertNull(cache.internalCache.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 4)
   }
 
@@ -166,9 +166,9 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.entries.asMap().size())
+    assertEquals(0, cache.internalCache.asMap().size())
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.entries.asMap().size())
+    assertEquals(1, cache.internalCache.asMap().size())
     verifyFetchIndexInvocation(count = 1)
 
     cache.close()
@@ -178,55 +178,108 @@ class RemoteIndexCacheTest {
   }
 
   @Test
-  def testConcurrentReadAccessForCache(): Unit = {
+  def testCloseIsIdempotent(): Unit = {
+    val spyInternalCache = spy(cache.internalCache)
+    cache.internalCache = spyInternalCache
+    cache.close()
+    cache.close()
+    // verify that cleanup is only called once
+    verify(spyInternalCache).cleanUp()
+  }
+
+  @Test
+  def testClose(): Unit = {
+    val spyInternalCache = spy(cache.internalCache)
+    val spyCleanerThread = spy(cache.cleanerThread)
+
+    cache.internalCache = spyInternalCache
+    cache.cleanerThread = spyCleanerThread
+
+    // use the cache
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataList = generateRemoteLogSegmentMetadata(size = 1, tpId)
+    val entry = cache.getIndexEntry(metadataList.head)
+    val spyTxnIndex = spy(entry.txnIndex)
+    val spyOffsetIndex = spy(entry.offsetIndex)
+    val spyTimeIndex = spy(entry.timeIndex)
+    // remove this entry and replace with spied entry
+    cache.internalCache.invalidateAll()
+    cache.internalCache.put(metadataList.head.remoteLogSegmentId().id(), new Entry(spyOffsetIndex, spyTimeIndex, spyTxnIndex))
+
+    // close the cache
+    cache.close()
+
+    // cleaner thread should be closed properly
+    verify(spyCleanerThread).initiateShutdown()
+    verify(spyCleanerThread).awaitShutdown()
+
+    // internal cache cleanup should be called
+    verify(spyInternalCache).cleanUp()
+
+    // close for all index entries must be invoked
+    verify(spyTxnIndex).close()
+    verify(spyOffsetIndex).close()
+    verify(spyTimeIndex).close()
+
+    // index files must not be deleted
+    verify(spyTxnIndex, times(0)).deleteIfExists()
+    verify(spyOffsetIndex, times(0)).deleteIfExists()
+    verify(spyTimeIndex, times(0)).deleteIfExists()
+  }
+
+  @Test
+  def testConcurrentReadWriteAccessForCache(): Unit = {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.entries.asMap().size())
+    assertEquals(0, cache.internalCache.asMap().size())
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.entries.asMap().size())
+    assertEquals(1, cache.internalCache.asMap().size())
     verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
     reset(rsm)
 
-    // Mimic a situation where one thread is reading the entry already present in the cache and the other thread is
-    // reading an entry which is not available in the cache. The expected behaviour is for the former thread to succeed
-    // while latter is fetching from rsm.
+    // Simulate a concurrency situation where one thread is reading the entry already present in the cache (cache hit)
+    // and the other thread is reading an entry which is not available in the cache (cache miss). The expected behaviour
+    // is for the former thread to succeed while latter is fetching from rsm.
+    // In this this test we simulate the situation using latches. We perform the following operations:
+    // 1. Start the CacheMiss thread and wait until it starts executing the rsm.fetchIndex
+    // 2. Block the CacheMiss thread inside the call to rsm.fetchIndex.
+    // 3. Start the CacheHit thread. Assert that it performs a successful read.
+    // 4. On completion of successful read by CacheHit thread, signal the CacheMiss thread to release it's block.
+    // 5. Validate that the test passes. If the CacheMiss thread was blocking the CacheHit thread, the test will fail.
+    //
     val latchForCacheHit = new CountDownLatch(1)
     val latchForCacheMiss = new CountDownLatch(1)
 
-    val readerThread = (() => {
-      System.out.println("Waiting latchForCacheHit from Hit thread" + Thread.currentThread())
+    val readerCacheHit = (() => {
+      // Wait for signal to start executing the read
+      logger.debug(s"Waiting for signal to begin read from ${Thread.currentThread()}")
       latchForCacheHit.await()
       val entry = cache.getIndexEntry(metadataList.head)
       assertNotNull(entry)
-      // complete the second reader
-      System.out.println("Completing latchForCacheMiss from Hit thread" + Thread.currentThread())
+      // Signal the CacheMiss to unblock itself
+      logger.debug(s"Signaling CacheMiss to unblock from ${Thread.currentThread()}")
       latchForCacheMiss.countDown()
-      System.out.println("Exiting wait latchForCacheMiss from Hit thread" + Thread.currentThread())
     }): Runnable
 
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
-      .thenAnswer(ans => {
-        System.out.println("Completing latchForCacheHit from Miss thread" + Thread.currentThread())
+      .thenAnswer(_ => {
+        logger.debug(s"Signaling CacheHit to begin read from ${Thread.currentThread()}")
         latchForCacheHit.countDown()
-        System.out.println("Waiting latchForCacheMiss from Miss thread" + Thread.currentThread())
+        logger.debug("Waiting for signal to complete rsm fetch from" + Thread.currentThread())
         latchForCacheMiss.await()
-        System.out.println("Exiting wait latchForCacheMiss from Miss thread" + Thread.currentThread())
       })
 
-    val readerWithCacheMiss = (() => {
+    val readerCacheMiss = (() => {
       val entry = cache.getIndexEntry(metadataList.last)
       assertNotNull(entry)
     }): Runnable
 
     val executor = Executors.newFixedThreadPool(2)
     try {
-      System.out.println("Submitting task for readerWithCacheMiss" + Thread.currentThread())
-      executor.submit(readerWithCacheMiss: Runnable)
-      System.out.println("Submitting task for readerWithCacheHit")
-      executor.submit(readerThread: Runnable)
-      System.out.println("Waiting for ")
+      executor.submit(readerCacheMiss: Runnable)
+      executor.submit(readerCacheHit: Runnable)
       assertTrue(latchForCacheMiss.await(30, TimeUnit.SECONDS))
     } finally {
       executor.shutdownNow()
@@ -239,21 +292,21 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.entries.asMap().size())
+    assertEquals(0, cache.internalCache.asMap().size())
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.entries.asMap().size())
+    assertEquals(1, cache.internalCache.asMap().size())
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.entries.asMap().size())
+    assertEquals(1, cache.internalCache.asMap().size())
     verifyFetchIndexInvocation(count = 1)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(1))
-    assertEquals(2, cache.entries.asMap().size())
+    assertEquals(2, cache.internalCache.asMap().size())
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(1))
-    assertEquals(2, cache.entries.asMap().size())
+    assertEquals(2, cache.internalCache.asMap().size())
     verifyFetchIndexInvocation(count = 2)
 
     // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex
@@ -261,10 +314,10 @@ class RemoteIndexCacheTest {
     cache.getIndexEntry(metadataList(2))
     // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
     // that cache reaches correct state eventually
-    TestUtils.waitUntilTrue(() => cache.entries.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
+    TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(2))
-    assertEquals(2, cache.entries.asMap().size())
+    assertEquals(2, cache.internalCache.asMap().size())
     verifyFetchIndexInvocation(count = 3)
 
     // Close the cache
@@ -272,7 +325,7 @@ class RemoteIndexCacheTest {
 
     // Reload the cache from the disk and check the cache size is same as earlier
     val reloadedCache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
-    assertEquals(2, cache.entries.asMap().size())
+    assertEquals(2, cache.internalCache.asMap().size())
     reloadedCache.close()
 
     verifyNoMoreInteractions(rsm)
