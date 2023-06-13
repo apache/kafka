@@ -60,6 +60,7 @@ import org.apache.kafka.image.ScramImageTest;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.image.TopicsImageTest;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.server.util.MockRandom;
@@ -286,6 +287,7 @@ public class KRaftMigrationZkWriterTest {
             .setLeader(2)
             .setLeaderEpoch(0)
             .setPartitionEpoch(-1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
             .build());
         partitionMap.put(1, new PartitionRegistration.Builder()
             .setReplicas(new int[]{3, 4, 5})
@@ -293,6 +295,7 @@ public class KRaftMigrationZkWriterTest {
             .setLeader(3)
             .setLeaderEpoch(0)
             .setPartitionEpoch(-1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
             .build());
 
         CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
