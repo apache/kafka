@@ -881,6 +881,7 @@ class ReplicaManager(val config: KafkaConfig,
               if (partition.futureReplicaDirChanged(destinationDir)) {
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
                 partition.removeFutureLocalReplica()
+                logManager.resumeCleaning(topicPartition)
               }
             case HostedPartition.Offline =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
@@ -1808,7 +1809,10 @@ class ReplicaManager(val config: KafkaConfig,
 
           // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
           // replica from source dir to destination dir
-          logManager.abortAndPauseCleaning(topicPartition)
+          replicaAlterLogDirsManager.getFetcher(topicPartition) match {
+            case None => logManager.abortAndPauseCleaning(topicPartition)
+            case Some(_) => // do nothing
+          }
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
             partition.getLeaderEpoch, futureLog.highWatermark))
