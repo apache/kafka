@@ -16,23 +16,21 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
-import org.apache.kafka.common.TopicPartition;
-
 /**
- * The base event type used by all events processed in the
- * coordinator runtime.
+ * Coordinator is basically a replicated state machine managed by the
+ * {@link CoordinatorRuntime}.
  */
-public interface CoordinatorEvent extends EventAccumulator.Event<TopicPartition> {
+public interface Coordinator<U> extends CoordinatorPlayback<U> {
 
     /**
-     * Executes the event.
+     * The coordinator has been loaded. This is used to apply any
+     * post loading operations (e.g. registering timers).
      */
-    void run();
+    default void onLoaded() {};
 
     /**
-     * Completes the event with the provided exception.
-     *
-     * @param exception An exception if the processing of the event failed or null otherwise.
+     * The coordinator has been unloaded. This is used to apply
+     * any post unloading operations.
      */
-    void complete(Throwable exception);
+    default void onUnloaded() {};
 }

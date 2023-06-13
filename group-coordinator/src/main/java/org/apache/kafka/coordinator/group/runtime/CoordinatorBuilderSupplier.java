@@ -16,23 +16,15 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
-import org.apache.kafka.common.TopicPartition;
-
 /**
- * The base event type used by all events processed in the
- * coordinator runtime.
+ * Supplies a {@link CoordinatorBuilder} to the {@link CoordinatorRuntime}.
+ *
+ * @param <S> The type of the coordinator.
+ * @param <U> The record type.
  */
-public interface CoordinatorEvent extends EventAccumulator.Event<TopicPartition> {
-
+interface CoordinatorBuilderSupplier<S extends Coordinator<U>, U> {
     /**
-     * Executes the event.
+     * @return A {@link CoordinatorBuilder}.
      */
-    void run();
-
-    /**
-     * Completes the event with the provided exception.
-     *
-     * @param exception An exception if the processing of the event failed or null otherwise.
-     */
-    void complete(Throwable exception);
+    CoordinatorBuilder<S, U> get();
 }
