@@ -32,7 +32,7 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
 
     RocksDBTimeOrderedKeyValueBytesStore(final String name,
                                          final String metricsScope) {
-        super(name, metricsScope, Long.MAX_VALUE, Long.MAX_VALUE, new TimeFirstWindowKeySchema(),Optional.empty());
+        super(name, metricsScope, Long.MAX_VALUE, Long.MAX_VALUE, new TimeFirstWindowKeySchema(), Optional.empty());
     }
 
     @Override
