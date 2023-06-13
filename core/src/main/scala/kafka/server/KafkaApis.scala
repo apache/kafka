@@ -1460,12 +1460,15 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setErrorCode(Errors.forException(exception).code)
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
-        val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
+
+        val result = authHelper.partitionSeqByAuthorized(
           requestContext,
           DESCRIBE,
           TOPIC,
           offsets.asScala
         )(_.name)
+
+        val (authorizedOffsets, _) = result
 
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(groupOffsetFetch.groupId)

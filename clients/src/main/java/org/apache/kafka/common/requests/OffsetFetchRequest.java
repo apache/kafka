@@ -57,6 +57,14 @@ public class OffsetFetchRequest extends AbstractRequest {
                        boolean requireStable,
                        List<TopicPartition> partitions,
                        boolean throwOnFetchStableOffsetsUnsupported) {
+            this(groupId, requireStable, partitions, throwOnFetchStableOffsetsUnsupported, Collections.emptyMap());
+        }
+
+        public Builder(String groupId,
+                       boolean requireStable,
+                       List<TopicPartition> partitions,
+                       boolean throwOnFetchStableOffsetsUnsupported,
+                       Map<String, Uuid> topicIds) {
             super(ApiKeys.OFFSET_FETCH);
 
             final List<OffsetFetchRequestTopic> topics;
@@ -80,7 +88,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                             .setRequireStable(requireStable)
                             .setTopics(topics);
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
-            this.topicNameToIds = Collections.emptyMap();
+            this.topicNameToIds = topicIds;
         }
 
         boolean isAllTopicPartitions() {

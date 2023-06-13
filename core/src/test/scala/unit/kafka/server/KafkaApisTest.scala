@@ -4285,6 +4285,7 @@ class KafkaApisTest {
     if (version == 0) return
 
     val fooId = Uuid.randomUuid()
+
     addTopicToMetadataCache("foo", numPartitions = 2, topicId = fooId)
 
     def makeRequest(version: Short): RequestChannel.Request = {
@@ -4311,6 +4312,7 @@ class KafkaApisTest {
         "group-1",
         List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
           .setName("foo")
+          .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
           .setPartitionIndexes(List[Integer](0, 1).asJava)
         ).asJava,
         false
@@ -4336,7 +4338,8 @@ class KafkaApisTest {
         .setGroupId("group-1")
         .setTopics(List(
           new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName("foo")
+            .setName(if (version >= 9) "" else "foo")
+            .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
             .setPartitions(List(
               new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                 .setPartitionIndex(0)
@@ -4353,7 +4356,8 @@ class KafkaApisTest {
         .setGroupId("group-2")
         .setTopics(List(
           new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName("bar")
+            .setName(if (version >= 9) "" else "bar")
+            .setTopicId(Uuid.ZERO_UUID)
             .setPartitions(List(
               new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                 .setPartitionIndex(0)
@@ -4393,6 +4397,10 @@ class KafkaApisTest {
     // in testing this here.
     if (version == 0) return
 
+    val fooId = Uuid.randomUuid()
+
+    addTopicToMetadataCache("foo", 1, topicId = fooId)
+
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new OffsetFetchRequest.Builder(
         "group-1",
@@ -4401,7 +4409,8 @@ class KafkaApisTest {
           new TopicPartition("foo", 0),
           new TopicPartition("foo", 1)
         ).asJava,
-        false
+        false,
+        Map("foo" -> fooId).asJava
       ).build(version))
     }
 
@@ -4413,6 +4422,7 @@ class KafkaApisTest {
       "group-1",
       List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
         .setName("foo")
+        .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
         .setPartitionIndexes(List[Integer](0, 1).asJava)
       ).asJava,
       false
@@ -4424,7 +4434,8 @@ class KafkaApisTest {
       .setGroupId("group-1")
       .setTopics(List(
         new OffsetFetchResponseData.OffsetFetchResponseTopics()
-          .setName("foo")
+          .setName(if (version >= 9) "" else "foo")
+          .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetFetchResponseData.OffsetFetchResponsePartitions()
               .setPartitionIndex(0)
@@ -4471,12 +4482,17 @@ class KafkaApisTest {
     // offsets request. We are not interested in testing these here.
     if (version < 2) return
 
+    val fooId = Uuid.randomUuid()
+
+    addTopicToMetadataCache("foo", 2, topicId = fooId)
+
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new OffsetFetchRequest.Builder(
         "group-1",
         false,
         null, // all offsets.
-        false
+        false,
+        Map("foo" -> fooId).asJava
       ).build(version))
     }
 
@@ -4495,7 +4511,8 @@ class KafkaApisTest {
       .setGroupId("group-1")
       .setTopics(List(
         new OffsetFetchResponseData.OffsetFetchResponseTopics()
-          .setName("foo")
+          .setName(if (version >= 9) "" else "foo")
+          .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetFetchResponseData.OffsetFetchResponsePartitions()
               .setPartitionIndex(0)
@@ -4537,6 +4554,12 @@ class KafkaApisTest {
 
   @Test
   def testHandleOffsetFetchAuthorization(): Unit = {
+    val fooId = Uuid.randomUuid()
+    val barId = Uuid.randomUuid()
+
+    addTopicToMetadataCache("foo", 1, topicId = fooId)
+    addTopicToMetadataCache("bar", 1, topicId = barId)
+
     def makeRequest(version: Short): RequestChannel.Request = {
       val groups = Map(
         "group-1" -> List(
@@ -4550,10 +4573,10 @@ class KafkaApisTest {
         "group-3" -> null,
         "group-4" -> null,
       ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false, Map("foo" -> fooId, "bar" -> barId).asJava).build(version))
     }
 
-    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
+    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
@@ -4583,6 +4606,7 @@ class KafkaApisTest {
       "group-1",
       List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
         .setName("bar")
+        .setTopicId(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) barId else Uuid.ZERO_UUID)
         .setPartitionIndexes(List[Integer](0).asJava)
       ).asJava,
       false
@@ -4602,7 +4626,8 @@ class KafkaApisTest {
       .setGroupId("group-1")
       .setTopics(List(
         new OffsetFetchResponseData.OffsetFetchResponseTopics()
-          .setName("bar")
+          .setName(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) "" else "bar")
+          .setTopicId(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) barId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetFetchResponseData.OffsetFetchResponsePartitions()
               .setPartitionIndex(0)
@@ -4617,6 +4642,7 @@ class KafkaApisTest {
         // foo should be filtered out.
         new OffsetFetchResponseData.OffsetFetchResponseTopics()
           .setName("foo")
+          .setTopicId(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) fooId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetFetchResponseData.OffsetFetchResponsePartitions()
               .setPartitionIndex(0)
@@ -4625,6 +4651,7 @@ class KafkaApisTest {
           ).asJava),
         new OffsetFetchResponseData.OffsetFetchResponseTopics()
           .setName("bar")
+          .setTopicId(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) barId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetFetchResponseData.OffsetFetchResponsePartitions()
               .setPartitionIndex(0)
@@ -4640,7 +4667,8 @@ class KafkaApisTest {
           .setGroupId("group-1")
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("bar")
+              .setName(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) "" else "bar")
+              .setTopicId(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) barId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -4648,7 +4676,8 @@ class KafkaApisTest {
                   .setCommittedLeaderEpoch(1)
               ).asJava),
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo")
+              .setName(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) "" else "foo")
+              .setTopicId(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) fooId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -4665,7 +4694,8 @@ class KafkaApisTest {
           .setGroupId("group-3")
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("bar")
+              .setName(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) "" else "bar")
+              .setTopicId(if (ApiKeys.OFFSET_FETCH.latestVersion() >= 9) barId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
