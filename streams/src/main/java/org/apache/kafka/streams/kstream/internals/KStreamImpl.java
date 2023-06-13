@@ -76,7 +76,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueSegmentedBytesStore;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBytesStore;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
@@ -1262,13 +1262,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
-        Optional<TimeOrderedKeyValueBuffer<K, V>> buffer = Optional.empty();
+        Optional<TimeOrderedKeyValueBuffer<K, V, V>> buffer = Optional.empty();
 
         if (joined.gracePeriod() != null) {
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new RuntimeException("KTable must be versioned to use a grace period in a stream table join.");
             }
-            final RocksDBTimeOrderedKeyValueSegmentedBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,
+            final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,
                 joined.gracePeriod().toMillis()).get();
 
             buffer = Optional.of(new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name));

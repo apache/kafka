@@ -49,7 +49,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
     private final boolean leftJoin;
     private Sensor droppedRecordsSensor;
     private final Optional<Duration> gracePeriod;
-    private final Optional<TimeOrderedKeyValueBuffer<K1, V1>> buffer;
+    private final Optional<TimeOrderedKeyValueBuffer<K1, V1, V1>> buffer;
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private InternalProcessorContext internalProcessorContext;
 
@@ -58,7 +58,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
                                final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
                                final boolean leftJoin,
                                final Optional<Duration> gracePeriod,
-                               final Optional<TimeOrderedKeyValueBuffer<K1, V1>> buffer) {
+                               final Optional<TimeOrderedKeyValueBuffer<K1, V1, V1>> buffer) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
         this.joiner = joiner;
@@ -106,12 +106,10 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             }
             updateObservedStreamTime(record.timestamp());
             final long deadline = observedStreamTime - gracePeriod.get().toMillis();
-            if(record.timestamp() <= deadline) {
+            if (record.timestamp() <= deadline) {
                 doJoin(record);
             } else {
-                final Change<V1> change = new Change<>(record.value(), record.value());
-                final Record<K1, Change<V1>> r = new Record<>(record.key(), change, record.timestamp());
-                buffer.get().put(observedStreamTime, r, internalProcessorContext.recordContext());
+                buffer.get().put(observedStreamTime, record, internalProcessorContext.recordContext());
             }
             buffer.get().evictWhile(() -> buffer.get().minTimestamp() <= deadline, this::emit);
         }
@@ -123,7 +121,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
     }
 
     private void emit(final TimeOrderedKeyValueBuffer.Eviction<K1, V1> toEmit) {
-        final Record<K1, V1> record = new Record<>(toEmit.key(), toEmit.value().newValue, toEmit.recordContext().timestamp())
+        final Record<K1, V1> record = new Record<>(toEmit.key(), toEmit.value(), toEmit.recordContext().timestamp())
             .withHeaders(toEmit.recordContext().headers());
         internalProcessorContext.setRecordContext(toEmit.recordContext());
         doJoin(record);
