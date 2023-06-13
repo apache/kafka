@@ -23,6 +23,7 @@ import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLog
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{OffsetIndex, OffsetPosition, TimeIndex}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -37,26 +38,31 @@ import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
 
 class RemoteIndexCacheTest {
-  val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
-  val time = new MockTime()
-  val partition = new TopicPartition("foo", 0)
-  val idPartition = new TopicIdPartition(Uuid.randomUuid(), partition)
-  val logDir: File = TestUtils.tempDir()
-  val tpDir: File = new File(logDir, partition.toString)
-  val brokerId = 1
-  val baseOffset = 45L
-  val lastOffset = 75L
-  val segmentSize = 1024
-
-  val rsm: RemoteStorageManager = mock(classOf[RemoteStorageManager])
-  val cache: RemoteIndexCache =  new RemoteIndexCache(remoteStorageManager = rsm, logDir = logDir.toString)
-  val remoteLogSegmentId = new RemoteLogSegmentId(idPartition, Uuid.randomUuid())
-  val rlsMetadata: RemoteLogSegmentMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
-    time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+  private val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
+  private val time = new MockTime()
+  private val partition = new TopicPartition("foo", 0)
+  private val brokerId = 1
+  private val baseOffset = 45L
+  private val lastOffset = 75L
+  private val segmentSize = 1024
+  private val rsm: RemoteStorageManager = mock(classOf[RemoteStorageManager])
+  private var cache: RemoteIndexCache = _
+  private var rlsMetadata: RemoteLogSegmentMetadata = _
+  private var logDir: File = _
 
   @BeforeEach
   def setup(): Unit = {
+    val idPartition = new TopicIdPartition(Uuid.randomUuid(), partition)
+    logDir = TestUtils.tempDir()
+    val tpDir = new File(logDir, idPartition.toString)
     Files.createDirectory(tpDir.toPath)
+
+    val remoteLogSegmentId = new RemoteLogSegmentId(idPartition, Uuid.randomUuid())
+    rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
+      time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+
+    cache = new RemoteIndexCache(remoteStorageManager = rsm, logDir = logDir.toString)
+
     val txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix)
     txnIdxFile.createNewFile()
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
@@ -82,9 +88,11 @@ class RemoteIndexCacheTest {
   @AfterEach
   def cleanup(): Unit = {
     reset(rsm)
-    // delete the files on the disk after every test
-    cache.internalCache.asMap().forEach((_, entry) => entry.cleanup())
-    cache.close()
+    // the files created for the test will be deleted automatically on thread exit since we use temp dir
+    Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
+    // best effort to delete the per-test resource. Even if we don't delete, it is ok because the parent directory
+    // will be deleted at the end of test.
+    Utils.delete(logDir)
   }
 
   @Test
@@ -120,31 +128,30 @@ class RemoteIndexCacheTest {
 
   @Test
   def testCacheEntryExpiry(): Unit = {
-    val cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    cache.close()
+    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.internalCache.estimatedSize())
+    assertCacheSize(0)
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.internalCache.estimatedSize())
+    assertCacheSize(1)
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.internalCache.estimatedSize())
+    assertCacheSize(1)
     verifyFetchIndexInvocation(count = 1)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList.head)
     cache.getIndexEntry(metadataList(1))
-    assertEquals(2, cache.internalCache.estimatedSize())
+    assertCacheSize(2)
     verifyFetchIndexInvocation(count = 2)
 
     // getting index for metadataList.last should call rsm#fetchIndex, but metadataList(1) is already in cache.
     cache.getIndexEntry(metadataList.last)
     cache.getIndexEntry(metadataList(1))
-    // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
-    // that cache reaches correct state eventually
-    TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
+    assertCacheSize(2)
     assertNotNull(cache.internalCache.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
     assertNotNull(cache.internalCache.getIfPresent(metadataList(1).remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 3)
@@ -153,22 +160,21 @@ class RemoteIndexCacheTest {
     // but metadataList(1) is already in cache.
     cache.getIndexEntry(metadataList(1))
     cache.getIndexEntry(metadataList.head)
-    // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
-    // that cache reaches correct state eventually
-    TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
+    assertCacheSize(2)
     assertNull(cache.internalCache.getIfPresent(metadataList.last.remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 4)
   }
 
   @Test
   def testGetIndexAfterCacheClose(): Unit = {
-    val cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    cache.close()
+    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.internalCache.asMap().size())
+    assertCacheSize(0)
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.internalCache.asMap().size())
+    assertCacheSize(1)
     verifyFetchIndexInvocation(count = 1)
 
     cache.close()
@@ -192,6 +198,7 @@ class RemoteIndexCacheTest {
     val spyInternalCache = spy(cache.internalCache)
     val spyCleanerThread = spy(cache.cleanerThread)
 
+    // replace with new spy cache
     cache.internalCache = spyInternalCache
     cache.cleanerThread = spyCleanerThread
 
@@ -199,6 +206,7 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 1, tpId)
     val entry = cache.getIndexEntry(metadataList.head)
+
     val spyTxnIndex = spy(entry.txnIndex)
     val spyOffsetIndex = spy(entry.offsetIndex)
     val spyTimeIndex = spy(entry.timeIndex)
@@ -232,10 +240,10 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.internalCache.asMap().size())
+    assertCacheSize(0)
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.internalCache.asMap().size())
+    assertCacheSize(1)
     verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
     reset(rsm)
 
@@ -288,36 +296,35 @@ class RemoteIndexCacheTest {
 
   @Test
   def testReloadCacheAfterClose(): Unit = {
-    val cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    cache.close()
+    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
-    assertEquals(0, cache.internalCache.asMap().size())
+    assertCacheSize(0)
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.internalCache.asMap().size())
+    assertCacheSize(1)
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
-    assertEquals(1, cache.internalCache.asMap().size())
+    assertCacheSize(1)
     verifyFetchIndexInvocation(count = 1)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(1))
-    assertEquals(2, cache.internalCache.asMap().size())
+    assertCacheSize(2)
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(1))
-    assertEquals(2, cache.internalCache.asMap().size())
+    assertCacheSize(2)
     verifyFetchIndexInvocation(count = 2)
 
     // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex
     // The cache max size is 2, it will remove one entry and keep the overall size to 2
     cache.getIndexEntry(metadataList(2))
-    // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
-    // that cache reaches correct state eventually
-    TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == 2, msg = "cache did not adhere to max size of 2")
+    assertCacheSize(2)
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(2))
-    assertEquals(2, cache.internalCache.asMap().size())
+    assertCacheSize(2)
     verifyFetchIndexInvocation(count = 3)
 
     // Close the cache
@@ -325,10 +332,17 @@ class RemoteIndexCacheTest {
 
     // Reload the cache from the disk and check the cache size is same as earlier
     val reloadedCache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
-    assertEquals(2, cache.internalCache.asMap().size())
+    assertEquals(2, reloadedCache.internalCache.asMap().size())
     reloadedCache.close()
 
     verifyNoMoreInteractions(rsm)
+  }
+
+  private def assertCacheSize(expectedSize: Int): Unit = {
+    // Cache may grow beyond the size temporarily while evicting, hence, run in a loop to validate
+    // that cache reaches correct state eventually
+    TestUtils.waitUntilTrue(() => cache.internalCache.asMap().size() == expectedSize,
+      msg = s"cache did not adhere to max size of $expectedSize")
   }
 
   private def verifyFetchIndexInvocation(count: Int,

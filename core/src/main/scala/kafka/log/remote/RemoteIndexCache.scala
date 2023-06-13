@@ -173,7 +173,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       val offset = name.substring(0, firstIndex).toInt
       val uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')))
 
-      if (internalCache.getIfPresent(uuid) != null) {
+      if (internalCache.getIfPresent(uuid) == null) {
         val offsetIndexFile = new File(cacheDir, name + UnifiedLog.IndexFileSuffix)
         val timestampIndexFile = new File(cacheDir, name + UnifiedLog.TimeIndexFileSuffix)
         val txnIndexFile = new File(cacheDir, name + UnifiedLog.TxnIndexFileSuffix)
