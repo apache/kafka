@@ -91,10 +91,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
                     minTimestamp = bufferValue.context().timestamp();
 
-                    if (wrapped().observedStreamTime - gracePeriod > minTimestamp) {
-                        return;
-                    }
-
                     final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
 
                     if (bufferValue.context().timestamp() != minTimestamp) {
@@ -104,7 +100,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                         );
                     }
 
-                    callback.accept(new Eviction<K, V>(key, value, bufferValue.context()));
+                    callback.accept(new Eviction<>(key, value, bufferValue.context()));
 
                     wrapped().remove(keyValue.key);
                     numRecords--;
@@ -126,16 +122,18 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
     @Override
     public void put(final long time, final Record<K, V> record, final ProcessorRecordContext recordContext) {
         requireNonNull(record.value(), "value cannot be null");
+        requireNonNull(record.key(), "key cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
         if (wrapped().observedStreamTime - gracePeriod > record.timestamp()) {
             return;
         }
+        maybeUpdateSeqnumForDups();
         final Bytes serializedKey = Bytes.wrap(
             PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.key()),
                 record.timestamp(),
-                seqnum++).get());
-        final byte[] serialChange = valueSerde.serializer().serialize(topic, record.value());
-        final BufferValue buffered = new BufferValue(serialChange, serialChange, serialChange, recordContext);
+                seqnum).get());
+        final byte[] valueBytes = valueSerde.serializer().serialize(topic, record.value());
+        final BufferValue buffered = new BufferValue(null, null, valueBytes, recordContext);
         wrapped().put(serializedKey, buffered.serialize(0).array());
         bufferSize += computeRecordSize(serializedKey, buffered);
         numRecords++;
@@ -168,4 +166,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
         return size;
     }
 
+    private void maybeUpdateSeqnumForDups() {
+        seqnum = (seqnum + 1) & 0x7FFFFFFF;
+    }
 }

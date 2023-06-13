@@ -22,7 +22,7 @@ public class RocksDbTimeOrderedKeyValueBytesStoreSupplier {
 
     public RocksDbTimeOrderedKeyValueBytesStoreSupplier(final String name,
                                                         final long retentionPeriod) {
-        this.name = name + "-buffer";
+        this.name = name;
         this.retentionPeriod = retentionPeriod;
     }
 

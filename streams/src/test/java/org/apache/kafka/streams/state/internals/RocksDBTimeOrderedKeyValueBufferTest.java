@@ -113,7 +113,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     @Test
-    public void shouldAddRecrodsTwiceAndEvictRecordsOnce() {
+    public void shouldAddRecordsTwiceAndEvictRecordsOnce() {
         createJoin(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
