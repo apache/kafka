@@ -32,6 +32,8 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -75,7 +77,8 @@ public class KStreamKTableJoinWithGraceTest {
 
         final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
         stream = builder.stream(streamTopic, consumed);
-        table = builder.table(tableTopic, consumed);
+        table = builder.table(tableTopic, consumed, Materialized.as(
+            Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(5))));
         stream.join(table,
             MockValueJoiner.TOSTRING_JOINER,
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String(), "Grace", Duration.ZERO)
@@ -100,12 +103,11 @@ public class KStreamKTableJoinWithGraceTest {
     }
 
     private void pushToTable(final int messageCount, final String valuePrefix) {
-        final Random r = new Random(System.currentTimeMillis());
         for (int i = 0; i < messageCount; i++) {
             inputTableTopic.pipeInput(
                 expectedKeys[i],
                 valuePrefix + expectedKeys[i],
-                r.nextInt(Integer.MAX_VALUE));
+                0);
         }
     }
 
