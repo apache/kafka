@@ -16,42 +16,47 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Event for retrieving partition offsets from the partition leader
- * by performing a {@link org.apache.kafka.common.requests.ListOffsetsRequest}
+ * Event for retrieving partition offsets by performing a
+ * {@link org.apache.kafka.common.requests.ListOffsetsRequest ListOffsetsRequest}.
+ * This event is created with a map of {@link TopicPartition} and target timestamps to search
+ * offsets for. It is completed with a map of {@link TopicPartition} and the
+ * {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is greater than
+ * or equals to the target timestamp)
  */
-public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, Long>> {
-    private final CompletableFuture<Map<TopicPartition, Long>> future;
-
-    final Set<TopicPartition> partitions;
-    final long timestamp;
+public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
+    final Map<TopicPartition, Long> timestampsToSearch;
     final boolean requireTimestamps;
 
-    public ListOffsetsApplicationEvent(final Set<TopicPartition> partitions,
-                                       long timestamp,
-                                       boolean requireTimestamps) {
+    public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps) {
         super(Type.LIST_OFFSETS);
-        this.partitions = partitions;
-        this.timestamp = timestamp;
+        this.timestampsToSearch = timestampToSearch;
         this.requireTimestamps = requireTimestamps;
-        this.future = new CompletableFuture<>();
-    }
-
-    public CompletableFuture<Map<TopicPartition, Long>> future() {
-        return future;
     }
 
     @Override
     public String toString() {
         return "ListOffsetsApplicationEvent {" +
-                "partitions=" + partitions + ", " +
-                "target timestamp=" + timestamp + ", " +
+                "timestampsToSearch=" + timestampsToSearch + ", " +
                 "requireTimestamps=" + requireTimestamps + '}';
+    }
+
+    /**
+     * Build result representing that no offsets were found as part of the current event.
+     *
+     * @return Map containing all the partitions the event was trying to get offsets for, and
+     * null {@link OffsetAndTimestamp} as value
+     */
+    public Map<TopicPartition, OffsetAndTimestamp> emptyResult() {
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
+            offsetsByTimes.put(entry.getKey(), null);
+        return offsetsByTimes;
     }
 }

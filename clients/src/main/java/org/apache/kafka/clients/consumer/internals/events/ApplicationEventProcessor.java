@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
 import java.util.Map;
@@ -128,21 +130,16 @@ public class ApplicationEventProcessor {
     }
 
     private boolean process(final ListOffsetsApplicationEvent event) {
-        requestManagers.listOffsetsRequestManager.fetchOffsets(event.partitions, event.timestamp,
-                event.requireTimestamps)
-            .whenComplete((result, error) -> {
-                if (error != null) {
-                    event.future().completeExceptionally(error);
-                    return;
-                }
-                event.future().complete(result);
-            });
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+                requestManagers.listOffsetsRequestManager.fetchOffsets(event.timestampsToSearch,
+                        event.requireTimestamps);
+        event.chain(future);
         return true;
     }
 
     private boolean process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-            this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+                this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
         return true;
     }

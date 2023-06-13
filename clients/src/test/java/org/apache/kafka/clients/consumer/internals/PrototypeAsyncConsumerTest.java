@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
@@ -67,6 +68,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,7 +76,7 @@ import static org.mockito.Mockito.when;
 public class PrototypeAsyncConsumerTest {
 
     private Consumer<?, ?> consumer;
-    private Map<String, Object> consumerProps = new HashMap<>();
+    private final Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
     private LogContext logContext;
@@ -82,7 +84,6 @@ public class PrototypeAsyncConsumerTest {
     private EventHandler eventHandler;
     private Metrics metrics;
     private String groupId = "group.id";
-    private String clientId = "client-1";
     private ConsumerConfig config;
 
     @BeforeEach
@@ -214,15 +215,17 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testBeginningOffsets() {
-        Map<TopicPartition, Long> expectedPartitionOffsets = mockTopicPartitionOffset().entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
-        Set<TopicPartition> partitions = expectedPartitionOffsets.keySet();
-        when(eventHandler.addAndGet(any(), any())).thenReturn(expectedPartitionOffsets);
+        Map<TopicPartition, OffsetAndTimestamp> expectedOffsetsAndTimestamp =
+                mockOffsetAndTimestamp();
+        Set<TopicPartition> partitions = expectedOffsetsAndTimestamp.keySet();
+        when(eventHandler.addAndGet(any(), any())).thenReturn(expectedOffsetsAndTimestamp);
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         Map<TopicPartition, Long> result =
                 assertDoesNotThrow(() -> consumer.beginningOffsets(partitions,
                         Duration.ofMillis(1)));
-        assertEquals(expectedPartitionOffsets, result);
+        Map<TopicPartition, Long> expectedOffsets = expectedOffsetsAndTimestamp.entrySet().stream()
+                .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().offset()));
+        assertEquals(expectedOffsets, result);
         verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
                 ArgumentMatchers.isA(Duration.class));
     }
@@ -237,9 +240,49 @@ public class PrototypeAsyncConsumerTest {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         Throwable consumerError = assertThrows(KafkaException.class,
                 () -> consumer.beginningOffsets(partitions,
-                Duration.ofMillis(1)));
+                        Duration.ofMillis(1)));
         assertEquals(eventProcessingFailure, consumerError);
         verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Duration.class));
+    }
+
+    @Test
+    public void testOffsetsForTimesOnNullPartitions() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(NullPointerException.class, () -> consumer.offsetsForTimes(null,
+                Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testOffsetsForTimes() {
+        Map<TopicPartition, OffsetAndTimestamp> expectedResult = mockOffsetAndTimestamp();
+        Map<TopicPartition, Long> timestampToSearch = mockTimestampToSearch();
+
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        when(eventHandler.addAndGet(any(), any())).thenReturn(expectedResult);
+        Map<TopicPartition, OffsetAndTimestamp> result =
+                assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ofMillis(1)));
+        assertEquals(expectedResult, result);
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Duration.class));
+    }
+
+    // This test ensures same behaviour as the current consumer when offsetsForTimes is called
+    // with 0 timeout. It should return map with all requested partitions as keys, with null
+    // OffsetAndTimestamp as value.
+    @Test
+    public void testOffsetsForTimesWithZeroTimeout() {
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        Map<TopicPartition, OffsetAndTimestamp> expectedResult =
+                Collections.singletonMap(tp, null);
+        Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(tp, 5L);
+
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        Map<TopicPartition, OffsetAndTimestamp> result =
+                assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch,
+                        Duration.ofMillis(0)));
+        assertEquals(expectedResult, result);
+        verify(eventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Duration.class));
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
@@ -249,6 +292,24 @@ public class PrototypeAsyncConsumerTest {
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
         return topicPartitionOffsets;
+    }
+
+    private HashMap<TopicPartition, OffsetAndTimestamp> mockOffsetAndTimestamp() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = new HashMap<>();
+        offsetAndTimestamp.put(t0, new OffsetAndTimestamp(5L, 1L));
+        offsetAndTimestamp.put(t1, new OffsetAndTimestamp(6L, 3L));
+        return offsetAndTimestamp;
+    }
+
+    private HashMap<TopicPartition, Long> mockTimestampToSearch() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, Long> timestampToSearch = new HashMap<>();
+        timestampToSearch.put(t0, 1L);
+        timestampToSearch.put(t1, 2L);
+        return timestampToSearch;
     }
 
     private ConsumerMetadata createMetadata(SubscriptionState subscription) {

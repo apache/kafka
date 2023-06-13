@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
 import org.apache.kafka.common.ClusterResource;
@@ -44,15 +45,14 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 
 /**
- * Build requests for retrieving partition offsets from partition leaders (see
- * {@link #fetchOffsets(Set, long, boolean)}). Requests are kept in-memory
- * ready to be sent on the next call to {@link #poll(long)}.
+ * Manager responsible for building requests to retrieve partition offsets (see
+ * {@link #fetchOffsets(Map, boolean)}). Requests are kept in-memory ready to be sent on the next
+ * call to {@link #poll(long)}.
  * <p>
  * Partition leadership information required to build the requests is retrieved from the
  * {@link ConsumerMetadata}, so this implements {@link ClusterResourceListener} to get notified
@@ -112,21 +112,22 @@ public class ListOffsetsRequestManager implements RequestManager, ClusterResourc
     /**
      * Retrieve offsets for the given partitions and timestamp.
      *
-     * @param partitions        Partitions to get offsets for
-     * @param timestamp         Target time to look offsets for
-     * @param requireTimestamps True if this should fail with an UnsupportedVersionException if
-     *                          the broker does not support fetching precise timestamps for offsets
-     * @return Future containing the map of offsets retrieved for each partition. The future will
-     * complete when the responses for the requests are received and processed following a call
-     * to {@link #poll(long)}
+     * @param timestampsToSearch Partitions and target timestamps to get offsets for
+     * @param requireTimestamps  True if this should fail with an UnsupportedVersionException if the
+     *                           broker does not support fetching precise timestamps for offsets
+     * @return Future containing the map of {@link TopicPartition} and {@link OffsetAndTimestamp}
+     * found (offset of the first message whose timestamp is greater than or equals to the target
+     * timestamp).The future will complete when the requests responses are received and
+     * processed, following a call to {@link #poll(long)}
      */
-    public CompletableFuture<Map<TopicPartition, Long>> fetchOffsets(final Set<TopicPartition> partitions,
-                                                                     final long timestamp,
-                                                                     final boolean requireTimestamps) {
-        metadata.addTransientTopics(offsetFetcherUtils.topicsForPartitions(partitions));
+    public CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsets(
+            final Map<TopicPartition, Long> timestampsToSearch,
+            final boolean requireTimestamps) {
+        if (timestampsToSearch.isEmpty()) {
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        }
+        metadata.addTransientTopics(offsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
 
-        Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
-                .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
                 timestampsToSearch,
                 requireTimestamps,
@@ -134,13 +135,19 @@ public class ListOffsetsRequestManager implements RequestManager, ClusterResourc
                 isolationLevel);
         listOffsetsRequestState.globalResult.whenComplete((result, error) -> {
             metadata.clearTransientTopics();
-            log.debug("Fetch offsets completed for partitions {} and timestamp {}. Result {}, " +
-                    "error", partitions, timestamp, result, error);
+            if (error != null) {
+                log.error("Fetch offsets completed with error for partitions and timestamps {}." +
+                        timestampsToSearch, error);
+            } else {
+                log.debug("Fetch offsets completed successfully for partitions and timestamps {}." +
+                        " Result {}" + timestampsToSearch, result);
+            }
         });
 
         fetchOffsetsByTimes(timestampsToSearch, requireTimestamps, listOffsetsRequestState);
 
-        return listOffsetsRequestState.globalResult;
+        return listOffsetsRequestState.globalResult.thenApply(result ->
+                offsetFetcherUtils.buildOffsetsForTimesResult(timestampsToSearch, result.fetchedOffsets));
     }
 
     /**
@@ -150,9 +157,14 @@ public class ListOffsetsRequestManager implements RequestManager, ClusterResourc
     private void fetchOffsetsByTimes(final Map<TopicPartition, Long> timestampsToSearch,
                                      final boolean requireTimestamps,
                                      final ListOffsetsRequestState listOffsetsRequestState) {
+        if (timestampsToSearch.isEmpty()) {
+            // Early return if empty map to avoid wrongfully raising StaleMetadataException on
+            // empty grouping
+            return;
+        }
         try {
-            List<NetworkClientDelegate.UnsentRequest> unsentRequests =
-                    sendListOffsetsRequests(timestampsToSearch, requireTimestamps, listOffsetsRequestState);
+            List<NetworkClientDelegate.UnsentRequest> unsentRequests = sendListOffsetsRequests(
+                    timestampsToSearch, requireTimestamps, listOffsetsRequestState);
             requestsToSend.addAll(unsentRequests);
         } catch (StaleMetadataException e) {
             requestsToRetry.add(listOffsetsRequestState);
@@ -208,7 +220,7 @@ public class ListOffsetsRequestManager implements RequestManager, ClusterResourc
                     ListOffsetResult listOffsetResult =
                             new ListOffsetResult(listOffsetsRequestState.fetchedOffsets,
                                     listOffsetsRequestState.remainingToSearch.keySet());
-                    listOffsetsRequestState.globalResult.complete(listOffsetResult.offsetAndMetadataMap());
+                    listOffsetsRequestState.globalResult.complete(listOffsetResult);
                 } else {
                     requestsToRetry.add(listOffsetsRequestState);
                 }
@@ -270,7 +282,7 @@ public class ListOffsetsRequestManager implements RequestManager, ClusterResourc
         private final Map<TopicPartition, Long> timestampsToSearch;
         private final Map<TopicPartition, ListOffsetData> fetchedOffsets;
         private final Map<TopicPartition, Long> remainingToSearch;
-        private final CompletableFuture<Map<TopicPartition, Long>> globalResult;
+        private final CompletableFuture<ListOffsetResult> globalResult;
         final boolean requireTimestamps;
         final OffsetFetcherUtils offsetFetcherUtils;
         final IsolationLevel isolationLevel;
