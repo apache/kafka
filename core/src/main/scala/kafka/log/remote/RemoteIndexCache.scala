@@ -73,6 +73,14 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
   }
 
   /**
+   * Deletes the index files from the disk. Invoking #close is not required prior to this function.
+   */
+  def cleanup(): Unit = {
+    markForCleanup()
+    CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists(), () => txnIndex.deleteIfExists()))
+  }
+
+  /**
    * Calls the underlying close method for each index which may lead to releasing resources such as mmap.
    * This function does not delete the index files.
    */
@@ -80,13 +88,6 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
     Utils.closeQuietly(offsetIndex, "Closing the offset index.")
     Utils.closeQuietly(timeIndex, "Closing the time index.")
     Utils.closeQuietly(txnIndex, "Closing the transaction index.")
-  }
-
-  /**
-   * Deletes the index files from the disk. Invoking #close is not required prior to this function.
-   */
-  def cleanup(): Unit = {
-    CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists(), () => txnIndex.deleteIfExists()))
   }
 }
 
