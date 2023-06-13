@@ -16,9 +16,11 @@
  */
 package kafka.log.remote
 
+import com.github.benmanes.caffeine.cache.{Cache, Caffeine, RemovalCause}
 import kafka.log.UnifiedLog
 import kafka.log.remote.RemoteIndexCache.DirName
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
+import kafka.utils.{CoreUtils, Logging, threadsafe}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
@@ -26,9 +28,10 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
 import org.apache.kafka.server.util.ShutdownableThread
-import java.io.{Closeable, File, InputStream}
-import java.nio.file.{Files, Path}
-import java.util
+
+import java.io.{File, InputStream}
+import java.nio.file.{FileAlreadyExistsException, Files, Path}
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
@@ -37,28 +40,27 @@ object RemoteIndexCache {
   val TmpFileSuffix = ".tmp"
 }
 
-class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex: TransactionIndex) {
+class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex: TransactionIndex) extends AutoCloseable {
   private var markedForCleanup: Boolean = false
-  private val lock: ReentrantReadWriteLock = new ReentrantReadWriteLock()
+  private val entryLock: ReentrantReadWriteLock = new ReentrantReadWriteLock()
 
   def lookupOffset(targetOffset: Long): OffsetPosition = {
-    CoreUtils.inLock(lock.readLock()) {
+    inReadLock(entryLock) {
       if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup")
       else offsetIndex.lookup(targetOffset)
     }
   }
 
   def lookupTimestamp(timestamp: Long, startingOffset: Long): OffsetPosition = {
-    CoreUtils.inLock(lock.readLock()) {
+    inReadLock(entryLock) {
       if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup")
-
       val timestampOffset = timeIndex.lookup(timestamp)
       offsetIndex.lookup(math.max(startingOffset, timestampOffset.offset))
     }
   }
 
   def markForCleanup(): Unit = {
-    CoreUtils.inLock(lock.writeLock()) {
+    inWriteLock(entryLock) {
       if (!markedForCleanup) {
         markedForCleanup = true
         Array(offsetIndex, timeIndex).foreach(index =>
@@ -69,56 +71,59 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
     }
   }
 
-  def cleanup(): Unit = {
-    markForCleanup()
-    CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists(), () => txnIndex.deleteIfExists()))
+  def close(): Unit = {
+    Utils.closeQuietly(offsetIndex, s"Closing the offset index.")
+    Utils.closeQuietly(timeIndex, "Closing the time index.")
+    Utils.closeQuietly(txnIndex, "Closing the transaction index.")
   }
 
-  def close(): Unit = {
-    Array(offsetIndex, timeIndex).foreach(index => try {
-      index.close()
-    } catch {
-      case _: Exception => // ignore error.
-    })
-    Utils.closeQuietly(txnIndex, "Closing the transaction index.")
+  def cleanup(): Unit = {
+    CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists(), () => txnIndex.deleteIfExists()))
   }
 }
 
 /**
  * This is a LRU cache of remote index files stored in `$logdir/remote-log-index-cache`. This is helpful to avoid
- * re-fetching the index files like offset, time indexes from the remote storage for every fetch call.
+ * re-fetching the index files like offset, time indexes from the remote storage for every fetch call. The cache is
+ * re-initialized from the index files on disk on startup, if the index files are available.
+ *
+ * Note that closing this cache does not delete the index files on disk.
  *
  * @param maxSize              maximum number of segment index entries to be cached.
  * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
  * @param logDir               log directory
  */
+@threadsafe
 class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageManager, logDir: String)
-  extends Logging with Closeable {
+  extends Logging with AutoCloseable {
 
   val cacheDir = new File(logDir, DirName)
-  @volatile var closed = false
+  var closed: AtomicBoolean = new AtomicBoolean(false)
 
   val expiredIndexes = new LinkedBlockingQueue[Entry]()
-  val lock = new Object()
+  val entries: Cache[Uuid, Entry] = Caffeine.newBuilder()
+    .maximumSize(maxSize)
+    // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
+    // evicted (means removal due to the policy)
+    .removalListener((k: Uuid, entry: Entry, _: RemovalCause) => {
+      // Mark the entries for cleanup, background thread will clean them later.
+      entry.markForCleanup()
+      expiredIndexes.add(entry)
+    })
+    .build[Uuid, Entry]()
 
-  val entries: util.Map[Uuid, Entry] = new java.util.LinkedHashMap[Uuid, Entry](maxSize / 2,
-    0.75f, true) {
-    override def removeEldestEntry(eldest: util.Map.Entry[Uuid, Entry]): Boolean = {
-      if (this.size() > maxSize) {
-        val entry = eldest.getValue
-        // Mark the entries for cleanup, background thread will clean them later.
-        entry.markForCleanup()
-        expiredIndexes.add(entry)
-        true
-      } else {
-        false
-      }
-    }
-  }
 
   private def init(): Unit = {
-    if (cacheDir.mkdir())
+    try {
+      Files.createDirectory(cacheDir.toPath)
       info(s"Created $cacheDir successfully")
+    } catch {
+      case _: FileAlreadyExistsException =>
+        info(s"RemoteIndexCache directory $cacheDir already exists. Re-using the same directory.")
+      case e: Exception =>
+        error(s"Unable to create directory $cacheDir for RemoteIndexCache.", e)
+        throw new IllegalArgumentException(e)
+    }
 
     // Delete any .deleted files remained from the earlier run of the broker.
     Files.list(cacheDir.toPath).forEach((path: Path) => {
@@ -136,12 +141,12 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       val offset = name.substring(0, firstIndex).toInt
       val uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')))
 
-      if(!entries.containsKey(uuid)) {
+      if(entries.getIfPresent(uuid) != null) {
         val offsetIndexFile = new File(cacheDir, name + UnifiedLog.IndexFileSuffix)
         val timestampIndexFile = new File(cacheDir, name + UnifiedLog.TimeIndexFileSuffix)
         val txnIndexFile = new File(cacheDir, name + UnifiedLog.TxnIndexFileSuffix)
 
-        if (offsetIndexFile.exists() && timestampIndexFile.exists() && txnIndexFile.exists()) {
+        if (Files.exists(offsetIndexFile.toPath) && Files.exists(timestampIndexFile.toPath) && Files.exists(txnIndexFile.toPath)) {
 
           val offsetIndex = new OffsetIndex(offsetIndexFile, offset, Int.MaxValue, false)
           offsetIndex.sanityCheck()
@@ -171,7 +176,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     setDaemon(true)
 
     override def doWork(): Unit = {
-      while (!closed) {
+      while (!closed.get()) {
         try {
           val entry = expiredIndexes.take()
           info(s"Cleaning up index entry $entry")
@@ -186,76 +191,77 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   cleanerThread.start()
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
-    if(closed) throw new IllegalStateException("Instance is already closed.")
+    if (closed.get()) throw new IllegalStateException("Instance is already closed.")
+    val cacheKey = remoteLogSegmentMetadata.remoteLogSegmentId().id()
+    // We want to ensure that reading other entries from the cache is not blocked while one entry is being updated.
+    // Therefore, we will first try to fetch the desired entry with a read lock so that multiple threads can read
+    // existing entries concurrently. On a cache miss, the code proceeds ahead
+    entries.get(cacheKey, (uuid: Uuid) => {
+      def loadIndexFile[T](fileName: String,
+                           suffix: String,
+                           fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
+                           readIndex: File => T): T = {
+        val indexFile = new File(cacheDir, fileName + suffix)
 
-    def loadIndexFile[T](fileName: String,
-                         suffix: String,
-                         fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
-                         readIndex: File => T): T = {
-      val indexFile = new File(cacheDir, fileName + suffix)
+        def fetchAndCreateIndex(): T = {
+          val tmpIndexFile = new File(cacheDir, fileName + suffix + RemoteIndexCache.TmpFileSuffix)
 
-      def fetchAndCreateIndex(): T = {
-        val tmpIndexFile = new File(cacheDir, fileName + suffix + RemoteIndexCache.TmpFileSuffix)
-
-        val inputStream = fetchRemoteIndex(remoteLogSegmentMetadata)
-        try {
-          Files.copy(inputStream, tmpIndexFile.toPath)
-        } finally {
-          if (inputStream != null) {
-            inputStream.close()
+          val inputStream = fetchRemoteIndex(remoteLogSegmentMetadata)
+          try {
+            Files.copy(inputStream, tmpIndexFile.toPath)
+          } finally {
+            if (inputStream != null) {
+              inputStream.close()
+            }
           }
-        }
 
-        Utils.atomicMoveWithFallback(tmpIndexFile.toPath, indexFile.toPath, false)
-        readIndex(indexFile)
-      }
-
-      if (indexFile.exists()) {
-        try {
+          Utils.atomicMoveWithFallback(tmpIndexFile.toPath, indexFile.toPath, false)
           readIndex(indexFile)
-        } catch {
-          case ex: CorruptRecordException =>
-            info("Error occurred while loading the stored index", ex)
-            fetchAndCreateIndex()
         }
-      } else {
-        fetchAndCreateIndex()
+
+        if (indexFile.exists()) {
+          try {
+            readIndex(indexFile)
+          } catch {
+            case ex: CorruptRecordException =>
+              info("Error occurred while loading the stored index", ex)
+              fetchAndCreateIndex()
+          }
+        } else {
+          fetchAndCreateIndex()
+        }
       }
-    }
 
-    lock synchronized {
-      entries.computeIfAbsent(remoteLogSegmentMetadata.remoteLogSegmentId().id(), (uuid: Uuid) => {
-        val startOffset = remoteLogSegmentMetadata.startOffset()
-        // uuid.toString uses URL encoding which is safe for filenames and URLs.
-        val fileName = startOffset.toString + "_" + uuid.toString + "_"
+      val startOffset = remoteLogSegmentMetadata.startOffset()
+      // uuid.toString uses URL encoding which is safe for filenames and URLs.
+      val fileName = startOffset.toString + "_" + uuid.toString + "_"
 
-        val offsetIndex: OffsetIndex = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
-          rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
-          file => {
-            val index = new OffsetIndex(file, startOffset, Int.MaxValue, false)
-            index.sanityCheck()
-            index
-          })
+      val offsetIndex: OffsetIndex = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
+        rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
+        file => {
+          val index = new OffsetIndex(file, startOffset, Int.MaxValue, false)
+          index.sanityCheck()
+          index
+        })
 
-        val timeIndex: TimeIndex = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
-          rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
-          file => {
-            val index = new TimeIndex(file, startOffset, Int.MaxValue, false)
-            index.sanityCheck()
-            index
-          })
+      val timeIndex: TimeIndex = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
+        rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
+        file => {
+          val index = new TimeIndex(file, startOffset, Int.MaxValue, false)
+          index.sanityCheck()
+          index
+        })
 
-        val txnIndex: TransactionIndex = loadIndexFile(fileName, UnifiedLog.TxnIndexFileSuffix,
-          rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION),
-          file => {
-            val index = new TransactionIndex(startOffset, file)
-            index.sanityCheck()
-            index
-          })
+      val txnIndex: TransactionIndex = loadIndexFile(fileName, UnifiedLog.TxnIndexFileSuffix,
+        rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION),
+        file => {
+          val index = new TransactionIndex(startOffset, file)
+          index.sanityCheck()
+          index
+        })
 
-        new Entry(offsetIndex, timeIndex, txnIndex)
-      })
-    }
+      new Entry(offsetIndex, timeIndex, txnIndex)
+    })
   }
 
   def lookupOffset(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset: Long): Int = {
@@ -266,13 +272,21 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position
   }
 
+  /**
+   * Close should synchronously cleanup the resources used by this cache.
+   * This index is closed when [[RemoteLogManager]] is closed.
+   */
   def close(): Unit = {
-    closed = true
-    cleanerThread.shutdown()
-    // Close all the opened indexes.
-    lock synchronized {
-      entries.values().stream().forEach(entry => entry.close())
+    // make close idempotent
+    if (!closed.getAndSet(true)) {
+      // Initiate shutdown for cleaning thread
+      val shutdownRequired = cleanerThread.initiateShutdown()
+      // Close all the opened indexes to force unload mmap memory. This does not delete the index files from disk.
+      entries.asMap().forEach((_, entry) => entry.close())
+      // Perform any pending activities required by the cache for cleanup
+      entries.cleanUp()
+      // wait for cleaner thread to shutdown
+      if (shutdownRequired) cleanerThread.awaitShutdown()
     }
   }
-
 }
