@@ -347,23 +347,4 @@ public class KStreamKTableJoinWithGraceTest {
             + "      --> none\n"
             + "      <-- KSTREAM-SOURCE-0000000005\n\n";
 
-    private final String expectedTopologyBasicJoin =
-        "Topologies:\n" +
-            "   Sub-topology: 0\n" +
-            "    Source: KSTREAM-SOURCE-0000000000 (topics: [streamTopic])\n" +
-            "      --> Grace-buffer\n" +
-            "    Processor: Grace-buffer (stores: [])\n" +
-            "      --> Grace\n" +
-            "      <-- KSTREAM-SOURCE-0000000000\n" +
-            "    Processor: Grace (stores: [tableTopic-STATE-STORE-0000000001])\n" +
-            "      --> KSTREAM-PROCESSOR-0000000005\n" +
-            "      <-- Grace-buffer\n" +
-            "    Source: KSTREAM-SOURCE-0000000002 (topics: [tableTopic])\n" +
-            "      --> KTABLE-SOURCE-0000000003\n" +
-            "    Processor: KSTREAM-PROCESSOR-0000000005 (stores: [])\n" +
-            "      --> none\n" +
-            "      <-- Grace\n" +
-            "    Processor: KTABLE-SOURCE-0000000003 (stores: [tableTopic-STATE-STORE-0000000001])\n" +
-            "      --> none\n" +
-            "      <-- KSTREAM-SOURCE-0000000002\n\n";
 }
