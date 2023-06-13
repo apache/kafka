@@ -222,6 +222,31 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(expectedTransaction2Errors, transaction2Errors)
   }
 
+  @Test
+  def testAddPartitionsToTxnManagerMetrics(): Unit = {
+    val transactionErrors = mutable.Map[TopicPartition, Errors]()
+    val startTime = time.milliseconds()
+
+    addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transactionErrors))
+    addPartitionsToTxnManager.addTxnData(node1, transactionData(transactionalId2, producerId2), setErrors(transactionErrors))
+
+    time.sleep(100)
+
+    val requestsAndHandlers = addPartitionsToTxnManager.generateRequests()
+    var requestsHandled = 0
+
+    requestsAndHandlers.foreach { requestAndCompletionHandler => {
+      time.sleep(100)
+      requestAndCompletionHandler.handler.onComplete(authenticationErrorResponse)
+      }
+      requestsHandled += 1
+      assertEquals((time.milliseconds() - startTime).toDouble, TestUtils.histogramMaxValue("VerificationTimeMs"))
+      assertEquals(requestsHandled * 3, TestUtils.meterCount("VerificationFailureRate"))
+    }
+    TestUtils.clearYammerMetric("VerificationTimeMs")
+    TestUtils.clearYammerMetric("VerificationFailureRate")
+  }
+
   private def clientResponse(response: AbstractResponse, authException: AuthenticationException = null, mismatchException: UnsupportedVersionException = null, disconnected: Boolean = false): ClientResponse = {
     new ClientResponse(null, null, null, 0, 0, disconnected, mismatchException, authException, response)
   }
