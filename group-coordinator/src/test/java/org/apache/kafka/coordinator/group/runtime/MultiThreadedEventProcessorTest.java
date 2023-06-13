@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -41,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MultiThreadedEventProcessorTest {
 
     private static class FutureEvent<T> implements CoordinatorEvent {
-        private final int key;
+        private final TopicPartition key;
         private final CompletableFuture<T> future;
         private final Supplier<T> supplier;
         private final boolean block;
@@ -49,14 +50,14 @@ public class MultiThreadedEventProcessorTest {
         private final CountDownLatch executed;
 
         FutureEvent(
-            int key,
+            TopicPartition key,
             Supplier<T> supplier
         ) {
             this(key, supplier, false);
         }
 
         FutureEvent(
-            int key,
+            TopicPartition key,
             Supplier<T> supplier,
             boolean block
         ) {
@@ -90,7 +91,7 @@ public class MultiThreadedEventProcessorTest {
         }
 
         @Override
-        public Integer key() {
+        public TopicPartition key() {
             return key;
         }
 
@@ -132,12 +133,12 @@ public class MultiThreadedEventProcessorTest {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
             List<FutureEvent<Integer>> events = Arrays.asList(
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(1, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(2, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(1, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(2, numEventsExecuted::incrementAndGet)
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
             events.forEach(eventProcessor::enqueue);
@@ -167,12 +168,12 @@ public class MultiThreadedEventProcessorTest {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
             List<FutureEvent<Integer>> events = Arrays.asList(
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true), // Event 0
-                new FutureEvent<>(1, numEventsExecuted::incrementAndGet, true), // Event 1
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true), // Event 2
-                new FutureEvent<>(1, numEventsExecuted::incrementAndGet, true), // Event 3
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true), // Event 4
-                new FutureEvent<>(1, numEventsExecuted::incrementAndGet, true)  // Event 5
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 0
+                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true), // Event 1
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 2
+                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true), // Event 3
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 4
+                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true)  // Event 5
             );
 
             events.forEach(eventProcessor::enqueue);
@@ -251,7 +252,7 @@ public class MultiThreadedEventProcessorTest {
         eventProcessor.close();
 
         assertThrows(RejectedExecutionException.class,
-            () -> eventProcessor.enqueue(new FutureEvent<>(0, () -> 0)));
+            () -> eventProcessor.enqueue(new FutureEvent<>(new TopicPartition("foo", 0), () -> 0)));
     }
 
     @Test
@@ -264,15 +265,15 @@ public class MultiThreadedEventProcessorTest {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
             // Special event which blocks until the latch is released.
-            FutureEvent<Integer> blockingEvent = new FutureEvent<>(0, numEventsExecuted::incrementAndGet, true);
+            FutureEvent<Integer> blockingEvent = new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true);
 
             List<FutureEvent<Integer>> events = Arrays.asList(
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(0, numEventsExecuted::incrementAndGet)
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet)
             );
 
             // Enqueue the blocking event.

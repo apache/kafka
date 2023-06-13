@@ -60,7 +60,6 @@ import org.apache.kafka.image.ScramImageTest;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.image.TopicsImageTest;
-import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.server.util.MockRandom;
@@ -281,8 +280,20 @@ public class KRaftMigrationZkWriterTest {
         // Set up a topic with two partitions in ZK (via iterateTopics) and a KRaft TopicsImage, then run the given verifier
         Uuid topicId = Uuid.randomUuid();
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
-        partitionMap.put(0, new PartitionRegistration(new int[]{2, 3, 4}, new int[]{2, 3, 4}, new int[]{}, new int[]{}, 2, LeaderRecoveryState.RECOVERED, 0, -1));
-        partitionMap.put(1, new PartitionRegistration(new int[]{3, 4, 5}, new int[]{3, 4, 5}, new int[]{}, new int[]{}, 3, LeaderRecoveryState.RECOVERED, 0, -1));
+        partitionMap.put(0, new PartitionRegistration.Builder()
+            .setReplicas(new int[]{2, 3, 4})
+            .setIsr(new int[]{2, 3, 4})
+            .setLeader(2)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(-1)
+            .build());
+        partitionMap.put(1, new PartitionRegistration.Builder()
+            .setReplicas(new int[]{3, 4, 5})
+            .setIsr(new int[]{3, 4, 5})
+            .setLeader(3)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(-1)
+            .build());
 
         CapturingTopicMigrationClient topicClient = new CapturingTopicMigrationClient() {
             @Override
