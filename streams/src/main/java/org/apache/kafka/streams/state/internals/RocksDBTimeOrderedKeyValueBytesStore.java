@@ -28,14 +28,11 @@ import org.rocksdb.WriteBatch;
 /**
  * A RocksDB backed time-ordered segmented bytes store for window key schema.
  */
-public class RocksDBTimeOrderedKeyValueSegmentedBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
+public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
 
-    RocksDBTimeOrderedKeyValueSegmentedBytesStore(final String name,
-                                                  final String metricsScope,
-                                                  final long retention,
-                                                  final long segmentInterval) {
-        super(name, metricsScope, retention, segmentInterval, new TimeFirstWindowKeySchema(),
-            Optional.empty());
+    RocksDBTimeOrderedKeyValueBytesStore(final String name,
+                                         final String metricsScope) {
+        super(name, metricsScope, Long.MAX_VALUE, Long.MAX_VALUE, new TimeFirstWindowKeySchema(),Optional.empty());
     }
 
     @Override

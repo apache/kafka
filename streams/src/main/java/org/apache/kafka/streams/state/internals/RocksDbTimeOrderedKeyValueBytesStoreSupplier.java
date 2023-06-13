@@ -30,12 +30,10 @@ public class RocksDbTimeOrderedKeyValueBytesStoreSupplier {
         return name;
     }
 
-    public RocksDBTimeOrderedKeyValueSegmentedBytesStore get() {
-        return new RocksDBTimeOrderedKeyValueSegmentedBytesStore(
+    public RocksDBTimeOrderedKeyValueBytesStore get() {
+        return new RocksDBTimeOrderedKeyValueBytesStore(
             name,
-            metricsScope(),
-            retentionPeriod,
-            Math.max(retentionPeriod / 2, 60_000L)
+            metricsScope()
         );
     }
 
