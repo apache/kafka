@@ -829,10 +829,8 @@ class ReplicaFetcherThreadTest {
     ))
     mockNetwork.setIdsForNextResponse(topicIds)
 
-    // Sends the fetch request and processes the response. This should truncate the
-    // log but it should not update the high watermark.
+    // Sends the fetch request and processes the response.
     thread.doWork()
-
     assertEquals(1, mockNetwork.fetchCount)
 
     // Lag is set to Some(0).
