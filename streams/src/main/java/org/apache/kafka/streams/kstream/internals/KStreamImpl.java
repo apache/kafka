@@ -1268,7 +1268,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new RuntimeException("KTable must be versioned to use a grace period in a stream table join.");
             }
-            final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(name,
+            final String bufferStoreName = name + "-Buffer";
+            final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier(bufferStoreName,
                 joined.gracePeriod().toMillis()).get();
 
             buffer = Optional.of(new RocksDBTimeOrderedKeyValueBuffer<>(store, joined.gracePeriod(), name));
