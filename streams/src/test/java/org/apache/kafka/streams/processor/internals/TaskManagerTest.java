@@ -109,7 +109,6 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
-import static org.easymock.EasyMock.resetToStrict;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -197,7 +196,7 @@ public class TaskManagerTest {
     private ActiveTaskCreator activeTaskCreator;
     @Mock(type = MockType.NICE)
     private StandbyTaskCreator standbyTaskCreator;
-    @Mock(type = MockType.NICE)
+    @org.mockito.Mock
     private Admin adminClient;
     final StateUpdater stateUpdater = Mockito.mock(StateUpdater.class);
 
@@ -3725,12 +3724,12 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSendPurgeData() {
-        resetToStrict(adminClient);
-        expect(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
-            .andReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
-        expect(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L))))
-            .andReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
-        replay(adminClient);
+        when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
+            .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
+        when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L))))
+            .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
+
+        final InOrder inOrder = Mockito.inOrder(adminClient);
 
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
@@ -3757,16 +3756,16 @@ public class TaskManagerTest {
         purgableOffsets.put(t1p1, 17L);
         taskManager.maybePurgeCommittedRecords();
 
-        verify(adminClient);
+        inOrder.verify(adminClient).deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L)));
+        inOrder.verify(adminClient).deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L)));
+        inOrder.verifyNoMoreInteractions();
     }
 
     @Test
     public void shouldNotSendPurgeDataIfPreviousNotDone() {
-        resetToStrict(adminClient);
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
-        expect(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
-            .andReturn(new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords)));
-        replay(adminClient);
+        when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
+            .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords)));
 
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
@@ -3794,8 +3793,6 @@ public class TaskManagerTest {
         // so it would fail verification if we invoke the admin client again.
         purgableOffsets.put(t1p1, 17L);
         taskManager.maybePurgeCommittedRecords();
-
-        verify(adminClient);
     }
 
     @Test
@@ -3807,9 +3804,9 @@ public class TaskManagerTest {
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords));
         futureDeletedRecords.completeExceptionally(new Exception("KABOOM!"));
-        expect(adminClient.deleteRecords(anyObject())).andReturn(deleteRecordsResult).times(2);
+        when(adminClient.deleteRecords(any())).thenReturn(deleteRecordsResult);
 
-        replay(adminClient, consumer);
+        replay(consumer);
 
         taskManager.addTask(task00);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3820,8 +3817,6 @@ public class TaskManagerTest {
 
         taskManager.maybePurgeCommittedRecords();
         taskManager.maybePurgeCommittedRecords();
-
-        verify(adminClient);
     }
 
     @Test
