@@ -28,14 +28,14 @@ public class GroupCoordinatorConfigTest {
     @Test
     public void testConfigs() {
         PartitionAssignor assignor = new RangeAssignor();
-        GroupCoordinatorConfig config = new GroupCoordinatorConfig.Builder()
-            .withNumThreads(10)
-            .withConsumerGroupSessionTimeoutMs(30)
-            .withConsumerGroupHeartbeatIntervalMs(10)
-            .withConsumerGroupMaxSize(55)
-            .withConsumerGroupAssignors(Collections.singletonList(assignor))
-            .withOffsetsTopicSegmentBytes(2222)
-            .build();
+        GroupCoordinatorConfig config = new GroupCoordinatorConfig(
+            10,
+            30,
+            10,
+            55,
+            Collections.singletonList(assignor),
+            2222
+        );
 
         assertEquals(10, config.numThreads);
         assertEquals(30, config.consumerGroupSessionTimeoutMs);

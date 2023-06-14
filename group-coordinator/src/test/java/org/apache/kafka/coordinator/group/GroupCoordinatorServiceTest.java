@@ -69,9 +69,14 @@ public class GroupCoordinatorServiceTest {
     }
 
     private GroupCoordinatorConfig createConfig() {
-        return new GroupCoordinatorConfig.Builder()
-            .withConsumerGroupAssignors(Collections.singletonList(new RangeAssignor()))
-            .build();
+        return new GroupCoordinatorConfig(
+            1,
+            45,
+            5,
+            Integer.MAX_VALUE,
+            Collections.singletonList(new RangeAssignor()),
+            1000
+        );
     }
 
     @Test
@@ -214,17 +219,14 @@ public class GroupCoordinatorServiceTest {
         CoordinatorRuntime<ReplicatedGroupCoordinator, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
-            new GroupCoordinatorConfig.Builder()
-                .withConsumerGroupAssignors(Collections.singletonList(new RangeAssignor()))
-                .withOffsetsTopicSegmentBytes(5555)
-                .build(),
+            createConfig(),
             runtime
         );
 
         Properties expectedProperties = new Properties();
         expectedProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         expectedProperties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        expectedProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "5555");
+        expectedProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000");
 
         assertEquals(expectedProperties, service.groupMetadataTopicConfigs());
     }

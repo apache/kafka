@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -140,11 +141,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * The name of the consumer metadata topic.
-     */
-    private static final String CONSUMER_METADATA_TOPIC_NAME = "__consumer_offsets";
-
-    /**
      * The logger.
      */
     private final Logger log;
@@ -201,7 +197,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private TopicPartition topicPartitionFor(
         String groupId
     ) {
-        return new TopicPartition(CONSUMER_METADATA_TOPIC_NAME, partitionFor(groupId));
+        return new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(groupId));
     }
 
     /**
@@ -503,7 +499,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         throwIfNotActive();
         runtime.scheduleLoadOperation(
-            new TopicPartition(CONSUMER_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
+            new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
             groupMetadataPartitionLeaderEpoch
         );
     }
@@ -521,7 +517,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             throw new IllegalArgumentException("The leader epoch should always be provided in KRaft.");
         }
         runtime.scheduleUnloadOperation(
-            new TopicPartition(CONSUMER_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
+            new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
             groupMetadataPartitionLeaderEpoch.getAsInt()
         );
     }
@@ -556,6 +552,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public void startup(
         IntSupplier groupMetadataTopicPartitionCount
     ) {
+        if (!isActive.compareAndSet(false, true)) {
+            log.warn("Group coordinator is already running.");
+            return;
+        }
+
         log.info("Starting up.");
         numPartitions = groupMetadataTopicPartitionCount.getAsInt();
         isActive.set(true);
@@ -567,6 +568,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     @Override
     public void shutdown() {
+        if (!isActive.compareAndSet(true, false)) {
+            log.warn("Group coordinator is already shutting down.");
+            return;
+        }
+
         log.info("Shutting down.");
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
