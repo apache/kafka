@@ -25,17 +25,26 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 class TimerTaskList implements Delayed {
-    final AtomicInteger taskCounter;
-    final AtomicLong expiration;
+    private final Time time;
+    private final AtomicInteger taskCounter;
+    private final AtomicLong expiration;
 
     // TimerTaskList forms a doubly linked cyclic list using a dummy root entry
     // root.next points to the head
     // root.prev points to the tail
-    private TimerTaskEntry root;
+    private final TimerTaskEntry root;
 
     TimerTaskList(
         AtomicInteger taskCounter
     ) {
+        this(taskCounter, Time.SYSTEM);
+    }
+
+    TimerTaskList(
+        AtomicInteger taskCounter,
+        Time time
+    ) {
+        this.time = time;
         this.taskCounter = taskCounter;
         this.expiration = new AtomicLong(-1L);
         this.root = new TimerTaskEntry(null, -1L);
@@ -111,7 +120,7 @@ class TimerTaskList implements Delayed {
 
     @Override
     public long getDelay(TimeUnit unit) {
-        return unit.convert(Math.max(getExpiration() - Time.SYSTEM.hiResClockMs(), 0), TimeUnit.MICROSECONDS);
+        return unit.convert(Math.max(getExpiration() - time.hiResClockMs(), 0), TimeUnit.MILLISECONDS);
     }
 
     @Override

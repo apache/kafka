@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.server.util.timer;
 
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -98,5 +100,14 @@ public class TimerTaskListTest {
         assertEquals(0, size(list1));
         assertEquals(0, size(list2));
         assertEquals(0, size(list3));
+    }
+
+    @Test
+    public void testGetDelay() {
+        MockTime time = new MockTime();
+        TimerTaskList list = new TimerTaskList(new AtomicInteger(0), time);
+        list.setExpiration(time.hiResClockMs() + 10000L);
+        time.sleep(5000L);
+        assertEquals(5L, list.getDelay(TimeUnit.SECONDS));
     }
 }
