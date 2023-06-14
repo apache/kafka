@@ -996,8 +996,10 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
-      baseOffset = 0L)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+      baseOffset = 0L,
+      producerId = 2L)
+    val verificationGuard = partition.maybeStartTransactionVerification(2L)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching, verificationGuard)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(timestamp,

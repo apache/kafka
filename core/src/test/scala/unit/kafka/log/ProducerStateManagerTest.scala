@@ -1102,10 +1102,6 @@ class ProducerStateManagerTest {
     val updatedEntry = stateManager.verificationStateEntry(producerId, true)
     verifyEntry(producerId, updatedEntry)
 
-    // Before we add transactional data, we can't remove the entry.
-    stateManager.clearVerificationStateEntry(producerId)
-    verifyEntry(producerId, updatedEntry)
-
     // Add the transactional data and clear the entry.
     append(stateManager, producerId, 0, 0, offset = 0, isTransactional = true)
     stateManager.clearVerificationStateEntry(producerId)
