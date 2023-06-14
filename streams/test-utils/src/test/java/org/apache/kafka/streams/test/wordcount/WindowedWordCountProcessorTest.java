@@ -25,8 +25,8 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -89,9 +89,7 @@ public class WindowedWordCountProcessorTest {
     }
 
     @Test
-    public void shouldWorkWithPersistentStore() throws IOException {
-        final File stateDir = TestUtils.tempDirectory();
-
+    public void shouldWorkWithPersistentStore(@TempDir final File stateDir) throws IOException {
         try {
             final MockProcessorContext<String, String> context = new MockProcessorContext<>(
                 new Properties(),

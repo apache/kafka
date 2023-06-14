@@ -18,9 +18,9 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -32,8 +32,7 @@ import java.util.Optional;
 public class RemoteLogMetadataSnapshotFileTest {
 
     @Test
-    public void testEmptyCommittedLogMetadataFile() throws Exception {
-        File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
+    public void testEmptyCommittedLogMetadataFile(@TempDir File metadataStoreDir) throws Exception {
         RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
 
         // There should be an empty snapshot as nothing is written into it.
@@ -41,8 +40,7 @@ public class RemoteLogMetadataSnapshotFileTest {
     }
 
     @Test
-    public void testEmptySnapshotWithCommittedLogMetadataFile() throws Exception {
-        File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
+    public void testEmptySnapshotWithCommittedLogMetadataFile(@TempDir File metadataStoreDir) throws Exception {
         RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
 
         snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(0, 0L, Collections.emptyList()));
@@ -53,8 +51,7 @@ public class RemoteLogMetadataSnapshotFileTest {
     }
 
     @Test
-    public void testWriteReadCommittedLogMetadataFile() throws Exception {
-        File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
+    public void testWriteReadCommittedLogMetadataFile(@TempDir File metadataStoreDir) throws Exception {
         RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
 
         List<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadatas = new ArrayList<>();

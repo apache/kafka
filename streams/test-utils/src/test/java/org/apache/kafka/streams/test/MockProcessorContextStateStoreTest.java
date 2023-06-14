@@ -30,7 +30,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -155,8 +155,7 @@ public class MockProcessorContextStateStoreTest {
     public void shouldEitherInitOrThrow(final StoreBuilder<StateStore> builder,
                                         final boolean timestamped,
                                         final boolean caching,
-                                        final boolean logging) {
-        final File stateDir = TestUtils.tempDirectory();
+                                        final boolean logging, @TempDir final File stateDir) {
         try {
             final MockProcessorContext<Void, Void> context = new MockProcessorContext<>(
                 mkProperties(mkMap(

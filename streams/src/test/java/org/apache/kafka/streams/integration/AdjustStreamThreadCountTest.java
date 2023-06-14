@@ -44,7 +44,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.io.IOException;
@@ -99,7 +101,7 @@ public class AdjustStreamThreadCountTest {
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @BeforeEach
-    public void setup(final TestInfo testInfo) {
+    public void setup(final TestInfo testInfo, @TempDir final File stateDir) {
         final String testId = safeUniqueTestName(getClass(), testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
@@ -112,7 +114,7 @@ public class AdjustStreamThreadCountTest {
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath()),
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),

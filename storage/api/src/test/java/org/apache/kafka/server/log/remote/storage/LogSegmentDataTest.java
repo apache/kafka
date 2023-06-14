@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -29,24 +29,23 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class LogSegmentDataTest {
 
     @Test
-    public void testOptionalTransactionIndex() {
-        File dir = TestUtils.tempDirectory();
+    public void testOptionalTransactionIndex(@TempDir File tempDir) {
         LogSegmentData logSegmentDataWithTransactionIndex = new LogSegmentData(
-                new File(dir, "log-segment").toPath(),
-                new File(dir, "offset-index").toPath(),
-                new File(dir, "time-index").toPath(),
-                Optional.of(new File(dir, "transaction-index").toPath()),
-                new File(dir, "producer-snapshot").toPath(),
+                new File(tempDir, "log-segment").toPath(),
+                new File(tempDir, "offset-index").toPath(),
+                new File(tempDir, "time-index").toPath(),
+                Optional.of(new File(tempDir, "transaction-index").toPath()),
+                new File(tempDir, "producer-snapshot").toPath(),
                 ByteBuffer.allocate(1)
         );
         Assertions.assertTrue(logSegmentDataWithTransactionIndex.transactionIndex().isPresent());
 
         LogSegmentData logSegmentDataWithNoTransactionIndex = new LogSegmentData(
-                new File(dir, "log-segment").toPath(),
-                new File(dir, "offset-index").toPath(),
-                new File(dir, "time-index").toPath(),
+                new File(tempDir, "log-segment").toPath(),
+                new File(tempDir, "offset-index").toPath(),
+                new File(tempDir, "time-index").toPath(),
                 Optional.empty(),
-                new File(dir, "producer-snapshot").toPath(),
+                new File(tempDir, "producer-snapshot").toPath(),
                 ByteBuffer.allocate(1)
         );
         assertFalse(logSegmentDataWithNoTransactionIndex.transactionIndex().isPresent());

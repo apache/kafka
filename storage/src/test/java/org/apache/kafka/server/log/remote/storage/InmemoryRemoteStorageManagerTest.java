@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,8 +47,10 @@ public class InmemoryRemoteStorageManagerTest {
     private static final Logger log = LoggerFactory.getLogger(InmemoryRemoteStorageManagerTest.class);
 
     private static final TopicPartition TP = new TopicPartition("foo", 1);
-    private static final File DIR = TestUtils.tempDirectory("inmem-rsm-");
     private static final Random RANDOM = new Random();
+    
+    @TempDir
+    private static File dir;
 
     @Test
     public void testCopyLogSegment() throws Exception {
@@ -230,19 +233,19 @@ public class InmemoryRemoteStorageManagerTest {
 
     private LogSegmentData createLogSegmentData(int segSize) throws Exception {
         int prefix = Math.abs(RANDOM.nextInt());
-        Path segment = new File(DIR, prefix + ".seg").toPath();
+        Path segment = new File(dir, prefix + ".seg").toPath();
         Files.write(segment, TestUtils.randomBytes(segSize));
 
-        Path offsetIndex = new File(DIR, prefix + ".oi").toPath();
+        Path offsetIndex = new File(dir, prefix + ".oi").toPath();
         Files.write(offsetIndex, TestUtils.randomBytes(10));
 
-        Path timeIndex = new File(DIR, prefix + ".ti").toPath();
+        Path timeIndex = new File(dir, prefix + ".ti").toPath();
         Files.write(timeIndex, TestUtils.randomBytes(10));
 
-        Path txnIndex = new File(DIR, prefix + ".txni").toPath();
+        Path txnIndex = new File(dir, prefix + ".txni").toPath();
         Files.write(txnIndex, TestUtils.randomBytes(10));
 
-        Path producerSnapshotIndex = new File(DIR, prefix + ".psi").toPath();
+        Path producerSnapshotIndex = new File(dir, prefix + ".psi").toPath();
         Files.write(producerSnapshotIndex, TestUtils.randomBytes(10));
 
         ByteBuffer leaderEpochIndex = ByteBuffer.wrap(TestUtils.randomBytes(10));

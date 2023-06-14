@@ -20,9 +20,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -36,12 +38,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 final public class SnapshotsTest {
 
     @Test
-    public void testValidSnapshotFilename() {
+    public void testValidSnapshotFilename(@TempDir File logDir) {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE),
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE)
         );
-        Path path = Snapshots.snapshotPath(TestUtils.tempDirectory().toPath(), snapshotId);
+        Path path = Snapshots.snapshotPath(logDir.toPath(), snapshotId);
         SnapshotPath snapshotPath = Snapshots.parse(path).get();
 
         assertEquals(path, snapshotPath.path);
@@ -51,13 +53,13 @@ final public class SnapshotsTest {
     }
 
     @Test
-    public void testValidPartialSnapshotFilename() throws IOException {
+    public void testValidPartialSnapshotFilename(@TempDir final File logDir) throws IOException {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE),
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE)
         );
 
-        Path path = Snapshots.createTempFile(TestUtils.tempDirectory().toPath(), snapshotId);
+        Path path = Snapshots.createTempFile(logDir.toPath(), snapshotId);
         // Delete it as we only need the path for testing
         Files.delete(path);
 
@@ -69,12 +71,12 @@ final public class SnapshotsTest {
     }
 
     @Test
-    public void testValidDeletedSnapshotFilename() {
+    public void testValidDeletedSnapshotFilename(@TempDir final File logDir) {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE),
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE)
         );
-        Path path = Snapshots.snapshotPath(TestUtils.tempDirectory().toPath(), snapshotId);
+        Path path = Snapshots.snapshotPath(logDir.toPath(), snapshotId);
         Path deletedPath = Snapshots.deleteRenamePath(path, snapshotId);
         SnapshotPath snapshotPath = Snapshots.parse(deletedPath).get();
 

@@ -47,6 +47,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -254,7 +255,7 @@ public class LagFetchIntegrationTest {
     }
 
     @Test
-    public void shouldFetchLagsDuringRestoration() throws Exception {
+    public void shouldFetchLagsDuringRestoration(@TempDir final File stateDir) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputTopicName,
             mkSet(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
@@ -267,7 +268,6 @@ public class LagFetchIntegrationTest {
 
         // create stream threads
         final Properties props = (Properties) streamsConfiguration.clone();
-        final File stateDir = TestUtils.tempDirectory(stateStoreName + "0");
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:0");
         props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-0");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getAbsolutePath());

@@ -38,7 +38,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
@@ -82,12 +84,12 @@ public class EmitOnChangeIntegrationTest {
     }
 
     @Test
-    public void shouldEmitSameRecordAfterFailover() throws Exception {
+    public void shouldEmitSameRecordAfterFailover(@TempDir final File tempDir) throws Exception {
         final Properties properties  = mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, tempDir.getPath()),
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
                 mkEntry(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L),
