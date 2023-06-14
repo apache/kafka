@@ -427,40 +427,63 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    *         corresponding to failed elections that should not be retried.
    *         2. The partitions that we should retry due to a zookeeper BADVERSION conflict. Version conflicts can occur if
    *         the partition leader updated partition state while the controller attempted to update partition state.
+   * 第一部分：首先，代码会批量读取 ZooKeeper 中给定分区的所有 Znode 数据。之后，会构建两个容器，分别保存可选举 Leader 分区列表和选举失败分区列表。
+   * 接着，开始遍历每个分区的 Znode 节点数据，如果成功拿到 Znode 节点数据，节点数据包含 Leader 和 ISR 信息且节点数据的 Controller Epoch 值小于当前 Controller Epoch 值，
+   * 那么，就将该分区加入到可选举 Leader 分区列表。倘若发现 Zookeeper 中保存的 Controller Epoch 值大于当前 Epoch 值，说明该分区已经被一个更新的 Controller 选举过 Leader 了，
+   * 此时必须终止本次 Leader 选举，并将该分区放置到选举失败分区列表中。遍历完这些分区之后，代码要看下 validLeaderAndIsrs 容器中是否包含可选举 Leader 的分区。
+   * 如果一个满足选举 Leader 的分区都没有，方法直接返回。至此，doElectLeaderForPartitions 方法的第一大步完成。
+   *
+   * 第二部分：根据给定的 PartitionLeaderElectionStrategy，调用 PartitionLeaderElectionAlgorithms 的不同方法执行 Leader 选举，
+   * 同时，区分出成功选举 Leader 和未选出 Leader 的分区。
+   *
+   * 第三部分：首先，将上一步中所有选举失败的分区，全部加入到 Leader 选举失败分区列表。
+   * 然后，使用新选举的 Leader 和 ISR 信息，更新 ZooKeeper 上分区的 Znode 节点数据。对于 ZooKeeper Znode 节点数据更新成功的那些分区，
+   * 源码会封装对应的 Leader 和 ISR 信息，构建 LeaderAndIsr 请求，并将该请求加入到 Controller 待发送请求集合，等待后续统一发送。
+   * 最后，方法返回选举结果，包括成功选举并更新 ZooKeeper 节点的分区列表、选举失败分区列表，以及 ZooKeeper 节点更新失败的分区列表。
    */
   private def doElectLeaderForPartitions(
     partitions: Seq[TopicPartition],
     partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy
   ): (Map[TopicPartition, Either[Exception, LeaderAndIsr]], Seq[TopicPartition]) = {
+    // doElectLeaderForPartitions方法的第1部分
     val getDataResponses = try {
+      // 批量获取ZooKeeper中给定分区的znode节点数据
       zkClient.getTopicPartitionStatesRaw(partitions)
     } catch {
       case e: Exception =>
         return (partitions.iterator.map(_ -> Left(e)).toMap, Seq.empty)
     }
+    // 构建两个容器，分别保存可选举Leader分区列表和选举失败分区列表
     val failedElections = mutable.Map.empty[TopicPartition, Either[Exception, LeaderAndIsr]]
     val validLeaderAndIsrs = mutable.Buffer.empty[(TopicPartition, LeaderAndIsr)]
 
+    // 遍历每个分区的znode节点数据
     getDataResponses.foreach { getDataResponse =>
       val partition = getDataResponse.ctx.get.asInstanceOf[TopicPartition]
       val currState = partitionState(partition)
+      // 如果成功拿到znode节点数据
       if (getDataResponse.resultCode == Code.OK) {
         TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat) match {
+          // 节点数据中含Leader和ISR信息
           case Some(leaderIsrAndControllerEpoch) =>
+            // 如果节点数据的Controller Epoch值大于当前Controller Epoch值
             if (leaderIsrAndControllerEpoch.controllerEpoch > controllerContext.epoch) {
               val failMsg = s"Aborted leader election for partition $partition since the LeaderAndIsr path was " +
                 s"already written by another controller. This probably means that the current controller $controllerId went through " +
                 s"a soft failure and another controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}."
+              // 将该分区加入到选举失败分区列表
               failedElections.put(partition, Left(new StateChangeFailedException(failMsg)))
             } else {
+              // 将该分区加入到可选举Leader分区列表
               validLeaderAndIsrs += partition -> leaderIsrAndControllerEpoch.leaderAndIsr
             }
-
+          // 如果节点数据不含Leader和ISR信息
           case None =>
             val exception = new StateChangeFailedException(s"LeaderAndIsr information doesn't exist for partition $partition in $currState state")
+            // 将该分区加入到选举失败分区列表
             failedElections.put(partition, Left(exception))
         }
-
+        // 如果没有拿到znode节点数据，则将该分区加入到选举失败分区列表
       } else if (getDataResponse.resultCode == Code.NONODE) {
         val exception = new StateChangeFailedException(s"LeaderAndIsr information doesn't exist for partition $partition in $currState state")
         failedElections.put(partition, Left(exception))
@@ -473,12 +496,15 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       return (failedElections.toMap, Seq.empty)
     }
 
+    // doElectLeaderForPartitions方法的第2部分
+    // 开始选举Leader，并根据有无Leader将分区进行分区
     val (partitionsWithoutLeaders, partitionsWithLeaders) = partitionLeaderElectionStrategy match {
       case OfflinePartitionLeaderElectionStrategy(allowUnclean) =>
         val partitionsWithUncleanLeaderElectionState = collectUncleanLeaderElectionState(
           validLeaderAndIsrs,
           allowUnclean
         )
+        // 为OfflinePartition分区选举Leader
         leaderForOffline(
           controllerContext,
           isLeaderRecoverySupported,
@@ -486,12 +512,18 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         ).partition(_.leaderAndIsr.isEmpty)
 
       case ReassignPartitionLeaderElectionStrategy =>
+        // 为副本重分配的分区选举Leader
         leaderForReassign(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
       case PreferredReplicaPartitionLeaderElectionStrategy =>
+        // 为分区执行Preferred副本Leader选举
         leaderForPreferredReplica(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
       case ControlledShutdownPartitionLeaderElectionStrategy =>
+        // 为因Broker正常关闭而受影响的分区选举Leader
         leaderForControlledShutdown(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
     }
+
+    // doElectLeaderForPartitions方法的第3部分
+    // 将所有选举失败的分区全部加入到Leader选举失败分区列表
     partitionsWithoutLeaders.foreach { electionResult =>
       val partition = electionResult.topicPartition
       val failMsg = s"Failed to elect leader for partition $partition under strategy $partitionLeaderElectionStrategy"
@@ -501,6 +533,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     val adjustedLeaderAndIsrs = partitionsWithLeaders.map(result => result.topicPartition -> result.leaderAndIsr.get).toMap
     val UpdateLeaderAndIsrResult(finishedUpdates, updatesToRetry) = zkClient.updateLeaderAndIsr(
       adjustedLeaderAndIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
+    // 对于ZooKeeper znode节点数据更新成功的分区，封装对应的Leader和ISR信息
+    // 构建LeaderAndIsr请求，并将该请求加入到Controller待发送请求集合 等待后续统一发送
     finishedUpdates.forKeyValue { (partition, result) =>
       result.foreach { leaderAndIsr =>
         val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
@@ -517,7 +551,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           s"Attempted to write state ${adjustedLeaderAndIsrs(partition)}, but failed with bad ZK version. This will be retried.")
       }
     }
-
+    // 返回选举结果，包括成功选举并更新ZooKeeper节点的分区、选举失败分区以及
+    // ZooKeeper节点更新失败的分区
     (finishedUpdates ++ failedElections, updatesToRetry)
   }
 
