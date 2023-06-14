@@ -57,9 +57,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -570,7 +568,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
-    public void testNoCheckpointsIfNoRecordsAreMirrored() throws InterruptedException {
+    public void testNoCheckpointsIfNoRecordsAreMirrored() throws Exception {
         String consumerGroupName = "consumer-group-no-checkpoints";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
 
@@ -635,7 +633,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
-    public void testRestartReplication() throws InterruptedException {
+    public void testRestartReplication() throws Exception {
         String consumerGroupName = "consumer-group-restart";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
@@ -662,7 +660,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
-    public void testOffsetTranslationBehindReplicationFlow() throws InterruptedException {
+    public void testOffsetTranslationBehindReplicationFlow() throws Exception {
         String consumerGroupName = "consumer-group-lagging-behind";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
@@ -1192,12 +1190,12 @@ public class MirrorConnectorsIntegrationBaseTest {
      * <p>This is done to force the MirrorCheckpointConnector to start at a task which checkpoints this group.
      * Must be called before {@link #waitUntilMirrorMakerIsRunning} to prevent that method from timing out.
      */
-    protected void prepareConsumerGroup(Map<String, Object> consumerProps) {
+    protected void prepareConsumerGroup(Map<String, Object> consumerProps) throws Exception {
         prepareConsumerGroup(primary.kafka(), consumerProps, "test-topic-1");
         prepareConsumerGroup(backup.kafka(), consumerProps, "test-topic-1");
     }
 
-    private void prepareConsumerGroup(EmbeddedKafkaCluster cluster, Map<String, Object> consumerProps, String topic) {
+    private void prepareConsumerGroup(EmbeddedKafkaCluster cluster, Map<String, Object> consumerProps, String topic) throws Exception {
         try (Admin client = cluster.createAdminClient()) {
             Map<String, TopicDescription> topics = client.describeTopics(Collections.singleton(topic))
                     .allTopicNames()
@@ -1210,8 +1208,6 @@ public class MirrorConnectorsIntegrationBaseTest {
                             ignored -> new OffsetAndMetadata(0L)));
             AlterConsumerGroupOffsetsResult alterResult = client.alterConsumerGroupOffsets((String) consumerProps.get("group.id"), collect);
             alterResult.all().get(REQUEST_TIMEOUT_DURATION_MS, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException | InterruptedException | TimeoutException e) {
-            throw new RuntimeException(e);
         }
     }
 
