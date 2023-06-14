@@ -65,11 +65,10 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         context = new MockInternalNewProcessorContext<>(StreamsTestUtils.getStreamsConfig(), new TaskId(0, 0), TestUtils.tempDirectory());
     }
 
-    public void createJoin(final Duration grace) {
-        final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDbTimeOrderedKeyValueBytesStoreSupplier("testing",  100).get();
+    private void createBuffer(final Duration grace) {
+        final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDBTimeOrderedKeyValueBytesStoreSupplier("testing",  100).get();
         buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, grace, "testing");
         buffer.setSerdesIfNull(serdeGetter);
-        store.init((StateStoreContext) context, store);
         buffer.init((StateStoreContext) context, store);
     }
 
@@ -80,41 +79,60 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     @Test
+    public void shouldPutInBufferAndUpdateFields() {
+        createBuffer(Duration.ofMinutes(1));
+        assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
+        pipeRecord("1", "0", 0L);
+        assertNumSizeAndTimestamp(buffer, 1, 0, 42);
+        pipeRecord("3", "0", 2L);
+        assertNumSizeAndTimestamp(buffer, 2, 0, 84);
+
+    }
+
+    @Test
     public void shouldAddAndEvictRecord() {
-        createJoin(Duration.ZERO);
+        createBuffer(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
+        assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
         assertThat(count.get(), equalTo(1));
     }
 
     @Test
     public void shouldAddAndEvictRecordTwice() {
-        createJoin(Duration.ZERO);
+        createBuffer(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
+        assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
         assertThat(count.get(), equalTo(1));
         pipeRecord("2", "0", 1L);
+        assertNumSizeAndTimestamp(buffer, 1, 1, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
         assertThat(count.get(), equalTo(2));
     }
 
     @Test
     public void shouldAddAndEvictRecordTwiceWithNonZeroGrace() {
-        createJoin(Duration.ofMillis(1));
+        createBuffer(Duration.ofMillis(1));
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         assertThat(count.get(), equalTo(0));
         pipeRecord("2", "0", 1L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
+        assertNumSizeAndTimestamp(buffer, 1, 1, 42);
         assertThat(count.get(), equalTo(1));
     }
 
     @Test
     public void shouldAddRecordsTwiceAndEvictRecordsOnce() {
-        createJoin(Duration.ZERO);
+        createBuffer(Duration.ZERO);
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
@@ -126,43 +144,49 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
 
     @Test
     public void shouldDropLateRecords() {
-        createJoin(Duration.ZERO);
-        final AtomicInteger count = new AtomicInteger(0);
+        createBuffer(Duration.ZERO);
         pipeRecord("1", "0", 1L);
-        buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertNumSizeAndTimestamp(buffer, 1, 1, 42);
         pipeRecord("2", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(1));
+        assertNumSizeAndTimestamp(buffer, 1, 1, 42);
     }
 
     @Test
     public void shouldDropLateRecordsWithNonZeroGrace() {
-        createJoin(Duration.ofMillis(1));
-        final AtomicInteger count = new AtomicInteger(0);
+        createBuffer(Duration.ofMillis(1));
         pipeRecord("1", "0", 2L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertNumSizeAndTimestamp(buffer, 1, 2, 42);
         pipeRecord("2", "0", 1L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(1));
-        pipeRecord("2", "0", 0L);
-        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(1));
+        assertNumSizeAndTimestamp(buffer, 2, 1, 84);
+        pipeRecord("3", "0", 0L);
+        assertNumSizeAndTimestamp(buffer, 2, 1, 84);
     }
 
     @Test
     public void shouldHandleCollidingKeys() {
-        createJoin(Duration.ofMillis(1));
+        createBuffer(Duration.ofMillis(1));
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("2", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
+        assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         pipeRecord("2", "2", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(0));
+        assertNumSizeAndTimestamp(buffer, 2, 0, 84);
         pipeRecord("1", "0", 7L);
+        assertNumSizeAndTimestamp(buffer, 3, 0, 126);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(2));
+        assertNumSizeAndTimestamp(buffer, 1, 7, 42);
+    }
+
+    private void assertNumSizeAndTimestamp(final TimeOrderedKeyValueBuffer<String, String, String> buffer,
+                                           final int num,
+                                           final long time,
+                                           final long size) {
+        assertThat(buffer.numRecords(), equalTo(num));
+        assertThat(buffer.minTimestamp(), equalTo(time));
+        assertThat(buffer.bufferSize(), equalTo(size));
     }
 }
