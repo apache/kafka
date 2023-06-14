@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
 
@@ -27,16 +28,16 @@ import static java.util.Collections.singletonMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-public class InMemoryTimeOrderedKeyValueBufferTest {
+public class InMemoryTimeOrderedKeyValueChangeBufferTest {
 
     @Test
     public void bufferShouldAllowCacheEnablement() {
-        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withCachingEnabled();
+        new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(null, null, null).withCachingEnabled();
     }
 
     @Test
     public void bufferShouldAllowCacheDisablement() {
-        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withCachingDisabled();
+        new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(null, null, null).withCachingDisabled();
     }
 
     @Test
@@ -44,8 +45,8 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
         final String expect = "3";
         final Map<String, String> logConfig = new HashMap<>();
         logConfig.put("min.insync.replicas", expect);
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder =
-            new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
+        final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<Object, Object, Change<Object>>> builder =
+            new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(null, null, null)
                 .withLoggingEnabled(logConfig);
 
         assertThat(builder.logConfig(), is(singletonMap("min.insync.replicas", expect)));
@@ -54,8 +55,8 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
 
     @Test
     public void bufferShouldAllowLoggingDisablement() {
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder
-            = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
+        final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<Object, Object, Change<Object>>> builder
+            = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(null, null, null)
                 .withLoggingDisabled();
 
         assertThat(builder.logConfig(), is(emptyMap()));

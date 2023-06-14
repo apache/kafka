@@ -22,9 +22,9 @@ import java.util.concurrent.atomic._
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
-import kafka.utils.timer._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.util.timer.{SystemTimer, Timer, TimerTask}
 
 import scala.collection._
 import scala.collection.mutable.ListBuffer
@@ -46,9 +46,9 @@ import scala.jdk.CollectionConverters._
  * Noted that if you add a future delayed operation that calls ReplicaManager.appendRecords() in onComplete()
  * like DelayedJoin, you must be aware that this operation's onExpiration() needs to call actionQueue.tryCompleteAction().
  */
-abstract class DelayedOperation(override val delayMs: Long,
+abstract class DelayedOperation(delayMs: Long,
                                 lockOpt: Option[Lock] = None)
-  extends TimerTask with Logging {
+  extends TimerTask(delayMs) with Logging {
 
   private val completed = new AtomicBoolean(false)
   // Visible for testing
@@ -334,8 +334,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     if (reaperEnabled) {
       expirationReaper.initiateShutdown()
       // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
-      timeoutTimer.add(new TimerTask {
-        override val delayMs: Long = 0
+      timeoutTimer.add(new TimerTask(0) {
         override def run(): Unit = {}
       })
       expirationReaper.awaitShutdown()
