@@ -230,6 +230,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         return TopicAdmin.defineTopic(topic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
+                .setSegmentSize()
                 .partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG))
                 .replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();

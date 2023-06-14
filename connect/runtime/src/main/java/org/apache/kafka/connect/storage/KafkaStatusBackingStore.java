@@ -215,6 +215,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
+                .setSegmentSize()
                 .partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG))
                 .replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
