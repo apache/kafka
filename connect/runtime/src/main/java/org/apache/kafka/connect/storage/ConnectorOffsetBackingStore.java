@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -140,6 +141,9 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     private final Optional<OffsetBackingStore> workerStore;
     private final Optional<KafkaOffsetBackingStore> connectorStore;
     private final Optional<TopicAdmin> connectorStoreAdmin;
+
+    private boolean isEOSEnabled;
+    private long offsetFlushTimeoutMs;
 
     ConnectorOffsetBackingStore(
             Time time,
@@ -284,13 +288,12 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 .stream()
                 .anyMatch(offset -> offset.getValue() == null);
 
-        AtomicReference<Throwable> secondaryStoreTombstoneWriteError = new AtomicReference<>();
-
         // If there are tombstone offsets, then the failure to write to secondary store will
         // not be ignored. Also, for tombstone records, we first write to secondary store and
         // then to primary stores.
         if (secondaryStore != null && containsTombstones) {
-            secondaryStore.set(values, (secondaryWriteError, ignored) -> {
+            AtomicReference<Throwable> secondaryStoreTombstoneWriteError = new AtomicReference<>();
+            Future<Void> secondaryWriteFuture = secondaryStore.set(values, (secondaryWriteError, ignored) -> {
                 try (LoggingContext context = loggingContext()) {
                     if (secondaryWriteError != null) {
                         log.warn("Failed to write offsets with tombstone records to secondary backing store", secondaryWriteError);
@@ -300,6 +303,37 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                     }
                 }
             });
+            try {
+                // For EOS, there is no timeout for offset commit and it is allowed to take as much time as needed for
+                // commits. We still need to wait because we want to fail the offset commit for cases when
+                // tombstone records fail to be written to the secondary store. Note that while commitTransaction
+                // already waits for all records to be sent and ack'ed, in this case we do need to add an explicit
+                // blocking call. In case of ALOS, we wait for the same duration as `offset.commit.timeout.ms`
+                // and throw that exception which would allow the offset commit to fail.
+                if (isEOSEnabled) {
+                    secondaryWriteFuture.get();
+                } else {
+                    secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
+                }
+            } catch (InterruptedException e) {
+                log.warn("{} Flush of tombstone offsets to secondary store interrupted, cancelling", this);
+                secondaryStoreTombstoneWriteError.compareAndSet(null, e);
+            } catch (ExecutionException e) {
+                log.error("{} Flush of tombstone offsets to secondary store threw an unexpected exception: ", this, e);
+                secondaryStoreTombstoneWriteError.compareAndSet(null, e);
+            } catch (TimeoutException e) {
+                log.error("{} Timed out waiting to flush offsets with tombstones to secondary storage ", this);
+                secondaryStoreTombstoneWriteError.compareAndSet(null, e);
+            } catch (Exception e) {
+                log.error("{} Got Exception when trying to flush tombstone offsets to secondary storage", this);
+                secondaryStoreTombstoneWriteError.compareAndSet(null, e);
+            }
+            Throwable writeError = secondaryStoreTombstoneWriteError.get();
+            if (writeError != null) {
+                FutureCallback<Void> failedWriteCallback = new FutureCallback<>(callback);
+                failedWriteCallback.onCompletion(writeError, null);
+                return failedWriteCallback;
+            }
         }
 
         return primaryStore.set(values, (primaryWriteError, ignored) -> {
@@ -326,12 +360,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 }
             }
             try (LoggingContext context = loggingContext()) {
-                Throwable secondaryWriteError = secondaryStoreTombstoneWriteError.get();
-                if (secondaryStore != null && containsTombstones && secondaryWriteError != null) {
-                    callback.onCompletion(secondaryWriteError, ignored);
-                } else {
-                    callback.onCompletion(primaryWriteError, ignored);
-                }
+                callback.onCompletion(primaryWriteError, ignored);
             }
         });
     }
@@ -355,6 +384,8 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     public void configure(WorkerConfig config) {
         // Worker offset store should already be configured
         connectorStore.ifPresent(store -> store.configure(config));
+        isEOSEnabled = config.exactlyOnceSourceEnabled();
+        offsetFlushTimeoutMs = config.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
     }
 
     // For testing
