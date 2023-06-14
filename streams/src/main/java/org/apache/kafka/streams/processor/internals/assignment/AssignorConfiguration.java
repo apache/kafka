@@ -267,6 +267,7 @@ public final class AssignorConfiguration {
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
         public final List<String> rackAwareAssignmentTags;
+        public final String rackAwareAssignmentStrategy;
 
         private AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
@@ -274,18 +275,21 @@ public final class AssignorConfiguration {
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
             rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+            rackAwareAssignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY);
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
                           final Long probingRebalanceIntervalMs,
-                          final List<String> rackAwareAssignmentTags) {
+                          final List<String> rackAwareAssignmentTags,
+                          final String rackAwareAssignmentStrategy) {
             this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
             this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
+            this.rackAwareAssignmentStrategy = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY, rackAwareAssignmentStrategy);
         }
 
         private static <T> T validated(final String configKey, final T value) {
@@ -304,6 +308,7 @@ public final class AssignorConfiguration {
                 "\n  numStandbyReplicas=" + numStandbyReplicas +
                 "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
                 "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
+                "\n  rackAwareAssignmentStrategy=" + rackAwareAssignmentStrategy +
                 "\n}";
         }
     }

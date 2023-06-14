@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor.TagEntry;
@@ -657,7 +658,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
                                      1,
                                      numStandbyReplicas,
                                      60000L,
-                                     asList(rackAwareAssignmentTags));
+                                     asList(rackAwareAssignmentTags),
+                                     StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE);
     }
 
     private static ClientState createClientStateWithCapacity(final int capacity,

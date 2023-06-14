@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
@@ -73,7 +74,8 @@ public class HighAvailabilityTaskAssignorTest {
         /*maxWarmupReplicas*/ 2,
         /*numStandbyReplicas*/ 0,
         /*probingRebalanceIntervalMs*/ 60 * 1000L,
-        /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+        /*rackAwareAssignmentStrategy*/ StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE
     );
 
     private final AssignmentConfigs configWithStandbys = new AssignmentConfigs(
@@ -81,7 +83,8 @@ public class HighAvailabilityTaskAssignorTest {
         /*maxWarmupReplicas*/ 2,
         /*numStandbyReplicas*/ 1,
         /*probingRebalanceIntervalMs*/ 60 * 1000L,
-        /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+        /*rackAwareAssignmentStrategy*/ StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE
     );
 
     @Test
@@ -101,7 +104,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(11L, 2, 1, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(11L, 2, 1, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
@@ -130,7 +133,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(Long.MAX_VALUE, 1, 1, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(Long.MAX_VALUE, 1, 1, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(clientState1, hasAssignedTasks(6));
@@ -151,7 +154,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -172,7 +175,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -192,7 +195,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(unstable, is(false));
@@ -214,7 +217,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(unstable, is(false));
@@ -243,7 +246,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(unstable, is(false));
@@ -265,7 +268,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(unstable, is(false));
@@ -290,7 +293,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(unstable, is(true));
@@ -320,7 +323,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, allTaskIds.size() / 3 + 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(unstable, is(false));
@@ -341,7 +344,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertThat(unstable, is(false));
@@ -526,7 +529,8 @@ public class HighAvailabilityTaskAssignorTest {
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 0,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L,
-                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+                /*rackAwareAssignmentStrategy*/ StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE
             )
         );
 
@@ -555,7 +559,8 @@ public class HighAvailabilityTaskAssignorTest {
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 1,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L,
-                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+                /*rackAwareAssignmentStrategy*/ StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE
             )
         );
 
@@ -734,7 +739,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertValidAssignment(
@@ -765,7 +770,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertValidAssignment(
@@ -796,7 +801,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertValidAssignment(
@@ -827,7 +832,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+            new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS, StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
         );
 
         assertValidAssignment(
