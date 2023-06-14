@@ -86,7 +86,6 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         pipeRecord("3", "0", 2L);
         assertNumSizeAndTimestamp(buffer, 2, 0, 84);
-
     }
 
     @Test
