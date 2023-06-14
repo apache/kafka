@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
@@ -243,6 +244,18 @@ public class PrototypeAsyncConsumerTest {
                         Duration.ofMillis(1)));
         assertEquals(eventProcessingFailure, consumerError);
         verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Duration.class));
+    }
+
+    @Test
+    public void testBeginningOffsetsTimeoutOnEventProcessingTimeout() {
+        when(eventHandler.addAndGet(any(), any())).thenThrow(new TimeoutException());
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(org.apache.kafka.common.errors.TimeoutException.class,
+                () -> consumer.beginningOffsets(
+                        Collections.singletonList(new TopicPartition("t1", 0)),
+                        Duration.ofMillis(1)));
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+                ArgumentMatchers.isA(Duration.class));
     }
 
     @Test
