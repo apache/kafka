@@ -147,6 +147,7 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
         return new Joined<>(null, valueSerde, null, null, null);
     }
 
+
     /**
      * Create an instance of {@code Joined} with an other value {@link Serde}.
      * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
@@ -234,6 +235,10 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
         return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
     }
 
+    public Duration gracePeriod() {
+        return gracePeriod;
+    }
+
     public Serde<K> keySerde() {
         return keySerde;
     }
@@ -244,9 +249,5 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
 
     public Serde<VO> otherValueSerde() {
         return otherValueSerde;
-    }
-
-    public Duration gracePeriod() {
-        return gracePeriod;
     }
 }

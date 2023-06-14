@@ -117,6 +117,19 @@ public class KStreamKTableJoinWithGraceTest {
     }
 
     @Test
+    public void shouldFailIfGracePeriodIsShorterThanHistoryRetention() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
+        builder.build(props);
+    }
+
+    @Test
     public void shouldCreateRepartitionTopicsWithUserProvidedName() {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
