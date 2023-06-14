@@ -98,7 +98,7 @@ public class OffsetStorageWriterTest {
     public void testWriteFlush() throws Exception {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = mock(Callback.class);
-        expectStore(store, OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
 
@@ -112,7 +112,7 @@ public class OffsetStorageWriterTest {
     public void testWriteNullValueFlush() throws Exception {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = mock(Callback.class);
-        expectStore(store, OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, false, null);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, false, null);
 
         writer.offset(OFFSET_KEY, null);
 
@@ -127,7 +127,7 @@ public class OffsetStorageWriterTest {
     public void testWriteNullKeyFlush() throws Exception {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = mock(Callback.class);
-        expectStore(store, null, null, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
+        expectStore(null, null, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
 
         writer.offset(null, OFFSET_VALUE);
 
@@ -154,14 +154,14 @@ public class OffsetStorageWriterTest {
         @SuppressWarnings("unchecked")
         final Callback<Void> callback = mock(Callback.class);
         // First time the write fails
-        expectStore(store, OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, true, null);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, true, null);
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         verify(callback).onCompletion(eq(EXCEPTION), isNull());
 
         // Second time it succeeds
-        expectStore(store, OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
         assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         verify(callback).onCompletion(isNull(), isNull());
@@ -176,7 +176,7 @@ public class OffsetStorageWriterTest {
         final Callback<Void> callback = mock(Callback.class);
         // Trigger the send, but don't invoke the callback so we'll still be mid-flush
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
-        expectStore(store, OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
@@ -201,7 +201,7 @@ public class OffsetStorageWriterTest {
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
         // In this test, the write should be cancelled so the callback will not be invoked and is not
         // passed to the expectStore call
-        expectStore(store, OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
@@ -455,7 +455,7 @@ public class OffsetStorageWriterTest {
      *                          ensure tests complete.
      */
     @SuppressWarnings("unchecked")
-    private void expectStore(OffsetBackingStore store, Map<String, Object> key, byte[] keySerialized,
+    private void expectStore(Map<String, Object> key, byte[] keySerialized,
                              Map<String, Object> value, byte[] valueSerialized,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
