@@ -284,9 +284,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             throw new IllegalStateException("At least one non-null offset store must be provided");
         }
 
-        boolean containsTombstones = values.entrySet()
-                .stream()
-                .anyMatch(offset -> offset.getValue() == null);
+        boolean containsTombstones = values.containsValue(null);
 
         // If there are tombstone offsets, then the failure to write to secondary store will
         // not be ignored. Also, for tombstone records, we first write to secondary store and
