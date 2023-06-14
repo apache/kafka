@@ -66,7 +66,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     private void createBuffer(final Duration grace) {
-        final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDBTimeOrderedKeyValueBytesStoreSupplier("testing",  100).get();
+        final RocksDBTimeOrderedKeyValueBytesStore store = new RocksDBTimeOrderedKeyValueBytesStoreSupplier("testing").get();
         buffer = new RocksDBTimeOrderedKeyValueBuffer<>(store, grace, "testing");
         buffer.setSerdesIfNull(serdeGetter);
         buffer.init((StateStoreContext) context, store);
