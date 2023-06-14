@@ -976,6 +976,7 @@ project(':core') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+  rat.dependsOn ':core:processMessages'
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
@@ -1210,6 +1211,7 @@ project(':metadata') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+  rat.dependsOn ':metadata:processMessages'
 
   sourceSets {
     main {
@@ -1290,6 +1292,7 @@ project(':group-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+  rat.dependsOn ':group-coordinator:processMessages'
 }
 
 project(':examples') {
@@ -1428,8 +1431,10 @@ project(':clients') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+  rat.dependsOn ':clients:processMessages'
 
   compileTestJava.dependsOn 'processTestMessages'
+  rat.dependsOn ':clients:processTestMessages'
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
@@ -1531,6 +1536,7 @@ project(':raft') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+  rat.dependsOn ':raft:processMessages'
 
   jar {
     dependsOn createVersionFile
@@ -1760,6 +1766,7 @@ project(':storage') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+  rat.dependsOn ':storage:processMessages'
 
   jar {
     dependsOn createVersionFile
@@ -2057,6 +2064,7 @@ project(':streams') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+  rat.dependsOn ':streams:processMessages'
 
   javadoc {
     include "**/org/apache/kafka/streams/**"
