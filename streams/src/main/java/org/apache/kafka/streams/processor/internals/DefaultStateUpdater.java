@@ -143,7 +143,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 removeUpdatingAndPausedTasks();
                 updaterMetrics.clear();
                 shutdownGate.countDown();
-                log.info("State updater thread shutdown");
+                log.info("State updater thread stopped");
             }
         }
 
@@ -240,6 +240,7 @@ public class DefaultStateUpdater implements StateUpdater {
             log.info("Encountered task corrupted exception: ", taskCorruptedException);
             final Set<TaskId> corruptedTaskIds = taskCorruptedException.corruptedTasks();
             final Set<Task> corruptedTasks = new HashSet<>();
+            final Set<TopicPartition> changelogsOfCorruptedTasks = new HashSet<>();
             for (final TaskId taskId : corruptedTaskIds) {
                 final Task corruptedTask = updatingTasks.get(taskId);
                 if (corruptedTask == null) {
@@ -247,7 +248,9 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
                 corruptedTasks.add(corruptedTask);
                 removeCheckpointForCorruptedTask(corruptedTask);
+                changelogsOfCorruptedTasks.addAll(corruptedTask.changelogPartitions());
             }
+            changelogReader.unregister(changelogsOfCorruptedTasks);
             addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(new ExceptionAndTasks(corruptedTasks, taskCorruptedException));
         }
 
@@ -568,7 +571,7 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public void shutdown(final Duration timeout) {
         if (stateUpdaterThread != null) {
-            log.info("Shutting down StateUpdater thread");
+            log.info("Shutting down state updater thread");
 
             // first set the running flag and then
             // notify the condition in case the thread is waiting on it;

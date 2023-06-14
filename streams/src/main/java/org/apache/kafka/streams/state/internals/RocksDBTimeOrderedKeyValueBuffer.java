@@ -89,10 +89,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                     final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
                     final K key = keySerde.deserializer().deserialize(topic,
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
-                    minTimestamp = bufferValue.context().timestamp();
-
-                    final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
-
                     if (bufferValue.context().timestamp() < minTimestamp) {
                         throw new IllegalStateException(
                             "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
@@ -100,6 +96,10 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> extends WrappedStateStore<Ro
                         );
                     }
 
+                    minTimestamp = bufferValue.context().timestamp();
+
+                    final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
+                  
                     callback.accept(new Eviction<>(key, value, bufferValue.context()));
 
                     wrapped().remove(keyValue.key);

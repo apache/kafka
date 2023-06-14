@@ -14,28 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.coordinator.group.runtime;
 
-public class RocksDBTimeOrderedKeyValueBytesStoreSupplier {
-    private final String name;
-  
-    public RocksDBTimeOrderedKeyValueBytesStoreSupplier(final String name) {
-        this.name = name;
-    }
+import org.apache.kafka.timeline.SnapshotRegistry;
 
-    public String name() {
-        return name;
-    }
+/**
+ * A builder to build a {@link Coordinator} replicated state machine.
+ *
+ * @param <S> The type of the coordinator.
+ * @param <U> The record type.
+ */
+interface CoordinatorBuilder<S extends Coordinator<U>, U> {
 
-    public RocksDBTimeOrderedKeyValueBytesStore get() {
-        return new RocksDBTimeOrderedKeyValueBytesStore(
-            name,
-            metricsScope()
-        );
-    }
+    /**
+     * Sets the snapshot registry used to back all the timeline
+     * datastructures used by the coordinator.
+     *
+     * @param snapshotRegistry The registry.
+     *
+     * @return The builder.
+     */
+    CoordinatorBuilder<S, U> withSnapshotRegistry(
+        SnapshotRegistry snapshotRegistry
+    );
 
-    public String metricsScope() {
-        return "rocksdb";
-    }
-
+    /**
+     * @return The built coordinator.
+     */
+    S build();
 }

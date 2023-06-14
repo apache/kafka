@@ -14,28 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.coordinator.group.runtime;
 
-public class RocksDBTimeOrderedKeyValueBytesStoreSupplier {
-    private final String name;
-  
-    public RocksDBTimeOrderedKeyValueBytesStoreSupplier(final String name) {
-        this.name = name;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public RocksDBTimeOrderedKeyValueBytesStore get() {
-        return new RocksDBTimeOrderedKeyValueBytesStore(
-            name,
-            metricsScope()
-        );
-    }
-
-    public String metricsScope() {
-        return "rocksdb";
-    }
-
+/**
+ * Supplies a {@link CoordinatorBuilder} to the {@link CoordinatorRuntime}.
+ *
+ * @param <S> The type of the coordinator.
+ * @param <U> The record type.
+ */
+interface CoordinatorBuilderSupplier<S extends Coordinator<U>, U> {
+    /**
+     * @return A {@link CoordinatorBuilder}.
+     */
+    CoordinatorBuilder<S, U> get();
 }

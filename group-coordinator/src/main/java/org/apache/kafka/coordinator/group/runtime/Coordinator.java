@@ -14,28 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.coordinator.group.runtime;
 
-public class RocksDBTimeOrderedKeyValueBytesStoreSupplier {
-    private final String name;
-  
-    public RocksDBTimeOrderedKeyValueBytesStoreSupplier(final String name) {
-        this.name = name;
-    }
+/**
+ * Coordinator is basically a replicated state machine managed by the
+ * {@link CoordinatorRuntime}.
+ */
+public interface Coordinator<U> extends CoordinatorPlayback<U> {
 
-    public String name() {
-        return name;
-    }
+    /**
+     * The coordinator has been loaded. This is used to apply any
+     * post loading operations (e.g. registering timers).
+     */
+    default void onLoaded() {};
 
-    public RocksDBTimeOrderedKeyValueBytesStore get() {
-        return new RocksDBTimeOrderedKeyValueBytesStore(
-            name,
-            metricsScope()
-        );
-    }
-
-    public String metricsScope() {
-        return "rocksdb";
-    }
-
+    /**
+     * The coordinator has been unloaded. This is used to apply
+     * any post unloading operations.
+     */
+    default void onUnloaded() {};
 }
