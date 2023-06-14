@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBTimeOrderedKeyValueBufferTest {
-    public RocksDBTimeOrderedKeyValueBuffer<String, String, String > buffer;
+    public RocksDBTimeOrderedKeyValueBuffer<String, String> buffer;
     @Mock
     public SerdeGetter serdeGetter;
     public InternalProcessorContext<String, String> context;
