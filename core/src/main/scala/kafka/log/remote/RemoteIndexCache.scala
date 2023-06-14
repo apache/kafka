@@ -176,7 +176,9 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       val offset = name.substring(0, firstIndex).toInt
       val uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')))
 
-      if (internalCache.getIfPresent(uuid) == null) {
+      // It is safe to update the internalCache non-atomically here since this function is always called by a single
+      // thread only.
+      if (!internalCache.asMap().containsKey(uuid)) {
         val offsetIndexFile = new File(cacheDir, name + UnifiedLog.IndexFileSuffix)
         val timestampIndexFile = new File(cacheDir, name + UnifiedLog.TimeIndexFileSuffix)
         val txnIndexFile = new File(cacheDir, name + UnifiedLog.TxnIndexFileSuffix)
@@ -320,8 +322,9 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       val shutdownRequired = cleanerThread.initiateShutdown()
       // Close all the opened indexes to force unload mmap memory. This does not delete the index files from disk.
       internalCache.asMap().forEach((_, entry) => entry.close())
-      // Perform any pending activities required by the cache for cleanup
-      internalCache.cleanUp()
+      // Note that internal cache does not require explicit cleaning / closing. We don't want to invalidate or cleanup
+      // the cache as both would lead to triggering of removal listener.
+      internalCache = null
       // wait for cleaner thread to shutdown
       if (shutdownRequired) cleanerThread.awaitShutdown()
     }

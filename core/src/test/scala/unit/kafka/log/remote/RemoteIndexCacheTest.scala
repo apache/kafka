@@ -192,12 +192,12 @@ class RemoteIndexCacheTest {
 
   @Test
   def testCloseIsIdempotent(): Unit = {
-    val spyInternalCache = spy(cache.internalCache)
-    cache.internalCache = spyInternalCache
+    val spyCleanerThread = spy(cache.cleanerThread)
+    cache.cleanerThread = spyCleanerThread
     cache.close()
     cache.close()
     // verify that cleanup is only called once
-    verify(spyInternalCache).cleanUp()
+    verify(spyCleanerThread).initiateShutdown()
   }
 
   @Test
@@ -227,9 +227,6 @@ class RemoteIndexCacheTest {
     // cleaner thread should be closed properly
     verify(spyCleanerThread).initiateShutdown()
     verify(spyCleanerThread).awaitShutdown()
-
-    // internal cache cleanup should be called
-    verify(spyInternalCache).cleanUp()
 
     // close for all index entries must be invoked
     verify(spyTxnIndex).close()
