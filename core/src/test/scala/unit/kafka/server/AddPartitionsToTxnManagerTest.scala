@@ -144,9 +144,6 @@ class AddPartitionsToTxnManagerTest {
     addPartitionsToTxnManager.addTxnData(node1, transactionData(transactionalId2, producerId2), setErrors(transactionErrors))
     addPartitionsToTxnManager.addTxnData(node2, transactionData(transactionalId3, producerId3), setErrors(transactionErrors))
 
-    // Test creationTimeMs increases too.
-    time.sleep(1000)
-
     val requestsAndHandlers2 = addPartitionsToTxnManager.generateRequests()
     // The request for node1 should not be added because one request is already inflight.
     assertEquals(1, requestsAndHandlers2.size)
@@ -224,6 +221,8 @@ class AddPartitionsToTxnManagerTest {
 
   @Test
   def testAddPartitionsToTxnManagerMetrics(): Unit = {
+    TestUtils.clearYammerMetric("VerificationTimeMs")
+    TestUtils.clearYammerMetric("VerificationFailureRate")
     val transactionErrors = mutable.Map[TopicPartition, Errors]()
     val startTime = time.milliseconds()
 
@@ -235,10 +234,9 @@ class AddPartitionsToTxnManagerTest {
     val requestsAndHandlers = addPartitionsToTxnManager.generateRequests()
     var requestsHandled = 0
 
-    requestsAndHandlers.foreach { requestAndCompletionHandler => {
+    requestsAndHandlers.foreach { requestAndCompletionHandler =>
       time.sleep(100)
       requestAndCompletionHandler.handler.onComplete(authenticationErrorResponse)
-      }
       requestsHandled += 1
       assertEquals((time.milliseconds() - startTime).toDouble, TestUtils.histogramMaxValue("VerificationTimeMs"))
       assertEquals(requestsHandled * 3, TestUtils.meterCount("VerificationFailureRate"))
