@@ -192,7 +192,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * @return TODO
+     * @return The topic partition for the given group.
      */
     private TopicPartition topicPartitionFor(
         String groupId

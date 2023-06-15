@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -55,7 +56,6 @@ import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -210,8 +210,7 @@ public class GroupCoordinatorServiceTest {
 
         service.startup(() -> 10);
 
-        assertTrue(service.partitionFor("foo") >= 0);
-        assertTrue(service.partitionFor("foo") < 10);
+        assertEquals(Utils.abs("foo".hashCode()) % 10, service.partitionFor("foo"));
     }
 
     @Test
@@ -240,6 +239,9 @@ public class GroupCoordinatorServiceTest {
             runtime
         );
 
+        assertThrows(CoordinatorNotAvailableException.class,
+            () -> service.onElection(5, 10));
+
         service.startup(() -> 1);
         service.onElection(5, 10);
 
@@ -257,6 +259,9 @@ public class GroupCoordinatorServiceTest {
             createConfig(),
             runtime
         );
+
+        assertThrows(CoordinatorNotAvailableException.class,
+            () -> service.onResignation(5, OptionalInt.of(10)));
 
         service.startup(() -> 1);
         service.onResignation(5, OptionalInt.of(10));
