@@ -29,7 +29,7 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "unitTest") {
+def doTest(env, target = ":core:test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --tests kafka.admin.DeleteTopicTest \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
