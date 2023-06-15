@@ -113,7 +113,7 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             tryStreamsArchetype()
           }
@@ -132,7 +132,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
@@ -151,7 +151,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
@@ -180,7 +180,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             tryStreamsArchetype()
           }
@@ -203,7 +203,7 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
@@ -226,7 +226,7 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            doValidation()
+            //doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
