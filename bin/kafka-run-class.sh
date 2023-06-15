@@ -20,11 +20,11 @@ then
   exit 1
 fi
 
-# CYGWIN == 1 if Cygwin is detected, else 0.
-if [[ $(uname -a) =~ "CYGWIN" ]]; then
-  CYGWIN=1
+# WINDOWS_OS_FORMAT == 1 if Cygwin or MinGW is detected, else 0.
+if [[ $(uname -a) =~ "CYGWIN" || $(uname -a) =~ "MINGW" ]]; then
+  WINDOWS_OS_FORMAT=1
 else
-  CYGWIN=0
+  WINDOWS_OS_FORMAT=0
 fi
 
 if [ -z "$INCLUDE_TEST_JARS" ]; then
@@ -229,7 +229,7 @@ if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
   LOG4J_DIR="$base_dir/config/tools-log4j.properties"
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
-  (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
+  (( WINDOWS_OS_FORMAT )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
   # create logs directory
@@ -239,7 +239,7 @@ else
 fi
 
 # If Cygwin is detected, LOG_DIR is converted to Windows format.
-(( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
+(( WINDOWS_OS_FORMAT )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 
 # Generic jvm settings you want to add
@@ -337,7 +337,7 @@ fi
 CLASSPATH=${CLASSPATH#:}
 
 # If Cygwin is detected, classpath is converted to Windows format.
-(( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
+(( WINDOWS_OS_FORMAT )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
