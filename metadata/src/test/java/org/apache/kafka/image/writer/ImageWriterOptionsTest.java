@@ -48,7 +48,7 @@ public class ImageWriterOptionsTest {
                     setMetadataVersion(version);
             if (i < MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.ordinal()) {
                 assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, options.metadataVersion());
-                assertEquals(version, options.orgmetadataVersion());
+                assertEquals(version, options.requestedMetadataVersion());
             } else {
                 assertEquals(version, options.metadataVersion());
             }
