@@ -3643,8 +3643,8 @@ foo
 
   <h3>Preparing for migration</h3>
   <p>
-    Before beginning the migration, the Kafka brokers must be upgraded to software version 3.4.0 and have the
-    "inter.broker.protocol.version" configuration set to "3.4". See <a href="#upgrade_3_4_0">Upgrading to 3.4.0</a> for
+    Before beginning the migration, the Kafka brokers must be upgraded to software version 3.5.0 and have the
+    "inter.broker.protocol.version" configuration set to "3.5". See <a href="#upgrade_3_5_0">Upgrading to 3.5.0</a> for
     upgrade instructions.
   </p>
 
@@ -3725,7 +3725,7 @@ advertised.listeners=PLAINTEXT://localhost:9092
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 
 # Set the IBP
-inter.broker.protocol.version=3.4
+inter.broker.protocol.version=3.5
 
 # Enable the migration
 zookeeper.metadata.migration.enable=true
@@ -3742,9 +3742,7 @@ controller.listener.names=CONTROLLER</pre>
     When the migration is complete, an INFO level log can be observed on the active controller:
   </p>
 
-  <pre>
-    Completed migration of metadata from Zookeeper to KRaft
-  </pre>
+  <pre>Completed migration of metadata from Zookeeper to KRaft</pre>
 
   <h3>Migrating brokers to KRaft</h3>
   <p>
@@ -3769,7 +3767,7 @@ advertised.listeners=PLAINTEXT://localhost:9092
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 
 # Don't set the IBP, KRaft uses "metadata.version" feature flag
-# inter.broker.protocol.version=3.4
+# inter.broker.protocol.version=3.5
 
 # Remove the migration enabled flag
 # zookeeper.metadata.migration.enable=true
@@ -3796,7 +3794,7 @@ controller.listener.names=CONTROLLER</pre>
 # Sample KRaft cluster controller.properties listening on 9093
 process.roles=controller
 node.id=3000
-controller.quorum.voters=1@localhost:9093
+controller.quorum.voters=3000@localhost:9093
 controller.listener.names=CONTROLLER
 listeners=CONTROLLER://:9093
 
