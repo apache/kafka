@@ -1027,7 +1027,7 @@ public final class Utils {
         try {
             flushFile(path);
         } catch (IOException e) {
-            log.warn("Failed to flush {} at path {}", name, path);
+            log.warn("Failed to flush {} at path {}", name, path, e);
         }
     }
 
