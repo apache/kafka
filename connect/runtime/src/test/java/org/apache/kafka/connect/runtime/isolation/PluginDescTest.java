@@ -22,6 +22,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -223,6 +224,20 @@ public class PluginDescTest {
         );
 
         assertNewer(transformDescPluginPath, transformDescClasspath);
+
+        PluginDesc<Predicate> predicateDescPluginPath = new PluginDesc<>(
+                Predicate.class,
+                regularVersion,
+                pluginLoader
+        );
+
+        PluginDesc<Predicate> predicateDescClasspath = new PluginDesc<>(
+                Predicate.class,
+                regularVersion,
+                systemLoader
+        );
+
+        assertNewer(predicateDescPluginPath, predicateDescClasspath);
     }
 
     private static <T> void assertPluginDesc(

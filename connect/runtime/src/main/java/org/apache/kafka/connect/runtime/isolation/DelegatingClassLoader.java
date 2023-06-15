@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.components.Versioned;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -48,10 +47,11 @@ import java.security.PrivilegedAction;
 import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.Set;
@@ -79,15 +79,6 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final ConcurrentMap<String, String> aliases;
-    private final SortedSet<PluginDesc<SinkConnector>> sinkConnectors;
-    private final SortedSet<PluginDesc<SourceConnector>> sourceConnectors;
-    private final SortedSet<PluginDesc<Converter>> converters;
-    private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
-    private final SortedSet<PluginDesc<Transformation<?>>> transformations;
-    private final SortedSet<PluginDesc<Predicate<?>>> predicates;
-    private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
-    private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
-    private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
     private final List<Path> pluginLocations;
 
     // Although this classloader does not load classes directly but rather delegates loading to a
@@ -103,15 +94,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.pluginLocations = pluginLocations;
         this.pluginLoaders = new ConcurrentHashMap<>();
         this.aliases = new ConcurrentHashMap<>();
-        this.sinkConnectors = new TreeSet<>();
-        this.sourceConnectors = new TreeSet<>();
-        this.converters = new TreeSet<>();
-        this.headerConverters = new TreeSet<>();
-        this.transformations = new TreeSet<>();
-        this.predicates = new TreeSet<>();
-        this.configProviders = new TreeSet<>();
-        this.restExtensions = new TreeSet<>();
-        this.connectorClientConfigPolicies = new TreeSet<>();
     }
 
     public DelegatingClassLoader(List<Path> pluginLocations) {
@@ -120,49 +102,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         // environments that control classloading differently (OSGi, Spring and others) and don't
         // depend on the System classloader to load Connect's classes.
         this(pluginLocations, DelegatingClassLoader.class.getClassLoader());
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public Set<PluginDesc<Connector>> connectors() {
-        Set<PluginDesc<Connector>> connectors = new TreeSet<>((Set) sinkConnectors);
-        connectors.addAll((Set) sourceConnectors);
-        return connectors;
-    }
-
-    public Set<PluginDesc<SinkConnector>> sinkConnectors() {
-        return sinkConnectors;
-    }
-
-    public Set<PluginDesc<SourceConnector>> sourceConnectors() {
-        return sourceConnectors;
-    }
-
-    public Set<PluginDesc<Converter>> converters() {
-        return converters;
-    }
-
-    public Set<PluginDesc<HeaderConverter>> headerConverters() {
-        return headerConverters;
-    }
-
-    public Set<PluginDesc<Transformation<?>>> transformations() {
-        return transformations;
-    }
-
-    public Set<PluginDesc<Predicate<?>>> predicates() {
-        return predicates;
-    }
-
-    public Set<PluginDesc<ConfigProvider>> configProviders() {
-        return configProviders;
-    }
-
-    public Set<PluginDesc<ConnectRestExtension>> restExtensions() {
-        return restExtensions;
-    }
-
-    public Set<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies() {
-        return connectorClientConfigPolicies;
     }
 
     /**
@@ -208,24 +147,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         );
     }
 
-    private <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
-        for (PluginDesc<T> plugin : plugins) {
-            String pluginClassName = plugin.className();
-            SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(pluginClassName);
-            if (inner == null) {
-                inner = new TreeMap<>();
-                pluginLoaders.put(pluginClassName, inner);
-                // TODO: once versioning is enabled this line should be moved outside this if branch
-                log.info("Added plugin '{}'", pluginClassName);
-            }
-            inner.put(plugin, loader);
-        }
-    }
-
-    protected void initLoaders() {
+    public PluginScanResult initLoaders() {
+        List<PluginScanResult> results = new ArrayList<>();
         for (Path pluginLocation : pluginLocations) {
             try {
-                registerPlugin(pluginLocation);
+                results.add(registerPlugin(pluginLocation));
             } catch (InvalidPathException | MalformedURLException e) {
                 log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
             } catch (IOException e) {
@@ -233,14 +159,16 @@ public class DelegatingClassLoader extends URLClassLoader {
             }
         }
         // Finally add parent/system loader.
-        scanUrlsAndAddPlugins(
+        results.add(scanUrlsAndAddPlugins(
                 getParent(),
                 ClasspathHelper.forJavaClassPath().toArray(new URL[0])
-        );
-        addAllAliases();
+        ));
+        PluginScanResult scanResult = new PluginScanResult(results);
+        installDiscoveredPlugins(scanResult);
+        return scanResult;
     }
 
-    private void registerPlugin(Path pluginLocation)
+    private PluginScanResult registerPlugin(Path pluginLocation)
         throws IOException {
         log.info("Loading plugin from: {}", pluginLocation);
         List<URL> pluginUrls = new ArrayList<>();
@@ -256,37 +184,17 @@ public class DelegatingClassLoader extends URLClassLoader {
                 urls,
                 this
         );
-        scanUrlsAndAddPlugins(loader, urls);
+        return scanUrlsAndAddPlugins(loader, urls);
     }
 
-    private void scanUrlsAndAddPlugins(
+    private PluginScanResult scanUrlsAndAddPlugins(
             ClassLoader loader,
             URL[] urls
     ) {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
-        if (!plugins.isEmpty()) {
-            addPlugins(plugins.sinkConnectors(), loader);
-            sinkConnectors.addAll(plugins.sinkConnectors());
-            addPlugins(plugins.sourceConnectors(), loader);
-            sourceConnectors.addAll(plugins.sourceConnectors());
-            addPlugins(plugins.converters(), loader);
-            converters.addAll(plugins.converters());
-            addPlugins(plugins.headerConverters(), loader);
-            headerConverters.addAll(plugins.headerConverters());
-            addPlugins(plugins.transformations(), loader);
-            transformations.addAll(plugins.transformations());
-            addPlugins(plugins.predicates(), loader);
-            predicates.addAll(plugins.predicates());
-            addPlugins(plugins.configProviders(), loader);
-            configProviders.addAll(plugins.configProviders());
-            addPlugins(plugins.restExtensions(), loader);
-            restExtensions.addAll(plugins.restExtensions());
-            addPlugins(plugins.connectorClientConfigPolicies(), loader);
-            connectorClientConfigPolicies.addAll(plugins.connectorClientConfigPolicies());
-        }
-
         loadJdbcDrivers(loader);
+        return plugins;
     }
 
     private void loadJdbcDrivers(final ClassLoader loader) {
@@ -344,16 +252,16 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     @SuppressWarnings({"unchecked"})
-    private Collection<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) {
-        return (Collection<PluginDesc<Predicate<?>>>) (Collection<?>) getPluginDesc(reflections, Predicate.class, loader);
+    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) {
+        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getPluginDesc(reflections, Predicate.class, loader);
     }
 
     @SuppressWarnings({"unchecked"})
-    private Collection<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) {
-        return (Collection<PluginDesc<Transformation<?>>>) (Collection<?>) getPluginDesc(reflections, Transformation.class, loader);
+    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) {
+        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(reflections, Transformation.class, loader);
     }
 
-    private <T> Collection<PluginDesc<T>> getPluginDesc(
+    private <T> SortedSet<PluginDesc<T>> getPluginDesc(
             Reflections reflections,
             Class<T> klass,
             ClassLoader loader
@@ -364,10 +272,10 @@ public class DelegatingClassLoader extends URLClassLoader {
         } catch (ReflectionsException e) {
             log.debug("Reflections scanner could not find any classes for URLs: " +
                     reflections.getConfiguration().getUrls(), e);
-            return Collections.emptyList();
+            return Collections.emptySortedSet();
         }
 
-        Collection<PluginDesc<T>> result = new ArrayList<>();
+        SortedSet<PluginDesc<T>> result = new TreeSet<>();
         for (Class<? extends T> pluginKlass : plugins) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} as it is not concrete implementation", pluginKlass);
@@ -393,8 +301,8 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
-        Collection<PluginDesc<T>> result = new ArrayList<>();
+    private <T> SortedSet<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
+        SortedSet<PluginDesc<T>> result = new TreeSet<>();
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
             try (LoaderSwap loaderSwap = withClassLoader(loader)) {
@@ -461,6 +369,17 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
+    private void installDiscoveredPlugins(PluginScanResult scanResult) {
+        pluginLoaders.putAll(computePluginLoaders(scanResult));
+        for (String pluginClassName : pluginLoaders.keySet()) {
+            log.info("Added plugin '{}'", pluginClassName);
+        }
+        aliases.putAll(PluginUtils.computeAliases(scanResult));
+        for (Map.Entry<String, String> alias : aliases.entrySet()) {
+            log.info("Added alias '{}' to plugin '{}'", alias.getKey(), alias.getValue());
+        }
+    }
+
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         String fullName = aliases.getOrDefault(name, name);
@@ -473,35 +392,12 @@ public class DelegatingClassLoader extends URLClassLoader {
         return super.loadClass(fullName, resolve);
     }
 
-    private void addAllAliases() {
-        addAliases(connectors());
-        addAliases(converters);
-        addAliases(headerConverters);
-        addAliases(transformations);
-        addAliases(predicates);
-        addAliases(restExtensions);
-        addAliases(connectorClientConfigPolicies);
-    }
-
-    private <S> void addAliases(Collection<PluginDesc<S>> plugins) {
-        for (PluginDesc<S> plugin : plugins) {
-            if (PluginUtils.isAliasUnique(plugin, plugins)) {
-                String simple = PluginUtils.simpleName(plugin);
-                String pruned = PluginUtils.prunedName(plugin);
-                aliases.put(simple, plugin.className());
-                if (simple.equals(pruned)) {
-                    log.info("Added alias '{}' to plugin '{}'", simple, plugin.className());
-                } else {
-                    aliases.put(pruned, plugin.className());
-                    log.info(
-                            "Added aliases '{}' and '{}' to plugin '{}'",
-                            simple,
-                            pruned,
-                            plugin.className()
-                    );
-                }
-            }
-        }
+    private static Map<String, SortedMap<PluginDesc<?>, ClassLoader>> computePluginLoaders(PluginScanResult plugins) {
+        Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders = new HashMap<>();
+        plugins.forEach(pluginDesc ->
+                pluginLoaders.computeIfAbsent(pluginDesc.className(), k -> new TreeMap<>())
+                        .put(pluginDesc, pluginDesc.loader()));
+        return pluginLoaders;
     }
 
     private static class InternalReflections extends Reflections {

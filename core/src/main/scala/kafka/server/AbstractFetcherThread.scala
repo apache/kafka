@@ -363,13 +363,13 @@ abstract class AbstractFetcherThread(name: String,
                         fetcherLagStats.getAndMaybePut(topicPartition).lag = lag
 
                         // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
-                        if (validBytes > 0 && partitionStates.contains(topicPartition)) {
+                        if ((validBytes > 0 || currentFetchState.lag.isEmpty) && partitionStates.contains(topicPartition)) {
                           // Update partitionStates only if there is no exception during processPartitionData
                           val newFetchState = PartitionFetchState(currentFetchState.topicId, nextOffset, Some(lag),
                             currentFetchState.currentLeaderEpoch, state = Fetching,
                             logAppendInfo.lastLeaderEpoch.asScala)
                           partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
-                          fetcherStats.byteRate.mark(validBytes)
+                          if (validBytes > 0) fetcherStats.byteRate.mark(validBytes)
                         }
                       }
                     }

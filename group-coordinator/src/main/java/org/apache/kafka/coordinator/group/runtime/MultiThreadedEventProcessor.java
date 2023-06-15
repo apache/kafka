@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -39,7 +40,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     /**
      * The accumulator.
      */
-    private final EventAccumulator<Integer, CoordinatorEvent> accumulator;
+    private final EventAccumulator<TopicPartition, CoordinatorEvent> accumulator;
 
     /**
      * The processing threads.
