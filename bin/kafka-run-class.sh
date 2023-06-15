@@ -21,7 +21,7 @@ then
 fi
 
 # WINDOWS_OS_FORMAT == 1 if Cygwin or MinGW is detected, else 0.
-if [[ $(uname -a) =~ "CYGWIN" || $(uname -a) =~ "MINGW" ]]; then
+if [[ $(uname -a) =~ "CYGWIN" || $(uname -a) =~ "MINGW" || $(uname -a) =~ "MSYS" ]]; then
   WINDOWS_OS_FORMAT=1
 else
   WINDOWS_OS_FORMAT=0
