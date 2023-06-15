@@ -606,9 +606,10 @@ object TestUtils extends Logging {
   }
 
   /**
-    * Create the consumer offsets/group metadata topic and wait until the leader is elected and metadata is propagated
-    * to all brokers.
-    */
+   * Ensures that the consumer offsets/group metadata topic exists. If it does not, the topic is created and the method waits
+   * until the leader is elected and metadata is propagated to all brokers. If it does, the method verifies that it has
+   * the expected number of partition and replication factor however it does not guarantee that the topic is empty.
+   */
   def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
     val server = servers.head
     val numPartitions = server.config.offsetsTopicPartitions
