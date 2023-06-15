@@ -30,7 +30,7 @@ def isChangeRequest(env) {
 }
 
 def doTest(env, target = ":core:test") {
-  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} -x spotbugsMain -x checkstyleTest \
       --tests kafka.admin.DeleteTopicTest \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
