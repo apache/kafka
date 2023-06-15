@@ -133,7 +133,7 @@ public class ConnectorPluginsResourceTest {
             HEADER_CONVERTER_PLUGINS.add(new MockConnectorPluginDesc<>(LongConverter.class));
 
             TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(RegexRouter.class));
-            TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(TimestampConverter.class));
+            TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(TimestampConverter.Key.class));
 
             PREDICATE_PLUGINS.add(new MockConnectorPluginDesc<>(HasHeaderKey.class));
             PREDICATE_PLUGINS.add(new MockConnectorPluginDesc<>(RecordIsTombstone.class));
@@ -387,8 +387,7 @@ public class ConnectorPluginsResourceTest {
     public void testListAllPlugins() {
         Set<Class<?>> excludes = Stream.of(
                         ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.TRANSFORM_EXCLUDES
+                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES
                 ).flatMap(Collection::stream)
                 .collect(Collectors.toSet());
         Set<PluginInfo> expectedConnectorPlugins = Stream.of(

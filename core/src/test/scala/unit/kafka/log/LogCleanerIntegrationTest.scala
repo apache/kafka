@@ -18,13 +18,12 @@
 package kafka.log
 
 import java.io.PrintWriter
-
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -34,7 +33,7 @@ import scala.jdk.CollectionConverters._
 /**
   * This is an integration test that tests the fully integrated log cleaner
   */
-class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
+class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
   val codec: CompressionType = CompressionType.LZ4
 

@@ -43,6 +43,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     private final List<QuorumController> controllers;
     private final LocalLogManagerTestEnv logEnv;
     private final Map<Integer, MockFaultHandler> fatalFaultHandlers = new HashMap<>();
+    private final Map<Integer, MockFaultHandler> nonFatalFaultHandlers = new HashMap<>();
 
     public static class Builder {
         private final LocalLogManagerTestEnv logEnv;
@@ -111,6 +112,9 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
                 builder.setFatalFaultHandler(fatalFaultHandler);
                 fatalFaultHandlers.put(nodeId, fatalFaultHandler);
+                MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
+                builder.setNonFatalFaultHandler(nonFatalFaultHandler);
+                nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 this.controllers.add(builder.build());
             }
@@ -163,6 +167,9 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             controller.close();
         }
         for (MockFaultHandler faultHandler : fatalFaultHandlers.values()) {
+            faultHandler.maybeRethrowFirstException();
+        }
+        for (MockFaultHandler faultHandler : nonFatalFaultHandlers.values()) {
             faultHandler.maybeRethrowFirstException();
         }
     }

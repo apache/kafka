@@ -18,20 +18,22 @@ package org.apache.kafka.clients.consumer;
 
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.getAssignorInstances;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,12 +112,21 @@ public class ConsumerPartitionAssignorTest {
         ));
     }
 
-    public static class TestConsumerPartitionAssignor implements ConsumerPartitionAssignor {
+    @Test
+    public void shouldBeConfigurable() {
+        Map<String, Object> configs = Collections.singletonMap("key", "value");
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(
+            Collections.singletonList(TestConsumerPartitionAssignor.class.getName()),
+            configs
+        );
+        assertEquals(1, assignors.size());
+        assertInstanceOf(TestConsumerPartitionAssignor.class, assignors.get(0));
+        assertEquals(configs, ((TestConsumerPartitionAssignor) assignors.get(0)).configs);
+    }
 
-        @Override
-        public ByteBuffer subscriptionUserData(Set<String> topics) {
-            return ConsumerPartitionAssignor.super.subscriptionUserData(topics);
-        }
+
+    public static class TestConsumerPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
+        private Map<String, ?> configs = null;
 
         @Override
         public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
@@ -123,24 +134,14 @@ public class ConsumerPartitionAssignorTest {
         }
 
         @Override
-        public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
-            ConsumerPartitionAssignor.super.onAssignment(assignment, metadata);
-        }
-
-        @Override
-        public List<RebalanceProtocol> supportedProtocols() {
-            return ConsumerPartitionAssignor.super.supportedProtocols();
-        }
-
-        @Override
-        public short version() {
-            return ConsumerPartitionAssignor.super.version();
-        }
-
-        @Override
         public String name() {
             // use the RangeAssignor's name to cause naming conflict
             return new RangeAssignor().name();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
         }
     }
 

@@ -77,6 +77,10 @@ import java.util.function.Supplier;
  *     calling class keeps track of state based on the log and only writes to it when consume callbacks are invoked
  *     and only reads it in {@link #readToEnd(Callback)} callbacks then no additional synchronization will be required.
  * </p>
+ * <p>
+ *     This is a useful utility that has been used outside of Connect. This isn't in Connect's public API,
+ *     but we've tried to maintain the method signatures and backward compatibility since early Kafka versions.
+ * </p>
  */
 public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
@@ -253,12 +257,20 @@ public class KafkaBasedLog<K, V> {
             partitionInfos = consumer.partitionsFor(topic);
         }
         if (partitionInfos.isEmpty())
-            throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
+            throw new ConnectException("Could not look up partition metadata for topic '" + topic + "' in the" +
                     " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
                     " this is your first use of the topic it may have taken too long to create.");
 
-        for (PartitionInfo partition : partitionInfos)
-            partitions.add(new TopicPartition(partition.topic(), partition.partition()));
+        for (PartitionInfo partition : partitionInfos) {
+            TopicPartition topicPartition = new TopicPartition(partition.topic(), partition.partition());
+            if (readPartition(topicPartition)) {
+                partitions.add(topicPartition);
+            }
+        }
+        if (partitions.isEmpty()) {
+            throw new ConnectException("Some partitions for " + topic + " exist, but no partitions matched the " +
+                    "required filter.");
+        }
         partitionCount = partitions.size();
         consumer.assign(partitions);
 
@@ -345,18 +357,43 @@ public class KafkaBasedLog<K, V> {
 
     /**
      * Send a record asynchronously to the configured {@link #topic} without using a producer callback.
+     * <p>
+     * This method exists for backward compatibility reasons and delegates to the newer
+     * {@link #sendWithReceipt(Object, Object)} method that returns a future.
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     */
+    public void send(K key, V value) {
+        sendWithReceipt(key, value);
+    }
+
+    /**
+     * Send a record asynchronously to the configured {@link #topic}.
+     * <p>
+     * This method exists for backward compatibility reasons and delegates to the newer
+     * {@link #sendWithReceipt(Object, Object, org.apache.kafka.clients.producer.Callback)} method that returns a future.
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     * @param callback the callback to invoke after completion; can be null if no callback is desired
+     */
+    public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
+        sendWithReceipt(key, value, callback);
+    }
+
+    /**
+     * Send a record asynchronously to the configured {@link #topic} without using a producer callback.
      * @param key the key for the {@link ProducerRecord}
      * @param value the value for the {@link ProducerRecord}
      *
      * @return the future from the call to {@link Producer#send}. {@link Future#get} can be called on this returned
      *         future if synchronous behavior is desired.
      */
-    public Future<RecordMetadata> send(K key, V value) {
-        return send(key, value, null);
+    public Future<RecordMetadata> sendWithReceipt(K key, V value) {
+        return sendWithReceipt(key, value, null);
     }
 
     /**
-     * Send a record asynchronously to the configured {@link #topic}
+     * Send a record asynchronously to the configured {@link #topic}.
      * @param key the key for the {@link ProducerRecord}
      * @param value the value for the {@link ProducerRecord}
      * @param callback the callback to invoke after completion; can be null if no callback is desired
@@ -364,7 +401,7 @@ public class KafkaBasedLog<K, V> {
      * @return the future from the call to {@link Producer#send}. {@link Future#get} can be called on this returned
      *         future if synchronous behavior is desired.
      */
-    public Future<RecordMetadata> send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
+    public Future<RecordMetadata> sendWithReceipt(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
         return producer.orElseThrow(() ->
                 new IllegalStateException("This KafkaBasedLog was created in read-only mode and does not support write operations")
         ).send(new ProducerRecord<>(topic, key, value), callback);
@@ -390,6 +427,18 @@ public class KafkaBasedLog<K, V> {
         // Turn off autocommit since we always want to consume the full log
         consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         return new KafkaConsumer<>(consumerConfigs);
+    }
+
+    /**
+     * Signals whether a topic partition should be read by this log. Invoked on {@link #start() startup} once
+     * for every partition found in the log's backing topic.
+     * <p>This method can be overridden by subclasses when only a subset of the assigned partitions
+     * should be read into memory. By default, all partitions are read.
+     * @param topicPartition A topic partition which could be read by this log.
+     * @return true if the partition should be read by this log, false if its contents should be ignored.
+     */
+    protected boolean readPartition(TopicPartition topicPartition) {
+        return true;
     }
 
     private void poll(long timeoutMs) {

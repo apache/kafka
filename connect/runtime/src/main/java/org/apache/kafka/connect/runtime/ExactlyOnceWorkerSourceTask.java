@@ -61,7 +61,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     private static final Logger log = LoggerFactory.getLogger(ExactlyOnceWorkerSourceTask.class);
 
     private boolean transactionOpen;
-    private final LinkedHashMap<SourceRecord, RecordMetadata> commitableRecords;
+    private final LinkedHashMap<SourceRecord, RecordMetadata> committableRecords;
 
     private final TransactionBoundaryManager transactionBoundaryManager;
     private final TransactionMetricsGroup transactionMetrics;
@@ -101,7 +101,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                 loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
 
         this.transactionOpen = false;
-        this.commitableRecords = new LinkedHashMap<>();
+        this.committableRecords = new LinkedHashMap<>();
 
         this.preProducerCheck = preProducerCheck;
         this.postProducerCheck = postProducerCheck;
@@ -146,8 +146,8 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
     @Override
     protected void recordDropped(SourceRecord record) {
-        synchronized (commitableRecords) {
-            commitableRecords.put(record, null);
+        synchronized (committableRecords) {
+            committableRecords.put(record, null);
         }
         transactionBoundaryManager.maybeCommitTransactionForRecord(record);
     }
@@ -192,8 +192,8 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             ProducerRecord<byte[], byte[]> producerRecord,
             RecordMetadata recordMetadata
     ) {
-        synchronized (commitableRecords) {
-            commitableRecords.put(sourceRecord, recordMetadata);
+        synchronized (committableRecords) {
+            committableRecords.put(sourceRecord, recordMetadata);
         }
     }
 
@@ -219,9 +219,6 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         if (failed) {
             log.debug("Skipping final offset commit as task has failed");
             return;
-        } else if (isCancelled()) {
-            log.debug("Skipping final offset commit as task has been cancelled");
-            return;
         }
 
         // It should be safe to commit here even if we were in the middle of retrying on RetriableExceptions in the
@@ -236,6 +233,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     @Override
     public void removeMetrics() {
         Utils.closeQuietly(transactionMetrics, "source task transaction metrics tracker");
+        super.removeMetrics();
     }
 
     @Override
@@ -258,12 +256,31 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         long started = time.milliseconds();
 
+        AtomicReference<Throwable> flushError = new AtomicReference<>();
+        boolean shouldFlush = false;
+        try {
+            // Begin the flush without waiting, as there should not be any concurrent flushes.
+            // This is because commitTransaction is always called on the same thread, and should always block until
+            // the flush is complete, or cancel the flush if an error occurs.
+            shouldFlush = offsetWriter.beginFlush();
+        } catch (Throwable e) {
+            flushError.compareAndSet(null, e);
+        }
+        if (flushError.get() == null && !transactionOpen && !shouldFlush) {
+            // There is no contents on the framework side to commit, so skip the offset flush and producer commit
+            long durationMillis = time.milliseconds() - started;
+            recordCommitSuccess(durationMillis);
+            log.debug("{} Finished commitOffsets successfully in {} ms", this, durationMillis);
+
+            commitSourceTask();
+            return;
+        }
+
         // We might have just aborted a transaction, in which case we'll have to begin a new one
         // in order to commit offsets
         maybeBeginTransaction();
 
-        AtomicReference<Throwable> flushError = new AtomicReference<>();
-        if (offsetWriter.beginFlush()) {
+        if (shouldFlush) {
             // Now we can actually write the offsets to the internal topic.
             // No need to track the flush future here since it's guaranteed to complete by the time
             // Producer::commitTransaction completes
@@ -312,9 +329,9 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         log.debug("{} Finished commitOffsets successfully in {} ms", this, durationMillis);
 
         // Synchronize in order to guarantee that writes on other threads are picked up by this one
-        synchronized (commitableRecords) {
-            commitableRecords.forEach(this::commitTaskRecord);
-            commitableRecords.clear();
+        synchronized (committableRecords) {
+            committableRecords.forEach(this::commitTaskRecord);
+            committableRecords.clear();
         }
         commitSourceTask();
     }
@@ -387,7 +404,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         }
 
         private void maybeCommitTransaction(boolean shouldCommit) {
-            if (shouldCommit && (transactionOpen || offsetWriter.willFlush())) {
+            if (shouldCommit) {
                 try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
                     commitTransaction();
                 }
@@ -454,7 +471,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                     protected boolean shouldCommitTransactionForBatch(long currentTimeMs) {
                         if (transactionContext.shouldAbortBatch()) {
                             log.info("Aborting transaction for batch as requested by connector");
-                            abortTransaction();
+                            maybeAbortTransaction();
                             // We abort the transaction, which causes all the records up to this point to be dropped, but we still want to
                             // commit offsets so that the task doesn't see the same records all over again
                             return true;
@@ -467,7 +484,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                         if (transactionContext.shouldAbortOn(record)) {
                             log.info("Aborting transaction for record on topic {} as requested by connector", record.topic());
                             log.trace("Last record in aborted transaction: {}", record);
-                            abortTransaction();
+                            maybeAbortTransaction();
                             // We abort the transaction, which causes all the records up to this point to be dropped, but we still want to
                             // commit offsets so that the task doesn't see the same records all over again
                             return true;
@@ -475,7 +492,11 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                         return transactionContext.shouldCommitOn(record);
                     }
 
-                    private void abortTransaction() {
+                    private void maybeAbortTransaction() {
+                        if (!transactionOpen) {
+                            log.warn("Ignoring request by task to abort transaction as the current transaction is empty");
+                            return;
+                        }
                         producer.abortTransaction();
                         transactionMetrics.abortTransaction();
                         transactionOpen = false;

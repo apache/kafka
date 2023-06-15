@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
@@ -28,9 +29,13 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.FetchConfig;
+import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.TopicMetadataFetcher;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -50,6 +55,7 @@ import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -158,6 +164,7 @@ import static org.mockito.Mockito.verify;
  * the test.
  */
 public class KafkaConsumerTest {
+
     private final String topic = "test";
     private final Uuid topicId = Uuid.randomUuid();
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -294,6 +301,16 @@ public class KafkaConsumerTest {
                 } else {
                     i++;
                     return super.deserialize(topic, data);
+                }
+            }
+
+            @Override
+            public String deserialize(String topic, Headers headers, ByteBuffer data) {
+                if (i == recordIndex) {
+                    throw new SerializationException();
+                } else {
+                    i++;
+                    return super.deserialize(topic, headers, data);
                 }
             }
         };
@@ -493,6 +510,32 @@ public class KafkaConsumerTest {
 
         } finally {
             // cleanup since we are using mutable static variables in MockConsumerInterceptor
+            MockConsumerInterceptor.resetCounters();
+        }
+    }
+
+    @Test
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+        final int targetInterceptor = 3;
+
+        try {
+            Properties props = new Properties();
+            props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName() + ", "
+                    + MockConsumerInterceptor.class.getName() + ", "
+                    + MockConsumerInterceptor.class.getName());
+
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
+
+            assertThrows(KafkaException.class, () -> {
+                new KafkaConsumer<>(
+                        props, new StringDeserializer(), new StringDeserializer());
+            });
+
+            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
+
+        } finally {
             MockConsumerInterceptor.resetCounters();
         }
     }
@@ -2626,27 +2669,37 @@ public class KafkaConsumerTest {
                 throwOnStableOffsetNotSupported,
                 null);
         }
-        Fetcher<String, String> fetcher = new Fetcher<>(
-                loggerFactory,
-                consumerClient,
+        IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+        FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        FetchConfig<String, String> fetchConfig = new FetchConfig<>(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
                 maxPollRecords,
                 checkCrcs,
-                "",
+                CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 keyDeserializer,
                 deserializer,
+                isolationLevel);
+        Fetcher<String, String> fetcher = new Fetcher<>(
+                loggerFactory,
+                consumerClient,
                 metadata,
                 subscription,
-                metrics,
-                metricsRegistry.fetcherMetrics,
+                fetchConfig,
+                metricsManager,
+                time);
+        OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,
+                consumerClient,
+                metadata,
+                subscription,
                 time,
                 retryBackoffMs,
                 requestTimeoutMs,
-                IsolationLevel.READ_UNCOMMITTED,
+                isolationLevel,
                 new ApiVersions());
+        TopicMetadataFetcher topicMetadataFetcher = new TopicMetadataFetcher(loggerFactory, consumerClient, requestTimeoutMs);
 
         return new KafkaConsumer<>(
                 loggerFactory,
@@ -2655,6 +2708,8 @@ public class KafkaConsumerTest {
                 keyDeserializer,
                 deserializer,
                 fetcher,
+                offsetFetcher,
+                topicMetadataFetcher,
                 interceptors,
                 time,
                 consumerClient,

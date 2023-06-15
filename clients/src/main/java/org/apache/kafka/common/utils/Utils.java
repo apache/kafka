@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.nio.ByteOrder;
 import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
 import java.util.EnumSet;
@@ -743,6 +744,36 @@ public final class Utils {
     }
 
     /**
+     * Reads bytes from a source buffer and returns a new buffer.
+     * <p> The content of the new buffer will start at this buffer's current
+     * position.  Changes to this buffer's content will be visible in the new
+     * buffer, and vice versa; the two buffers' position, limit, and mark
+     * values will be independent.
+     *
+     * <p> The new buffer's position will be zero, its limit will be the number of bytes
+     * read i.e. <code>bytesToRead</code>, it's capacity will be the number of bytes remaining in
+     * source buffer , its mark will be undefined, and its byte order will be {@link ByteOrder#BIG_ENDIAN BIG_ENDIAN}.
+     *
+     * <p>Since JDK 13, this method could be replaced with slice(int index, int length).
+     *
+     * @param srcBuf Source buffer where data is read from
+     * @param bytesToRead Number of bytes to read
+     * @return Destination buffer or null if bytesToRead is < 0
+     *
+     * @see ByteBuffer#slice()
+     */
+    public static ByteBuffer readBytes(ByteBuffer srcBuf, int bytesToRead) {
+        if (bytesToRead < 0)
+            return null;
+
+        final ByteBuffer dstBuf = srcBuf.slice();
+        dstBuf.limit(bytesToRead);
+        srcBuf.position(srcBuf.position() + bytesToRead);
+
+        return dstBuf;
+    }
+
+    /**
      * Read a file as string and return the content. The file is treated as a stream and no seek is performed.
      * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
@@ -1192,12 +1223,12 @@ public final class Utils {
      * Read data from the input stream to the given byte buffer until there are no bytes remaining in the buffer or the
      * end of the stream has been reached.
      *
-     * @param inputStream Input stream to read from
+     * @param inputStream       Input stream to read from
      * @param destinationBuffer The buffer into which bytes are to be transferred (it must be backed by an array)
-     *
+     * @return number of byte read from the input stream
      * @throws IOException If an I/O error occurs
      */
-    public static void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+    public static int readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
         if (!destinationBuffer.hasArray())
             throw new IllegalArgumentException("destinationBuffer must be backed by an array");
         int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
@@ -1211,6 +1242,7 @@ public final class Utils {
             totalBytesRead += bytesRead;
         } while (length > totalBytesRead);
         destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
+        return totalBytesRead;
     }
 
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
@@ -1281,15 +1313,6 @@ public final class Utils {
         return res;
     }
 
-    public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
-        return concatLists(left, right, Collections::unmodifiableList);
-    }
-
-    public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
-        return Stream.concat(left.stream(), right.stream())
-                .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
-    }
-
     public static int to32BitField(final Set<Byte> bytes) {
         int value = 0;
         for (final byte b : bytes)
@@ -1313,18 +1336,6 @@ public final class Utils {
             count++;
         }
         return result;
-    }
-
-    public static <K1, V1, K2, V2> Map<K2, V2> transformMap(
-            Map<? extends K1, ? extends V1> map,
-            Function<K1, K2> keyMapper,
-            Function<V1, V2> valueMapper) {
-        return map.entrySet().stream().collect(
-            Collectors.toMap(
-                entry -> keyMapper.apply(entry.getKey()),
-                entry -> valueMapper.apply(entry.getValue())
-            )
-        );
     }
 
     /**
@@ -1476,12 +1487,6 @@ public final class Utils {
      */    
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
-    }
-
-    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
-        Map<K, V> res = new HashMap<>(keys.size());
-        keys.forEach(key -> res.put(key, valueSupplier.get()));
-        return res;
     }
 
     /**

@@ -81,14 +81,14 @@ public class MeteredKeyValueStore<K, V>
     protected Sensor putSensor;
     private Sensor putIfAbsentSensor;
     protected Sensor getSensor;
-    private Sensor deleteSensor;
+    protected Sensor deleteSensor;
     private Sensor putAllSensor;
     private Sensor allSensor;
     private Sensor rangeSensor;
     private Sensor prefixScanSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
-    private InternalProcessorContext context;
+    protected InternalProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
@@ -169,7 +169,7 @@ public class MeteredKeyValueStore<K, V>
 
 
     @Deprecated
-    private void initStoreSerde(final ProcessorContext context) {
+    protected void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
@@ -179,7 +179,7 @@ public class MeteredKeyValueStore<K, V>
         );
     }
 
-    private void initStoreSerde(final StateStoreContext context) {
+    protected void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
@@ -200,7 +200,8 @@ public class MeteredKeyValueStore<K, V>
                     record.withKey(serdes.keyFrom(record.key()))
                         .withValue(new Change<>(
                             record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().isLatest
                         ))
                 ),
                 sendOldValues);
@@ -246,9 +247,9 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
+    protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                               final PositionBound positionBound,
+                                               final QueryConfig config) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
@@ -289,9 +290,9 @@ public class MeteredKeyValueStore<K, V>
 
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                           final PositionBound positionBound,
-                                           final QueryConfig config) {
+    protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
@@ -439,7 +440,7 @@ public class MeteredKeyValueStore<K, V>
         return byteEntries;
     }
 
-    private void maybeRecordE2ELatency() {
+    protected void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && context != null) {

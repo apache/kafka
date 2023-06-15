@@ -17,10 +17,10 @@
 package kafka.log.remote
 
 import kafka.log.UnifiedLog
-import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{OffsetIndex, OffsetPosition, TimeIndex}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -121,8 +121,10 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
+    assertEquals(0, cache.entries.size())
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
+    assertEquals(1, cache.entries.size())
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertEquals(1, cache.entries.size())
@@ -157,6 +159,7 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
+    assertEquals(0, cache.entries.size())
     cache.getIndexEntry(metadataList.head)
     assertEquals(1, cache.entries.size())
     verifyFetchIndexInvocation(count = 1)
@@ -173,8 +176,10 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
+    assertEquals(0, cache.entries.size())
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
+    assertEquals(1, cache.entries.size())
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertEquals(1, cache.entries.size())
@@ -182,6 +187,7 @@ class RemoteIndexCacheTest {
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(1))
+    assertEquals(2, cache.entries.size())
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(1))
     assertEquals(2, cache.entries.size())
@@ -189,6 +195,7 @@ class RemoteIndexCacheTest {
 
     // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(2))
+    assertEquals(2, cache.entries.size())
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(2))
     assertEquals(2, cache.entries.size())

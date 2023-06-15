@@ -17,8 +17,12 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
 
 public class LongDeserializer implements Deserializer<Long> {
+    @Override
     public Long deserialize(String topic, byte[] data) {
         if (data == null)
             return null;
@@ -32,5 +36,17 @@ public class LongDeserializer implements Deserializer<Long> {
             value |= b & 0xFF;
         }
         return value;
+    }
+
+    @Override
+    public Long deserialize(String topic, Headers headers, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+
+        if (data.remaining() != 8) {
+            throw new SerializationException("Size of data received by LongDeserializer is not 8");
+        }
+        return data.getLong(data.position());
     }
 }

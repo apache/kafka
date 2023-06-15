@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,7 +84,10 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             }
             droppedRecordsSensor.record();
         } else {
-            final V2 value2 = getValueOrNull(valueGetter.get(mappedKey));
+            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.isVersioned()
+                ? valueGetter.get(mappedKey, record.timestamp())
+                : valueGetter.get(mappedKey);
+            final V2 value2 = getValueOrNull(valueAndTimestamp2);
             if (leftJoin || value2 != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), value2)));
             }

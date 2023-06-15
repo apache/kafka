@@ -366,6 +366,10 @@ class WorkerSinkTask extends WorkerTask {
      * the write commit.
      **/
     private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, int seqno) {
+        if (isCancelled()) {
+            log.debug("Skipping final offset commit as task has been cancelled");
+            return;
+        }
         if (closing) {
             doCommitSync(offsets, seqno);
         } else {
@@ -670,11 +674,6 @@ class WorkerSinkTask extends WorkerTask {
     protected void recordBatch(int size) {
         super.recordBatch(size);
         sinkTaskMetricsGroup.recordSend(size);
-    }
-
-    @Override
-    protected void recordCommitFailure(long duration, Throwable error) {
-        super.recordCommitFailure(duration, error);
     }
 
     @Override
