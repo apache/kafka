@@ -378,7 +378,7 @@ public class RecordHelpersTest {
             new ConsumerGroupMember.Builder("member-id")
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setNextMemberEpoch(23)
+                .setTargetMemberEpoch(23)
                 .setAssignedPartitions(assigned)
                 .setPartitionsPendingRevocation(revoking)
                 .setPartitionsPendingAssignment(assigning)

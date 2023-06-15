@@ -48,7 +48,7 @@ public class ConsumerGroupMember {
         private final String memberId;
         private int memberEpoch = 0;
         private int previousMemberEpoch = -1;
-        private int nextMemberEpoch = 0;
+        private int targetMemberEpoch = 0;
         private String instanceId = null;
         private String rackId = null;
         private int rebalanceTimeoutMs = -1;
@@ -72,7 +72,7 @@ public class ConsumerGroupMember {
             this.memberId = member.memberId;
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
-            this.nextMemberEpoch = member.nextMemberEpoch;
+            this.targetMemberEpoch = member.targetMemberEpoch;
             this.instanceId = member.instanceId;
             this.rackId = member.rackId;
             this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
@@ -97,8 +97,8 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setNextMemberEpoch(int nextMemberEpoch) {
-            this.nextMemberEpoch = nextMemberEpoch;
+        public Builder setTargetMemberEpoch(int targetMemberEpoch) {
+            this.targetMemberEpoch = targetMemberEpoch;
             return this;
         }
 
@@ -217,7 +217,7 @@ public class ConsumerGroupMember {
         public Builder updateWith(ConsumerGroupCurrentMemberAssignmentValue record) {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
-            setNextMemberEpoch(record.targetMemberEpoch());
+            setTargetMemberEpoch(record.targetMemberEpoch());
             setAssignedPartitions(assignmentFromTopicPartitions(record.assignedPartitions()));
             setPartitionsPendingRevocation(assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
             setPartitionsPendingAssignment(assignmentFromTopicPartitions(record.partitionsPendingAssignment()));
@@ -246,7 +246,7 @@ public class ConsumerGroupMember {
                 memberId,
                 memberEpoch,
                 previousMemberEpoch,
-                nextMemberEpoch,
+                targetMemberEpoch,
                 instanceId,
                 rackId,
                 rebalanceTimeoutMs,
@@ -305,7 +305,7 @@ public class ConsumerGroupMember {
      * assignment epoch used to compute the current assigned,
      * revoking and assigning partitions.
      */
-    private final int nextMemberEpoch;
+    private final int targetMemberEpoch;
 
     /**
      * The instance id provided by the member.
@@ -378,7 +378,7 @@ public class ConsumerGroupMember {
         String memberId,
         int memberEpoch,
         int previousMemberEpoch,
-        int nextMemberEpoch,
+        int targetMemberEpoch,
         String instanceId,
         String rackId,
         int rebalanceTimeoutMs,
@@ -396,7 +396,7 @@ public class ConsumerGroupMember {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
         this.previousMemberEpoch = previousMemberEpoch;
-        this.nextMemberEpoch = nextMemberEpoch;
+        this.targetMemberEpoch = targetMemberEpoch;
         this.instanceId = instanceId;
         this.rackId = rackId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
@@ -434,10 +434,10 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The next member epoch.
+     * @return The target member epoch.
      */
-    public int nextMemberEpoch() {
-        return nextMemberEpoch;
+    public int targetMemberEpoch() {
+        return targetMemberEpoch;
     }
 
     /**
@@ -535,10 +535,9 @@ public class ConsumerGroupMember {
      * @return A string representation of the current assignment state.
      */
     public String currentAssignmentSummary() {
-        return "CurrentAssignment(" +
-            ", memberEpoch=" + memberEpoch +
+        return "CurrentAssignment(memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
-            ", nextMemberEpoch=" + nextMemberEpoch +
+            ", targetMemberEpoch=" + targetMemberEpoch +
             ", state=" + state +
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
@@ -553,7 +552,7 @@ public class ConsumerGroupMember {
         ConsumerGroupMember that = (ConsumerGroupMember) o;
         return memberEpoch == that.memberEpoch
             && previousMemberEpoch == that.previousMemberEpoch
-            && nextMemberEpoch == that.nextMemberEpoch
+            && targetMemberEpoch == that.targetMemberEpoch
             && rebalanceTimeoutMs == that.rebalanceTimeoutMs
             && Objects.equals(memberId, that.memberId)
             && Objects.equals(instanceId, that.instanceId)
@@ -574,7 +573,7 @@ public class ConsumerGroupMember {
         int result = memberId != null ? memberId.hashCode() : 0;
         result = 31 * result + memberEpoch;
         result = 31 * result + previousMemberEpoch;
-        result = 31 * result + nextMemberEpoch;
+        result = 31 * result + targetMemberEpoch;
         result = 31 * result + Objects.hashCode(instanceId);
         result = 31 * result + Objects.hashCode(rackId);
         result = 31 * result + rebalanceTimeoutMs;
@@ -596,7 +595,7 @@ public class ConsumerGroupMember {
             "memberId='" + memberId + '\'' +
             ", memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
-            ", nextMemberEpoch=" + nextMemberEpoch +
+            ", targetMemberEpoch=" + targetMemberEpoch +
             ", instanceId='" + instanceId + '\'' +
             ", rackId='" + rackId + '\'' +
             ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +

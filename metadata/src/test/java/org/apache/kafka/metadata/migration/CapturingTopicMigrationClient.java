@@ -30,12 +30,18 @@ import java.util.Set;
 public class CapturingTopicMigrationClient implements TopicMigrationClient {
     public List<String> deletedTopics = new ArrayList<>();
     public List<String> createdTopics = new ArrayList<>();
+    public LinkedHashMap<String, Map<Integer, PartitionRegistration>> updatedTopics = new LinkedHashMap<>();
+    public LinkedHashMap<String, Set<Integer>> newTopicPartitions = new LinkedHashMap<>();
     public LinkedHashMap<String, Set<Integer>> updatedTopicPartitions = new LinkedHashMap<>();
+    public LinkedHashMap<String, Set<Integer>> deletedTopicPartitions = new LinkedHashMap<>();
+
 
     public void reset() {
         createdTopics.clear();
         updatedTopicPartitions.clear();
         deletedTopics.clear();
+        updatedTopics.clear();
+        deletedTopicPartitions.clear();
     }
 
 
@@ -57,10 +63,35 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
     }
 
     @Override
+    public ZkMigrationLeadershipState updateTopic(
+        String topicName,
+        Uuid topicId,
+        Map<Integer, PartitionRegistration> topicPartitions,
+        ZkMigrationLeadershipState state
+    ) {
+        updatedTopics.put(topicName, topicPartitions);
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState createTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state) {
+        topicPartitions.forEach((topicName, partitionMap) ->
+            newTopicPartitions.put(topicName, partitionMap.keySet())
+        );
+        return state;
+    }
+
+    @Override
     public ZkMigrationLeadershipState updateTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state) {
         topicPartitions.forEach((topicName, partitionMap) ->
             updatedTopicPartitions.put(topicName, partitionMap.keySet())
         );
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState deleteTopicPartitions(Map<String, Set<Integer>> topicPartitions, ZkMigrationLeadershipState state) {
+        deletedTopicPartitions.putAll(topicPartitions);
         return state;
     }
 }

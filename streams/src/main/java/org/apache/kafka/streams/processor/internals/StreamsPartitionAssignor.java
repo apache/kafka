@@ -1344,8 +1344,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             partitionsByHost.keySet()
         );
 
-        final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
-        streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
+        streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, topicToPartitionInfo);
 
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread

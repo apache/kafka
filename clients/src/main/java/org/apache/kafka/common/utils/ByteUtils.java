@@ -196,28 +196,28 @@ public final class ByteUtils {
      * @return The integer read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
-     * @throws IOException              if {@link DataInput} throws {@link IOException}
-     * @throws EOFException             if {@link DataInput} throws {@link EOFException}
+     * @throws IOException              if {@link InputStream} throws {@link IOException}
+     * @throws EOFException             if {@link InputStream} throws {@link EOFException}
      */
-    static int readUnsignedVarint(DataInput in) throws IOException {
-        byte tmp = in.readByte();
+    static int readUnsignedVarint(InputStream in) throws IOException {
+        byte tmp = (byte) in.read();
         if (tmp >= 0) {
             return tmp;
         } else {
             int result = tmp & 127;
-            if ((tmp = in.readByte()) >= 0) {
+            if ((tmp = (byte) in.read()) >= 0) {
                 result |= tmp << 7;
             } else {
                 result |= (tmp & 127) << 7;
-                if ((tmp = in.readByte()) >= 0) {
+                if ((tmp = (byte) in.read()) >= 0) {
                     result |= tmp << 14;
                 } else {
                     result |= (tmp & 127) << 14;
-                    if ((tmp = in.readByte()) >= 0) {
+                    if ((tmp = (byte) in.read()) >= 0) {
                         result |= tmp << 21;
                     } else {
                         result |= (tmp & 127) << 21;
-                        result |= (tmp = in.readByte()) << 28;
+                        result |= (tmp = (byte) in.read()) << 28;
                         if (tmp < 0) {
                             throw illegalVarintException(result);
                         }
@@ -252,7 +252,7 @@ public final class ByteUtils {
      * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
-    public static int readVarint(DataInput in) throws IOException {
+    public static int readVarint(InputStream in) throws IOException {
         int value = readUnsignedVarint(in);
         return (value >>> 1) ^ -(value & 1);
     }
@@ -267,11 +267,11 @@ public final class ByteUtils {
      * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
-    public static long readVarlong(DataInput in) throws IOException {
+    public static long readVarlong(InputStream in) throws IOException {
         long value = 0L;
         int i = 0;
         long b;
-        while (((b = in.readByte()) & 0x80) != 0) {
+        while (((b = in.read()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
             if (i > 63)

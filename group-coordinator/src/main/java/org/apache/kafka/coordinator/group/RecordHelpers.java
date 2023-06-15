@@ -330,7 +330,7 @@ public class RecordHelpers {
                 new ConsumerGroupCurrentMemberAssignmentValue()
                     .setMemberEpoch(member.memberEpoch())
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
-                    .setTargetMemberEpoch(member.nextMemberEpoch())
+                    .setTargetMemberEpoch(member.targetMemberEpoch())
                     .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
                     .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation()))
                     .setPartitionsPendingAssignment(toTopicPartitions(member.partitionsPendingAssignment())),

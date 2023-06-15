@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -49,8 +48,10 @@ public class ZstdFactory {
     public static InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
             // We use our own BufferSupplier instead of com.github.luben.zstd.RecyclingBufferPool since our
-            // implementation doesn't require locking or soft references.
-            BufferPool bufferPool = new BufferPool() {
+            // implementation doesn't require locking or soft references. The buffer allocated by this buffer pool is
+            // used by zstd-jni for 1\ reading compressed data from input stream into a buffer before passing it over JNI
+            // 2\ implementation of skip inside zstd-jni where buffer is obtained and released with every call
+            final BufferPool bufferPool = new BufferPool() {
                 @Override
                 public ByteBuffer get(int capacity) {
                     return decompressionBufferSupplier.get(capacity);
@@ -61,11 +62,10 @@ public class ZstdFactory {
                     decompressionBufferSupplier.release(buffer);
                 }
             };
-
-            // Set output buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
-            // in cases where the caller reads a small number of bytes (potentially a single byte).
-            return new BufferedInputStream(new ZstdInputStreamNoFinalizer(new ByteBufferInputStream(buffer),
-                bufferPool), 16 * 1024);
+            // Ideally, data from ZstdInputStreamNoFinalizer should be read in a bulk because every call to
+            // `ZstdInputStreamNoFinalizer#read()` is a JNI call. The caller is expected to
+            // balance the tradeoff between reading large amount of data vs. making multiple JNI calls.
+            return new ZstdInputStreamNoFinalizer(new ByteBufferInputStream(buffer), bufferPool);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }

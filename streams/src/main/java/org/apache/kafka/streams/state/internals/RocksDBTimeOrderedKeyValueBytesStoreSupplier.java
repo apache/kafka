@@ -16,35 +16,29 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
-
-public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
-
+public class RocksDBTimeOrderedKeyValueBytesStoreSupplier {
     private final String name;
-    private final boolean returnTimestampedStore;
+    private final long retentionPeriod;
 
-    public RocksDbKeyValueBytesStoreSupplier(final String name,
-                                             final boolean returnTimestampedStore) {
+    public RocksDBTimeOrderedKeyValueBytesStoreSupplier(final String name,
+                                                        final long retentionPeriod) {
         this.name = name;
-        this.returnTimestampedStore = returnTimestampedStore;
+        this.retentionPeriod = retentionPeriod;
     }
 
-    @Override
     public String name() {
         return name;
     }
 
-    @Override
-    public KeyValueStore<Bytes, byte[]> get() {
-        return returnTimestampedStore ?
-            new RocksDBTimestampedStore(name, metricsScope()) :
-            new RocksDBStore(name, metricsScope());
+    public RocksDBTimeOrderedKeyValueBytesStore get() {
+        return new RocksDBTimeOrderedKeyValueBytesStore(
+            name,
+            metricsScope()
+        );
     }
 
-    @Override
     public String metricsScope() {
         return "rocksdb";
     }
+
 }

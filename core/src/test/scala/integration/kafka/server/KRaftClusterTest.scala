@@ -28,12 +28,14 @@ import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.message.DescribeClusterRequestData
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer._
@@ -80,7 +82,7 @@ class KRaftClusterTest {
   }
 
   @Test
-  def testCreateClusterAndRestartNode(): Unit = {
+  def testCreateClusterAndRestartBrokerNode(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
@@ -91,6 +93,35 @@ class KRaftClusterTest {
       val broker = cluster.brokers().values().iterator().next()
       broker.shutdown()
       broker.startup()
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndRestartControllerNode(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
+      val port = controller.socketServer.boundPort(controller.config.controllerListeners.head.listenerName)
+
+      // shutdown active controller
+      controller.shutdown()
+      // Rewrite The `listeners` config to avoid controller socket server init using different port
+      val config = controller.sharedServer.controllerConfig.props
+      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$port")
+      controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
+      //  metrics will be set to null when closing a controller, so we should recreate it for testing
+      controller.sharedServer.metrics = new Metrics()
+
+      // restart controller
+      controller.startup()
+      TestUtils.waitUntilTrue(() => cluster.controllers().values().iterator().asScala.exists(_.controller.isActive), "Timeout waiting for new controller election")
     } finally {
       cluster.close()
     }
@@ -1101,6 +1132,33 @@ class KRaftClusterTest {
           executionException.getCause.getMessage)
       } finally {
         admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testTimedOutHeartbeats(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      setConfigProp(KafkaConfig.BrokerHeartbeatIntervalMsProp, 10.toString).
+      setConfigProp(KafkaConfig.BrokerSessionTimeoutMsProp, 1000.toString).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      controller.controller.waitForReadyBrokers(3).get()
+      TestUtils.retry(60000) {
+        val latch = controller.controller.asInstanceOf[QuorumController].pause()
+        Thread.sleep(1001)
+        latch.countDown()
+        assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
+        assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
+          "Expected timedOutHeartbeats to be greater than 0.");
       }
     } finally {
       cluster.close()

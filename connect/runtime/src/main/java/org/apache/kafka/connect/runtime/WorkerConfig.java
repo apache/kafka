@@ -307,7 +307,7 @@ public class WorkerConfig extends AbstractConfig {
         String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
         // Can't use AbstractConfig::originalsStrings here since some values may be null, which
         // causes that method to fail
-        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
+        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG), null);
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
             log.warn(
                 "Variables cannot be used in the 'plugin.path' property, since the property is "

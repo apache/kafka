@@ -37,9 +37,9 @@ import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.{AuthFailedException, NoAuthException, SessionClosedRequireAuthException}
 
 import java.{lang, util}
-import java.util.Properties
 import java.util.function.Consumer
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationClient {
@@ -145,44 +145,47 @@ class ZkMigrationClient(
     topicClient.iterateTopics(
       util.EnumSet.allOf(classOf[TopicVisitorInterest]),
       new TopicVisitor() {
-      override def visitTopic(topicName: String, topicId: Uuid, assignments: util.Map[Integer, util.List[Integer]]): Unit = {
-        if (!topicBatch.isEmpty) {
-          recordConsumer.accept(topicBatch)
-          topicBatch = new util.ArrayList[ApiMessageAndVersion]()
+        override def visitTopic(topicName: String, topicId: Uuid, assignments: util.Map[Integer, util.List[Integer]]): Unit = {
+          if (!topicBatch.isEmpty) {
+            recordConsumer.accept(topicBatch)
+            topicBatch = new util.ArrayList[ApiMessageAndVersion]()
+          }
+
+          topicBatch.add(new ApiMessageAndVersion(new TopicRecord()
+            .setName(topicName)
+            .setTopicId(topicId), 0.toShort))
+
+          // This breaks the abstraction a bit, but the topic configs belong in the topic batch
+          // when migrating topics and the logic for reading configs lives elsewhere
+          configClient.readTopicConfigs(topicName, (topicConfigs: util.Map[String, String]) => {
+            topicConfigs.forEach((key: Any, value: Any) => {
+              topicBatch.add(new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id)
+                .setResourceName(topicName)
+                .setName(key.toString)
+                .setValue(value.toString), 0.toShort))
+            })
+          })
         }
 
-        topicBatch.add(new ApiMessageAndVersion(new TopicRecord()
-          .setName(topicName)
-          .setTopicId(topicId), 0.toShort))
+        override def visitPartition(topicIdPartition: TopicIdPartition, partitionRegistration: PartitionRegistration): Unit = {
+          val record = new PartitionRecord()
+            .setTopicId(topicIdPartition.topicId())
+            .setPartitionId(topicIdPartition.partition())
+            .setReplicas(partitionRegistration.replicas.map(Integer.valueOf).toList.asJava)
+            .setAddingReplicas(partitionRegistration.addingReplicas.map(Integer.valueOf).toList.asJava)
+            .setRemovingReplicas(partitionRegistration.removingReplicas.map(Integer.valueOf).toList.asJava)
+            .setIsr(partitionRegistration.isr.map(Integer.valueOf).toList.asJava)
+            .setLeader(partitionRegistration.leader)
+            .setLeaderEpoch(partitionRegistration.leaderEpoch)
+            .setPartitionEpoch(partitionRegistration.partitionEpoch)
+            .setLeaderRecoveryState(partitionRegistration.leaderRecoveryState.value())
+          partitionRegistration.replicas.foreach(brokerIdConsumer.accept(_))
+          partitionRegistration.addingReplicas.foreach(brokerIdConsumer.accept(_))
+          topicBatch.add(new ApiMessageAndVersion(record, 0.toShort))
+        }
       }
-
-      override def visitPartition(topicIdPartition: TopicIdPartition, partitionRegistration: PartitionRegistration): Unit = {
-        val record = new PartitionRecord()
-          .setTopicId(topicIdPartition.topicId())
-          .setPartitionId(topicIdPartition.partition())
-          .setReplicas(partitionRegistration.replicas.map(Integer.valueOf).toList.asJava)
-          .setAddingReplicas(partitionRegistration.addingReplicas.map(Integer.valueOf).toList.asJava)
-          .setRemovingReplicas(partitionRegistration.removingReplicas.map(Integer.valueOf).toList.asJava)
-          .setIsr(partitionRegistration.isr.map(Integer.valueOf).toList.asJava)
-          .setLeader(partitionRegistration.leader)
-          .setLeaderEpoch(partitionRegistration.leaderEpoch)
-          .setPartitionEpoch(partitionRegistration.partitionEpoch)
-          .setLeaderRecoveryState(partitionRegistration.leaderRecoveryState.value())
-        partitionRegistration.replicas.foreach(brokerIdConsumer.accept(_))
-        partitionRegistration.addingReplicas.foreach(brokerIdConsumer.accept(_))
-        topicBatch.add(new ApiMessageAndVersion(record, 0.toShort))
-      }
-
-      override def visitConfigs(topicName: String, topicProps: Properties): Unit = {
-        topicProps.forEach((key: Any, value: Any) => {
-          topicBatch.add(new ApiMessageAndVersion(new ConfigRecord()
-            .setResourceType(ConfigResource.Type.TOPIC.id)
-            .setResourceName(topicName)
-            .setName(key.toString)
-            .setValue(value.toString), 0.toShort))
-        })
-      }
-    })
+    )
 
     if (!topicBatch.isEmpty) {
       recordConsumer.accept(topicBatch)
@@ -299,6 +302,11 @@ class ZkMigrationClient(
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
     new util.HashSet[Integer](zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava)
+  }
+
+  override def readProducerId(): util.Optional[ProducerIdsBlock] = {
+    val (dataOpt, _) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
+    dataOpt.map(ProducerIdBlockZNode.parseProducerIdBlockData).asJava
   }
 
   override def writeProducerId(

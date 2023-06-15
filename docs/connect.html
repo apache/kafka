@@ -320,6 +320,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
 
     <ul>
         <li><code>GET /connector-plugins</code>- return a list of connector plugins installed in the Kafka Connect cluster. Note that the API only checks for connectors on the worker that handles the request, which means you may see inconsistent results, especially during a rolling upgrade if you add new connector jars</li>
+        <li><code>GET /connector-plugins/{plugin-type}/config</code> - get the configuration definition for the specified plugin.</li>
         <li><code>PUT /connector-plugins/{connector-type}/config/validate</code> - validate the provided configuration values against the configuration definition. This API performs per config validation, returns suggested values and error messages during validation.</li>
     </ul>
 
