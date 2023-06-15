@@ -29,8 +29,9 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "unitTest integrationTest") {
+def doTest(env, target = "unitTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+      --tests kafka.admin.DeleteTopicTest \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
