@@ -60,13 +60,16 @@ public final class ImageWriterOptions {
             return this;
         }
 
-        public Builder setOrgMetadataVersion(MetadataVersion orgMetadataVersion) {
+        public void setOrgMetadataVersion(MetadataVersion orgMetadataVersion) {
             this.orgMetadataVersion = orgMetadataVersion;
-            return this;
         }
 
         public MetadataVersion metadataVersion() {
             return metadataVersion;
+        }
+
+        public MetadataVersion orgmetadataVersion() {
+            return orgMetadataVersion;
         }
 
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {
