@@ -215,19 +215,17 @@ This is my second event</code></pre>
             Edit the <code class="language-bash">config/connect-standalone.properties</code> file, add or change the <code>plugin.path</code> configuration property match the following, and save the file:
         </p>
 
-        <pre class="brush: bash;">
-&gt; echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar"</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar"</code></pre>
 
         <p>
             Then, start by creating some seed data to test with:
         </p>
 
-        <pre class="brush: bash;">
-&gt; echo -e "foo\nbar" > test.txt</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo -e "foo\nbar" > test.txt</code></pre>
+
         Or on Windows:
-        <pre class="brush: bash;">
-&gt; echo foo> test.txt
-&gt; echo bar>> test.txt</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo foo> test.txt
+$ echo bar>> test.txt</code></pre>
 
         <p>
             Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
@@ -237,8 +235,7 @@ This is my second event</code></pre>
             class to instantiate, and any other configuration required by the connector.
         </p>
 
-        <pre class="brush: bash;">
-&gt; bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</pre>
+        <pre class="line-numbers"><code class="language-bash">$ bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</code></pre>
 
         <p>
             These sample configuration files, included with Kafka, use the default local cluster configuration you started earlier
@@ -255,10 +252,9 @@ This is my second event</code></pre>
         </p>
 
 
-        <pre class="brush: bash;">
-&gt; more test.sink.txt
+        <pre class="line-numbers"><code class="language-bash">$ more test.sink.txt
 foo
-bar</pre>
+bar </code></pre>
 
         <p>
             Note that the data is being stored in the Kafka topic <code>connect-test</code>, so we can also run a console consumer to see the
@@ -266,16 +262,13 @@ bar</pre>
         </p>
 
 
-        <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
 {"schema":{"type":"string","optional":false},"payload":"foo"}
-{"schema":{"type":"string","optional":false},"payload":"bar"}
-...</pre>
+{"schema":{"type":"string","optional":false},"payload":"bar"} </code></pre>
 
         <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
 
-        <pre class="brush: bash;">
-&gt; echo Another line>> test.txt</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo Another line>> test.txt</code></pre>
 
         <p>You should see the line appear in the console consumer output and in the sink file.</p>
 
