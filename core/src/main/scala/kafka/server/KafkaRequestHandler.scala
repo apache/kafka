@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.network._
 import kafka.utils._
+import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChannel}
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -33,6 +34,44 @@ import scala.jdk.CollectionConverters._
 
 trait ApiRequestHandler {
   def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
+}
+
+object KafkaRequestHandler {
+  // Support for scheduling callbacks on a request thread.
+  private val threadRequestChannel = new ThreadLocal[RequestChannel]
+  private val threadCurrentRequest = new ThreadLocal[RequestChannel.Request]
+
+  // For testing
+  @volatile private var bypassThreadCheck = false
+  def setBypassThreadCheck(bypassCheck: Boolean): Unit = {
+    bypassThreadCheck = bypassCheck
+  }
+  
+  def currentRequestOnThread(): RequestChannel.Request = {
+    threadCurrentRequest.get()
+  }
+
+  /**
+   * Wrap callback to schedule it on a request thread.
+   * NOTE: this function must be called on a request thread.
+   * @param fun Callback function to execute
+   * @return Wrapped callback that would execute `fun` on a request thread
+   */
+  def wrap[T](fun: T => Unit): T => Unit = {
+    val requestChannel = threadRequestChannel.get()
+    val currentRequest = threadCurrentRequest.get()
+    if (requestChannel == null || currentRequest == null) {
+      if (!bypassThreadCheck)
+        throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
+      T => fun(T)
+    } else {
+      T => {
+        // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
+        // we can re-schedule the original callback on a request thread and update the metrics accordingly.
+        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
+      }
+    }
+  }
 }
 
 /**
@@ -51,6 +90,7 @@ class KafkaRequestHandler(id: Int,
   @volatile private var stopped = false
 
   def run(): Unit = {
+    threadRequestChannel.set(requestChannel)
     while (!stopped) {
       // We use a single meter for aggregate idle percentage for the thread pool.
       // Since meter is calculated as total_recorded_value / time_window and
@@ -69,10 +109,39 @@ class KafkaRequestHandler(id: Int,
           completeShutdown()
           return
 
+        case callback: RequestChannel.CallbackRequest =>
+          try {
+            val originalRequest = callback.originalRequest
+            
+            // If we've already executed a callback for this request, reset the times and subtract the callback time from the 
+            // new dequeue time. This will allow calculation of multiple callback times.
+            // Otherwise, set dequeue time to now.
+            if (originalRequest.callbackRequestDequeueTimeNanos.isDefined) {
+              val prevCallbacksTimeNanos = originalRequest.callbackRequestCompleteTimeNanos.getOrElse(0L) - originalRequest.callbackRequestDequeueTimeNanos.getOrElse(0L)
+              originalRequest.callbackRequestCompleteTimeNanos = None
+              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds() - prevCallbacksTimeNanos)
+            } else {
+              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds())
+            }
+            
+            threadCurrentRequest.set(originalRequest)
+            callback.fun()
+            if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
+              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
+          } catch {
+            case e: FatalExitError =>
+              completeShutdown()
+              Exit.exit(e.statusCode)
+            case e: Throwable => error("Exception when handling request", e)
+          } finally {
+            threadCurrentRequest.remove()
+          }
+
         case request: RequestChannel.Request =>
           try {
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
+            threadCurrentRequest.set(request)
             apis.handle(request, requestLocal)
           } catch {
             case e: FatalExitError =>
@@ -80,8 +149,13 @@ class KafkaRequestHandler(id: Int,
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
+            threadCurrentRequest.remove()
             request.releaseBuffer()
           }
+
+        case RequestChannel.WakeupRequest => 
+          // We should handle this in receiveRequest by polling callbackQueue.
+          warn("Received a wakeup request outside of typical usage.")
 
         case null => // continue
       }

@@ -424,8 +424,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             offset = reader.lastOffset().getAsLong();
         }
 
-        void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            listener.handleSnapshot(reader);
+        void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            listener.handleLoadSnapshot(reader);
             offset = reader.lastContainedLogOffset();
         }
 
@@ -519,7 +519,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             Optional<RawSnapshotReader> snapshot = shared.nextSnapshot(listenerData.offset());
                             if (snapshot.isPresent()) {
                                 log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
-                                listenerData.handleSnapshot(
+                                listenerData.handleLoadSnapshot(
                                     RecordsSnapshotReader.of(
                                         snapshot.get(),
                                         new  MetadataRecordSerde(),

@@ -1456,7 +1456,7 @@ public class KafkaStreams implements AutoCloseable {
             log.info("Streams client stopped completely");
             return true;
         } else {
-            log.info("Streams client cannot stop completely within the timeout");
+            log.info("Streams client cannot stop completely within the {}ms timeout", timeoutMs);
             return false;
         }
     }

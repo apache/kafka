@@ -22,14 +22,19 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.UnalignedRecords;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -150,17 +155,6 @@ public class TestUtils {
     public static File tempFile(final String prefix, final String suffix) throws IOException {
         final File file = Files.createTempFile(prefix, suffix).toFile();
         file.deleteOnExit();
-
-        // Note that we don't use Exit.addShutdownHook here because it allows for the possibility of accidently
-        // overriding the behaviour of this hook leading to leaked files.
-        Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon("delete-temp-file-shutdown-hook", () -> {
-            try {
-                Utils.delete(file);
-            } catch (IOException e) {
-                log.error("Error deleting {}", file.getAbsolutePath(), e);
-            }
-        }));
-
         return file;
     }
 
@@ -592,5 +586,58 @@ public class TestUtils {
         iterator2.forEachRemaining(expectedSegmentsSet::add);
 
         return allSegmentsSet.equals(expectedSegmentsSet);
+    }
+
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+            ApiMessageType.ListenerType listenerType
+    ) {
+        return defaultApiVersionsResponse(0, listenerType);
+    }
+
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+            int throttleTimeMs,
+            ApiMessageType.ListenerType listenerType
+    ) {
+        return createApiVersionsResponse(
+                throttleTimeMs,
+                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, true),
+                Features.emptySupportedFeatures(),
+                false
+        );
+    }
+
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+            int throttleTimeMs,
+            ApiMessageType.ListenerType listenerType,
+            boolean enableUnstableLastVersion
+    ) {
+        return createApiVersionsResponse(
+                throttleTimeMs,
+                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion),
+                Features.emptySupportedFeatures(),
+                false
+        );
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+            int throttleTimeMs,
+            ApiVersionsResponseData.ApiVersionCollection apiVersions
+    ) {
+        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures(), false);
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+            int throttleTimeMs,
+            ApiVersionsResponseData.ApiVersionCollection apiVersions,
+            Features<SupportedVersionRange> latestSupportedFeatures,
+            boolean zkMigrationEnabled
+    ) {
+        return ApiVersionsResponse.createApiVersionsResponse(
+                throttleTimeMs,
+                apiVersions,
+                latestSupportedFeatures,
+                Collections.emptyMap(),
+                ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+                zkMigrationEnabled);
     }
 }

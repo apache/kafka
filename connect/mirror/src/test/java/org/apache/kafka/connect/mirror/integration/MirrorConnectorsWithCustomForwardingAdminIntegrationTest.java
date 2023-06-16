@@ -146,8 +146,6 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         backupWorkerProps.putAll(superUserConfig());
 
         HashMap<String, String> additionalConfig = new HashMap<String, String>(superUserConfig()) {{
-                put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".enabled", "true");
-                put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "true");
                 put(FORWARDING_ADMIN_CLASS, FakeForwardingAdminWithLocalMetadata.class.getName());
             }};
 
@@ -194,7 +192,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
-        warmUpConsumer(consumerProps);
+        prepareConsumerGroup(consumerProps);
 
         mm2Config = new MirrorMakerConfig(mm2Props);
 
@@ -231,7 +229,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
-        warmUpConsumer(consumerProps);
+        prepareConsumerGroup(consumerProps);
 
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
         waitUntilMirrorMakerIsRunning(primary, CONNECTOR_LIST, mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
@@ -264,7 +262,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
-        warmUpConsumer(consumerProps);
+        prepareConsumerGroup(consumerProps);
 
         waitUntilMirrorMakerIsRunning(primary, CONNECTOR_LIST, mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);

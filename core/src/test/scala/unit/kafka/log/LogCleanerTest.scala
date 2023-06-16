@@ -25,9 +25,13 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.ArgumentMatchers.{any, anyString}
+import org.mockito.Mockito.{mockConstruction, times, verify, verifyNoMoreInteractions}
 
 import java.io.{File, RandomAccessFile}
 import java.nio._
@@ -55,11 +59,38 @@ class LogCleanerTest {
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
-  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
 
   @AfterEach
   def teardown(): Unit = {
     Utils.delete(tmpdir)
+  }
+
+  @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val logCleaner = new LogCleaner(new CleanerConfig(true),
+        logDirs = Array(TestUtils.tempDir()),
+        logs = new Pool[TopicPartition, UnifiedLog](),
+        logDirFailureChannel = new LogDirFailureChannel(1),
+        time = time)
+
+      // shutdown logCleaner so that metrics are removed
+      logCleaner.shutdown()
+
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      val numMetricsRegistered = LogCleaner.MetricNames.size
+      verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
+      
+      // verify that each metric is removed
+      LogCleaner.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
   }
 
   /**

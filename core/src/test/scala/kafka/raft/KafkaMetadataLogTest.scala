@@ -19,7 +19,7 @@ package kafka.raft
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft._
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason}
 import org.apache.kafka.test.TestUtils.assertOptional

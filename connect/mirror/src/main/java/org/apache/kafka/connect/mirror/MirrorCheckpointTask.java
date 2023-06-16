@@ -42,6 +42,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Collections;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
@@ -67,20 +68,21 @@ public class MirrorCheckpointTask extends SourceTask {
     private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
-    private Map<String, List<Checkpoint>> checkpointsPerConsumerGroup;
+    private Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup;
     public MirrorCheckpointTask() {}
 
     // for testing
     MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
             ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore,
             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
-            Map<String, List<Checkpoint>> checkpointsPerConsumerGroup) {
+            Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
         this.offsetSyncStore = offsetSyncStore;
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
         this.checkpointsPerConsumerGroup = checkpointsPerConsumerGroup;
+        this.topicFilter = topic -> true;
     }
 
     @Override
@@ -96,12 +98,12 @@ public class MirrorCheckpointTask extends SourceTask {
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
         offsetSyncStore = new OffsetSyncStore(config);
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("checkpoint-source-admin"));
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
         metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
-        scheduler = new Scheduler(MirrorCheckpointTask.class, config.adminTimeout());
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(() -> {
             offsetSyncStore.start();
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
@@ -167,9 +169,11 @@ public class MirrorCheckpointTask extends SourceTask {
     private List<SourceRecord> sourceRecordsForGroup(String group) throws InterruptedException {
         try {
             long timestamp = System.currentTimeMillis();
-            List<Checkpoint> checkpoints = checkpointsForGroup(group);
-            checkpointsPerConsumerGroup.put(group, checkpoints);
-            return checkpoints.stream()
+            Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets = listConsumerGroupOffsets(group);
+            Map<TopicPartition, Checkpoint> newCheckpoints = checkpointsForGroup(upstreamGroupOffsets, group);
+            Map<TopicPartition, Checkpoint> oldCheckpoints = checkpointsPerConsumerGroup.computeIfAbsent(group, ignored -> new HashMap<>());
+            oldCheckpoints.putAll(newCheckpoints);
+            return newCheckpoints.values().stream()
                 .map(x -> checkpointRecord(x, timestamp))
                 .collect(Collectors.toList());
         } catch (ExecutionException e) {
@@ -178,13 +182,44 @@ public class MirrorCheckpointTask extends SourceTask {
         }
     }
 
-    private List<Checkpoint> checkpointsForGroup(String group) throws ExecutionException, InterruptedException {
-        return listConsumerGroupOffsets(group).entrySet().stream()
-            .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
+    // for testing
+    Map<TopicPartition, Checkpoint> checkpointsForGroup(Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets, String group) {
+        return upstreamGroupOffsets.entrySet().stream()
+            .filter(x -> shouldCheckpointTopic(x.getKey().topic())) // Only perform relevant checkpoints filtered by "topic filter"
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
             .flatMap(o -> o.map(Stream::of).orElseGet(Stream::empty)) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
-            .collect(Collectors.toList());
+            .filter(this::checkpointIsMoreRecent) // do not emit checkpoints for partitions that have a later checkpoint
+            .collect(Collectors.toMap(Checkpoint::topicPartition, Function.identity()));
+    }
+
+    private boolean checkpointIsMoreRecent(Checkpoint checkpoint) {
+        Map<TopicPartition, Checkpoint> checkpoints = checkpointsPerConsumerGroup.get(checkpoint.consumerGroupId());
+        if (checkpoints == null) {
+            log.trace("Emitting {} (first for this group)", checkpoint);
+            return true;
+        }
+        Checkpoint lastCheckpoint = checkpoints.get(checkpoint.topicPartition());
+        if (lastCheckpoint == null) {
+            log.trace("Emitting {} (first for this partition)", checkpoint);
+            return true;
+        }
+        // Emit sync after a rewind of the upstream consumer group takes place (checkpoints can be non-monotonic)
+        if (checkpoint.upstreamOffset() < lastCheckpoint.upstreamOffset()) {
+            log.trace("Emitting {} (upstream offset rewind)", checkpoint);
+            return true;
+        }
+        // Or if the downstream offset is newer (force checkpoints to be monotonic)
+        if (checkpoint.downstreamOffset() > lastCheckpoint.downstreamOffset()) {
+            log.trace("Emitting {} (downstream offset advanced)", checkpoint);
+            return true;
+        }
+        if (checkpoint.downstreamOffset() != lastCheckpoint.downstreamOffset()) {
+            log.trace("Skipping {} (preventing downstream rewind)", checkpoint);
+        } else {
+            log.trace("Skipping {} (repeated checkpoint)", checkpoint);
+        }
+        return false;
     }
 
     private Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
@@ -201,7 +236,7 @@ public class MirrorCheckpointTask extends SourceTask {
         if (offsetAndMetadata != null) {
             long upstreamOffset = offsetAndMetadata.offset();
             OptionalLong downstreamOffset =
-                offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
+                offsetSyncStore.translateDownstream(group, topicPartition, upstreamOffset);
             if (downstreamOffset.isPresent()) {
                 return Optional.of(new Checkpoint(group, renameTopicPartition(topicPartition),
                     upstreamOffset, downstreamOffset.getAsLong(), offsetAndMetadata.metadata()));
@@ -336,10 +371,10 @@ public class MirrorCheckpointTask extends SourceTask {
     Map<String, Map<TopicPartition, OffsetAndMetadata>> getConvertedUpstreamOffset() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
 
-        for (Entry<String, List<Checkpoint>> entry : checkpointsPerConsumerGroup.entrySet()) {
+        for (Entry<String, Map<TopicPartition, Checkpoint>> entry : checkpointsPerConsumerGroup.entrySet()) {
             String consumerId = entry.getKey();
             Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = new HashMap<>();
-            for (Checkpoint checkpoint : entry.getValue()) {
+            for (Checkpoint checkpoint : entry.getValue().values()) {
                 convertedUpstreamOffset.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
             }
             result.put(consumerId, convertedUpstreamOffset);

@@ -283,7 +283,7 @@ class DefaultAlterPartitionManager(
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicIdPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-          .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+          .setNewIsrWithEpochs(item.leaderAndIsr.isrWithBrokerEpoch.asJava)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
         if (metadataVersion.isLeaderRecoverySupported) {

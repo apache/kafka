@@ -32,6 +32,7 @@ import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -101,6 +102,12 @@ public abstract class BaseRecordBatchBenchmark {
             int size = random.nextInt(maxBatchSize) + 1;
             batchBuffers[i] = createBatch(size);
         }
+    }
+
+    @TearDown
+    public void cleanUp() {
+        if (requestLocal != null)
+            requestLocal.close();
     }
 
     private static Header[] createHeaders() {

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -28,7 +27,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
@@ -114,93 +112,6 @@ public final class AssignmentTestUtils {
 
     private AssignmentTestUtils() {}
 
-    public static final long ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT = 100;
-
-    public static AssignmentConfigs getDefaultConfigsWithZeroStandbys() {
-        return new AssignmentConfigs(
-            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
-            2,
-            0,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
-    public static AssignmentConfigs getDefaultConfigsWithOneStandbys() {
-        return new AssignmentConfigs(
-            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
-            2,
-            1,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
-    public static AssignmentConfigs getConfigsWithZeroStandbysAndWarmups(final int maxWarmups) {
-        return new AssignmentConfigs(
-            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
-            maxWarmups,
-            0,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
-    public static AssignmentConfigs getConfigsWithOneStandbysAndWarmups(final int maxWarmups) {
-        return new AssignmentConfigs(
-            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
-            maxWarmups,
-            1,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
-    public static AssignmentConfigs getConfigsWithOneStandbysAndZeroLagAndWarmups(final int maxWarmups) {
-        return new AssignmentConfigs(
-            0L,
-            maxWarmups,
-            1,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
-    public static AssignmentConfigs getConfigsWithZeroStandbysAndZeroLagAndWarmups(final int maxWarmups) {
-        return new AssignmentConfigs(
-            0L,
-            maxWarmups,
-            0,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
-    public static AssignmentConfigs getConfigsWithOneStandbysAndLagAndWarmups(final long acceptableRecoveryLag,
-                                                                              final int maxWarmups) {
-        return new AssignmentConfigs(
-            acceptableRecoveryLag,
-            maxWarmups,
-            1,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
     static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<UUID, ClientState> clientStates = new HashMap<>();
         int nthState = 1;
@@ -217,18 +128,14 @@ public final class AssignmentTestUtils {
         final AdminClient adminClient = mock(AdminClient.class);
 
         final ListOffsetsResult result = mock(ListOffsetsResult.class);
-        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
-        allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
-            Entry::getKey,
-            t -> {
-                final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
-                lenient().when(info.offset()).thenReturn(t.getValue());
-                return info;
-            }))
-        );
-
         when(adminClient.listOffsets(any())).thenReturn(result);
-        when(result.all()).thenReturn(allFuture);
+        for (final Map.Entry<TopicPartition, Long> entry : changelogEndOffsets.entrySet()) {
+            final KafkaFutureImpl<ListOffsetsResultInfo> partitionFuture = new KafkaFutureImpl<>();
+            final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
+            lenient().when(info.offset()).thenReturn(entry.getValue());
+            partitionFuture.complete(info);
+            lenient().when(result.partitionResult(entry.getKey())).thenReturn(partitionFuture);
+        }
 
         return adminClient;
     }
