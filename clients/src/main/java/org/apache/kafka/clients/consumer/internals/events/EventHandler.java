@@ -80,4 +80,10 @@ public interface EventHandler extends Closeable {
      * @param <T>     Type of return value of the event
      */
     <T> T addAndGet(CompletableApplicationEvent<T> event, Duration timeout);
+
+    default void close() {
+        close(Duration.ofMillis(Long.MAX_VALUE));
+    }
+
+    void close(Duration timeout);
 }

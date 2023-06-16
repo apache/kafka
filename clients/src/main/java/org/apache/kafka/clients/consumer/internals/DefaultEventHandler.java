@@ -16,107 +16,53 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
-import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Supplier;
 
 /**
- * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
- * {@code BackgroundEvent} from the {@link DefaultBackgroundThread}.
+ * An {@link EventHandler} that uses a single background thread to consume {@link ApplicationEvent} and produce
+ * {@link BackgroundEvent} from the {@link DefaultBackgroundThread}.
  */
 public class DefaultEventHandler implements EventHandler {
 
+    private final Logger log;
     private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final DefaultBackgroundThread backgroundThread;
-
-    public DefaultEventHandler(final ConsumerConfig config,
-                               final GroupRebalanceConfig groupRebalanceConfig,
-                               final LogContext logContext,
-                               final SubscriptionState subscriptions,
-                               final ApiVersions apiVersions,
-                               final Metrics metrics,
-                               final ClusterResourceListeners clusterResourceListeners,
-                               final Sensor fetcherThrottleTimeSensor) {
-        this(Time.SYSTEM,
-                config,
-                logContext,
-                new LinkedBlockingQueue<>(),
-                new LinkedBlockingQueue<>(),
-                subscriptions,
-                groupRebalanceConfig,
-                apiVersions,
-                metrics,
-                clusterResourceListeners,
-                fetcherThrottleTimeSensor);
-    }
+    private final IdempotentCloser closer = new IdempotentCloser();
 
     public DefaultEventHandler(final Time time,
-                               final ConsumerConfig config,
                                final LogContext logContext,
                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                               final SubscriptionState subscriptions,
-                               final GroupRebalanceConfig groupRebalanceConfig,
-                               final ApiVersions apiVersions,
-                               final Metrics metrics,
-                               final ClusterResourceListeners clusterResourceListeners,
-                               final Sensor fetcherThrottleTimeSensor) {
+                               final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+                               final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                               final Supplier<RequestManagers> requestManagersSupplier) {
+        this.log = logContext.logger(DefaultEventHandler.class);
         this.time = time;
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
-
-        // Bootstrap a metadata object with the bootstrap server IP address, which will be used once for the
-        // subsequent metadata refresh once the background thread has started up.
-        final ConsumerMetadata metadata = new ConsumerMetadata(config,
-                subscriptions,
-                logContext,
-                clusterResourceListeners);
-        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-        metadata.bootstrap(addresses);
-
         this.backgroundThread = new DefaultBackgroundThread(time,
-                config,
                 logContext,
-                this.applicationEventQueue,
-                this.backgroundEventQueue,
-                metadata,
-                apiVersions,
-                metrics,
-                fetcherThrottleTimeSensor,
-                subscriptions,
-                groupRebalanceConfig);
+                applicationEventQueue,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier);
         this.backgroundThread.start();
-    }
-
-    // VisibleForTesting
-    DefaultEventHandler(final Time time,
-                        final DefaultBackgroundThread backgroundThread,
-                        final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                        final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
-        this.time = time;
-        this.backgroundThread = backgroundThread;
-        this.applicationEventQueue = applicationEventQueue;
-        this.backgroundEventQueue = backgroundEventQueue;
-        backgroundThread.start();
     }
 
     @Override
@@ -131,21 +77,39 @@ public class DefaultEventHandler implements EventHandler {
 
     @Override
     public boolean add(final ApplicationEvent event) {
+        Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         backgroundThread.wakeup();
         return applicationEventQueue.add(event);
     }
 
     @Override
-    public <T> T addAndGet(CompletableApplicationEvent<T> event, Duration timeout) {
+    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Duration timeout) {
+        Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
+        Objects.requireNonNull(timeout, "Duration provided to addAndGet must be non-null");
         add(event);
         return event.get(time.timer(timeout));
     }
 
-    public void close() {
-        try {
-            backgroundThread.close();
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
+    public void close(final Duration timeout) {
+        Objects.requireNonNull(timeout, "Duration provided to close must be non-null");
+
+        closer.close(
+                () ->  {
+                    log.info("Closing the default consumer event handler");
+
+                    try {
+                        long timeoutMs = timeout.toMillis();
+
+                        if (timeoutMs < 0)
+                            throw new IllegalArgumentException("The timeout cannot be negative.");
+
+                        backgroundThread.close();
+                        log.info("The default consumer event handler was closed");
+                    } catch (final Exception e) {
+                        throw new KafkaException(e);
+                    }
+                },
+                () -> log.info("The default consumer event handler was already closed"));
+
     }
 }

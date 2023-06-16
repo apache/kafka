@@ -17,12 +17,15 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -30,10 +33,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 public class ApplicationEventProcessor {
 
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+
+    private final Logger log;
 
     private final ConsumerMetadata metadata;
 
@@ -41,15 +47,23 @@ public class ApplicationEventProcessor {
 
     public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                      final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata) {
+                                     final ConsumerMetadata metadata,
+                                     final LogContext logContext) {
+        this.log = logContext.logger(ApplicationEventProcessor.class);
         this.backgroundEventQueue = backgroundEventQueue;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
 
     public boolean process(final ApplicationEvent event) {
-        Objects.requireNonNull(event);
-        switch (event.type) {
+        Objects.requireNonNull(event, "Attempt to process null ApplicationEvent");
+        Objects.requireNonNull(event.type(), "Attempt to process ApplicationEvent with null type: " + event);
+
+        log.debug("Processing event {}", event);
+
+        // Make sure to use the event's type() method, not the type variable directly. This causes problems when
+        // unit tests mock the EventType.
+        switch (event.type()) {
             case NOOP:
                 return process((NoopApplicationEvent) event);
             case COMMIT:
@@ -71,7 +85,7 @@ public class ApplicationEventProcessor {
     }
 
     /**
-     * Processes {@link NoopApplicationEvent} and equeue a
+     * Processes {@link NoopApplicationEvent} and enqueue a
      * {@link NoopBackgroundEvent}. This is intentionally left here for
      * demonstration purpose.
      *
@@ -107,7 +121,7 @@ public class ApplicationEventProcessor {
 
     private boolean process(final OffsetFetchApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
-            event.future.completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
+            event.future().completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
                     "CommittedRequestManager is not available. Check if group.id was set correctly"));
             return false;
         }
@@ -142,5 +156,22 @@ public class ApplicationEventProcessor {
                 this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
         return true;
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
+     */
+    public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final ConsumerMetadata metadata,
+                                                               final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+        return new CachedSupplier<ApplicationEventProcessor>() {
+            @Override
+            protected ApplicationEventProcessor create() {
+                RequestManagers requestManagers = requestManagersSupplier.get();
+                return new ApplicationEventProcessor(backgroundEventQueue, requestManagers, metadata, logContext);
+            }
+        };
     }
 }

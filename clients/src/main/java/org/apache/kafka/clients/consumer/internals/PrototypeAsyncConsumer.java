@@ -28,6 +28,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
@@ -51,6 +53,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -63,18 +66,22 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.Utils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.Utils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.Utils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.Utils.createSubscriptionState;
@@ -98,9 +105,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Time time;
     private final Optional<String> groupId;
     private final Logger log;
-    private final Deserializers<K, V> deserializers;
     private final SubscriptionState subscriptions;
-    private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
     public PrototypeAsyncConsumer(final Properties properties,
@@ -118,49 +123,78 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public PrototypeAsyncConsumer(final ConsumerConfig config,
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer) {
-        this.time = Time.SYSTEM;
+        this(Time.SYSTEM, config, keyDeserializer, valueDeserializer);
+    }
+
+
+    public PrototypeAsyncConsumer(final Time time,
+                                  final ConsumerConfig config,
+                                  final Deserializer<K> keyDeserializer,
+                                  final Deserializer<V> valueDeserializer) {
+        this.time = time;
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                 GroupRebalanceConfig.ProtocolType.CONSUMER);
         this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.logContext = createLogContext(config, groupRebalanceConfig);
         this.log = logContext.logger(getClass());
-        this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
+        Deserializers<K, V> deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
         this.subscriptions = createSubscriptionState(config, logContext);
-        this.metrics = createMetrics(config, time);
+        Metrics metrics = createMetrics(config, time);
         List<ConsumerInterceptor<K, V>> interceptorList = getConfiguredConsumerInterceptors(config);
         ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(metrics.reporters(),
                 interceptorList,
                 Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
-        this.eventHandler = new DefaultEventHandler(
+        ConsumerMetadata metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+        // Bootstrap the metadata with the bootstrap server IP address, which will be used once for the subsequent
+        // metadata refresh once the background thread has started up.
+        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
+        metadata.bootstrap(addresses);
+
+        final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
+        final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+
+        FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
+        final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
+                logContext,
+                metadata,
+                config,
+                new ApiVersions(),
+                metrics,
+                fetchMetricsManager);
+        final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
+                logContext,
+                backgroundEventQueue,
+                metadata,
+                subscriptions,
                 config,
                 groupRebalanceConfig,
+                new ApiVersions());
+        final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
+                metadata,
+                backgroundEventQueue,
+                requestManagersSupplier);
+        this.eventHandler = new DefaultEventHandler(time,
                 logContext,
-                subscriptions,
-                new ApiVersions(),
-                this.metrics,
-                clusterResourceListeners,
-                null // this is coming from the fetcher, but we don't have one
-        );
+                applicationEventQueue,
+                backgroundEventQueue,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier);
     }
 
-    // Visible for testing
-    PrototypeAsyncConsumer(Time time,
-                           LogContext logContext,
-                           ConsumerConfig config,
-                           SubscriptionState subscriptions,
-                           EventHandler eventHandler,
-                           Metrics metrics,
-                           Optional<String> groupId,
-                           int defaultApiTimeoutMs) {
-        this.time = time;
+    public PrototypeAsyncConsumer(LogContext logContext,
+                                  Time time,
+                                  EventHandler eventHandler,
+                                  Optional<String> groupId,
+                                  SubscriptionState subscriptions,
+                                  long defaultApiTimeoutMs) {
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
-        this.metrics = metrics;
+        this.time = time;
         this.groupId = groupId;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.deserializers = new Deserializers<>(config);
         this.eventHandler = eventHandler;
     }
 

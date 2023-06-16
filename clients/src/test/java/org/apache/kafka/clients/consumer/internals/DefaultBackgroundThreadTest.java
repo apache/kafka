@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
@@ -29,11 +26,9 @@ import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicati
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -43,73 +38,57 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
-    private static final long RETRY_BACKOFF_MS = 100;
-    private final Properties properties = new Properties();
-    private MockTime time;
+
+    private ConsumerTestBuilder.DefaultBackgroundThreadTestBuilder testBuilder;
+    private Time time;
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
-    private SubscriptionState subscriptionState;
-    private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor applicationEventProcessor;
     private CoordinatorRequestManager coordinatorManager;
-    private ListOffsetsRequestManager listOffsetsRequestManager;
-    private ErrorEventHandler errorEventHandler;
-    private final int requestTimeoutMs = 500;
-    private GroupState groupState;
     private CommitRequestManager commitManager;
     private TopicMetadataRequestManager topicMetadataRequestManager;
+    private DefaultBackgroundThread backgroundThread;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     public void setup() {
-        this.time = new MockTime(0);
-        this.metadata = mock(ConsumerMetadata.class);
-        this.networkClient = mock(NetworkClientDelegate.class);
-        this.subscriptionState = mock(SubscriptionState.class);
-        this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
-        this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
-        this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
-        this.coordinatorManager = mock(CoordinatorRequestManager.class);
-        this.listOffsetsRequestManager = mock(ListOffsetsRequestManager.class);
-        this.errorEventHandler = mock(ErrorEventHandler.class);
-        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
-                100,
-                100,
-                100,
-                "group_id",
-                Optional.empty(),
-                100,
-                true);
-        this.groupState = new GroupState(rebalanceConfig);
-        this.commitManager = mock(CommitRequestManager.class);
-        this.topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
+        this.testBuilder = new ConsumerTestBuilder.DefaultBackgroundThreadTestBuilder();
+        this.time = testBuilder.time;
+        this.metadata = testBuilder.metadata;
+        this.networkClient = testBuilder.networkClientDelegate;
+        this.applicationEventsQueue = testBuilder.applicationEventQueue;
+        this.applicationEventProcessor = testBuilder.applicationEventProcessor;
+        this.coordinatorManager = testBuilder.coordinatorRequestManager;
+        this.commitManager = testBuilder.commitRequestManager;
+        this.topicMetadataRequestManager = testBuilder.topicMetadataRequestManager;
+        this.backgroundThread = testBuilder.backgroundThread;
+        this.backgroundThread.initializeResources();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        if (testBuilder != null)
+            testBuilder.close();
     }
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         backgroundThread.start();
+        assertFalse(backgroundThread.isRunning());
 
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
@@ -125,11 +104,8 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testApplicationEvent() {
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         ApplicationEvent e = new NoopApplicationEvent("noop event");
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
@@ -139,14 +115,8 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testMetadataUpdateEvent() {
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
-        this.applicationEventProcessor = new ApplicationEventProcessor(this.backgroundEventsQueue,
-                mockRequestManagers(),
-                metadata);
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         ApplicationEvent e = new MetadataUpdateApplicationEvent(time.milliseconds());
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
@@ -156,11 +126,8 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testCommitEvent() {
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
@@ -170,9 +137,6 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testListOffsetsEventIsProcessed() {
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
         ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true);
         this.applicationEventsQueue.add(e);
@@ -184,9 +148,8 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     void testFindCoordinator() {
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
-        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
-        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         backgroundThread.runOnce();
         Mockito.verify(coordinatorManager, times(1)).poll(anyLong());
         Mockito.verify(networkClient, times(1)).poll(anyLong(), anyLong());
@@ -195,8 +158,6 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     void testFetchTopicMetadata() {
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         when(this.topicMetadataRequestManager.requestTopicMetadata(Optional.of(anyString()))).thenReturn(new CompletableFuture<>());
         this.applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic"));
         backgroundThread.runOnce();
@@ -206,11 +167,10 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     void testPollResultTimer() {
-        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         // purposely setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+                Collections.singletonList(findCoordinatorUnsentRequest()));
         assertEquals(10, backgroundThread.handlePollResult(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
@@ -219,60 +179,26 @@ public class DefaultBackgroundThreadTest {
         assertEquals(10, backgroundThread.handlePollResult(failure));
     }
 
-    private RequestManagers mockRequestManagers() {
-        return new RequestManagers(
-            listOffsetsRequestManager,
-            topicMetadataRequestManager,
-            Optional.of(coordinatorManager),
-            Optional.of(commitManager));
-    }
-
-    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
-            final Time time,
-            final long timeout
-    ) {
+    private NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest() {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
-            Optional.empty());
-        req.setTimer(time, timeout);
+                Optional.empty());
+        req.setTimer(time, ConsumerTestBuilder.REQUEST_TIMEOUT_MS);
         return req;
-    }
-
-    private DefaultBackgroundThread mockBackgroundThread() {
-        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
-
-        return new DefaultBackgroundThread(this.time,
-            new ConsumerConfig(properties),
-            new LogContext(),
-            applicationEventsQueue,
-            backgroundEventsQueue,
-            this.metadata,
-            this.networkClient,
-            this.subscriptionState,
-            this.groupState,
-            this.errorEventHandler,
-            applicationEventProcessor,
-            this.coordinatorManager,
-            this.commitManager,
-            this.listOffsetsRequestManager,
-            this.topicMetadataRequestManager);
-
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {
         return new NetworkClientDelegate.PollResult(
-            RETRY_BACKOFF_MS,
-            Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+                ConsumerTestBuilder.RETRY_BACKOFF_MS,
+                Collections.singletonList(findCoordinatorUnsentRequest()));
     }
 
     private NetworkClientDelegate.PollResult mockPollCommitResult() {
         return new NetworkClientDelegate.PollResult(
-            RETRY_BACKOFF_MS,
-            Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+                ConsumerTestBuilder.RETRY_BACKOFF_MS,
+                Collections.singletonList(findCoordinatorUnsentRequest()));
     }
 }

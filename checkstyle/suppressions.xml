@@ -60,6 +60,8 @@
               files="AbstractRequest.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="AbstractResponse.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="PrototypeAsyncConsumer.java"/>
 
     <suppress checks="MethodLength"
               files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor).java"/>
@@ -67,7 +69,7 @@
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaRaftClient).java"/>
     <suppress checks="ParameterNumber"
-              files="(KafkaConsumer|ConsumerCoordinator).java"/>
+              files="(KafkaConsumer|PrototypeAsyncConsumer|ConsumerCoordinator).java"/>
     <suppress checks="ParameterNumber"
               files="Sender.java"/>
     <suppress checks="ParameterNumber"
@@ -107,7 +109,7 @@
 
     <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Sender|Fetcher|OffsetFetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
+              files="(Sender|Fetcher|OffsetFetcher|KafkaConsumer|PrototypeAsyncConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
