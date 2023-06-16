@@ -157,7 +157,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         info(s"RemoteIndexCache directory $cacheDir already exists. Re-using the same directory.")
       case e: Exception =>
         error(s"Unable to create directory $cacheDir for RemoteIndexCache.", e)
-        throw new IllegalArgumentException(e)
+        throw e
     }
 
     // Delete any .deleted files remained from the earlier run of the broker.
