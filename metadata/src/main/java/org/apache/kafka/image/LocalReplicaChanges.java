@@ -28,15 +28,19 @@ public final class LocalReplicaChanges {
     private final Set<TopicPartition> deletes;
     private final Map<TopicPartition, PartitionInfo> leaders;
     private final Map<TopicPartition, PartitionInfo> followers;
+    // The topic name -> topic id map in leaders and followers changes
+    private final Map<String, Uuid> topicIds;
 
     LocalReplicaChanges(
         Set<TopicPartition> deletes,
         Map<TopicPartition, PartitionInfo> leaders,
-        Map<TopicPartition, PartitionInfo> followers
+        Map<TopicPartition, PartitionInfo> followers,
+        Map<String, Uuid> topicIds
     ) {
         this.deletes = deletes;
         this.leaders = leaders;
         this.followers = followers;
+        this.topicIds = topicIds;
     }
 
     public Set<TopicPartition> deletes() {
@@ -49,6 +53,10 @@ public final class LocalReplicaChanges {
 
     public Map<TopicPartition, PartitionInfo> followers() {
         return followers;
+    }
+
+    public Map<String, Uuid> topicIds() {
+        return topicIds;
     }
 
     @Override

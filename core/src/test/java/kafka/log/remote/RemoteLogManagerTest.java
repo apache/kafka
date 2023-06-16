@@ -167,11 +167,11 @@ public class RemoteLogManagerTest {
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
-        long offset = remoteLogManager.findHighestRemoteOffset(tpId);
+        long offset = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
         assertEquals(-1, offset);
 
         when(remoteLogMetadataManager.highestOffsetForEpoch(tpId, 2)).thenReturn(Optional.of(200L));
-        long offset2 = remoteLogManager.findHighestRemoteOffset(tpId);
+        long offset2 = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
         assertEquals(200, offset2);
     }
 
@@ -261,7 +261,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToLeader(2);
-        task.copyLogSegmentsToRemote();
+        task.copyLogSegmentsToRemote(mockLog);
 
         // verify remoteLogMetadataManager did add the expected RemoteLogSegmentMetadata
         ArgumentCaptor<RemoteLogSegmentMetadata> remoteLogSegmentMetadataArg = ArgumentCaptor.forClass(RemoteLogSegmentMetadata.class);
@@ -318,7 +318,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition);
         task.convertToFollower();
-        task.copyLogSegmentsToRemote();
+        task.copyLogSegmentsToRemote(mockLog);
 
         // verify the remoteLogMetadataManager never add any metadata and remoteStorageManager never copy log segments
         verify(remoteLogMetadataManager, never()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));

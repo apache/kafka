@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -193,7 +192,7 @@ import static org.apache.kafka.connect.util.ConnectUtils.className;
  * rebalance must be deferred.
  * </p>
  */
-public class KafkaConfigBackingStore implements ConfigBackingStore {
+public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore implements ConfigBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaConfigBackingStore.class);
 
     public static final String TARGET_STATE_PREFIX = "target-state-";
@@ -339,6 +338,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         this.offset = -1;
         this.topicAdminSupplier = adminSupplier;
         this.clientId = Objects.requireNonNull(clientIdBase) + "configs";
+        this.time = time;
 
         this.baseProducerProps = baseProducerProps(config);
         // By default, Connect disables idempotent behavior for all producers, even though idempotence became
@@ -357,7 +357,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
         this.configTransformer = configTransformer;
-        this.time = time;
     }
 
     @Override
@@ -774,7 +773,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier, config, time);
     }
 
     /**
@@ -845,22 +844,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
-    private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps,
-                                                              Callback<ConsumerRecord<String, byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
-        java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
-            log.debug("Creating admin client to manage Connect internal config topic");
-            // Create the topic if it doesn't exist
-            Set<String> newTopics = admin.createTopics(topicDescription);
-            if (!newTopics.contains(topic)) {
-                // It already existed, so check that the topic cleanup policy is compact only and not delete
-                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                        DistributedConfig.CONFIG_TOPIC_CONFIG, "connector configurations");
-            }
-        };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
+    @Override
+    protected String getTopicConfig() {
+        return DistributedConfig.CONFIG_TOPIC_CONFIG;
+    }
+
+    @Override
+    protected String getTopicPurpose() {
+        return "connector configurations";
     }
 
     private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {

@@ -41,6 +41,8 @@ public class FileTokenRetriever implements AccessTokenRetriever {
     @Override
     public void init() throws IOException {
         this.accessToken = Utils.readFileAsString(accessTokenFile.toFile().getPath());
+        // always non-null; to remove any newline chars or backend will report err
+        this.accessToken = this.accessToken.trim();
     }
 
     @Override

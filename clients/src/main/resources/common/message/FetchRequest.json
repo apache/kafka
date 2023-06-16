@@ -61,7 +61,7 @@
       "about": "The clusterId if known. This is used to validate metadata fetches prior to broker registration." },
     { "name": "ReplicaId", "type": "int32", "versions": "0-14", "default": "-1", "entityType": "brokerId",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
-    { "name": "ReplicaState", "type": "ReplicaState", "taggedVersions":"15+", "tag": 1, "fields": [
+    { "name": "ReplicaState", "type": "ReplicaState", "versions": "15+", "taggedVersions": "15+", "tag": 1, "fields": [
       { "name": "ReplicaId", "type": "int32", "versions": "15+", "default": "-1", "entityType": "brokerId",
         "about": "The replica ID of the follower, or -1 if this request is from a consumer." },
       { "name": "ReplicaEpoch", "type": "int64", "versions": "15+", "default": "-1",

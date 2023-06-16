@@ -580,7 +580,7 @@
   </ul>
 
   <p>
-    By default, a flow replicates all topics and consumer groups. However, each replication flow can be configured independently. For instance, you can define that only specific topics or consumer groups are replicated from the source cluster to the target cluster.
+    By default, a flow replicates all topics and consumer groups (except excluded ones). However, each replication flow can be configured independently. For instance, you can define that only specific topics or consumer groups are replicated from the source cluster to the target cluster.
   </p>
 
   <p>
@@ -693,6 +693,45 @@ us-east.producer.compression.type = gzip
 us-east.producer.buffer.memory = 32768
 us-east.admin.bootstrap.servers = broker8-secondary:9092
 </code></pre>
+
+  <h5 class="anchor-heading"><a id="georeplication-exactly_once" class="anchor-link"></a><a href="#georeplication-exactly_once">Exactly once</a></h5>
+
+  <p>
+    Exactly-once semantics are supported for dedicated MirrorMaker clusters as of version 3.5.0.</p>
+  
+  <p>
+    For new MirrorMaker clusters, set the <code>exactly.once.source.support</code> property to enabled for all targeted Kafka clusters that should be written to with exactly-once semantics. For example, to enable exactly-once for writes to cluster </code>us-east</code>, the following configuration can be used:
+  </p>
+
+<pre class="line-numbers"><code class="language-text">us-east.exactly.once.source.support = enabled
+</code></pre>
+  
+  <p>
+    For existing MirrorMaker clusters, a two-step upgrade is necessary. Instead of immediately setting the <code>exactly.once.source.support</code> property to enabled, first set it to <code>preparing</code> on all nodes in the cluster. Once this is complete, it can be set to </code>enabled</code> on all nodes in the cluster, in a second round of restarts.
+  </p>
+  
+  <p>
+    In either case, it is also necessary to enable intra-cluster communication between the MirrorMaker nodes, as described in  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters">KIP-710</a>. To do this, the <code>dedicated.mode.enable.internal.rest</code> property must be set to <code>true</code>. In addition, many of the REST-related  <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties available for Kafka Connect</a> can be specified the MirrorMaker config. For example, to enable intra-cluster communication in MirrorMaker cluster with each node listening on port 8080 of their local machine, the following should be added to the MirrorMaker config file:
+  </p>
+
+<pre class="line-numbers"><code class="language-text">dedicated.mode.enable.internal.rest = true
+listeners = http://localhost:8080
+</code></pre>
+  
+  <p><b>
+    Note that, if intra-cluster communication is enabled in production environments, it is highly recommended to secure the REST servers brought up by each MirrorMaker node. See the <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties for Kafka Connect</a> for information on how this can be accomplished.
+  </b></p>
+  
+  <p>
+    It is also recommended to filter records from aborted transactions out from replicated data when running MirrorMaker. To do this, ensure that the consumer used to read from source clusters is configured with <code>isolation.level</code> set to <code>read_committed</code>. If replicating data from cluster <code>us-west</code>, this can be done for all replication flows that read from that cluster by adding the following to the MirrorMaker config file:
+  </p>
+
+<pre class="line-numbers"><code class="language-text">us-west.consumer.isolation.level = read_committed
+</code></pre>
+
+  <p>
+    As a final note, under the hood, MirrorMaker uses Kafka Connect source connectors to replicate data. For more information on exactly-once support for these kinds of connectors, see the <a href="https://kafka.apache.org/documentation/#connect_exactlyoncesource">relevant docs page</a>.
+  </p>
 
   <h5 class="anchor-heading"><a id="georeplication-flow-create" class="anchor-link"></a><a href="#georeplication-flow-create">Creating and Enabling Replication Flows</a></h5>
 

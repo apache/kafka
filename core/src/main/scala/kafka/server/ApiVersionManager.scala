@@ -29,7 +29,19 @@ trait ApiVersionManager {
   def enableUnstableLastVersion: Boolean
   def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
+
+  /**
+   * @see [[DefaultApiVersionManager.apiVersionResponse]]
+   * @see [[kafka.server.KafkaApis.handleApiVersionsRequest]]
+   */
   def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse
+
+  /**
+   * @see [[SimpleApiVersionManager.apiVersionResponse]]
+   * @see [[kafka.server.ControllerApis.handleApiVersionsRequest]]
+   */
+  def apiVersionResponse(throttleTimeMs: Int, finalizedFeatures: Map[String, java.lang.Short], finalizedFeaturesEpoch: Long): ApiVersionsResponse
+
   def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
     apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
   }
@@ -55,6 +67,16 @@ object ApiVersionManager {
   }
 }
 
+/**
+ * A simple ApiVersionManager that does not support forwarding and does not have metadata cache, used in kraft controller.
+ * its enabled apis are determined by the listener type, its finalized features are dynamically determined by the controller.
+ *
+ * @param listenerType the listener type
+ * @param enabledApis the enabled apis, which are computed by the listener type
+ * @param brokerFeatures the broker features
+ * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
+ * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
+ */
 class SimpleApiVersionManager(
   val listenerType: ListenerType,
   val enabledApis: collection.Set[ApiKeys],
@@ -80,10 +102,33 @@ class SimpleApiVersionManager(
   private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava, enableUnstableLastVersion)
 
   override def apiVersionResponse(requestThrottleMs: Int): ApiVersionsResponse = {
-    ApiVersionsResponse.createApiVersionsResponse(requestThrottleMs, apiVersions, brokerFeatures, zkMigrationEnabled)
+    throw new UnsupportedOperationException("This method is not supported in SimpleApiVersionManager, use apiVersionResponse(throttleTimeMs, finalizedFeatures, epoch) instead")
+  }
+
+  override def apiVersionResponse(throttleTimeMs: Int, finalizedFeatures: Map[String, java.lang.Short], finalizedFeaturesEpoch: Long): ApiVersionsResponse = {
+    ApiVersionsResponse.createApiVersionsResponse(
+      throttleTimeMs,
+      apiVersions,
+      brokerFeatures,
+      finalizedFeatures.asJava,
+      finalizedFeaturesEpoch,
+      zkMigrationEnabled
+    )
   }
 }
 
+/**
+ * The default ApiVersionManager that supports forwarding and has metadata cache, used in broker and zk controller.
+ * When forwarding is enabled, the enabled apis are determined by the broker listener type and the controller apis,
+ * otherwise the enabled apis are determined by the broker listener type, which is the same with SimpleApiVersionManager.
+ *
+ * @param listenerType the listener type
+ * @param forwardingManager the forwarding manager,
+ * @param features the broker features
+ * @param metadataCache the metadata cache, used to get the finalized features and the metadata version
+ * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
+ * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
+ */
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
   forwardingManager: Option[ForwardingManager],
@@ -111,5 +156,9 @@ class DefaultApiVersionManager(
       enableUnstableLastVersion,
       zkMigrationEnabled
     )
+  }
+
+  override def apiVersionResponse(throttleTimeMs: Int, finalizedFeatures: Map[String, java.lang.Short], finalizedFeatureEpoch: Long): ApiVersionsResponse = {
+    throw new UnsupportedOperationException("This method is not supported in DefaultApiVersionManager, use apiVersionResponse(throttleTimeMs) instead")
   }
 }

@@ -30,6 +30,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -1609,7 +1610,8 @@ public class KafkaConfigBackingStoreTest {
         PowerMock.expectPrivate(configStorage, "createKafkaBasedLog",
                 EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
                 EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback),
-                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier))
+                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier),
+                EasyMock.anyObject(WorkerConfig.class), EasyMock.anyObject(Time.class))
                 .andReturn(storeLog);
     }
 

@@ -193,14 +193,24 @@ class SharedServer(
     })
 
   /**
-   * The fault handler to use when the QuorumController experiences a fault.
+   * The fault handler to use when the QuorumController experiences a fatal fault.
    */
-  def quorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
+  def fatalQuorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "quorum controller",
     fatal = true,
     action = () => SharedServer.this.synchronized {
       Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
-      snapshotsDisabledReason.compareAndSet(null, "quorum controller fault")
+      snapshotsDisabledReason.compareAndSet(null, "quorum controller fatal fault")
+    })
+
+  /**
+   * The fault handler to use when the QuorumController experiences a non-fatal fault.
+   */
+  def nonFatalQuorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "quorum controller",
+    fatal = false,
+    action = () => SharedServer.this.synchronized {
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
     })
 
   /**

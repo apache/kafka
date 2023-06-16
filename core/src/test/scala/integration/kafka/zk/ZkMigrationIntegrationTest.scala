@@ -26,7 +26,7 @@ import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.{PasswordEncoder, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -36,6 +36,7 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.TOPIC
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -56,7 +57,7 @@ import scala.jdk.CollectionConverters._
 
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@Timeout(120)
+@Timeout(300)
 class ZkMigrationIntegrationTest {
 
   val log = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
@@ -187,6 +188,66 @@ class ZkMigrationIntegrationTest {
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
   }
 
+  // SCRAM and Quota are intermixed. Test SCRAM Only here
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_5_IV2, serverProperties = Array(
+    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
+  ))
+  def testDualWriteScram(zkCluster: ClusterInstance): Unit = {
+    var admin = zkCluster.createAdminClient()
+    createUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+    admin.close()
+
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_5_IV2).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      val clientProps = kraftCluster.controllerClientProperties()
+      val voters = clientProps.get(RaftConfig.QUORUM_VOTERS_CONFIG)
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(30, TimeUnit.SECONDS)
+
+      // Wait for migration to begin
+      log.info("Waiting for ZK migration to begin")
+      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+
+      // Alter the metadata
+      log.info("Updating metadata with AdminClient")
+      admin = zkCluster.createAdminClient()
+      alterUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+
+      // Verify the changes made to KRaft are seen in ZK
+      log.info("Verifying metadata changes with ZK")
+      verifyUserScramCredentials(zkClient)
+    } finally {
+      shutdownInSequence(zkCluster, kraftCluster)
+    }
+  }
+
+  // SCRAM and Quota are intermixed. Test Quota Only here
   @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
     new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
     new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
@@ -259,9 +320,152 @@ class ZkMigrationIntegrationTest {
       verifyProducerId(producerIdBlock, zkClient)
 
     } finally {
+      shutdownInSequence(zkCluster, kraftCluster)
+    }
+  }
+
+  // SCRAM and Quota are intermixed. Test both here
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_5_IV2, serverProperties = Array(
+    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
+  ))
+  def testDualWriteQuotaAndScram(zkCluster: ClusterInstance): Unit = {
+    var admin = zkCluster.createAdminClient()
+    createUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+    admin.close()
+
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_5_IV2).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      val clientProps = kraftCluster.controllerClientProperties()
+      val voters = clientProps.get(RaftConfig.QUORUM_VOTERS_CONFIG)
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(30, TimeUnit.SECONDS)
+
+      // Wait for migration to begin
+      log.info("Waiting for ZK migration to begin")
+      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+
+      // Alter the metadata
+      log.info("Updating metadata with AdminClient")
+      admin = zkCluster.createAdminClient()
+      alterUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+      alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
+
+      // Verify the changes made to KRaft are seen in ZK
+      log.info("Verifying metadata changes with ZK")
+      verifyUserScramCredentials(zkClient)
+      verifyClientQuotas(zkClient)
+    } finally {
+      shutdownInSequence(zkCluster, kraftCluster)
+    }
+  }
+
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
+    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
+  ))
+  def testNewAndChangedTopicsInDualWrite(zkCluster: ClusterInstance): Unit = {
+    // Create a topic in ZK mode
+    val topicName = "test"
+    var admin = zkCluster.createAdminClient()
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      val clientProps = kraftCluster.controllerClientProperties()
+      val voters = clientProps.get(RaftConfig.QUORUM_VOTERS_CONFIG)
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(30, TimeUnit.SECONDS)
+
+      // Wait for migration to begin
+      log.info("Waiting for ZK migration to begin")
+      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+
+      // Alter the metadata
+      log.info("Create new topic with AdminClient")
+      admin = zkCluster.createAdminClient()
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic(topicName, 2, 3.toShort))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+
+      val existingPartitions = Seq(new TopicPartition(topicName, 0), new TopicPartition(topicName, 1))
+      // Verify the changes made to KRaft are seen in ZK
+      verifyTopicPartitionMetadata(topicName, existingPartitions, zkClient)
+
+      log.info("Create new partitions with AdminClient")
+      admin.createPartitions(Map(topicName -> NewPartitions.increaseTo(3)).asJava).all().get(60, TimeUnit.SECONDS)
+
+      // Verify the changes seen in Zk.
+      verifyTopicPartitionMetadata(topicName, existingPartitions ++ Seq(new TopicPartition(topicName, 2)), zkClient)
+    } finally {
       zkCluster.stop()
       kraftCluster.close()
     }
+  }
+
+  def verifyTopicPartitionMetadata(topicName: String, partitions: Seq[TopicPartition], zkClient: KafkaZkClient): Unit = {
+    val (topicIdReplicaAssignment, success) = TestUtils.computeUntilTrue(
+      zkClient.getReplicaAssignmentAndTopicIdForTopics(Set(topicName)).headOption) {
+      x => x.exists(_.assignment.size == partitions.size)
+    }
+    assertTrue(success, "Unable to find topic metadata in Zk")
+    TestUtils.waitUntilTrue(() =>{
+      val lisrMap = zkClient.getTopicPartitionStates(partitions.toSeq)
+      lisrMap.size == partitions.size &&
+        lisrMap.forall { case (tp, lisr) =>
+          lisr.leaderAndIsr.leader >= 0 &&
+            topicIdReplicaAssignment.exists(_.assignment(tp).replicas == lisr.leaderAndIsr.isr)
+        }
+    }, "Unable to find topic partition metadata")
   }
 
   def allocateProducerId(bootstrapServers: String): Unit = {
@@ -305,6 +509,22 @@ class ZkMigrationIntegrationTest {
     admin.alterClientQuotas(quotas)
   }
 
+  def createUserScramCredentials(admin: Admin): AlterUserScramCredentialsResult = {
+    val alterations = new util.ArrayList[UserScramCredentialAlteration]()
+    alterations.add(new UserScramCredentialUpsertion("user1",
+        new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 8190), "password0"))
+    admin.alterUserScramCredentials(alterations)
+  }
+
+  def alterUserScramCredentials(admin: Admin): AlterUserScramCredentialsResult = {
+    val alterations = new util.ArrayList[UserScramCredentialAlteration]()
+    alterations.add(new UserScramCredentialUpsertion("user1",
+        new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 8191), "password1"))
+    alterations.add(new UserScramCredentialUpsertion("user2",
+        new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 8192), "password2"))
+    admin.alterUserScramCredentials(alterations)
+  }
+
   def verifyTopicConfigs(zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
       val propsAfter = zkClient.getEntityConfigs(ConfigType.Topic, "test")
@@ -322,10 +542,29 @@ class ZkMigrationIntegrationTest {
     }
   }
 
+  def verifyUserScramCredentials(zkClient: KafkaZkClient): Unit = {
+    TestUtils.retry(10000) {
+      val propertyValue1 = zkClient.getEntityConfigs(ConfigType.User, "user1").getProperty("SCRAM-SHA-256")
+      val scramCredentials1 = ScramCredentialUtils.credentialFromString(propertyValue1)
+      assertEquals(8191, scramCredentials1.iterations)
+
+      val propertyValue2 = zkClient.getEntityConfigs(ConfigType.User, "user2").getProperty("SCRAM-SHA-256")
+      assertNotNull(propertyValue2)
+      val scramCredentials2 = ScramCredentialUtils.credentialFromString(propertyValue2)
+      assertEquals(8192, scramCredentials2.iterations)
+    }
+  }
+
   def verifyProducerId(firstProducerIdBlock: ProducerIdsBlock, zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
       val producerIdBlock = readProducerIdBlock(zkClient)
       assertTrue(firstProducerIdBlock.firstProducerId() < producerIdBlock.firstProducerId())
     }
+  }
+
+  def shutdownInSequence(zkCluster: ClusterInstance, kraftCluster: KafkaClusterTestKit): Unit = {
+    zkCluster.brokerIds().forEach(zkCluster.shutdownBroker(_))
+    kraftCluster.close()
+    zkCluster.stop()
   }
 }

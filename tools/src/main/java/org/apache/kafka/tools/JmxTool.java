@@ -82,7 +82,7 @@ public class JmxTool {
             List<ObjectName> queries = options.queries();
             boolean hasPatternQueries = queries.stream().filter(Objects::nonNull).anyMatch(ObjectName::isPattern);
 
-            Set<ObjectName> found = findObjectsIfNoPattern(options, conn, queries, hasPatternQueries);
+            Set<ObjectName> found = findObjects(options, conn, queries, hasPatternQueries);
             Map<ObjectName, Integer> numExpectedAttributes =
                     findNumExpectedAttributes(conn, attributesInclude, hasPatternQueries, queries, found);
 
@@ -113,8 +113,8 @@ public class JmxTool {
         }
     }
 
-    private static String mkString(Stream<Object> stream, String delimeter) {
-        return stream.filter(Objects::nonNull).map(Object::toString).collect(Collectors.joining(delimeter));
+    private static String mkString(Stream<Object> stream, String delimiter) {
+        return stream.filter(Objects::nonNull).map(Object::toString).collect(Collectors.joining(delimiter));
     }
 
     private static int sumValues(Map<ObjectName, Integer> numExpectedAttributes) {
@@ -162,26 +162,24 @@ public class JmxTool {
         return serverConn;
     }
 
-    private static Set<ObjectName> findObjectsIfNoPattern(JmxToolOptions options,
-                                                          MBeanServerConnection conn,
-                                                          List<ObjectName> queries,
-                                                          boolean hasPatternQueries) throws Exception {
+    private static Set<ObjectName> findObjects(JmxToolOptions options,
+                                               MBeanServerConnection conn,
+                                               List<ObjectName> queries,
+                                               boolean hasPatternQueries) throws Exception {
         long waitTimeoutMs = 10_000;
         Set<ObjectName> result = new HashSet<>();
         Set<ObjectName> querySet = new HashSet<>(queries);
-        BiPredicate<Set<ObjectName>, Set<ObjectName>> foundAllObjects = (s1, s2) -> s1.containsAll(s2);
-        if (!hasPatternQueries) {
-            long start = System.currentTimeMillis();
-            do {
-                if (!result.isEmpty()) {
-                    System.err.println("Could not find all object names, retrying");
-                    TimeUnit.MILLISECONDS.sleep(100);
-                }
-                result.addAll(queryObjects(conn, queries));
-            } while (options.hasWait() && System.currentTimeMillis() - start < waitTimeoutMs && !foundAllObjects.test(querySet, result));
-        }
+        BiPredicate<Set<ObjectName>, Set<ObjectName>> foundAllObjects = Set::containsAll;
+        long start = System.currentTimeMillis();
+        do {
+            if (!result.isEmpty()) {
+                System.err.println("Could not find all object names, retrying");
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+            result.addAll(queryObjects(conn, queries));
+        } while (!hasPatternQueries && options.hasWait() && System.currentTimeMillis() - start < waitTimeoutMs && !foundAllObjects.test(querySet, result));
 
-        if (options.hasWait() && !foundAllObjects.test(querySet, result)) {
+        if (!hasPatternQueries && options.hasWait() && !foundAllObjects.test(querySet, result)) {
             querySet.removeAll(result);
             String missing = mkString(querySet.stream().map(Object::toString), ",");
             throw new TerseException(String.format("Could not find all requested object names after %d ms. Missing %s", waitTimeoutMs, missing));
@@ -218,7 +216,7 @@ public class JmxTool {
                 }
             });
         } else {
-            if (!hasPatternQueries) {
+            if (hasPatternQueries) {
                 found.forEach(objectName -> {
                     try {
                         MBeanInfo mBeanInfo = conn.getMBeanInfo(objectName);
@@ -237,7 +235,7 @@ public class JmxTool {
                     }
                 });
             } else {
-                queries.forEach(objectName -> result.put(objectName, attributesInclude.get().length));
+                found.forEach(objectName -> result.put(objectName, attributesInclude.get().length));
             }
         }
 
