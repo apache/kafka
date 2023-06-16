@@ -65,7 +65,6 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
-import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -74,6 +73,10 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
+
+import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
+import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 
 /**
  * The group coordinator service.
@@ -86,7 +89,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private PartitionWriter<Record> writer;
         private CoordinatorLoader<Record> loader;
         private Time time;
-        private Timer timer;
 
         public Builder(
             int nodeId,
@@ -111,11 +113,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
-        public Builder withTimer(Timer timer) {
-            this.timer = timer;
-            return this;
-        }
-
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -123,8 +120,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Writer must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
-            if (timer == null)
-                throw new IllegalArgumentException("Timer must be set.");
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
 
@@ -150,6 +145,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withPartitionWriter(writer)
                     .withLoader(loader)
                     .withCoordinatorBuilderSupplier(supplier)
+                    .withTime(time)
                     .build();
 
             return new GroupCoordinatorService(
@@ -286,9 +282,32 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
+
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+
+            return responseFuture;
+        }
+
+        runtime.scheduleWriteOperation("generic-group-join",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
+        ).exceptionally(exception -> {
+            log.error("Request {} hit an unexpected exception: {}",
+                request, exception.getMessage());
+
+            if (!responseFuture.isDone()) {
+                Errors clientError = toResponseError(Errors.forException(exception));
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setErrorCode(clientError.code()));
+            }
+            return null;
+        });
+
+        return responseFuture;
     }
 
     /**
@@ -598,5 +617,29 @@ public class GroupCoordinatorService implements GroupCoordinator {
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
         log.info("Shutdown complete.");
+    }
+
+    private static boolean isGroupIdNotEmpty(String groupId) {
+        return groupId != null && !groupId.isEmpty();
+    }
+
+    private static Errors toResponseError(Errors appendError) {
+        switch (appendError) {
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case NOT_ENOUGH_REPLICAS:
+                return COORDINATOR_NOT_AVAILABLE;
+
+            case NOT_LEADER_OR_FOLLOWER:
+            case KAFKA_STORAGE_ERROR:
+                return NOT_COORDINATOR;
+
+            case MESSAGE_TOO_LARGE:
+            case RECORD_LIST_TOO_LARGE:
+            case INVALID_FETCH_SIZE:
+                return UNKNOWN_SERVER_ERROR;
+
+            default:
+                return appendError;
+        }
     }
 }
