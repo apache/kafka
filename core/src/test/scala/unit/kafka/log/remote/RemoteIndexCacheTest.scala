@@ -128,7 +128,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testCacheEntryExpiry(): Unit = {
-    // close exiting cache created in test setup before creating a new one
+    // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
@@ -172,7 +172,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testGetIndexAfterCacheClose(): Unit = {
-    // close exiting cache created in test setup before creating a new one
+    // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
 
     cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
@@ -300,7 +300,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testReloadCacheAfterClose(): Unit = {
-    // close exiting cache created in test setup before creating a new one
+    // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
