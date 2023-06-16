@@ -19,8 +19,7 @@ package kafka.server
 
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
-
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.{Metadata, MockClient, NodeApiVersions}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.Node
@@ -35,6 +34,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, BrokerHeartbeatRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.api.Assertions._
 
