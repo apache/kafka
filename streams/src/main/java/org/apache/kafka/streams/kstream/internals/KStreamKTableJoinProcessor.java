@@ -100,7 +100,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         if (!useBuffer) {
             doJoin(record);
         } else {
-            if (buffer.get().put(observedStreamTime, record, internalProcessorContext.recordContext())) {
+            if (!buffer.get().put(observedStreamTime, record, internalProcessorContext.recordContext())) {
                 doJoin(record);
             }
             buffer.get().evictWhile(() -> true, this::emit);
