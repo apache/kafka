@@ -121,7 +121,8 @@ public class ApiVersionsResponseTest {
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER,
-            true
+            true,
+            false
         );
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
@@ -141,7 +142,8 @@ public class ApiVersionsResponseTest {
             10L,
             null,
             ListenerType.ZK_BROKER,
-            true
+            true,
+            false
         );
 
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
@@ -169,7 +171,8 @@ public class ApiVersionsResponseTest {
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER,
-            true
+            true,
+            false
         );
         assertEquals(new HashSet<>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
@@ -188,7 +191,8 @@ public class ApiVersionsResponseTest {
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.ZK_BROKER,
-            true
+            true,
+            false
         );
 
         // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them

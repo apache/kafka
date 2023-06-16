@@ -1195,13 +1195,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                         commitNeeded = true;
                         entry.setValue(offset - 1);
                     }
-                } catch (final TimeoutException error) {
-                    // the `consumer.position()` call should never block, because we know that we did process data
-                    // for the requested partition and thus the consumer should have a valid local position
-                    // that it can return immediately
-
-                    // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
-                    throw new IllegalStateException(error);
+                } catch (final TimeoutException swallow) {
+                    log.debug(
+                        String.format("Could not get consumer position for partition %s", partition),
+                        swallow
+                    );
                 } catch (final KafkaException fatal) {
                     throw new StreamsException(fatal);
                 }

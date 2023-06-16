@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.ElectionType;
@@ -92,7 +91,7 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -132,6 +131,7 @@ import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.PartitionReassignmentReplicas.isReassignmentInProgress;
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -204,19 +204,12 @@ public class ReplicationControlManager {
             if (configurationControl == null) {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
-                throw new IllegalStateException("Cluster controller must be set before building");
+                throw new IllegalStateException("Cluster control must be set before building");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
             if (featureControl == null) {
-                featureControl = new FeatureControlManager.Builder().
-                    setLogContext(logContext).
-                    setSnapshotRegistry(snapshotRegistry).
-                    setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
-                        QuorumFeatures.defaultFeatureMap(),
-                        Collections.singletonList(0))).
-                    setMetadataVersion(MetadataVersion.latest()).
-                    build();
+                throw new IllegalStateException("FeatureControlManager must not be null");
             }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,
@@ -532,7 +525,7 @@ public class ReplicationControlManager {
         Set<String> describable
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
         // Check the topic names.
         validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
@@ -867,7 +860,8 @@ public class ReplicationControlManager {
 
     ControllerResult<Map<Uuid, ApiError>> deleteTopics(ControllerRequestContext context, Collection<Uuid> ids) {
         Map<Uuid, ApiError> results = new HashMap<>(ids.size());
-        List<ApiMessageAndVersion> records = new ArrayList<>(ids.size());
+        List<ApiMessageAndVersion> records =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP, ids.size());
         for (Uuid id : ids) {
             try {
                 deleteTopic(context, id, records);
@@ -1291,7 +1285,7 @@ public class ReplicationControlManager {
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
         ElectionType electionType = electionType(request.electionType());
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         ElectLeadersResponseData response = new ElectLeadersResponseData();
         if (request.topicPartitions() == null) {
             // If topicPartitions is null, we try to elect a new leader for every partition.  There
@@ -1390,7 +1384,9 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<BrokerHeartbeatReply> processBrokerHeartbeat(
-                BrokerHeartbeatRequestData request, long registerBrokerRecordOffset) {
+        BrokerHeartbeatRequestData request,
+        long registerBrokerRecordOffset
+    ) {
         int brokerId = request.brokerId();
         long brokerEpoch = request.brokerEpoch();
         clusterControl.checkBrokerEpoch(brokerId, brokerEpoch);
@@ -1425,13 +1421,30 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, reply);
     }
 
+    /**
+     * Process a broker heartbeat which has been sitting on the queue for too long, and has
+     * expired. With default settings, this would happen after 1 second. We process expired
+     * heartbeats by updating the lastSeenNs of the broker, so that the broker won't get fenced
+     * incorrectly. However, we don't perform any state changes that we normally would, such as
+     * unfencing a fenced broker, etc.
+     */
+    void processExpiredBrokerHeartbeat(BrokerHeartbeatRequestData request) {
+        int brokerId = request.brokerId();
+        clusterControl.checkBrokerEpoch(brokerId, request.brokerEpoch());
+        clusterControl.heartbeatManager().touch(brokerId,
+                clusterControl.brokerRegistrations().get(brokerId).fenced(),
+                request.currentMetadataOffset());
+        log.error("processExpiredBrokerHeartbeat: controller event queue overloaded. Timed out " +
+                "heartbeat from broker {}.", brokerId);
+    }
+
     public ControllerResult<Void> unregisterBroker(int brokerId) {
         BrokerRegistration registration = clusterControl.brokerRegistrations().get(brokerId);
         if (registration == null) {
             throw new BrokerIdNotRegisteredException("Broker ID " + brokerId +
                 " is not currently registered");
         }
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         handleBrokerUnregistered(brokerId, registration.epoch(), records);
         return ControllerResult.of(records, null);
     }
@@ -1503,8 +1516,8 @@ public class ReplicationControlManager {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics
     ) {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        List<CreatePartitionsTopicResult> results = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (CreatePartitionsTopic topic : topics) {
             ApiError apiError = ApiError.NONE;
             try {
@@ -1743,7 +1756,7 @@ public class ReplicationControlManager {
 
     ControllerResult<AlterPartitionReassignmentsResponseData>
             alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         AlterPartitionReassignmentsResponseData result =
                 new AlterPartitionReassignmentsResponseData().setErrorMessage(null);
         int successfulAlterations = 0, totalAlterations = 0;

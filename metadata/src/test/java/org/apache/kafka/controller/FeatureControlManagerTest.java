@@ -35,6 +35,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -225,10 +227,10 @@ public class FeatureControlManagerTest {
     }
 
     private static final FeatureControlManager.Builder TEST_MANAGER_BUILDER1 =
-            new FeatureControlManager.Builder().
-                    setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
-                            MetadataVersion.IBP_3_3_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
-                    setMetadataVersion(MetadataVersion.IBP_3_3_IV2);
+        new FeatureControlManager.Builder().
+            setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
+                MetadataVersion.IBP_3_3_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
+            setMetadataVersion(MetadataVersion.IBP_3_3_IV2);
 
     @Test
     public void testApplyMetadataVersionChangeRecord() {
@@ -355,7 +357,8 @@ public class FeatureControlManagerTest {
                 setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                         MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV1.featureLevel())).
                 setMetadataVersion(MetadataVersion.IBP_3_1_IV0).
-                setMinimumBootstrapVersion(MetadataVersion.IBP_3_0_IV0).build();
+                setMinimumBootstrapVersion(MetadataVersion.IBP_3_0_IV0).
+                build();
         assertEquals(ControllerResult.of(Collections.emptyList(),
                         singletonMap(MetadataVersion.FEATURE_NAME, ApiError.NONE)),
                 manager.updateFeatures(
@@ -369,8 +372,9 @@ public class FeatureControlManagerTest {
     public void testCanotDowngradeBefore3_3_IV0() {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
-                    MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
-                    setMetadataVersion(MetadataVersion.IBP_3_3_IV0).build();
+                MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
+            setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
+            build();
         assertEquals(ControllerResult.of(Collections.emptyList(),
                         singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
                         "Invalid metadata.version 3. Unable to set a metadata.version less than 3.3-IV0"))),
@@ -411,5 +415,46 @@ public class FeatureControlManagerTest {
                 Collections.singletonMap("foo", ApiError.NONE)), result2);
         RecordTestUtils.replayAll(manager, result2.records());
         assertEquals(Optional.empty(), manager.finalizedFeatures(Long.MAX_VALUE).get("foo"));
+    }
+
+    @Test
+    public void testNoMetadataVersionChangeDuringMigration() {
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+            setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
+                    MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_5_IV1.featureLevel())).
+            setMetadataVersion(MetadataVersion.IBP_3_4_IV0).
+            build();
+        BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "FeatureControlManagerTest");
+        RecordTestUtils.replayAll(manager, bootstrapMetadata.records());
+        RecordTestUtils.replayOne(manager, ZkMigrationState.PRE_MIGRATION.toRecord());
+
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+            singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "Invalid metadata.version 10. Unable to modify metadata.version while a ZK migration is in progress."))),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_5_IV1.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
+                emptyMap(),
+                true));
+
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+                singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "Invalid metadata.version 4. Unable to modify metadata.version while a ZK migration is in progress."))),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+                emptyMap(),
+                true));
+
+        // Complete the migration
+        RecordTestUtils.replayOne(manager, ZkMigrationState.POST_MIGRATION.toRecord());
+        ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
+            singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_5_IV1.featureLevel()),
+            singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
+            emptyMap(),
+            false);
+        assertEquals(Errors.NONE, result.response().get(MetadataVersion.FEATURE_NAME).error());
+        RecordTestUtils.replayAll(manager, result.records());
+        assertEquals(MetadataVersion.IBP_3_5_IV1, manager.metadataVersion());
     }
 }

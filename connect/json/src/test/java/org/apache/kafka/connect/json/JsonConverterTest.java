@@ -921,6 +921,45 @@ public class JsonConverterTest {
         assertNull(sav.value());
     }
 
+    @Test
+    public void serializeFieldNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, structSchema, new Struct(structSchema)));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":\"default\"}}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void serializeFieldNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, structSchema, new Struct(structSchema)));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void deserializeFieldNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        String value = "{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        assertEquals(new Struct(structSchema).put("field1", "default"), sav.value());
+    }
+
+    @Test
+    public void deserializeFieldNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        String value = "{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        assertEquals(new Struct(structSchema), sav.value());
+    }
 
     private JsonNode parse(byte[] json) {
         try {

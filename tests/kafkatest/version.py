@@ -107,7 +107,8 @@ class KafkaVersion(LooseVersion):
         return self >= V_2_8_0
 
     def supports_fk_joins(self):
-        return hasattr(self, "version") and self >= V_2_4_0
+        # while we support FK joins since 2.4, rolling upgrade is broken in older versions and only fixed in 3.1
+        return hasattr(self, "version") and self >= V_3_1_2
 
 def get_version(node=None):
     """Return the version attached to the given node.
