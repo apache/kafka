@@ -3595,8 +3595,8 @@ foo
 
   <ul>
     <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
-    <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 servers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addressed in a future release of Kafka.</li>
-    <li>The Kafka controllers store all of the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
+    <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 controllers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addressed in a future release of Kafka.</li>
+    <li>The Kafka controllers store all the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
   </ul>
 
   <h4 class="anchor-heading"><a id="kraft_missing" class="anchor-link"></a><a href="#kraft_missing">Missing Features</a></h4>
@@ -3604,7 +3604,6 @@ foo
   <p>The following features are not fully implemented in KRaft mode:</p>
 
   <ul>
-    <li>Configuring SCRAM users via the administrative API</li>
     <li>Supporting JBOD configurations with multiple storage directories</li>
     <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
     <li>Delegation tokens</li>
@@ -3613,14 +3612,13 @@ foo
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
 
   <p>
-    <b>ZooKeeper to KRaft migration is considered an Early Access feature in 3.4.0 and is not recommended for production clusters.</b>
+    <b>ZooKeeper to KRaft migration is considered an Early Access feature and is not recommended for production clusters.</b>
   </p>
 
   <p>The following features are not yet supported for ZK to KRaft migrations:</p>
 
   <ul>
     <li>Downgrading to ZooKeeper mode during or after the migration</li>
-    <li>Migration of ACLs</li>
     <li>Other features <a href="#kraft_missing">not yet supported in KRaft</a></li>
   </ul>
 
