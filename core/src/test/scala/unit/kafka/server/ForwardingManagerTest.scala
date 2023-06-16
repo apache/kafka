@@ -20,10 +20,8 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.network
 import kafka.network.RequestChannel
-import kafka.utils.MockTime
 import org.apache.kafka.clients.{MockClient, NodeApiVersions}
 import org.apache.kafka.clients.MockClient.RequestMatcher
 import org.apache.kafka.common.Node
@@ -36,6 +34,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AlterConfigsRequest, AlterConfigsResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito

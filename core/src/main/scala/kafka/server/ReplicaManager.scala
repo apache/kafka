@@ -2379,18 +2379,22 @@ class ReplicaManager(val config: KafkaConfig,
       // Handle partitions which we are now the leader or follower for.
       if (!localChanges.leaders.isEmpty || !localChanges.followers.isEmpty) {
         val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
-        val changedPartitions = new mutable.HashSet[Partition]
+        val leaderChangedPartitions = new mutable.HashSet[Partition]
+        val followerChangedPartitions = new mutable.HashSet[Partition]
         if (!localChanges.leaders.isEmpty) {
-          applyLocalLeadersDelta(changedPartitions, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala)
+          applyLocalLeadersDelta(leaderChangedPartitions, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala)
         }
         if (!localChanges.followers.isEmpty) {
-          applyLocalFollowersDelta(changedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala)
+          applyLocalFollowersDelta(followerChangedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala)
         }
-        maybeAddLogDirFetchers(changedPartitions, lazyOffsetCheckpoints,
+
+        maybeAddLogDirFetchers(leaderChangedPartitions ++ followerChangedPartitions, lazyOffsetCheckpoints,
           name => Option(newImage.topics().getTopic(name)).map(_.id()))
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+
+        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
       }
     }
   }
