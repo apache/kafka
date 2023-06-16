@@ -1096,6 +1096,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         }
 
         log.info("Closing coordinator runtime.");
+        loader.close();
         // This close the processor, drain all the pending events and
         // reject any new events.
         processor.close();
