@@ -38,9 +38,9 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -69,7 +69,7 @@ public class KStreamKTableJoinWithGraceTest {
     private StreamsBuilder builder;
     private final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
-    @Before
+    @BeforeEach
     public void setUp() {
         builder = new StreamsBuilder();
         processor = supplier.theCapturedProcessor();
@@ -93,7 +93,7 @@ public class KStreamKTableJoinWithGraceTest {
         inputTableTopic = driver.createInputTopic(tableTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
     }
 
-    @After
+    @AfterEach
     public void cleanup() {
         driver.close();
     }
@@ -117,19 +117,6 @@ public class KStreamKTableJoinWithGraceTest {
         for (int i = 0; i < 2; i++) {
             inputTableTopic.pipeInput(expectedKeys[i], null);
         }
-    }
-
-    @Test
-    public void shouldFailIfGracePeriodIsLongerThanHistoryRetention() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final Properties props = new Properties();
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
-        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
-            Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
-
-        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMinutes(6))).to("out-one");
-        builder.build(props);
     }
 
     @Test

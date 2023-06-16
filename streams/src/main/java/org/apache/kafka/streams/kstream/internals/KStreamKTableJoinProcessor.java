@@ -51,6 +51,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
     private final Optional<TimeOrderedKeyValueBuffer<K1, V1, V1>> buffer;
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private InternalProcessorContext internalProcessorContext;
+    private final boolean useBuffer;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
@@ -62,6 +63,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         this.keyMapper = keyMapper;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
+        this.useBuffer = buffer.isPresent();
         if (gracePeriod.isPresent() ^ buffer.isPresent()) {
             throw new IllegalArgumentException("Grace Period requires a buffer");
         }
@@ -76,7 +78,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
         valueGetter.init(context);
         internalProcessorContext = asInternalProcessorContext((org.apache.kafka.streams.processor.ProcessorContext) context);
-        if (buffer.isPresent()) {
+        if (useBuffer) {
             if (!valueGetter.isVersioned() && gracePeriod.isPresent()) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
@@ -95,16 +97,13 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             return;
         }
 
-        if (!gracePeriod.isPresent() || !buffer.isPresent()) {
+        if (!useBuffer) {
             doJoin(record);
         } else {
-            final long deadline = observedStreamTime - gracePeriod.get().toMillis();
-            if (record.timestamp() <= deadline) {
+            if (buffer.get().put(observedStreamTime, record, internalProcessorContext.recordContext())) {
                 doJoin(record);
-            } else {
-                buffer.get().put(observedStreamTime, record, internalProcessorContext.recordContext());
             }
-            buffer.get().evictWhile(() -> buffer.get().minTimestamp() <= deadline, this::emit);
+            buffer.get().evictWhile(() -> true, this::emit);
         }
     }
 

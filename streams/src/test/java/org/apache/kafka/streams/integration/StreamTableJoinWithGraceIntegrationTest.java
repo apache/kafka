@@ -63,7 +63,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
         super.prepareEnvironment();
         appID = "stream-table-join-integration-test";
         builder = new StreamsBuilder();
-        joined = Joined.with(Serdes.Long(), Serdes.String(), Serdes.String(), "Grace", Duration.ZERO);
+        joined = Joined.with(Serdes.Long(), Serdes.String(), Serdes.String(), "Grace", Duration.ofMillis(2));
     }
     
     @Test
@@ -87,9 +87,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
             null,
             null,
             null,
-            null,
-            null,
-            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "12", null, 5L)),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null,  6L)),
             null,
             null,
