@@ -372,9 +372,9 @@ class ReplicaManagerTest {
       // Use the second instance of metrics group that is constructed. The first instance is constructed by
       // ReplicaManager constructor > BrokerTopicStats > BrokerTopicMetrics.
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
-      verify(mockMetricsGroup, times(9)).newGauge(anyString(), any())
-      verify(mockMetricsGroup, times(3)).newMeter(anyString(), anyString(), any(classOf[TimeUnit]))
-      verify(mockMetricsGroup, times(12)).removeMetric(anyString())
+      ReplicaManager.GaugeMetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      ReplicaManager.MeterMetricNames.foreach(metricName => verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(metricName), anyString(), any(classOf[TimeUnit])))
+      ReplicaManager.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
