@@ -106,7 +106,7 @@ public class SystemTimer implements Timer {
         return taskCounter.get();
     }
 
-    public void shutdown() {
+    public void close() {
         taskExecutor.shutdown();
     }
 }

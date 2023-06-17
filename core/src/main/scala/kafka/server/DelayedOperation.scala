@@ -339,7 +339,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       })
       expirationReaper.awaitShutdown()
     }
-    timeoutTimer.shutdown()
+    timeoutTimer.close()
     metricsGroup.removeMetric("PurgatorySize", metricsTags)
     metricsGroup.removeMetric("NumDelayedOperations", metricsTags)
   }
