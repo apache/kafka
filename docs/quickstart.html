@@ -212,10 +212,10 @@ This is my second event</code></pre>
         </p>
 
         <p>
-            Edit the <code class="language-bash">config/connect-standalone.properties</code> file, add or change the <code>plugin.path</code> configuration property match the following, and save the file:
+            Edit the <code class="language-bash">config/connect-standalone.properties</code> file, adding or changing the <code>plugin.path</code> configuration property to include <code>libs/connect-file-{{fullDotVersion}}.jar</code> and save the file. Alternatively, in your terminal session you can use the following command:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar"</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar" >> config/connect-standalone.properties</code></pre>
 
         <p>
             Then, start by creating some seed data to test with:
