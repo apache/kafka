@@ -162,13 +162,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
         when(inner.hasIndex()).thenReturn(hasIndex);
 
-        final TimeOrderedCachingWindowStore outer = mock(TimeOrderedCachingWindowStore.class);
-
-        when(inner.name()).thenReturn("store");
-        inner.init((StateStoreContext) context, outer);
-        verify(inner).init((StateStoreContext) context, outer);
+        final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
         outer.init((StateStoreContext) context, outer);
-        verify(outer).init((StateStoreContext) context, outer);
         verify(inner, times(1)).init((StateStoreContext) context, outer);
 
     }
