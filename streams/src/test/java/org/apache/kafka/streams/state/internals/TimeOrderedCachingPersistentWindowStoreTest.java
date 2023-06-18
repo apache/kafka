@@ -55,6 +55,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -152,14 +153,9 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         when(inner.hasIndex()).thenReturn(hasIndex);
 
         final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
-
-        when(inner.name()).thenReturn("store");
-        inner.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-        verify(inner).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-
         outer.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-        verify(inner, times(2))
-                .init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
+
+        verify(inner).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
     }
 
     @Test
@@ -168,7 +164,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         when(inner.hasIndex()).thenReturn(hasIndex);
 
         final TimeOrderedCachingWindowStore outer = mock(TimeOrderedCachingWindowStore.class);
-                // new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
 
         when(inner.name()).thenReturn("store");
         inner.init((StateStoreContext) context, outer);
