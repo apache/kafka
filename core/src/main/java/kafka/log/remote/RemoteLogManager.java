@@ -796,7 +796,7 @@ public class RemoteLogManager implements Closeable {
 
                 boolean isSegmentDeleted = deleteRemoteLogSegment(metadata, x -> {
                     // Assumption that segments contain size >= 0
-                    if (retentionSizeData.get().remainingBreachedSize > 0) {
+                    if (remainingBreachedSize > 0) {
                         remainingBreachedSize -= x.segmentSizeInBytes();
                         return remainingBreachedSize >= 0;
                     } else return false;
@@ -914,11 +914,12 @@ public class RemoteLogManager implements Closeable {
             // leaks. We can have a followup to improve it by maintaining these values through both copying and deletion.
             final Set<Integer> epochsSet = new HashSet<>();
             long totalSizeEarlierToLocalLogStartOffset = 0L;
+            long localLogStartOffset = log.localLogStartOffset();
             while (segmentMetadataIter.hasNext()) {
                 RemoteLogSegmentMetadata segmentMetadata = segmentMetadataIter.next();
                 epochsSet.addAll(segmentMetadata.segmentLeaderEpochs().keySet());
 
-                if (checkSizeRetention && segmentMetadata.endOffset() < log.localLogStartOffset()) {
+                if (checkSizeRetention && segmentMetadata.endOffset() < localLogStartOffset) {
                     totalSizeEarlierToLocalLogStartOffset += segmentMetadata.segmentSizeInBytes();
                 }
             }
