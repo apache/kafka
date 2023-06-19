@@ -1178,8 +1178,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         underlyingStore = mock(RocksDBTimeOrderedWindowStore.class);
         when(underlyingStore.name()).thenReturn("store-name");
         when(underlyingStore.isOpen()).thenReturn(true);
-        cachingStore = new TimeOrderedCachingWindowStore(underlyingStore,
-            WINDOW_SIZE, SEGMENT_INTERVAL);
+        cachingStore = new TimeOrderedCachingWindowStore(underlyingStore, WINDOW_SIZE, SEGMENT_INTERVAL);
         cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
