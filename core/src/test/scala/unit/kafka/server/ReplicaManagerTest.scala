@@ -139,7 +139,7 @@ class ReplicaManagerTest {
       rm.checkpointHighWatermarks()
     } finally {
       // shutdown the replica manager upon test completion
-      rm.shutdown(false)
+      rm.shutdown(checkpointHW = false)
     }
   }
 
@@ -347,7 +347,10 @@ class ReplicaManagerTest {
       rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
       assertTrue(appendResult.hasFired)
-    } finally rm.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      rm.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -370,7 +373,7 @@ class ReplicaManagerTest {
         threadNamePrefix = Option(this.getClass.getName))
 
       // shutdown ReplicaManager so that metrics are removed
-      rm.shutdown()
+      rm.shutdown(checkpointHW = false)
 
       // Use the second instance of metrics group that is constructed. The first instance is constructed by
       // ReplicaManager constructor > BrokerTopicStats > BrokerTopicMetrics.
@@ -448,7 +451,10 @@ class ReplicaManagerTest {
       response.values.foreach(assertEquals(Errors.NONE, _))
       // should succeed to invoke ReplicaAlterLogDirsThread again
       assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -1357,7 +1363,10 @@ class ReplicaManagerTest {
       val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(
         partition, metadata, FetchRequest.ORDINARY_CONSUMER_ID, 1L, System.currentTimeMillis)
       assertFalse(preferredReadReplica.isDefined)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -1592,7 +1601,10 @@ class ReplicaManagerTest {
       // Only leader will compute preferred replica
       assertTrue(!consumerResult.assertFired.preferredReadReplica.isPresent)
 
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -1658,7 +1670,10 @@ class ReplicaManagerTest {
 
       // Returns a preferred replica
       assertTrue(consumerResult.assertFired.preferredReadReplica.isPresent)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -1733,7 +1748,10 @@ class ReplicaManagerTest {
       assertTrue(followerResult.hasFired)
 
       assertEquals(fetchOffset, followerResult.assertFired.highWatermark)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -1766,7 +1784,10 @@ class ReplicaManagerTest {
       leaderBrokerId, countDownLatch, expectTruncation = true)
     try {
       assertFalse(replicaManager.replicaSelectorOpt.isDefined)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -1856,7 +1877,10 @@ class ReplicaManagerTest {
       mockTimer.advanceClock(11)
       assertEquals(Errors.NONE, purgatoryFetchResult.assertFired.error)
       assertMetricCount(2)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -2008,7 +2032,10 @@ class ReplicaManagerTest {
         Optional.empty())
       fetchResult = fetchPartitionAsConsumer(replicaManager, tidp0, partitionData, clientMetadata = Some(clientMetadata))
       assertEquals(Errors.NONE, fetchResult.assertFired.error)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -2057,7 +2084,10 @@ class ReplicaManagerTest {
           .setLeaderEpoch(LeaderAndIsr.EpochDuringDelete)))
 
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.assertFired.error)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -2099,7 +2129,10 @@ class ReplicaManagerTest {
 
       assertNotNull(produceResult.get)
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, produceResult.get.error)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -2109,7 +2142,7 @@ class ReplicaManagerTest {
     val producerId = 24L
     val producerEpoch = 0.toShort
     val sequence = 0
-    
+
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val metadataCache = mock(classOf[MetadataCache])
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
@@ -2143,7 +2176,7 @@ class ReplicaManagerTest {
       when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).thenReturn(metadataResponseTopic)
       when(metadataCache.getAliveBrokerNode(0, config.interBrokerListenerName)).thenReturn(Some(node))
       when(metadataCache.getAliveBrokerNode(1, config.interBrokerListenerName)).thenReturn(None)
-      
+
       // We will attempt to schedule to the request handler thread using a non request handler thread. Set this to avoid error.
       KafkaRequestHandler.setBypassThreadCheck(true)
 
@@ -2151,7 +2184,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
       val result = appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
-      
+
       val transactionToAdd = new AddPartitionsToTxnTransaction()
         .setTransactionalId(transactionalId)
         .setProducerId(producerId)
@@ -2160,7 +2193,7 @@ class ReplicaManagerTest {
         .setTopics(new AddPartitionsToTxnTopicCollection(
           Seq(new AddPartitionsToTxnTopic().setName(tp.topic).setPartitions(Collections.singletonList(tp.partition))).iterator.asJava
         ))
-      
+
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       // We should add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback.capture())
@@ -2175,7 +2208,7 @@ class ReplicaManagerTest {
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, idempotentRecords2)
       verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
-      
+
       // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
       appendRecordsToMultipleTopics(replicaManager, Map(tp -> transactionalRecords, new TopicPartition(topic, 1) -> idempotentRecords2), transactionalId, Some(0))
       verify(addPartitionsToTxnManager, times(2)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), any[AddPartitionsToTxnManager.AppendCallback]())
@@ -2231,7 +2264,7 @@ class ReplicaManagerTest {
       replicaManager.shutdown(checkpointHW = false)
     }
   }
-  
+
   @Test
   def testDisabledVerification(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
@@ -2263,9 +2296,9 @@ class ReplicaManagerTest {
     try {
       val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp.topic), tp, Seq(0, 1), LeaderAndIsr(0, List(0, 1)))
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
-      
+
       when(metadataCache.contains(tp)).thenReturn(true)
-      
+
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
@@ -2283,9 +2316,9 @@ class ReplicaManagerTest {
   @Test
   def testGetTransactionCoordinator(): Unit = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    
+
     val metadataCache = mock(classOf[MetadataCache])
-    
+
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -2296,7 +2329,7 @@ class ReplicaManagerTest {
       metadataCache = metadataCache,
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager)
-      
+
     try {
       val txnCoordinatorPartition0 = 0
       val txnCoordinatorPartition1 = 1
@@ -2304,7 +2337,7 @@ class ReplicaManagerTest {
       // Before we set up the metadata cache, return nothing for the topic.
       when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).thenReturn(Seq())
       assertEquals((Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode), replicaManager.getTransactionCoordinator(txnCoordinatorPartition0))
-      
+
       // Return an error response.
       when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).
         thenReturn(Seq(new MetadataResponseTopic().setErrorCode(Errors.UNSUPPORTED_VERSION.code)))
@@ -2324,7 +2357,7 @@ class ReplicaManagerTest {
       when(metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), config.interBrokerListenerName)).thenReturn(metadataResponseTopic)
       when(metadataCache.getAliveBrokerNode(0, config.interBrokerListenerName)).thenReturn(Some(node0))
       when(metadataCache.getAliveBrokerNode(1, config.interBrokerListenerName)).thenReturn(None)
-      
+
       assertEquals((Errors.NONE, node0), replicaManager.getTransactionCoordinator(txnCoordinatorPartition0))
       assertEquals((Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode), replicaManager.getTransactionCoordinator(txnCoordinatorPartition1))
     } finally {
@@ -3068,7 +3101,10 @@ class ReplicaManagerTest {
 
       val (_, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
       assertEquals(Errors.STALE_CONTROLLER_EPOCH, error)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3099,7 +3135,10 @@ class ReplicaManagerTest {
       val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
       assertEquals(Errors.NONE, error)
       assertEquals(Map(tp0 -> Errors.KAFKA_STORAGE_ERROR), result)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3151,7 +3190,10 @@ class ReplicaManagerTest {
         assertEquals(Map(tp0 -> Errors.NONE), result)
         assertTrue(replicaManager.logManager.getLog(tp0).isDefined)
       }
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3277,7 +3319,10 @@ class ReplicaManagerTest {
         assertFalse(readRecoveryPointCheckpoint().contains(tp0))
         assertFalse(readLogStartOffsetCheckpoint().contains(tp0))
       }
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3310,7 +3355,7 @@ class ReplicaManagerTest {
       val errors = replicaManager.alterReplicaLogDirs(Map(tp -> dir))
       assertEquals(Errors.REPLICA_NOT_AVAILABLE, errors(tp))
     } finally {
-      replicaManager.shutdown(false)
+      replicaManager.shutdown(checkpointHW = false)
     }
   }
 
@@ -3349,7 +3394,10 @@ class ReplicaManagerTest {
       // Current version of PartitionMetadataFile is 0.
       assertEquals(0, partitionMetadata.version)
       assertEquals(id, partitionMetadata.topicId)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3394,7 +3442,10 @@ class ReplicaManagerTest {
       // Current version of PartitionMetadataFile is 0.
       assertEquals(0, partitionMetadata.version)
       assertEquals(id, partitionMetadata.topicId)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3453,7 +3504,10 @@ class ReplicaManagerTest {
 
       assertEquals(topicId, log.partitionMetadataFile.get.read().topicId)
       assertEquals(topicId, log2.partitionMetadataFile.get.read().topicId)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3495,7 +3549,10 @@ class ReplicaManagerTest {
 
       val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(2, invalidTopicIds), (_, _) => ())
       assertEquals(Errors.INCONSISTENT_TOPIC_ID, response4.partitionErrors(invalidTopicNames).get(topicPartition))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -3551,7 +3608,10 @@ class ReplicaManagerTest {
       val log4 = replicaManager.localLog(topicPartitionFoo).get
       assertFalse(log4.partitionMetadataFile.get.exists())
       assertEquals(Errors.NONE, response4.partitionErrors(topicNames).get(topicPartitionFoo))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -3686,7 +3746,10 @@ class ReplicaManagerTest {
       val bar1 = new TopicPartition("bar", 1)
       replicaManager.markPartitionOffline(bar1)
       assertEquals(None, replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   private def verifyRLMOnLeadershipChange(leaderPartitions: util.Set[Partition], followerPartitions: util.Set[Partition]): Unit = {
@@ -3763,7 +3826,10 @@ class ReplicaManagerTest {
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -3824,7 +3890,10 @@ class ReplicaManagerTest {
       }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -3868,7 +3937,10 @@ class ReplicaManagerTest {
 
       val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.leader.brokerEndPoint()))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -3909,7 +3981,10 @@ class ReplicaManagerTest {
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -3949,7 +4024,10 @@ class ReplicaManagerTest {
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -3989,7 +4067,10 @@ class ReplicaManagerTest {
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -4030,10 +4111,9 @@ class ReplicaManagerTest {
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
-      replicaManager.shutdown()
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
     }
-
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @ParameterizedTest
@@ -4083,7 +4163,10 @@ class ReplicaManagerTest {
 
       // Check that the produce failed because it changed to follower before replicating
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, leaderResponse.get.error)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -4142,7 +4225,10 @@ class ReplicaManagerTest {
 
       // Check that the produce failed because it changed to follower before replicating
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchCallback.assertFired.error)
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -4265,7 +4351,10 @@ class ReplicaManagerTest {
             initOffset = 1
           ))
         )
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
@@ -4372,7 +4461,10 @@ class ReplicaManagerTest {
         currentLeaderEpoch = 1,
         initOffset = 0
       )))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -4489,7 +4581,10 @@ class ReplicaManagerTest {
         currentLeaderEpoch = 1,
         initOffset = 0
       )))
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @ParameterizedTest
@@ -4904,7 +4999,10 @@ class ReplicaManagerTest {
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
       }
-    } finally replicaManager.shutdown(checkpointHW = false)
+    } finally {
+      // shutdown the replica manager upon test completion
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 }
 
