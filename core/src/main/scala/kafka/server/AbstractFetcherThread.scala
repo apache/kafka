@@ -356,6 +356,12 @@ abstract class AbstractFetcherThread(name: String,
                         partitionData
                       )
 
+                      // For ReplicaDirAlterThread, logAppendInfoOpt may return None, If truncate behavior occurs, lag may
+                      // need to be updated accordingly
+                      if (logAppendInfoOpt.isEmpty && currentFetchState.lag.nonEmpty) {
+                        fetcherLagStats.getAndMaybePut(topicPartition).lag = currentFetchState.lag.get
+                      }
+
                       logAppendInfoOpt.foreach { logAppendInfo =>
                         val validBytes = logAppendInfo.validBytes
                         val nextOffset = if (validBytes > 0) logAppendInfo.lastOffset + 1 else currentFetchState.fetchOffset
@@ -460,17 +466,9 @@ abstract class AbstractFetcherThread(name: String,
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
-        var lag = state.lag
-        var fetchOffset = state.fetchOffset
-        if (truncationOffset < fetchOffset) {
-          if (lag.nonEmpty) {
-            lag = Some(math.max(0, lag.get + (fetchOffset - truncationOffset)))
-          }
-          fetchOffset = truncationOffset
-        }
-        val newState = PartitionFetchState(state.topicId, fetchOffset,
-          lag, state.currentLeaderEpoch, state.delay, state = Truncating,
-          lastFetchedEpoch = None)
+        val newState = PartitionFetchState(state.topicId, math.min(truncationOffset, state.fetchOffset),
+          reviseFetchStateLag(truncationOffset, state.fetchOffset), state.currentLeaderEpoch, state.delay,
+          state = Truncating, lastFetchedEpoch = None)
         partitionStates.updateAndMoveToEnd(topicPartition, newState)
         partitionMapCond.signalAll()
       }
@@ -555,13 +553,21 @@ abstract class AbstractFetcherThread(name: String,
               Fetching
             else
               Truncating
-            PartitionFetchState(currentFetchState.topicId, offsetTruncationState.offset, currentFetchState.lag,
+            PartitionFetchState(currentFetchState.topicId, offsetTruncationState.offset,
+              reviseFetchStateLag(offsetTruncationState.offset, currentFetchState.fetchOffset),
               currentFetchState.currentLeaderEpoch, currentFetchState.delay, state, lastFetchedEpoch)
           case None => currentFetchState
         }
         (topicPartition, maybeTruncationComplete)
       }
     partitionStates.set(newStates.asJava)
+  }
+
+  private def reviseFetchStateLag(truncateOffset: Long, currentFetchOffset: Long): Option[Long] = {
+    if (truncateOffset < currentFetchOffset)
+      Some(0L)
+    else
+      Some(truncateOffset - currentFetchOffset)
   }
 
   /**
