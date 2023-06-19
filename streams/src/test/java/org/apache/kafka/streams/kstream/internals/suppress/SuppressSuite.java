@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.internals.FullChangeSerdeTest;
 import org.apache.kafka.streams.kstream.internals.SuppressScenarioTest;
 import org.apache.kafka.streams.kstream.internals.SuppressTopologyTest;
 import org.apache.kafka.streams.state.internals.BufferValueTest;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBufferTest;
+import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBufferTest;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -44,7 +44,7 @@ import org.junit.runners.Suite;
     SuppressScenarioTest.class,
     SuppressTopologyTest.class,
     SuppressedTest.class,
-    InMemoryTimeOrderedKeyValueBufferTest.class,
+    InMemoryTimeOrderedKeyValueChangeBufferTest.class,
     TimeOrderedKeyValueBufferTest.class,
     FullChangeSerdeTest.class,
     SuppressionIntegrationTest.class,
