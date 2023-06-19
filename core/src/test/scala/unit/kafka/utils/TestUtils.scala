@@ -606,16 +606,39 @@ object TestUtils extends Logging {
   }
 
   /**
-    * Create the consumer offsets/group metadata topic and wait until the leader is elected and metadata is propagated
-    * to all brokers.
-    */
+   * Ensures that the consumer offsets/group metadata topic exists. If it does not, the topic is created and the method waits
+   * until the leader is elected and metadata is propagated to all brokers. If it does, the method verifies that it has
+   * the expected number of partition and replication factor however it does not guarantee that the topic is empty.
+   */
   def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
     val server = servers.head
-    createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME,
-      server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
-      server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
-      servers,
-      server.groupCoordinator.groupMetadataTopicConfigs)
+    val numPartitions = server.config.offsetsTopicPartitions
+    val replicationFactor = server.config.offsetsTopicReplicationFactor.toInt
+
+    try {
+      createTopic(
+        zkClient,
+        Topic.GROUP_METADATA_TOPIC_NAME,
+        numPartitions,
+        replicationFactor,
+        servers,
+        server.groupCoordinator.groupMetadataTopicConfigs
+      )
+    } catch {
+      case ex: TopicExistsException =>
+        val allPartitionsMetadata = waitForAllPartitionsMetadata(
+          servers,
+          Topic.GROUP_METADATA_TOPIC_NAME,
+          numPartitions
+        )
+
+        // If the topic already exists, we ensure that it has the required
+        // number of partitions and replication factor. If it has not, the
+        // exception is thrown further.
+        if (allPartitionsMetadata.size != numPartitions || allPartitionsMetadata.head._2.replicas.size != replicationFactor) {
+          throw ex
+        }
+    }
   }
 
   /**
