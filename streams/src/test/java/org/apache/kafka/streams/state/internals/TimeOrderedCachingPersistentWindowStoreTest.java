@@ -165,7 +165,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
         outer.init((StateStoreContext) context, outer);
         verify(inner, times(1)).init((StateStoreContext) context, outer);
-
     }
 
     @Test
