@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
-import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
@@ -77,6 +76,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -127,7 +127,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -160,7 +159,17 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
+    /**
+     * The maximum records that the controller will write in a single batch.
+     */
     private final static int MAX_RECORDS_PER_BATCH = 10000;
+
+    /**
+     * The maximum records any user-initiated operation is allowed to generate.
+     *
+     * For now, this is set to the maximum records in a single batch.
+     */
+    final static int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
 
     /**
      * A builder class which creates the QuorumController.
@@ -168,6 +177,7 @@ public final class QuorumController implements Controller {
     static public class Builder {
         private final int nodeId;
         private final String clusterId;
+        private FaultHandler nonFatalFaultHandler = null;
         private FaultHandler fatalFaultHandler = null;
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
@@ -194,6 +204,11 @@ public final class QuorumController implements Controller {
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
             this.clusterId = clusterId;
+        }
+
+        public Builder setNonFatalFaultHandler(FaultHandler nonFatalFaultHandler) {
+            this.nonFatalFaultHandler = nonFatalFaultHandler;
+            return this;
         }
 
         public Builder setFatalFaultHandler(FaultHandler fatalFaultHandler) {
@@ -318,6 +333,8 @@ public final class QuorumController implements Controller {
                 throw new IllegalStateException("You must specify an initial metadata.version using the kafka-storage tool.");
             } else if (quorumFeatures == null) {
                 throw new IllegalStateException("You must specify the quorum features");
+            } else if (nonFatalFaultHandler == null) {
+                throw new IllegalStateException("You must specify a non-fatal fault handler.");
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
             }
@@ -336,6 +353,7 @@ public final class QuorumController implements Controller {
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(
+                    nonFatalFaultHandler,
                     fatalFaultHandler,
                     logContext,
                     nodeId,
@@ -378,6 +396,7 @@ public final class QuorumController implements Controller {
         public void accept(ConfigResource configResource) {
             switch (configResource.type()) {
                 case BROKER_LOGGER:
+                    // BROKER_LOGGER are always allowed.
                     break;
                 case BROKER:
                     // Cluster configs are always allowed.
@@ -411,34 +430,23 @@ public final class QuorumController implements Controller {
 
     public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
 
-    private static final String ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX =
-        "The active controller appears to be node ";
-
-    private NotControllerException newNotControllerException() {
-        OptionalInt latestController = raftClient.leaderAndEpoch().leaderId();
-        if (latestController.isPresent()) {
-            return new NotControllerException(ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX +
-                latestController.getAsInt() + ".");
-        } else {
-            return new NotControllerException("No controller appears to be active.");
-        }
+    private OptionalInt latestController() {
+        return raftClient.leaderAndEpoch().leaderId();
     }
 
-    private NotControllerException newPreMigrationException() {
-        OptionalInt latestController = raftClient.leaderAndEpoch().leaderId();
-        if (latestController.isPresent()) {
-            return new NotControllerException("The controller is in pre-migration mode.");
+    /**
+     * @return          The offset that we should perform read operations at.
+     */
+    private long currentReadOffset() {
+        if (isActiveController()) {
+            // The active controller keeps an in-memory snapshot at the last committed offset,
+            // which we want to read from when performing read operations. This will avoid
+            // reading uncommitted data.
+            return lastCommittedOffset;
         } else {
-            return new NotControllerException("No controller appears to be active.");
-        }
-    }
-
-    public static int exceptionToApparentController(NotControllerException e) {
-        if (e.getMessage().startsWith(ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX)) {
-            return Integer.parseInt(e.getMessage().substring(
-                ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX.length()));
-        } else {
-            return -1;
+            // Standby controllers never have uncommitted data in memory. Therefore, we always
+            // read the latest from every data structure.
+            return SnapshotRegistry.LATEST_EPOCH;
         }
     }
 
@@ -453,36 +461,35 @@ public final class QuorumController implements Controller {
     private Throwable handleEventException(String name,
                                            OptionalLong startProcessingTimeNs,
                                            Throwable exception) {
+        Throwable externalException =
+                ControllerExceptions.toExternalException(exception, () -> latestController());
         if (!startProcessingTimeNs.isPresent()) {
             log.error("{}: unable to start processing because of {}. Reason: {}", name,
                 exception.getClass().getSimpleName(), exception.getMessage());
-            if (exception instanceof ApiException) {
-                return exception;
-            } else {
-                return new UnknownServerException(exception);
-            }
+            return externalException;
         }
         long endProcessingTime = time.nanoseconds();
         long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
         long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
-        if (exception instanceof ApiException) {
+        if (ControllerExceptions.isExpected(exception)) {
             log.info("{}: failed with {} in {} us. Reason: {}", name,
                 exception.getClass().getSimpleName(), deltaUs, exception.getMessage());
-            return exception;
+            return externalException;
         }
         if (isActiveController()) {
-            log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
-                    "Renouncing leadership and reverting to the last committed offset {}.",
+            nonFatalFaultHandler.handleFault(String.format("%s: failed with unexpected server " +
+                    "exception %s at epoch %d in %d us. Renouncing leadership and reverting " +
+                    "to the last committed offset %d.",
                     name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
-                    lastCommittedOffset, exception);
+                    lastCommittedOffset), exception);
             renounce();
         } else {
-            log.warn("{}: failed with unknown server exception {} in {} us.  " +
-                    "The controller is already in standby mode.",
-                    name, exception.getClass().getSimpleName(), deltaUs,
+            nonFatalFaultHandler.handleFault(String.format("%s: failed with unexpected server " +
+                    "exception %s in %d us. The controller is already in standby mode.",
+                    name, exception.getClass().getSimpleName(), deltaUs),
                     exception);
         }
-        return new UnknownServerException(exception);
+        return externalException;
     }
 
     /**
@@ -693,11 +700,11 @@ public final class QuorumController implements Controller {
             }
             int controllerEpoch = curClaimEpoch;
             if (!isActiveController(controllerEpoch)) {
-                throw newNotControllerException();
+                throw ControllerExceptions.newWrongControllerException(latestController());
             }
             if (featureControl.inPreMigrationMode() && !flags.contains(RUNS_IN_PREMIGRATION)) {
                 log.info("Cannot run write operation {} in pre-migration mode. Returning NOT_CONTROLLER.", name);
-                throw newPreMigrationException();
+                throw ControllerExceptions.newPreMigrationException(latestController());
             }
             startProcessingTimeNs = OptionalLong.of(now);
             ControllerResult<T> result = op.generateRecordsAndResult();
@@ -942,7 +949,6 @@ public final class QuorumController implements Controller {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
                     maybeCompleteAuthorizerInitialLoad();
-                    long processedRecordsSize = 0;
                     boolean isActive = isActiveController();
                     while (reader.hasNext()) {
                         Batch<ApiMessageAndVersion> batch = reader.next();
@@ -1002,8 +1008,8 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            appendRaftEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
+        public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            appendRaftEvent(String.format("handleLoadSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
                     if (isActiveController()) {
@@ -1311,7 +1317,8 @@ public final class QuorumController implements Controller {
             raftClient.resign(curClaimEpoch);
             curClaimEpoch = -1;
             controllerMetrics.setActive(false);
-            deferredEventQueue.failAll(newNotControllerException());
+            deferredEventQueue.failAll(ControllerExceptions.
+                    newWrongControllerException(OptionalInt.empty()));
 
             if (!snapshotRegistry.hasSnapshot(lastCommittedOffset)) {
                 throw new RuntimeException("Unable to find last committed offset " +
@@ -1341,8 +1348,7 @@ public final class QuorumController implements Controller {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op, flags);
         queue.scheduleDeferred(name, new EarliestDeadlineFunction(deadlineNs), event);
         event.future.exceptionally(e -> {
-            if (e instanceof UnknownServerException && e.getCause() != null &&
-                e.getCause() instanceof RejectedExecutionException) {
+            if (ControllerExceptions.isTimeoutException(e)) {
                 log.error("Cancelling deferred write event {} because the event queue " +
                     "is now closed.", name);
                 return null;
@@ -1582,14 +1588,14 @@ public final class QuorumController implements Controller {
     }
 
     /**
+     * Handles faults that cause a controller failover, but which don't abort the process.
+     */
+    private final FaultHandler nonFatalFaultHandler;
+
+    /**
      * Handles faults that should normally be fatal to the process.
      */
     private final FaultHandler fatalFaultHandler;
-
-    /**
-     * The slf4j log context, used to create new loggers.
-     */
-    private final LogContext logContext;
 
     /**
      * The slf4j logger.
@@ -1797,6 +1803,7 @@ public final class QuorumController implements Controller {
     private final RecordRedactor recordRedactor;
 
     private QuorumController(
+        FaultHandler nonFatalFaultHandler,
         FaultHandler fatalFaultHandler,
         LogContext logContext,
         int nodeId,
@@ -1822,8 +1829,8 @@ public final class QuorumController implements Controller {
         int maxRecordsPerBatch,
         boolean zkMigrationEnabled
     ) {
+        this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
-        this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.clusterId = clusterId;
@@ -1961,7 +1968,7 @@ public final class QuorumController implements Controller {
         if (names.isEmpty())
             return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendReadEvent("findTopicIds", context.deadlineNs(),
-            () -> replicationControl.findTopicIds(lastCommittedOffset, names));
+            () -> replicationControl.findTopicIds(currentReadOffset(), names));
     }
 
     @Override
@@ -1969,7 +1976,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context
     ) {
         return appendReadEvent("findAllTopicIds", context.deadlineNs(),
-            () -> replicationControl.findAllTopicIds(lastCommittedOffset));
+            () -> replicationControl.findAllTopicIds(currentReadOffset()));
     }
 
     @Override
@@ -1980,7 +1987,7 @@ public final class QuorumController implements Controller {
         if (ids.isEmpty())
             return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendReadEvent("findTopicNames", context.deadlineNs(),
-            () -> replicationControl.findTopicNames(lastCommittedOffset, ids));
+            () -> replicationControl.findTopicNames(currentReadOffset(), ids));
     }
 
     @Override
@@ -2000,7 +2007,7 @@ public final class QuorumController implements Controller {
         Map<ConfigResource, Collection<String>> resources
     ) {
         return appendReadEvent("describeConfigs", context.deadlineNs(),
-            () -> configurationControl.describeConfigs(lastCommittedOffset, resources));
+            () -> configurationControl.describeConfigs(currentReadOffset(), resources));
     }
 
     @Override
@@ -2022,7 +2029,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context
     ) {
         return appendReadEvent("getFinalizedFeatures", context.deadlineNs(),
-            () -> featureControl.finalizedFeatures(lastCommittedOffset));
+            () -> featureControl.finalizedFeatures(currentReadOffset()));
     }
 
     @Override
@@ -2067,7 +2074,7 @@ public final class QuorumController implements Controller {
                 new ListPartitionReassignmentsResponseData().setErrorMessage(null));
         }
         return appendReadEvent("listPartitionReassignments", context.deadlineNs(),
-            () -> replicationControl.listPartitionReassignments(request.topics()));
+            () -> replicationControl.listPartitionReassignments(request.topics(), currentReadOffset()));
     }
 
     @Override
@@ -2126,7 +2133,12 @@ public final class QuorumController implements Controller {
                     }
                 }
             },
-            EnumSet.of(RUNS_IN_PREMIGRATION));
+            EnumSet.of(RUNS_IN_PREMIGRATION)).whenComplete((__, t) -> {
+                if (ControllerExceptions.isTimeoutException(t)) {
+                    replicationControl.processExpiredBrokerHeartbeat(request);
+                    controllerMetrics.incrementTimedOutHeartbeats();
+                }
+            });
     }
 
     @Override
@@ -2215,7 +2227,8 @@ public final class QuorumController implements Controller {
         }
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
-            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(context, topics);
+            final ControllerResult<List<CreatePartitionsTopicResult>> result =
+                    replicationControl.createPartitions(context, topics);
             if (validateOnly) {
                 log.debug("Validate-only CreatePartitions result(s): {}", result.response());
                 return result.withoutRecords();
@@ -2278,7 +2291,7 @@ public final class QuorumController implements Controller {
     }
 
     // VisibleForTesting
-    CountDownLatch pause() {
+    public CountDownLatch pause() {
         final CountDownLatch latch = new CountDownLatch(1);
         appendControlEvent("pause", () -> {
             try {

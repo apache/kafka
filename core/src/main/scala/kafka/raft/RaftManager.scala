@@ -30,7 +30,6 @@ import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
-import kafka.utils.timer.SystemTimer
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
@@ -47,6 +46,7 @@ import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpo
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{KafkaScheduler, ShutdownableThread}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.server.util.timer.SystemTimer
 
 import scala.jdk.CollectionConverters._
 
@@ -264,7 +264,6 @@ class KafkaRaftManager[T](
       topicPartition,
       topicId,
       dataDir,
-      recordSerde,
       time,
       scheduler,
       config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)

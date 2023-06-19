@@ -250,7 +250,7 @@ public class MetadataLoaderTest {
                         )
                     )
                 );
-                loader.handleSnapshot(snapshotReader);
+                loader.handleLoadSnapshot(snapshotReader);
             }
             loader.waitForAllEventsToBeHandled();
             if (sameObject) {
@@ -291,7 +291,7 @@ public class MetadataLoaderTest {
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))));
             assertFalse(snapshotReader.closed);
-            loader.handleSnapshot(snapshotReader);
+            loader.handleLoadSnapshot(snapshotReader);
             loader.waitForAllEventsToBeHandled();
             assertTrue(snapshotReader.closed);
             publishers.get(0).firstPublish.get(1, TimeUnit.MINUTES);
@@ -355,7 +355,7 @@ public class MetadataLoaderTest {
         if (loader.time() instanceof MockTime) {
             snapshotReader.setTime((MockTime) loader.time());
         }
-        loader.handleSnapshot(snapshotReader);
+        loader.handleLoadSnapshot(snapshotReader);
         loader.waitForAllEventsToBeHandled();
     }
 
@@ -469,7 +469,7 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
                 build()) {
             loader.installPublishers(publishers).get();
-            loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+            loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(200, 100, 4000), asList(
                     asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
@@ -539,7 +539,7 @@ public class MetadataLoaderTest {
         MetadataLoader loader,
         long offset
     ) throws Exception {
-        loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+        loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(offset, 100, 4000), asList(
                         asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
@@ -555,7 +555,7 @@ public class MetadataLoaderTest {
         MetadataLoader loader,
         long offset
     ) throws Exception {
-        loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+        loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(offset, 100, 4000), asList(
                         asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).

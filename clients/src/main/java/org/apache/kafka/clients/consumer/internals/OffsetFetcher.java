@@ -16,6 +16,35 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.consumer.LogTruncationException;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
+import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
+import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -28,36 +57,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.StaleMetadataException;
-import org.apache.kafka.clients.consumer.LogTruncationException;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
-import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
-import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.requests.ListOffsetsResponse;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
-import org.slf4j.Logger;
 
 /**
  * {@link OffsetFetcher} is responsible for fetching the {@link OffsetAndTimestamp offsets} for
@@ -75,10 +74,9 @@ public class OffsetFetcher {
     private final long requestTimeoutMs;
     private final IsolationLevel isolationLevel;
     private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
-    private final AtomicReference<RuntimeException> cachedOffsetForLeaderException = new AtomicReference<>();
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final ApiVersions apiVersions;
-    private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
+    private final OffsetFetcherUtils offsetFetcherUtils;
 
     public OffsetFetcher(LogContext logContext,
                          ConsumerNetworkClient client,
@@ -99,31 +97,8 @@ public class OffsetFetcher {
         this.isolationLevel = isolationLevel;
         this.apiVersions = apiVersions;
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
-    }
-
-    /**
-     * Represents data about an offset returned by a broker.
-     */
-    static class ListOffsetData {
-        final long offset;
-        final Long timestamp; //  null if the broker does not support returning timestamps
-        final Optional<Integer> leaderEpoch; // empty if the leader epoch is not known
-
-        ListOffsetData(long offset, Long timestamp, Optional<Integer> leaderEpoch) {
-            this.offset = offset;
-            this.timestamp = timestamp;
-            this.leaderEpoch = leaderEpoch;
-        }
-    }
-
-    private Long offsetResetStrategyTimestamp(final TopicPartition partition) {
-        OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        if (strategy == OffsetResetStrategy.EARLIEST)
-            return ListOffsetsRequest.EARLIEST_TIMESTAMP;
-        else if (strategy == OffsetResetStrategy.LATEST)
-            return ListOffsetsRequest.LATEST_TIMESTAMP;
-        else
-            return null;
+        this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptions,
+                time, apiVersions);
     }
 
     private OffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
@@ -139,7 +114,7 @@ public class OffsetFetcher {
      * Reset offsets for all assigned partitions that require it.
      *
      * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
-     *   and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
+     *                                                                         and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
      */
     public void resetPositionsIfNeeded() {
         // Raise exception from previous offset fetch if there is one
@@ -147,16 +122,10 @@ public class OffsetFetcher {
         if (exception != null)
             throw exception;
 
-        Set<TopicPartition> partitions = subscriptions.partitionsNeedingReset(time.milliseconds());
-        if (partitions.isEmpty())
-            return;
+        Map<TopicPartition, Long> offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
 
-        final Map<TopicPartition, Long> offsetResetTimestamps = new HashMap<>();
-        for (final TopicPartition partition : partitions) {
-            Long timestamp = offsetResetStrategyTimestamp(partition);
-            if (timestamp != null)
-                offsetResetTimestamps.put(partition, timestamp);
-        }
+        if (offsetResetTimestamps.isEmpty())
+            return;
 
         resetPositionsAsync(offsetResetTimestamps);
     }
@@ -165,45 +134,21 @@ public class OffsetFetcher {
      * Validate offsets for all assigned partitions for which a leader change has been detected.
      */
     public void validatePositionsIfNeeded() {
-        RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
-        if (exception != null)
-            throw exception;
-
-        // Validate each partition against the current leader and epoch
-        // If we see a new metadata version, check all partitions
-        validatePositionsOnMetadataChange();
-
-        // Collect positions needing validation, with backoff
-        Map<TopicPartition, FetchPosition> partitionsToValidate = subscriptions
-                .partitionsNeedingValidation(time.milliseconds())
-                .stream()
-                .filter(tp -> subscriptions.position(tp) != null)
-                .collect(Collectors.toMap(Function.identity(), subscriptions::position));
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
+                offsetFetcherUtils.getPartitionsToValidate();
 
         validatePositionsAsync(partitionsToValidate);
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                    Timer timer) {
-        metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
+        metadata.addTransientTopics(offsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
 
         try {
             Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
                     timer, true).fetchedOffsets;
 
-            HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
-            for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-                offsetsByTimes.put(entry.getKey(), null);
-
-            for (Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
-                // 'entry.getValue().timestamp' will not be null since we are guaranteed
-                // to work with a v1 (or later) ListOffset request
-                ListOffsetData offsetData = entry.getValue();
-                offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp,
-                        offsetData.leaderEpoch));
-            }
-
-            return offsetsByTimes;
+            return offsetFetcherUtils.buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
         } finally {
             metadata.clearTransientTopics();
         }
@@ -227,24 +172,7 @@ public class OffsetFetcher {
                         result.fetchedOffsets.putAll(value.fetchedOffsets);
                         remainingToSearch.keySet().retainAll(value.partitionsToRetry);
 
-                        for (final Map.Entry<TopicPartition, ListOffsetData> entry: value.fetchedOffsets.entrySet()) {
-                            final TopicPartition partition = entry.getKey();
-
-                            // if the interested partitions are part of the subscriptions, use the returned offset to update
-                            // the subscription state as well:
-                            //   * with read-committed, the returned offset would be LSO;
-                            //   * with read-uncommitted, the returned offset would be HW;
-                            if (subscriptions.isAssigned(partition)) {
-                                final long offset = entry.getValue().offset;
-                                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-                                    log.trace("Updating last stable offset for partition {} to {}", partition, offset);
-                                    subscriptions.updateLastStableOffset(partition, offset);
-                                } else {
-                                    log.trace("Updating high watermark for partition {} to {}", partition, offset);
-                                    subscriptions.updateHighWatermark(partition, offset);
-                                }
-                            }
-                        }
+                        offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
                     }
                 }
 
@@ -258,7 +186,7 @@ public class OffsetFetcher {
 
             // if timeout is set to zero, do not try to poll the network client at all
             // and return empty immediately; otherwise try to get the results synchronously
-            // and throw timeout exception if cannot complete in time
+            // and throw timeout exception if it cannot complete in time
             if (timer.timeoutMs() == 0L)
                 return result;
 
@@ -287,7 +215,7 @@ public class OffsetFetcher {
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
                                                            Timer timer) {
-        metadata.addTransientTopics(topicsForPartitions(partitions));
+        metadata.addTransientTopics(offsetFetcherUtils.topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
                     .distinct()
@@ -420,7 +348,7 @@ public class OffsetFetcher {
                     });
 
                     if (!truncations.isEmpty()) {
-                        maybeSetOffsetForLeaderException(buildLogTruncationException(truncations));
+                        offsetFetcherUtils.maybeSetOffsetForLeaderException(buildLogTruncationException(truncations));
                     }
                 }
 
@@ -430,7 +358,7 @@ public class OffsetFetcher {
                     metadata.requestUpdate();
 
                     if (!(e instanceof RetriableException)) {
-                        maybeSetOffsetForLeaderException(e);
+                        offsetFetcherUtils.maybeSetOffsetForLeaderException(e);
                     }
                 }
             });
@@ -449,18 +377,12 @@ public class OffsetFetcher {
                 truncatedFetchOffsets, divergentOffsets);
     }
 
-    private void maybeSetOffsetForLeaderException(RuntimeException e) {
-        if (!cachedOffsetForLeaderException.compareAndSet(null, e)) {
-            log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
-        }
-    }
-
     /**
      * Search the offsets by target times for the specified partitions.
      *
      * @param timestampsToSearch the mapping between partitions and target time
-     * @param requireTimestamps true if we should fail with an UnsupportedVersionException if the broker does
-     *                         not support fetching precise timestamps for offsets
+     * @param requireTimestamps  true if we should fail with an UnsupportedVersionException if the broker does
+     *                           not support fetching precise timestamps for offsets
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch,
@@ -507,16 +429,17 @@ public class OffsetFetcher {
      * Groups timestamps to search by node for topic partitions in `timestampsToSearch` that have
      * leaders available. Topic partitions from `timestampsToSearch` that do not have their leader
      * available are added to `partitionsToRetry`
+     *
      * @param timestampsToSearch The mapping from partitions ot the target timestamps
-     * @param partitionsToRetry A set of topic partitions that will be extended with partitions
-     *                          that need metadata update or re-connect to the leader.
+     * @param partitionsToRetry  A set of topic partitions that will be extended with partitions
+     *                           that need metadata update or re-connect to the leader.
      */
     private Map<Node, Map<TopicPartition, ListOffsetsPartition>> groupListOffsetRequests(
             Map<TopicPartition, Long> timestampsToSearch,
             Set<TopicPartition> partitionsToRetry) {
         final Map<TopicPartition, ListOffsetsPartition> partitionDataMap = new HashMap<>();
-        for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
-            TopicPartition tp  = entry.getKey();
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            TopicPartition tp = entry.getKey();
             Long offset = entry.getValue();
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
 
@@ -544,15 +467,15 @@ public class OffsetFetcher {
                 }
             }
         }
-        return regroupPartitionMapByNode(partitionDataMap);
+        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap);
     }
 
     /**
      * Send the ListOffsetRequest to a specific broker for the partitions and target timestamps.
      *
-     * @param node The node to send the ListOffsetRequest to.
+     * @param node               The node to send the ListOffsetRequest to.
      * @param timestampsToSearch The mapping from partitions to the target timestamps.
-     * @param requireTimestamp  True if we require a timestamp in the response.
+     * @param requireTimestamp   True if we require a timestamp in the response.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
@@ -576,122 +499,32 @@ public class OffsetFetcher {
 
     /**
      * Callback for the response of the list offset call above.
+     *
      * @param listOffsetsResponse The response from the server.
-     * @param future The future to be completed when the response returns. Note that any partition-level errors will
-     *               generally fail the entire future result. The one exception is UNSUPPORTED_FOR_MESSAGE_FORMAT,
-     *               which indicates that the broker does not support the v1 message format. Partitions with this
-     *               particular error are simply left out of the future map. Note that the corresponding timestamp
-     *               value of each partition may be null only for v0. In v1 and later the ListOffset API would not
-     *               return a null timestamp (-1 is returned instead when necessary).
+     * @param future              The future to be completed when the response returns. Note that any partition-level errors will
+     *                            generally fail the entire future result. The one exception is UNSUPPORTED_FOR_MESSAGE_FORMAT,
+     *                            which indicates that the broker does not support the v1 message format. Partitions with this
+     *                            particular error are simply left out of the future map. Note that the corresponding timestamp
+     *                            value of each partition may be null only for v0. In v1 and later the ListOffset API would not
+     *                            return a null timestamp (-1 is returned instead when necessary).
      */
     private void handleListOffsetResponse(ListOffsetsResponse listOffsetsResponse,
                                           RequestFuture<ListOffsetResult> future) {
-        Map<TopicPartition, ListOffsetData> fetchedOffsets = new HashMap<>();
-        Set<TopicPartition> partitionsToRetry = new HashSet<>();
-        Set<String> unauthorizedTopics = new HashSet<>();
-
-        for (ListOffsetsTopicResponse topic : listOffsetsResponse.topics()) {
-            for (ListOffsetsPartitionResponse partition : topic.partitions()) {
-                TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
-                Errors error = Errors.forCode(partition.errorCode());
-                switch (error) {
-                    case NONE:
-                        if (!partition.oldStyleOffsets().isEmpty()) {
-                            // Handle v0 response with offsets
-                            long offset;
-                            if (partition.oldStyleOffsets().size() > 1) {
-                                future.raise(new IllegalStateException("Unexpected partitionData response of length " +
-                                        partition.oldStyleOffsets().size()));
-                                return;
-                            } else {
-                                offset = partition.oldStyleOffsets().get(0);
-                            }
-                            log.debug("Handling v0 ListOffsetResponse response for {}. Fetched offset {}",
-                                    topicPartition, offset);
-                            if (offset != ListOffsetsResponse.UNKNOWN_OFFSET) {
-                                ListOffsetData offsetData = new ListOffsetData(offset, null, Optional.empty());
-                                fetchedOffsets.put(topicPartition, offsetData);
-                            }
-                        } else {
-                            // Handle v1 and later response or v0 without offsets
-                            log.debug("Handling ListOffsetResponse response for {}. Fetched offset {}, timestamp {}",
-                                    topicPartition, partition.offset(), partition.timestamp());
-                            if (partition.offset() != ListOffsetsResponse.UNKNOWN_OFFSET) {
-                                Optional<Integer> leaderEpoch = (partition.leaderEpoch() == ListOffsetsResponse.UNKNOWN_EPOCH)
-                                        ? Optional.empty()
-                                        : Optional.of(partition.leaderEpoch());
-                                ListOffsetData offsetData = new ListOffsetData(partition.offset(), partition.timestamp(),
-                                        leaderEpoch);
-                                fetchedOffsets.put(topicPartition, offsetData);
-                            }
-                        }
-                        break;
-                    case UNSUPPORTED_FOR_MESSAGE_FORMAT:
-                        // The message format on the broker side is before 0.10.0, which means it does not
-                        // support timestamps. We treat this case the same as if we weren't able to find an
-                        // offset corresponding to the requested timestamp and leave it out of the result.
-                        log.debug("Cannot search by timestamp for partition {} because the message format version " +
-                                "is before 0.10.0", topicPartition);
-                        break;
-                    case NOT_LEADER_OR_FOLLOWER:
-                    case REPLICA_NOT_AVAILABLE:
-                    case KAFKA_STORAGE_ERROR:
-                    case OFFSET_NOT_AVAILABLE:
-                    case LEADER_NOT_AVAILABLE:
-                    case FENCED_LEADER_EPOCH:
-                    case UNKNOWN_LEADER_EPOCH:
-                        log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
-                                topicPartition, error);
-                        partitionsToRetry.add(topicPartition);
-                        break;
-                    case UNKNOWN_TOPIC_OR_PARTITION:
-                        log.warn("Received unknown topic or partition error in ListOffset request for partition {}", topicPartition);
-                        partitionsToRetry.add(topicPartition);
-                        break;
-                    case TOPIC_AUTHORIZATION_FAILED:
-                        unauthorizedTopics.add(topicPartition.topic());
-                        break;
-                    default:
-                        log.warn("Attempt to fetch offsets for partition {} failed due to unexpected exception: {}, retrying.",
-                                topicPartition, error.message());
-                        partitionsToRetry.add(topicPartition);
-                }
-            }
-        }
-
-        if (!unauthorizedTopics.isEmpty())
-            future.raise(new TopicAuthorizationException(unauthorizedTopics));
-        else
-            future.complete(new ListOffsetResult(fetchedOffsets, partitionsToRetry));
-    }
-
-    static class ListOffsetResult {
-        private final Map<TopicPartition, ListOffsetData> fetchedOffsets;
-        private final Set<TopicPartition> partitionsToRetry;
-
-        ListOffsetResult(Map<TopicPartition, ListOffsetData> fetchedOffsets, Set<TopicPartition> partitionsNeedingRetry) {
-            this.fetchedOffsets = fetchedOffsets;
-            this.partitionsToRetry = partitionsNeedingRetry;
-        }
-
-        ListOffsetResult() {
-            this.fetchedOffsets = new HashMap<>();
-            this.partitionsToRetry = new HashSet<>();
+        try {
+            ListOffsetResult result = offsetFetcherUtils.handleListOffsetResponse(listOffsetsResponse);
+            future.complete(result);
+        } catch (RuntimeException e) {
+            future.raise(e);
         }
     }
+
 
     /**
      * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then
      * we should check that all the assignments have a valid position.
      */
     public void validatePositionsOnMetadataChange() {
-        int newMetadataUpdateVersion = metadata.updateVersion();
-        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
-            subscriptions.assignedPartitions().forEach(topicPartition -> {
-                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
-                subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
-            });
-        }
+        offsetFetcherUtils.validatePositionsOnMetadataChange();
     }
 
     private Map<Node, Map<TopicPartition, FetchPosition>> regroupFetchPositionsByLeader(
@@ -701,17 +534,6 @@ public class OffsetFetcher {
                 .filter(entry -> entry.getValue().currentLeader.leader.isPresent())
                 .collect(Collectors.groupingBy(entry -> entry.getValue().currentLeader.leader.get(),
                         Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
-    }
-
-    private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
-        return partitionMap.entrySet()
-                .stream()
-                .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
-                        Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
-    }
-
-    private Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
-        return partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
     }
 
 }

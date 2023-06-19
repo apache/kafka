@@ -17,8 +17,10 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ProducerIdsBlock;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -73,6 +75,8 @@ public interface MigrationClient {
     ConfigMigrationClient configClient();
 
     AclMigrationClient aclClient();
+
+    Optional<ProducerIdsBlock> readProducerId();
 
     ZkMigrationLeadershipState writeProducerId(
         long nextProducerId,

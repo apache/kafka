@@ -103,7 +103,7 @@ class SharedServer(
   @volatile var brokerMetrics: BrokerServerMetrics = _
   @volatile var controllerServerMetrics: ControllerMetadataMetrics = _
   @volatile var loader: MetadataLoader = _
-  val snapshotsDiabledReason = new AtomicReference[String](null)
+  val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
   @volatile var snapshotGenerator: SnapshotGenerator = _
 
@@ -166,7 +166,7 @@ class SharedServer(
     action = () => SharedServer.this.synchronized {
       Option(brokerMetrics).foreach(_.metadataLoadErrorCount.getAndIncrement())
       Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
-      snapshotsDiabledReason.compareAndSet(null, "metadata loading fault")
+      snapshotsDisabledReason.compareAndSet(null, "metadata loading fault")
     })
 
   /**
@@ -177,7 +177,7 @@ class SharedServer(
     fatal = true,
     action = () => SharedServer.this.synchronized {
       Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
-      snapshotsDiabledReason.compareAndSet(null, "controller startup fault")
+      snapshotsDisabledReason.compareAndSet(null, "controller startup fault")
     })
 
   /**
@@ -189,18 +189,28 @@ class SharedServer(
     action = () => SharedServer.this.synchronized {
       Option(brokerMetrics).foreach(_.metadataApplyErrorCount.getAndIncrement())
       Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
-      snapshotsDiabledReason.compareAndSet(null, "initial broker metadata loading fault")
+      snapshotsDisabledReason.compareAndSet(null, "initial broker metadata loading fault")
     })
 
   /**
-   * The fault handler to use when the QuorumController experiences a fault.
+   * The fault handler to use when the QuorumController experiences a fatal fault.
    */
-  def quorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
+  def fatalQuorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "quorum controller",
     fatal = true,
     action = () => SharedServer.this.synchronized {
       Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
-      snapshotsDiabledReason.compareAndSet(null, "quorum controller fault")
+      snapshotsDisabledReason.compareAndSet(null, "quorum controller fatal fault")
+    })
+
+  /**
+   * The fault handler to use when the QuorumController experiences a non-fatal fault.
+   */
+  def nonFatalQuorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "quorum controller",
+    fatal = false,
+    action = () => SharedServer.this.synchronized {
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
     })
 
   /**
@@ -269,7 +279,7 @@ class SharedServer(
           setFaultHandler(metadataPublishingFaultHandler).
           setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
           setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
-          setDisabledReason(snapshotsDiabledReason).
+          setDisabledReason(snapshotsDisabledReason).
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           build()
         _raftManager.register(loader)

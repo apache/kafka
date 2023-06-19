@@ -18,11 +18,16 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
@@ -32,6 +37,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.MockTime;
@@ -54,6 +60,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -67,7 +74,9 @@ import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
+import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
@@ -78,6 +87,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
@@ -92,6 +102,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -100,6 +111,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -134,6 +146,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
@@ -144,6 +157,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstructionWithAnswer;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -589,7 +603,7 @@ public class WorkerTest {
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                noneConnectorClientConfigOverridePolicy);
+                noneConnectorClientConfigOverridePolicy, null);
         worker.herder = herder;
         worker.start();
 
@@ -628,7 +642,7 @@ public class WorkerTest {
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                noneConnectorClientConfigOverridePolicy);
+                noneConnectorClientConfigOverridePolicy, null);
         worker.herder = herder;
         worker.start();
 
@@ -688,7 +702,7 @@ public class WorkerTest {
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                noneConnectorClientConfigOverridePolicy);
+                noneConnectorClientConfigOverridePolicy, null);
         worker.herder = herder;
         worker.start();
 
@@ -746,7 +760,8 @@ public class WorkerTest {
             config,
             offsetBackingStore,
             executorService,
-            noneConnectorClientConfigOverridePolicy);
+            noneConnectorClientConfigOverridePolicy,
+            null);
 
         worker.herder = herder;
 
@@ -872,7 +887,7 @@ public class WorkerTest {
         TaskConfig taskConfig = new TaskConfig(origProps);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                            noneConnectorClientConfigOverridePolicy, null);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -916,7 +931,7 @@ public class WorkerTest {
         mockExecutorFakeSubmit(WorkerTask.class);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                            noneConnectorClientConfigOverridePolicy, null);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -1286,7 +1301,7 @@ public class WorkerTest {
         connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, we should only use the worker-global offsets store
-        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
 
@@ -1294,7 +1309,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1302,7 +1317,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific offsets store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1310,7 +1325,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific offsets store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1318,7 +1333,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1326,7 +1341,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, even with an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should still only use the worker-global offsets store
-        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
 
@@ -1361,7 +1376,7 @@ public class WorkerTest {
         connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, we should only use a connector-specific offsets store
-        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1369,7 +1384,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1377,7 +1392,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1385,7 +1400,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1393,7 +1408,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1401,7 +1416,7 @@ public class WorkerTest {
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's,  we should use both a connector-specific store and the worker-global store
-        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
 
@@ -1635,7 +1650,7 @@ public class WorkerTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config,
                             offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                            noneConnectorClientConfigOverridePolicy, null);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -1655,7 +1670,7 @@ public class WorkerTest {
         when(executorService.awaitTermination(1000L, TimeUnit.MILLISECONDS)).thenReturn(false);
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config,
                             offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                            noneConnectorClientConfigOverridePolicy, null);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -1676,7 +1691,7 @@ public class WorkerTest {
         when(executorService.awaitTermination(1000L, TimeUnit.MILLISECONDS)).thenThrow(new InterruptedException("interrupt"));
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config,
                             offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                            noneConnectorClientConfigOverridePolicy, null);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -1692,6 +1707,11 @@ public class WorkerTest {
     @SuppressWarnings("unchecked")
     public void testZombieFencing() {
         Admin admin = mock(Admin.class);
+        AtomicReference<Map<String, Object>> adminConfig = new AtomicReference<>();
+        Function<Map<String, Object>, Admin> mockAdminConstructor = actualAdminConfig -> {
+            adminConfig.set(actualAdminConfig);
+            return admin;
+        };
         FenceProducersResult fenceProducersResult = mock(FenceProducersResult.class);
         KafkaFuture<Void> fenceProducersFuture = mock(KafkaFuture.class);
         KafkaFuture<Void> expectedZombieFenceFuture = mock(KafkaFuture.class);
@@ -1703,21 +1723,15 @@ public class WorkerTest {
         mockGenericIsolation();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                allConnectorClientConfigOverridePolicy);
+                allConnectorClientConfigOverridePolicy, mockAdminConstructor);
         worker.herder = herder;
         worker.start();
 
         Map<String, String> connectorConfig = anyConnectorConfigMap();
         connectorConfig.put(CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + RETRY_BACKOFF_MS_CONFIG, "4761");
 
-        AtomicReference<Map<String, Object>> adminConfig = new AtomicReference<>();
-        Function<Map<String, Object>, Admin> mockAdminConstructor = actualAdminConfig -> {
-            adminConfig.set(actualAdminConfig);
-            return admin;
-        };
-
         KafkaFuture<Void> actualZombieFenceFuture =
-                worker.fenceZombies(CONNECTOR_ID, 12, connectorConfig, mockAdminConstructor);
+                worker.fenceZombies(CONNECTOR_ID, 12, connectorConfig);
 
         assertEquals(expectedZombieFenceFuture, actualZombieFenceFuture);
         assertNotNull(adminConfig.get());
@@ -1737,15 +1751,14 @@ public class WorkerTest {
         String connectorClass = SampleSinkConnector.class.getName();
         connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                allConnectorClientConfigOverridePolicy);
-        worker.start();
-
         Admin admin = mock(Admin.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
         mockAdminListConsumerGroupOffsets(admin, Collections.singletonMap(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10)), null);
 
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
-        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb, config -> admin);
+        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb);
         ConnectorOffsets offsets = cb.get(1000, TimeUnit.MILLISECONDS);
 
         assertEquals(1, offsets.offsets().size());
@@ -1754,7 +1767,7 @@ public class WorkerTest {
         assertEquals("test-topic", offsets.offsets().get(0).partition().get(SinkUtils.KAFKA_TOPIC_KEY));
 
         verify(admin).listConsumerGroupOffsets(eq(SinkUtils.consumerGroupId(CONNECTOR_ID)), any(ListConsumerGroupOffsetsOptions.class));
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
     }
 
@@ -1765,15 +1778,15 @@ public class WorkerTest {
         String connectorClass = SampleSinkConnector.class.getName();
         connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
 
+        Admin admin = mock(Admin.class);
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                allConnectorClientConfigOverridePolicy);
+                allConnectorClientConfigOverridePolicy, config -> admin);
         worker.start();
 
-        Admin admin = mock(Admin.class);
         when(admin.listConsumerGroupOffsets(anyString(), any(ListConsumerGroupOffsetsOptions.class))).thenThrow(new ClusterAuthorizationException("Test exception"));
 
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
-        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb, config -> admin);
+        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb);
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
 
@@ -1789,20 +1802,20 @@ public class WorkerTest {
         String connectorClass = SampleSinkConnector.class.getName();
         connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
 
+        Admin admin = mock(Admin.class);
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                allConnectorClientConfigOverridePolicy);
+                allConnectorClientConfigOverridePolicy, config -> admin);
         worker.start();
 
-        Admin admin = mock(Admin.class);
         mockAdminListConsumerGroupOffsets(admin, null, new ClusterAuthorizationException("Test exception"));
 
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
-        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb, config -> admin);
+        worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, cb);
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
 
         verify(admin).listConsumerGroupOffsets(eq(SinkUtils.consumerGroupId(CONNECTOR_ID)), any(ListConsumerGroupOffsetsOptions.class));
-        verify(admin).close();
+        verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
     }
 
@@ -1831,7 +1844,7 @@ public class WorkerTest {
             return null;
         });
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                allConnectorClientConfigOverridePolicy);
+                allConnectorClientConfigOverridePolicy, null);
         worker.start();
 
         Set<Map<String, Object>> connectorPartitions =
@@ -1853,7 +1866,6 @@ public class WorkerTest {
         assertEquals("partitionValue", offsets.offsets().get(0).partition().get("partitionKey"));
         assertEquals("offsetValue", offsets.offsets().get(0).offset().get("offsetKey"));
 
-        verify(offsetStore).configure(config);
         verify(offsetStore).start();
         verify(offsetReader).close();
         verify(offsetStore).stop();
@@ -1872,7 +1884,7 @@ public class WorkerTest {
             return null;
         });
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                allConnectorClientConfigOverridePolicy);
+                allConnectorClientConfigOverridePolicy, null);
         worker.start();
 
         when(offsetStore.connectorPartitions(CONNECTOR_ID)).thenThrow(new ConnectException("Test exception"));
@@ -1882,10 +1894,349 @@ public class WorkerTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
 
-        verify(offsetStore).configure(config);
         verify(offsetStore).start();
         verify(offsetReader).close();
         verify(offsetStore).stop();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testAlterOffsetsConnectorDoesNotSupportOffsetAlteration() {
+        mockKafkaClusterId();
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, null);
+        worker.start();
+
+        mockGenericIsolation();
+        when(plugins.newConnector(anyString())).thenReturn(sourceConnector);
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenThrow(new UnsupportedOperationException("This connector doesn't " +
+                "support altering of offsets"));
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterConnectorOffsets(CONNECTOR_ID, connectorProps,
+                Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                cb);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(ConnectException.class, e.getCause().getClass());
+        assertEquals("Failed to alter offsets for connector " + CONNECTOR_ID + " because it doesn't support external modification of offsets",
+                e.getCause().getMessage());
+
+        verifyGenericIsolation();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testAlterOffsetsSourceConnector() throws Exception {
+        mockKafkaClusterId();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, null);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+        ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+        OffsetStorageWriter offsetWriter = mock(OffsetStorageWriter.class);
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        partitionOffsets.put(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue"));
+        partitionOffsets.put(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"));
+
+        when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
+            invocation.getArgument(0, Callback.class).onCompletion(null, null);
+            return null;
+        });
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterSourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer,
+                offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
+        assertEquals("The offsets for this connector have been altered successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
+
+        verify(offsetStore).start();
+        partitionOffsets.forEach((partition, offset) -> verify(offsetWriter).offset(partition, offset));
+        verify(offsetWriter).beginFlush();
+        verify(offsetWriter).doFlush(any());
+        verify(offsetStore, timeout(1000)).stop();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testAlterOffsetsSourceConnectorError() throws Exception {
+        mockKafkaClusterId();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, null);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+        ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+        OffsetStorageWriter offsetWriter = mock(OffsetStorageWriter.class);
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        partitionOffsets.put(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue"));
+        partitionOffsets.put(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"));
+
+        when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
+            invocation.getArgument(0, Callback.class).onCompletion(new RuntimeException("Test exception"), null);
+            return null;
+        });
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterSourceConnectorOffsets(CONNECTOR_ID, sourceConnector, connectorProps, partitionOffsets, offsetStore, producer,
+                offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS).message());
+        assertEquals(ConnectException.class, e.getCause().getClass());
+
+        verify(offsetStore).start();
+        partitionOffsets.forEach((partition, offset) -> verify(offsetWriter).offset(partition, offset));
+        verify(offsetWriter).beginFlush();
+        verify(offsetWriter).doFlush(any());
+        verify(offsetStore, timeout(1000)).stop();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnectorNoResets() throws Exception {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture = ArgumentCaptor.forClass(Map.class);
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 500));
+        Map<String, String> partition2 = new HashMap<>();
+        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
+        partitionOffsets.put(partition2, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 100));
+
+        // A null value for deleteOffsetsSetCapture indicates that we don't expect any call to Admin::deleteConsumerGroupOffsets
+        alterOffsetsSinkConnector(partitionOffsets, alterOffsetsMapCapture, null);
+
+        assertEquals(2, alterOffsetsMapCapture.getValue().size());
+        assertEquals(500, alterOffsetsMapCapture.getValue().get(new TopicPartition("test_topic", 10)).offset());
+        assertEquals(100, alterOffsetsMapCapture.getValue().get(new TopicPartition("test_topic", 20)).offset());
+    }
+
+    @Test
+    public void testAlterOffsetSinkConnectorOnlyResets() throws Exception {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture = ArgumentCaptor.forClass(Set.class);
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, null);
+        Map<String, String> partition2 = new HashMap<>();
+        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
+        partitionOffsets.put(partition2, null);
+
+        // A null value for alterOffsetsMapCapture indicates that we don't expect any call to Admin::alterConsumerGroupOffsets
+        alterOffsetsSinkConnector(partitionOffsets, null, deleteOffsetsSetCapture);
+
+        Set<TopicPartition> expectedTopicPartitionsForOffsetDelete = new HashSet<>();
+        expectedTopicPartitionsForOffsetDelete.add(new TopicPartition("test_topic", 10));
+        expectedTopicPartitionsForOffsetDelete.add(new TopicPartition("test_topic", 20));
+
+        // Verify that contents are equal without caring about order
+        assertEquals(expectedTopicPartitionsForOffsetDelete, deleteOffsetsSetCapture.getValue());
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnectorAltersAndResets() throws Exception {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture = ArgumentCaptor.forClass(Map.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture = ArgumentCaptor.forClass(Set.class);
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
+        Map<String, String> partition2 = new HashMap<>();
+        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
+        partitionOffsets.put(partition2, null);
+
+        alterOffsetsSinkConnector(partitionOffsets, alterOffsetsMapCapture, deleteOffsetsSetCapture);
+
+        assertEquals(1, alterOffsetsMapCapture.getValue().size());
+        assertEquals(100, alterOffsetsMapCapture.getValue().get(new TopicPartition("test_topic", 10)).offset());
+
+        Set<TopicPartition> expectedTopicPartitionsForOffsetDelete = Collections.singleton(new TopicPartition("test_topic", 20));
+        assertEquals(expectedTopicPartitionsForOffsetDelete, deleteOffsetsSetCapture.getValue());
+    }
+
+    private void alterOffsetsSinkConnector(Map<Map<String, ?>, Map<String, ?>> partitionOffsets,
+                                           ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> alterOffsetsMapCapture,
+                                           ArgumentCaptor<Set<TopicPartition>> deleteOffsetsSetCapture) throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newCachedThreadPool(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+
+        // If alterOffsetsMapCapture is null, then we won't stub any of the following methods resulting in test failures in case
+        // offsets for certain topic partitions are actually attempted to be altered.
+        if (alterOffsetsMapCapture != null) {
+            AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
+            when(admin.alterConsumerGroupOffsets(anyString(), alterOffsetsMapCapture.capture(), any(AlterConsumerGroupOffsetsOptions.class)))
+                    .thenReturn(alterConsumerGroupOffsetsResult);
+            KafkaFuture<Void> alterFuture = KafkaFuture.completedFuture(null);
+            when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
+        }
+
+        // If deleteOffsetsSetCapture is null, then we won't stub any of the following methods resulting in test failures in case
+        // offsets for certain topic partitions are actually attempted to be deleted.
+        if (deleteOffsetsSetCapture != null) {
+            DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = mock(DeleteConsumerGroupOffsetsResult.class);
+            when(admin.deleteConsumerGroupOffsets(anyString(), deleteOffsetsSetCapture.capture(), any(DeleteConsumerGroupOffsetsOptions.class)))
+                    .thenReturn(deleteConsumerGroupOffsetsResult);
+            KafkaFuture<Void> deleteFuture = KafkaFuture.completedFuture(null);
+            when(deleteConsumerGroupOffsetsResult.all()).thenReturn(deleteFuture);
+        }
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+                Thread.currentThread().getContextClassLoader(), cb);
+        assertEquals("The offsets for this connector have been altered successfully", cb.get(1000, TimeUnit.MILLISECONDS).message());
+
+        verify(admin, timeout(1000)).close();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnectorAlterOffsetsError() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+
+        AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
+        when(admin.alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class)))
+                .thenReturn(alterConsumerGroupOffsetsResult);
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.completeExceptionally(new ClusterAuthorizationException("Test exception"));
+        when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
+
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = Collections.singletonMap(partition1,
+                Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+                Thread.currentThread().getContextClassLoader(), cb);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(ConnectException.class, e.getCause().getClass());
+
+        verify(admin, timeout(1000)).close();
+        verifyNoMoreInteractions(admin);
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnectorDeleteOffsetsError() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+
+        AlterConsumerGroupOffsetsResult alterConsumerGroupOffsetsResult = mock(AlterConsumerGroupOffsetsResult.class);
+        when(admin.alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class)))
+                .thenReturn(alterConsumerGroupOffsetsResult);
+        KafkaFuture<Void> alterFuture = KafkaFuture.completedFuture(null);
+        when(alterConsumerGroupOffsetsResult.all()).thenReturn(alterFuture);
+
+        DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsetsResult = mock(DeleteConsumerGroupOffsetsResult.class);
+        when(admin.deleteConsumerGroupOffsets(anyString(), anySet(), any(DeleteConsumerGroupOffsetsOptions.class)))
+                .thenReturn(deleteConsumerGroupOffsetsResult);
+        KafkaFutureImpl<Void> deleteFuture = new KafkaFutureImpl<>();
+        deleteFuture.completeExceptionally(new ClusterAuthorizationException("Test exception"));
+        when(deleteConsumerGroupOffsetsResult.all()).thenReturn(deleteFuture);
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
+        Map<String, String> partition2 = new HashMap<>();
+        partition2.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition2.put(SinkUtils.KAFKA_PARTITION_KEY, "20");
+        partitionOffsets.put(partition2, null);
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+                Thread.currentThread().getContextClassLoader(), cb);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(ConnectException.class, e.getCause().getClass());
+
+        verify(admin, timeout(1000)).close();
+        verifyNoMoreInteractions(admin);
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testAlterOffsetsSinkConnectorSynchronousError() throws Exception {
+        mockKafkaClusterId();
+        String connectorClass = SampleSinkConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        Admin admin = mock(Admin.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
+                allConnectorClientConfigOverridePolicy, config -> admin);
+        worker.start();
+
+        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenReturn(true);
+
+        when(admin.alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class)))
+                .thenThrow(new RuntimeException("Test Exception"));
+
+        Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
+        Map<String, String> partition1 = new HashMap<>();
+        partition1.put(SinkUtils.KAFKA_TOPIC_KEY, "test_topic");
+        partition1.put(SinkUtils.KAFKA_PARTITION_KEY, "10");
+        partitionOffsets.put(partition1, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, "100"));
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        worker.alterSinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, partitionOffsets,
+                Thread.currentThread().getContextClassLoader(), cb);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(ConnectException.class, e.getCause().getClass());
+
+        verify(admin, timeout(1000)).close();
+        verifyNoMoreInteractions(admin);
         verifyKafkaClusterId();
     }
 
