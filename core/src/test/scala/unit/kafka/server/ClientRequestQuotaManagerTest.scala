@@ -88,17 +88,25 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
 
   @Test
   def testExemptAndDelayedQueueSensorsShouldExistAfterInstantiationAndBeRemovedAfterShutdown(): Unit = {
+    var clientRequestQuotaManagerHasBeenShutdown = false;
     val sensorName = Request.toString + "-delayQueue"
     val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", None)
-    var requestDelayedQueueSensor = metrics.getSensor(sensorName)
-    assertNotNull(requestDelayedQueueSensor, "request delayed queue sensor should exist")
-    var exemptSensor = metrics.getSensor(ClientRequestQuotaManager.ExemptSensorName)
-    assertNotNull(exemptSensor, "exempt sensor should exist")
-    clientRequestQuotaManager.shutdown()
-    requestDelayedQueueSensor = metrics.getSensor(sensorName)
-    exemptSensor = metrics.getSensor(ClientRequestQuotaManager.ExemptSensorName)
-    assertNull(exemptSensor, "exempt sensor should not exist after shutdown")
-    assertNull(requestDelayedQueueSensor, "request delayed queue sensor should not exist after shutdown")
+    try {
+      var requestDelayedQueueSensor = metrics.getSensor(sensorName)
+      assertNotNull(requestDelayedQueueSensor, "request delayed queue sensor should exist")
+      var exemptSensor = metrics.getSensor(ClientRequestQuotaManager.ExemptSensorName)
+      assertNotNull(exemptSensor, "exempt sensor should exist")
+      clientRequestQuotaManager.shutdown()
+      clientRequestQuotaManagerHasBeenShutdown = true
+      requestDelayedQueueSensor = metrics.getSensor(sensorName)
+      exemptSensor = metrics.getSensor(ClientRequestQuotaManager.ExemptSensorName)
+      assertNull(exemptSensor, "exempt sensor should not exist after shutdown")
+      assertNull(requestDelayedQueueSensor, "request delayed queue sensor should not exist after shutdown")
+    } finally {
+      if (!clientRequestQuotaManagerHasBeenShutdown) {
+        clientRequestQuotaManager.shutdown()
+      }
+    }
   }
 
 }

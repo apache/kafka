@@ -19,7 +19,6 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.Collections
-
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.TopicPartition

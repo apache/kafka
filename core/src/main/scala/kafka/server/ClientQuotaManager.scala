@@ -572,9 +572,12 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   def shutdown(): Unit = {
-    metrics.removeSensor(delayQueueSensor.name())
-    initiateShutdown()
-    throttledChannelReaper.awaitShutdown()
+    try {
+      initiateShutdown()
+      throttledChannelReaper.awaitShutdown()
+    } finally {
+      metrics.removeSensor(delayQueueSensor.name())
+    }
   }
 
   class DefaultQuotaCallback extends ClientQuotaCallback {

@@ -419,14 +419,22 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   @Test
-  def testDelayedQueueSensorShouldShouldExistAfterInstantiationAndBeRemovedAfterShutdown(): Unit = {
+  def testDelayedQueueSensorShouldExistAfterInstantiationAndBeRemovedAfterShutdown(): Unit = {
     val sensorName = Produce.toString + "-delayQueue"
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
-    var delayedQueueSensor = metrics.getSensor(sensorName)
-    assertNotNull(delayedQueueSensor, "delayed queue sensor should exist")
-    clientQuotaManager.shutdown()
-    delayedQueueSensor = metrics.getSensor(sensorName)
-    assertNull(delayedQueueSensor, "delayed queue sensor should not exist after shutdown")
+    var clientQuotaManagerHasBeenShutdown = false;
+    try {
+      var delayedQueueSensor = metrics.getSensor(sensorName)
+      assertNotNull(delayedQueueSensor, "delayed queue sensor should exist")
+      clientQuotaManager.shutdown()
+      clientQuotaManagerHasBeenShutdown = true
+      delayedQueueSensor = metrics.getSensor(sensorName)
+      assertNull(delayedQueueSensor, "delayed queue sensor should not exist after shutdown")
+    } finally {
+      if (!clientQuotaManagerHasBeenShutdown) {
+        clientQuotaManager.shutdown();
+      }
+    }
   }
 
   private case class UserClient(user: String, clientId: String, configUser: Option[String] = None, configClientId: Option[String] = None) {

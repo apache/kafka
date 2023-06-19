@@ -33,7 +33,7 @@ object ClientRequestQuotaManager {
   // create once.
   val DefaultInactiveExemptSensorExpirationTimeSeconds = Long.MaxValue
 
-  val ExemptSensorName = "exempt-" + QuotaType.Request
+  private[server] val ExemptSensorName = "exempt-" + QuotaType.Request
 }
 
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
@@ -93,7 +93,10 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     nanos * ClientRequestQuotaManager.NanosToPercentagePerSecond
 
   override def shutdown(): Unit = {
-    metrics.removeSensor(exemptSensor.name())
-    super.shutdown()
+    try {
+      super.shutdown()
+    } finally {
+      metrics.removeSensor(exemptSensor.name())
+    }
   }
 }
