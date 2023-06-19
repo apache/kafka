@@ -42,6 +42,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
   extends InterBrokerSendThread("AddPartitionsToTxnSenderThread-" + config.brokerId, client, config.requestTimeoutMs, time)
   with Logging {
 
+  this.logIdent = logPrefix
+
   private val inflightNodes = mutable.HashSet[Node]()
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
 

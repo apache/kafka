@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * An inter-broker send thread that utilizes a non-blocking network client.
@@ -82,13 +83,7 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
         initiateShutdown();
         networkClient.initiateClose();
         awaitShutdown();
-        try {
-            networkClient.close();
-        } catch (IOException e) {
-            // Not expected - currently no Kafka client implementations throw on close()
-            log.error("exception while trying to close Kafka client", e);
-            throw new RuntimeException(e);
-        }
+        Utils.closeQuietly(networkClient, "InterBrokerSendThread network client");
     }
 
     private void drainGeneratedRequests() {
@@ -102,7 +97,9 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
                     true,
                     requestTimeoutMs,
                     request.handler
-                )));
+                )
+            )
+        );
     }
 
     protected void pollOnce(long maxTimeoutMs) {
@@ -185,9 +182,11 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
         }
     }
 
-    void completeWithDisconnect(ClientRequest request,
+    private static void completeWithDisconnect(
+        ClientRequest request,
         long now,
-        AuthenticationException authenticationException) {
+        AuthenticationException authenticationException
+    ) {
         final RequestCompletionHandler handler = request.callback();
         handler.onComplete(
             new ClientResponse(
@@ -199,7 +198,9 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
                 true /* disconnected */,
                 null /* versionMismatch */,
                 authenticationException,
-                null));
+                null
+            )
+        );
     }
 
     public void wakeup() {

@@ -38,4 +38,14 @@ public final class RequestAndCompletionHandler {
         this.request = request;
         this.handler = handler;
     }
+
+    @Override
+    public String toString() {
+        return "RequestAndCompletionHandler(" +
+            "creationTimeMs=" + creationTimeMs +
+            ", destination=" + destination +
+            ", request=" + request +
+            ", handler=" + handler +
+            ')';
+    }
 }

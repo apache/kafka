@@ -97,7 +97,7 @@ public class InterBrokerSendThreadTest {
     }
 
     @Test
-    public void shutdownThreadShouldNotCauseException() throws InterruptedException, IOException {
+    public void testShutdownThreadShouldNotCauseException() throws InterruptedException, IOException {
         // InterBrokerSendThread#shutdown calls NetworkClient#initiateClose first so NetworkClient#poll
         // can throw DisconnectException when thread is running
         when(networkClient.poll(anyLong(), anyLong())).thenThrow(new DisconnectException());
@@ -119,7 +119,7 @@ public class InterBrokerSendThreadTest {
     }
 
     @Test
-    public void disconnectWithoutShutdownShouldCauseException() {
+    public void testDisconnectWithoutShutdownShouldCauseException() {
         DisconnectException de = new DisconnectException();
         when(networkClient.poll(anyLong(), anyLong())).thenThrow(de);
         when(networkClient.active()).thenReturn(true);
@@ -139,11 +139,11 @@ public class InterBrokerSendThreadTest {
     }
 
     @Test
-    public void shouldNotSendAnythingWhenNoRequests() {
+    public void testShouldNotSendAnythingWhenNoRequests() {
         final InterBrokerSendThread sendThread = new TestInterBrokerSendThread();
 
         // poll is always called but there should be no further invocations on NetworkClient
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(new ArrayList<>());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
 
         sendThread.doWork();
 
@@ -154,7 +154,7 @@ public class InterBrokerSendThreadTest {
     }
 
     @Test
-    public void shouldCreateClientRequestAndSendWhenNodeIsReady() {
+    public void testShouldCreateClientRequestAndSendWhenNodeIsReady() {
         final AbstractRequest.Builder<?> request = new StubRequestBuilder<>();
         final Node node = new Node(1, "", 8080);
         final RequestAndCompletionHandler handler =
@@ -170,12 +170,12 @@ public class InterBrokerSendThreadTest {
             anyLong(),
             ArgumentMatchers.eq(true),
             ArgumentMatchers.eq(requestTimeoutMs),
-            same(handler.handler)))
-            .thenReturn(clientRequest);
+            same(handler.handler)
+        )).thenReturn(clientRequest);
 
         when(networkClient.ready(node, time.milliseconds())).thenReturn(true);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(new ArrayList<>());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
 
         sendThread.enqueue(handler);
         sendThread.doWork();
@@ -197,7 +197,7 @@ public class InterBrokerSendThreadTest {
     }
 
     @Test
-    public void shouldCallCompletionHandlerWithDisconnectedResponseWhenNodeNotReady() {
+    public void testShouldCallCompletionHandlerWithDisconnectedResponseWhenNodeNotReady() {
         final AbstractRequest.Builder<?> request = new StubRequestBuilder<>();
         final Node node = new Node(1, "", 8080);
         final RequestAndCompletionHandler handler =
@@ -213,14 +213,14 @@ public class InterBrokerSendThreadTest {
             anyLong(),
             ArgumentMatchers.eq(true),
             ArgumentMatchers.eq(requestTimeoutMs),
-            same(handler.handler)))
-            .thenReturn(clientRequest);
+            same(handler.handler)
+        )).thenReturn(clientRequest);
 
         when(networkClient.ready(node, time.milliseconds())).thenReturn(false);
 
         when(networkClient.connectionDelay(any(), anyLong())).thenReturn(0L);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(new ArrayList<>());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
 
         when(networkClient.connectionFailed(node)).thenReturn(true);
 
@@ -266,15 +266,15 @@ public class InterBrokerSendThreadTest {
             ArgumentMatchers.eq(handler.creationTimeMs),
             ArgumentMatchers.eq(true),
             ArgumentMatchers.eq(requestTimeoutMs),
-            same(handler.handler)))
-            .thenReturn(clientRequest);
+            same(handler.handler)
+        )).thenReturn(clientRequest);
 
         // make the node unready so the request is not cleared
         when(networkClient.ready(node, time.milliseconds())).thenReturn(false);
 
         when(networkClient.connectionDelay(any(), anyLong())).thenReturn(0L);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(new ArrayList<>());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
 
         // rule out disconnects so the request stays for the expiry check
         when(networkClient.connectionFailed(node)).thenReturn(false);

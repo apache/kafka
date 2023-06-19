@@ -310,6 +310,8 @@ class BrokerToControllerRequestThread(
   false
 ) with Logging {
 
+  this.logIdent = logPrefix
+
   private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
     if (isNetworkClientForZkController != controllerInformation.isZkController) {
       debug("Controller changed to " + (if (isNetworkClientForZkController) "kraft" else "zk") + " mode. " +
