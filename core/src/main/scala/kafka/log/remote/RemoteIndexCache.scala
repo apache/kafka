@@ -92,15 +92,15 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
 }
 
 /**
- * This is a LRU cache of remote index files stored in `$logdir/remote-log-index-cache`. This is helpful to avoid
- * re-fetching the index files like offset, time indexes from the remote storage for every fetch call. The cache is
- * re-initialized from the index files on disk on startup, if the index files are available.
+ * This is a LFU (Least Frequently Used) cache of remote index files stored in `$logdir/remote-log-index-cache`.
+ * This is helpful to avoid re-fetching the index files like offset, time indexes from the remote storage for every
+ * fetch call. The cache is re-initialized from the index files on disk on startup, if the index files are available.
  *
  * The cache contains a garbage collection thread which will delete the files for entries that have been removed from
  * the cache.
  *
  * Note that closing this cache does not delete the index files on disk.
- * Note that this cache is not strictly based on a LRU policy. It is based on the default implementation of Caffeine i.e.
+ * Note that the cache eviction policy is based on the default implementation of Caffeine i.e.
  * <a href="https://github.com/ben-manes/caffeine/wiki/Efficiency">Window TinyLfu</a>. TinyLfu relies on a frequency
  * sketch to probabilistically estimate the historic usage of an entry.
  *
@@ -130,7 +130,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
    * 1. Multiple threads should be able to read concurrently.
    * 2. Fetch for missing keys should not block read for available keys.
    * 3. Only one thread should fetch for a specific key.
-   * 4. Should support LRU policy.
+   * 4. Should support LRU-like policy.
    *
    * We use [[Caffeine]] cache instead of implementing a thread safe LRU cache on our own.
    *
@@ -146,7 +146,6 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       expiredIndexes.add(entry)
     })
     .build[Uuid, Entry]()
-
 
   private def init(): Unit = {
     try {
@@ -231,7 +230,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
     if (closed.get()) {
       throw new IllegalStateException(s"Unable to fetch index for " +
-        s"segment id=s{${remoteLogSegmentMetadata.remoteLogSegmentId().id()}}. Index instance is already closed.")
+        s"segment id=${remoteLogSegmentMetadata.remoteLogSegmentId().id()}. Index instance is already closed.")
     }
 
     val cacheKey = remoteLogSegmentMetadata.remoteLogSegmentId().id()
@@ -263,7 +262,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             readIndex(indexFile)
           } catch {
             case ex: CorruptRecordException =>
-              info("Error occurred while loading the stored index", ex)
+              info(s"Error occurred while loading the stored index at ${indexFile.toPath}", ex)
               fetchAndCreateIndex()
           }
         } else {

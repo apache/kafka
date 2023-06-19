@@ -279,7 +279,7 @@ class RemoteIndexCacheTest {
       .thenAnswer(_ => {
         logger.debug(s"Signaling CacheHit to begin read from ${Thread.currentThread()}")
         latchForCacheHit.countDown()
-        logger.debug("Waiting for signal to complete rsm fetch from" + Thread.currentThread())
+        logger.debug(s"Waiting for signal to complete rsm fetch from ${Thread.currentThread()}")
         latchForCacheMiss.await()
       })
 
