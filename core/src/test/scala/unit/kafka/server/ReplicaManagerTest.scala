@@ -19,7 +19,7 @@ package kafka.server
 
 import java.io.File
 import java.net.InetAddress
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -137,6 +137,9 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
       rm.checkpointHighWatermarks()
+      config.logDirs.map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
+        .foreach(checkpointFile => assertTrue(Files.exists(checkpointFile),
+          s"checkpoint file does not exist at $checkpointFile"))
     } finally {
       rm.shutdown(checkpointHW = false)
     }
@@ -163,6 +166,9 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
       rm.checkpointHighWatermarks()
+      config.logDirs.map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
+        .foreach(checkpointFile => assertTrue(Files.exists(checkpointFile),
+          s"checkpoint file does not exist at $checkpointFile"))
     } finally {
       rm.shutdown(checkpointHW = false)
     }
