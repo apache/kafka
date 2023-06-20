@@ -338,7 +338,7 @@ public class WorkerConnector implements Runnable {
                             "Could not begin changing connector state to " + preEmptedState.name()
                                 + " before another request to change state was made;"
                                 + " the new request (which is to change the state to " + targetState.name()
-                                + ") has pre-emptied this one"),
+                                + ") has pre-empted this one"),
                     null
             );
         }
