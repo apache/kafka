@@ -72,7 +72,9 @@ public class KStreamKTableJoinWithGraceTest {
     @BeforeEach
     public void setUp() {
         builder = new StreamsBuilder();
-        processor = supplier.theCapturedProcessor();
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+        driver = new TopologyTestDriver(builder.build(), props);
+
     }
 
     private void makeJoin(final Duration grace) {
@@ -91,6 +93,8 @@ public class KStreamKTableJoinWithGraceTest {
         driver = new TopologyTestDriver(builder.build(), props);
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic(tableTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+        processor = supplier.theCapturedProcessor();
     }
 
     @AfterEach
@@ -148,12 +152,11 @@ public class KStreamKTableJoinWithGraceTest {
         pushToTable(4, "YY");
         processor.checkAndClearProcessResult(EMPTY);
 
-        // push all four items to the primary stream. this should produce four items.
+        // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+YY0", 0),
-            new KeyValueTimestamp<>(1, "X1+YY1", 1),
-            new KeyValueTimestamp<>(2, "X2+YY2", 2),
-            new KeyValueTimestamp<>(3, "X3+YY3", 3));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+YY0", 0),
+            new KeyValueTimestamp<>(1, "X1+YY1", 1));
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YYY");
@@ -181,7 +184,7 @@ public class KStreamKTableJoinWithGraceTest {
 
     @Test
     public void shouldRequireCopartitionedStreams() {
-        makeJoin(Duration.ZERO);
+        makeJoin(Duration.ofMillis(9));
 
         final Collection<Set<String>> copartitionGroups =
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
@@ -192,16 +195,16 @@ public class KStreamKTableJoinWithGraceTest {
 
     @Test
     public void shouldNotJoinWithEmptyTableOnStreamUpdates() {
-        makeJoin(Duration.ZERO);
-        // push two items to the primary stream. the table is empty
-        pushToStream(2, "X");
+        makeJoin(Duration.ofMillis(1));
+        // push four items to the primary stream. the table is empty
+        pushToStream(4, "X");
         processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
     public void shouldNotJoinOnTableUpdates() {
-        makeJoin(Duration.ZERO);
-        // push two items to the primary stream. the table is empty
+        makeJoin(Duration.ofMillis(1));
+        // push two items to the primary stream. the table is empty, but one stays in the buffer
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(EMPTY);
 
@@ -209,21 +212,23 @@ public class KStreamKTableJoinWithGraceTest {
         pushToTable(2, "Y");
         processor.checkAndClearProcessResult(EMPTY);
 
-        // push all four items to the primary stream. this should produce two items.
+        // push all four items to the primary stream. this should produce three items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1+Y1", 1),
             new KeyValueTimestamp<>(1, "X1+Y1", 1));
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YY");
         processor.checkAndClearProcessResult(EMPTY);
 
-        // push all four items to the primary stream. this should produce four items.
+        // push all four items to the primary stream. this should produce three items. One is still in the stream buffer
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+YY0", 0),
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+YY0", 0),
             new KeyValueTimestamp<>(1, "X1+YY1", 1),
-            new KeyValueTimestamp<>(2, "X2+YY2", 2),
-            new KeyValueTimestamp<>(3, "X3+YY3", 3));
+            new KeyValueTimestamp<>(2, "X2+YY2", 2));
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YYY");
@@ -232,44 +237,41 @@ public class KStreamKTableJoinWithGraceTest {
 
     @Test
     public void shouldJoinOnlyIfMatchFoundOnStreamUpdates() {
-        makeJoin(Duration.ZERO);
+        makeJoin(Duration.ofMillis(3));
         // push two items to the table. this should not produce any item.
         pushToTable(2, "Y");
         processor.checkAndClearProcessResult(EMPTY);
 
-        // push all four items to the primary stream. this should produce two items.
+        // push all four items to the primary stream. this should produce one item the rest are in the stream buffer.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-            new KeyValueTimestamp<>(1, "X1+Y1", 1));
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0));
     }
 
     @Test
     public void shouldClearTableEntryOnNullValueUpdates() {
-        makeJoin(Duration.ZERO);
+        makeJoin(Duration.ofMillis(2));
         // push all four items to the table. this should not produce any item.
         pushToTable(4, "Y");
         processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-            new KeyValueTimestamp<>(1, "X1+Y1", 1),
-            new KeyValueTimestamp<>(2, "X2+Y2", 2),
-            new KeyValueTimestamp<>(3, "X3+Y3", 3));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1+Y1", 1));
 
         // push two items with null to the table as deletes. this should not produce any item.
         pushNullValueToTable();
         processor.checkAndClearProcessResult(EMPTY);
 
-        // push all four items to the primary stream. this should produce two items.
+        // push all four items to the primary stream. this should produce no items.
         pushToStream(4, "XX");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "XX2+Y2", 2),
-            new KeyValueTimestamp<>(3, "XX3+Y3", 3));
+        processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullLeftKey() {
-        makeJoin(Duration.ZERO);
+        makeJoin(Duration.ofMillis(1));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
@@ -284,7 +286,7 @@ public class KStreamKTableJoinWithGraceTest {
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullLeftValue() {
-        makeJoin(Duration.ZERO);
+        makeJoin(Duration.ofMillis(3));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
