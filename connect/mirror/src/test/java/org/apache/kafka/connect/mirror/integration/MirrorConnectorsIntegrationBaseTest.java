@@ -686,7 +686,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
         // Produce and consume an initial batch of records to establish an initial checkpoint
         produceMessages(primaryProducer, "test-topic-1");
-        prepareConsumerGroup(consumerProps);
+        warmUpConsumer(consumerProps);
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
         Map<TopicPartition, OffsetAndMetadata> initialCheckpoints = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic);
