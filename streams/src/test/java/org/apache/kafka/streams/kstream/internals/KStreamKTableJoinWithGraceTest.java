@@ -145,7 +145,8 @@ public class KStreamKTableJoinWithGraceTest {
 
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0),
             new KeyValueTimestamp<>(1, "X1+Y1", 1));
 
         // push all items to the table. this should not produce any item
