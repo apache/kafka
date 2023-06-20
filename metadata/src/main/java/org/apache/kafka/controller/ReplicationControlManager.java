@@ -993,7 +993,8 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     clusterControl::isActive,
-                    featureControl.metadataVersion()
+                    featureControl.metadataVersion(),
+                    clusterControl.zkRegistrationAllowed()
                 );
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1380,7 +1381,8 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             clusterControl::isActive,
-            featureControl.metadataVersion()
+            featureControl.metadataVersion(),
+            clusterControl.zkRegistrationAllowed()
         );
         builder.setElection(election);
         Optional<ApiMessageAndVersion> record = builder.build();
@@ -1515,7 +1517,8 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 clusterControl::isActive,
-                featureControl.metadataVersion()
+                featureControl.metadataVersion(),
+                clusterControl.zkRegistrationAllowed()
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
             builder.build().ifPresent(records::add);
@@ -1736,7 +1739,8 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
-                featureControl.metadataVersion()
+                featureControl.metadataVersion(),
+                clusterControl.zkRegistrationAllowed()
             );
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1848,7 +1852,8 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion()
+            featureControl.metadataVersion(),
+            clusterControl.zkRegistrationAllowed()
         );
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1905,7 +1910,8 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion()
+            featureControl.metadataVersion(),
+            clusterControl.zkRegistrationAllowed()
         );
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());

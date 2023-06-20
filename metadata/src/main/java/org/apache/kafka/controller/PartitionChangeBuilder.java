@@ -75,6 +75,8 @@ public class PartitionChangeBuilder {
     private final int partitionId;
     private final IntPredicate isAcceptableLeader;
     private final MetadataVersion metadataVersion;
+    private final boolean zkMigrationEnabled;
+
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
@@ -87,13 +89,16 @@ public class PartitionChangeBuilder {
         Uuid topicId,
         int partitionId,
         IntPredicate isAcceptableLeader,
-        MetadataVersion metadataVersion
+        MetadataVersion metadataVersion,
+        boolean zkMigrationEnabled
     ) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
+        this.zkMigrationEnabled = zkMigrationEnabled;
+
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
@@ -273,13 +278,16 @@ public class PartitionChangeBuilder {
      * that required that the leader epoch be bump whenever the ISR shrank. In MV 3.6 this leader
      * bump is not required when the ISR shrinks. Note, that the leader epoch is never increased if
      * the ISR expanded.
+     *
+     * When the controller is in ZK migration mode, the leader epoch must be bumped during ISR
+     * shrink for compatability with ZK brokers.
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
+        boolean shouldBumpLeaderEpoch = !metadataVersion.isSkipLeaderEpochBumpSupported() || zkMigrationEnabled;
         if (record.leader() == NO_LEADER_CHANGE) {
             if (!Replicas.contains(targetReplicas, partition.replicas)) {
                 record.setLeader(partition.leader);
-            } else if (!metadataVersion.isSkipLeaderEpochBumpSupported() &&
-                       !Replicas.contains(targetIsr, partition.isr)) {
+            } else if (shouldBumpLeaderEpoch && !Replicas.contains(targetIsr, partition.isr)) {
                 record.setLeader(partition.leader);
             }
         }
