@@ -20,8 +20,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import java.util.concurrent.{Callable, Executors, Future}
-
-import kafka.common.RequestAndCompletionHandler
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -31,6 +29,7 @@ import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, Write
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
@@ -129,7 +128,7 @@ class TransactionMarkerChannelManagerTest {
         response)
 
       TestUtils.waitUntilTrue(() => {
-        val requests = channelManager.generateRequests()
+        val requests = channelManager.generateRequests().asScala
         if (requests.nonEmpty) {
           assertEquals(1, requests.size)
           val request = requests.head
@@ -194,7 +193,7 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
-    val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
+    val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
@@ -264,13 +263,13 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
-    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
+    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
     assertEquals(Map(broker2 -> expectedBroker2Request), firstDrainedRequests)
 
-    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
+    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
@@ -345,7 +344,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests().asScala
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -398,7 +397,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests().asScala
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -452,7 +451,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests().asScala
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {

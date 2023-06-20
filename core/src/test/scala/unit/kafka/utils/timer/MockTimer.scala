@@ -67,6 +67,6 @@ class MockTimer(val time: MockTime = new MockTime) extends Timer {
 
   def size: Int = taskQueue.size
 
-  override def shutdown(): Unit = {}
+  override def close(): Unit = {}
 
 }

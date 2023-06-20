@@ -195,7 +195,7 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
-    CoreUtils.swallow(expirationTimer.shutdown(), this)
+    CoreUtils.swallow(expirationTimer.close(), this)
     CoreUtils.swallow(raftIoThread.shutdown(), this)
     CoreUtils.swallow(client.close(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)

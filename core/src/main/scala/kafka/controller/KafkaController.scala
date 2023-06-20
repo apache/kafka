@@ -1598,7 +1598,9 @@ class KafkaController(val config: KafkaConfig,
         !config.isFeatureVersioningSupported ||
         !featureCache.getFeatureOption.exists(
           latestFinalizedFeatures =>
-            BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
+            BrokerFeatures.hasIncompatibleFeatures(broker.features,
+              latestFinalizedFeatures.finalizedFeatures().asScala.
+                map(kv => (kv._1, kv._2.toShort)).toMap))
     }
   }
 
@@ -2081,8 +2083,8 @@ class KafkaController(val config: KafkaConfig,
                                                         callback: UpdateFeaturesCallback): Unit = {
     val updates = request.featureUpdates
     val existingFeatures = featureCache.getFeatureOption
-      .map(featuresAndEpoch => featuresAndEpoch.features)
-      .getOrElse(Map[String, Short]())
+      .map(featuresAndEpoch => featuresAndEpoch.finalizedFeatures().asScala.map(kv => (kv._1, kv._2.toShort)).toMap)
+    .getOrElse(Map[String, Short]())
     // A map with key being feature name and value being finalized version.
     // This contains the target features to be eventually written to FeatureZNode.
     val targetFeatures = scala.collection.mutable.Map[String, Short]() ++ existingFeatures
