@@ -25,6 +25,7 @@ import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.ConfigurationsImage;
 import org.apache.kafka.image.ConfigurationsImageTest;
+import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -90,7 +91,8 @@ public class KRaftMigrationZkWriterTest {
             ClientQuotasImage.EMPTY,
             ProducerIdsImage.EMPTY,
             AclsImage.EMPTY,
-            ScramImage.EMPTY
+            ScramImage.EMPTY,
+            DelegationTokenImage.EMPTY
         );
 
         writer.handleSnapshot(image, (opType, opLog, operation) -> {
@@ -129,7 +131,8 @@ public class KRaftMigrationZkWriterTest {
             ClientQuotasImage.EMPTY,    // TODO KAFKA-15017
             ProducerIdsImageTest.IMAGE1,
             AclsImageTest.IMAGE1,
-            ScramImage.EMPTY            // TODO KAFKA-15017
+            ScramImage.EMPTY,            // TODO KAFKA-15017
+            DelegationTokenImage.EMPTY
         );
 
         Map<String, Integer> opCounts = new HashMap<>();
@@ -187,7 +190,8 @@ public class KRaftMigrationZkWriterTest {
             ClientQuotasImage.EMPTY,
             ProducerIdsImage.EMPTY,
             AclsImage.EMPTY,
-            ScramImage.EMPTY
+            ScramImage.EMPTY,
+            DelegationTokenImage.EMPTY
         );
 
         Map<String, Integer> opCounts = new HashMap<>();

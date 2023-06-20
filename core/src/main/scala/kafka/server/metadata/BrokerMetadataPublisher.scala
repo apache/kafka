@@ -107,6 +107,7 @@ class BrokerMetadataPublisher(
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
   scramPublisher: ScramPublisher,
+  delegationTokenPublisher: DelegationTokenPublisher,
   private val _authorizer: Option[Authorizer],
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
@@ -228,6 +229,9 @@ class BrokerMetadataPublisher(
 
       // Apply SCRAM delta.
       scramPublisher.onMetadataUpdate(delta, newImage)
+
+      // Apply DelegationToken delta.
+      delegationTokenPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply changes to ACLs. This needs to be handled carefully because while we are
       // applying these changes, the Authorizer is continuing to return authorization

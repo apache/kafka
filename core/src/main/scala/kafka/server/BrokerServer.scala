@@ -25,7 +25,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
+import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, DelegationTokenPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.config.ConfigException
@@ -278,10 +278,7 @@ class BrokerServer(
       )
 
       /* start token manager */
-      if (config.tokenAuthEnabled) {
-        throw new UnsupportedOperationException("Delegation tokens are not supported")
-      }
-      tokenManager = new DelegationTokenManager(config, tokenCache, time , null)
+      tokenManager = new DelegationTokenManager(config, tokenCache, time)
       tokenManager.startup() // does nothing, we just need a token manager in order to compile right now...
 
       // Create group coordinator, but don't start it until we've started replica manager.
@@ -424,6 +421,11 @@ class BrokerServer(
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           credentialProvider),
+        new DelegationTokenPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          tokenManager),
         authorizer,
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler)

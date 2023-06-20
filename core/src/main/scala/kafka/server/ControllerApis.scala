@@ -101,6 +101,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
+        case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateDelegationTokenRequest(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -831,6 +832,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    println(s"ControllerApis:handleAlterUserScramRequest:start:${request.context.principal.toString()}")
     val alterRequest = request.body[AlterUserScramCredentialsRequest]
     authHelper.authorizeClusterOperation(request, ALTER)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
@@ -839,6 +841,22 @@ class ControllerApis(val requestChannel: RequestChannel,
       .thenApply[Unit] { response =>
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+  }
+
+  def handleCreateDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    println(s"ControllerApis:handleCreateDelegationTokenRequest:start:${request.context.principal.toString()}")
+    val alterRequest = request.body[CreateDelegationTokenRequest]
+// Requester is always allowed to create token for self
+//    authHelper.authorizeClusterOperation(request, ALTER)
+// XXX authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)
+    println("ControllerApis:handleCreateDelegationTokenRequest:authorized")
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+    controller.createDelegationToken(context, alterRequest.data)
+      .thenApply[Unit] { response =>
+         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+           new CreateDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
   }
 

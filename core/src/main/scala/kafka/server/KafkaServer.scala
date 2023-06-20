@@ -370,7 +370,7 @@ class KafkaServer(
         checkpointBrokerMetadata(zkMetaProperties)
 
         /* start token manager */
-        tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
+        tokenManager = new DelegationTokenManagerZk(config, tokenCache, time , zkClient)
         tokenManager.startup()
 
         /* start kafka controller */

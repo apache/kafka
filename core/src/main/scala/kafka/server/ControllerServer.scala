@@ -236,7 +236,8 @@ class ControllerServer(
           setBootstrapMetadata(bootstrapMetadata).
           setFatalFaultHandler(sharedServer.fatalQuorumControllerFaultHandler).
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
-          setZkMigrationEnabled(config.migrationEnabled)
+          setZkMigrationEnabled(config.migrationEnabled).
+          setDelegationTokenCache(tokenCache)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)

@@ -23,7 +23,7 @@ import java.util.{Base64, Properties}
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, KafkaConfig, QuorumTestHarness}
+import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, DelegationTokenManagerZk, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclOperation}
@@ -375,7 +375,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
   private def createDelegationTokenManager(config: KafkaConfig, tokenCache: DelegationTokenCache,
                                            time: Time, zkClient: KafkaZkClient): DelegationTokenManager = {
-    val tokenManager = new DelegationTokenManager(config, tokenCache, time, zkClient)
+    val tokenManager = new DelegationTokenManagerZk(config, tokenCache, time, zkClient)
     tokenManagers += tokenManager
     tokenManager
   }

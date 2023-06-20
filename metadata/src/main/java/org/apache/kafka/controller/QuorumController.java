@@ -39,6 +39,8 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -53,6 +55,7 @@ import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -73,6 +76,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -200,6 +204,7 @@ public final class QuorumController implements Controller {
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
+        private DelegationTokenCache tokenCache;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -325,6 +330,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setDelegationTokenCache(DelegationTokenCache tokenCache) {
+            this.tokenCache = tokenCache;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -377,7 +387,8 @@ public final class QuorumController implements Controller {
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
-                    zkMigrationEnabled
+                    zkMigrationEnabled,
+                    tokenCache
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1567,6 +1578,9 @@ public final class QuorumController implements Controller {
             case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
                 scramControlManager.replay((RemoveUserScramCredentialRecord) message);
                 break;
+            case DELEGATION_TOKEN_RECORD:
+                delegationTokenControlManager.replay((DelegationTokenRecord) message);
+                break;
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
                 break;
@@ -1684,6 +1698,11 @@ public final class QuorumController implements Controller {
      * Manages SCRAM credentials, if there are any.
      */
     private final ScramControlManager scramControlManager;
+
+    /**
+     * Manages DelegationTokens, if there are any.
+     */
+    private final DelegationTokenControlManager delegationTokenControlManager;
 
     /**
      * The ClusterMetadataAuthorizer, if one is configured. Note that this will still be
@@ -1827,7 +1846,8 @@ public final class QuorumController implements Controller {
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
-        boolean zkMigrationEnabled
+        boolean zkMigrationEnabled,
+        DelegationTokenCache tokenCache
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1890,6 +1910,11 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
+        this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
+            setLogContext(logContext).
+            setSnapshotRegistry(snapshotRegistry).
+            setTokenCache(tokenCache).
+            build();
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);
@@ -1937,6 +1962,16 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
             () -> scramControlManager.alterCredentials(request, featureControl.metadataVersion()));
+    }
+
+    @Override
+    public CompletableFuture<CreateDelegationTokenResponseData> createDelegationToken(
+        ControllerRequestContext context,
+        CreateDelegationTokenRequestData request
+    ) {
+        System.out.println("QuorumController createDelegationToken: start");
+        return appendWriteEvent("createDelegationToken", context.deadlineNs(),
+            () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersion()));
     }
 
     @Override

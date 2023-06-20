@@ -32,6 +32,7 @@ import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.ConfigurationsImage;
+import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -479,7 +480,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
@@ -531,7 +533,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();
@@ -583,7 +586,8 @@ public class KRaftMigrationDriverTest {
                 ClientQuotasImage.EMPTY,
                 ProducerIdsImage.EMPTY,
                 AclsImage.EMPTY,
-                ScramImage.EMPTY);
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
             driver.start();

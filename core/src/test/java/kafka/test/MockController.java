@@ -34,6 +34,8 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -136,6 +138,14 @@ public class MockController implements Controller {
     public CompletableFuture<AlterUserScramCredentialsResponseData> alterUserScramCredentials(
         ControllerRequestContext context,
         AlterUserScramCredentialsRequestData request
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<CreateDelegationTokenResponseData> createDelegationToken(
+        ControllerRequestContext context,
+        CreateDelegationTokenRequestData request
     ) {
         throw new UnsupportedOperationException();
     }
