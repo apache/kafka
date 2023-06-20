@@ -147,6 +147,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def localLogStartOffset(): Long = _localLogStartOffset
 
+  // This is the offset(inclusive) until which segments are copied to the remote storage.
   @volatile private var highestOffsetInRemoteStorage: Long = -1L
 
   locally {
@@ -159,9 +160,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     initializeTopicId()
 
     logOffsetsListener.onHighWatermarkUpdated(highWatermarkMetadata.messageOffset)
-
-    info(s"Completed load of log with ${localLog.segments.numberOfSegments} segments, local log start offset ${localLogStartOffset()} and " +
-      s"log end offset $logEndOffset")
   }
 
   def setLogOffsetsListener(listener: LogOffsetsListener): Unit = {
@@ -182,7 +180,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def updateLogStartOffsetFromRemoteTier(remoteLogStartOffset: Long): Unit = {
     if (!remoteLogEnabled()) {
-      info("Ignoring the call as the remote log storage is disabled")
+      error("Ignoring the call as the remote log storage is disabled")
       return;
     }
     maybeIncrementLogStartOffset(remoteLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
@@ -1012,17 +1010,17 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
         localLog.checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
+          _localLogStartOffset = math.max(newLogStartOffset, localLogStartOffset())
+
           // it should always get updated  if tiered-storage is not enabled.
           if (!onlyLocalLogStartOffsetUpdate || !remoteLogEnabled()) {
             updatedLogStartOffset = true
             updateLogStartOffset(newLogStartOffset)
-            _localLogStartOffset = newLogStartOffset
             info(s"Incremented log start offset to $newLogStartOffset due to $reason")
             leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
             producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
             maybeIncrementFirstUnstableOffset()
           } else {
-            _localLogStartOffset = math.max(newLogStartOffset, localLogStartOffset())
             info(s"Incrementing local log start offset to ${localLogStartOffset()}")
           }
         }
@@ -2270,7 +2268,7 @@ case class RetentionSizeBreach(log: UnifiedLog) extends SegmentDeletionReason {
     var size = log.size
     toDelete.foreach { segment =>
       size -= segment.size
-      log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config)} breach. Log size " +
+      log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config)} breach. Local log size " +
         s"after deletion will be $size.")
     }
   }

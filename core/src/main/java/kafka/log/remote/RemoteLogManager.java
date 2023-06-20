@@ -870,9 +870,9 @@ public class RemoteLogManager implements Closeable {
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
                                     RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
                     return true;
-                } else {
-                    return false;
                 }
+
+                return false;
             }
 
         }
@@ -886,11 +886,13 @@ public class RemoteLogManager implements Closeable {
             // Cleanup remote log segments and update the log start offset if applicable.
             final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
             if (!segmentMetadataIter.hasNext()) {
+                logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
                 return;
             }
 
             final Optional<UnifiedLog> logOptional = fetchLog.apply(topicIdPartition.topicPartition());
             if (!logOptional.isPresent()) {
+                logger.debug("No UnifiedLog instance available for partition: {}", topicIdPartition);
                 return;
             }
 
@@ -942,6 +944,7 @@ public class RemoteLogManager implements Closeable {
                 Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epochEntry.epoch);
                 while (isSegmentDeleted && segmentsIterator.hasNext()) {
                     if (isCancelled() || !isLeader()) {
+                        logger.info("Returning from remote log segments cleanup for the remaining segments as the task state is changed.");
                         return;
                     }
 
@@ -1332,6 +1335,10 @@ public class RemoteLogManager implements Closeable {
         private final long remainingBreachedSize;
 
         public RetentionSizeData(long retentionSize, long remainingBreachedSize) {
+            if (retentionSize < remainingBreachedSize) {
+                throw new IllegalArgumentException("retentionSize must be greater than remainingBreachedSize");
+            }
+
             this.retentionSize = retentionSize;
             this.remainingBreachedSize = remainingBreachedSize;
         }
@@ -1343,6 +1350,10 @@ public class RemoteLogManager implements Closeable {
         private final long cleanupUntilMs;
 
         public RetentionTimeData(long retentionMs, long cleanupUntilMs) {
+            if (retentionMs < cleanupUntilMs) {
+                throw new IllegalArgumentException("retentionMs must be greater than cleanupUntilMs");
+            }
+
             this.retentionMs = retentionMs;
             this.cleanupUntilMs = cleanupUntilMs;
         }
