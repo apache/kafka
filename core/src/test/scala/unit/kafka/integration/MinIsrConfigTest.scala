@@ -17,12 +17,13 @@
 
 package kafka.integration
 
+import java.util.Properties
+import scala.collection.Seq
+
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-
-import java.util.Properties
 
 class MinIsrConfigTest extends KafkaServerTestHarness {
   val overridingProps = new Properties()
