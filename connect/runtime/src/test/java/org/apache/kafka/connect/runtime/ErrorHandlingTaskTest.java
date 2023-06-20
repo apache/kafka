@@ -399,7 +399,7 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
-    public void testErrorHandlingInSourceTasksWthBadConverter() throws Exception {
+    public void testErrorHandlingInSourceTasksWithBadConverter() throws Exception {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
