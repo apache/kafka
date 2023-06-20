@@ -69,6 +69,16 @@ sealed trait MetadataSupport {
       handler(request)
     }
   }
+
+  def alsoMaybeForward(request: RequestChannel.Request,
+    handler: RequestChannel.Request => Unit,
+    responseCallback: Option[AbstractResponse] => Unit
+  ): Unit = {
+    if (!request.isForwarded && canForward()) {
+      forwardingManager.get.forwardRequest(request, responseCallback)
+    }
+    handler(request)
+  }
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,

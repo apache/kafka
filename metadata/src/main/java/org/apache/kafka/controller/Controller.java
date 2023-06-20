@@ -30,6 +30,8 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -80,6 +82,19 @@ public interface Controller extends AclMutator, AutoCloseable {
     CompletableFuture<AlterUserScramCredentialsResponseData> alterUserScramCredentials(
         ControllerRequestContext context,
         AlterUserScramCredentialsRequestData request
+    );
+
+    /**
+     * Create a DelegationToken for a specified user.
+     *
+     * @param context       The controller request context.
+     * @param request       The CreateDelegationTokenRequest data.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<CreateDelegationTokenResponseData> createDelegationToken(
+        ControllerRequestContext context,
+        CreateDelegationTokenRequestData request
     );
 
     /**

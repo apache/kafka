@@ -24,9 +24,9 @@ import java.util.Base64
 
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Mac, SecretKey}
-import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
+// import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.{CoreUtils, Json, Logging}
-import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode, KafkaZkClient}
+//import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode, KafkaZkClient}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMechanism}
@@ -165,9 +165,10 @@ object DelegationTokenManager {
 
 class DelegationTokenManager(val config: KafkaConfig,
                              val tokenCache: DelegationTokenCache,
-                             val time: Time,
-                             val zkClient: KafkaZkClient) extends Logging {
+                             val time: Time) extends Logging {
   this.logIdent = s"[Token Manager on Broker ${config.brokerId}]: "
+
+  protected val lock = new Object()
 
   import DelegationTokenManager._
 
@@ -186,57 +187,28 @@ class DelegationTokenManager(val config: KafkaConfig,
   val tokenMaxLifetime: Long = config.delegationTokenMaxLifeMs
   val defaultTokenRenewTime: Long = config.delegationTokenExpiryTimeMs
   val tokenRemoverScanInterval: Long = config.delegationTokenExpiryCheckIntervalMs
-  private val lock = new Object()
-  private var tokenChangeListener: ZkNodeChangeNotificationListener = _
 
   def startup(): Unit = {
     if (config.tokenAuthEnabled) {
-      zkClient.createDelegationTokenPaths()
       loadCache()
-      tokenChangeListener = new ZkNodeChangeNotificationListener(zkClient, DelegationTokenChangeNotificationZNode.path, DelegationTokenChangeNotificationSequenceZNode.SequenceNumberPrefix, TokenChangedNotificationHandler)
-      tokenChangeListener.init()
     }
   }
 
   def shutdown(): Unit = {
     if (config.tokenAuthEnabled) {
-      if (tokenChangeListener != null) tokenChangeListener.close()
+        // Nothing to do
     }
   }
 
   private def loadCache(): Unit = {
-    lock.synchronized {
-      val tokens = zkClient.getChildren(DelegationTokensZNode.path)
-      info(s"Loading the token cache. Total token count: ${tokens.size}")
-      for (tokenId <- tokens) {
-        try {
-          getTokenFromZk(tokenId) match {
-            case Some(token) => updateCache(token)
-            case None =>
-          }
-        } catch {
-          case ex: Throwable => error(s"Error while getting Token for tokenId: $tokenId", ex)
-        }
-      }
-    }
-  }
-
-  private def getTokenFromZk(tokenId: String): Option[DelegationToken] = {
-    zkClient.getDelegationTokenInfo(tokenId) match {
-      case Some(tokenInformation) => {
-        val hmac = createHmac(tokenId, secretKey)
-        Some(new DelegationToken(tokenInformation, hmac))
-      }
-      case None =>
-        None
-    }
+    println("Nothing to load")
   }
 
   /**
    *
    * @param token
    */
-  private def updateCache(token: DelegationToken): Unit = {
+  protected def updateCache(token: DelegationToken): Unit = {
     val hmacString = token.hmacAsBase64String
     val scramCredentialMap =  prepareScramCredentials(hmacString)
     tokenCache.updateCache(token, scramCredentialMap.asJava)
@@ -337,10 +309,8 @@ class DelegationTokenManager(val config: KafkaConfig,
   /**
    * @param token
    */
-  private def updateToken(token: DelegationToken): Unit = {
-    zkClient.setOrCreateDelegationToken(token)
+  def updateToken(token: DelegationToken): Unit = {
     updateCache(token)
-    zkClient.createTokenChangeNotification(token.tokenInfo.tokenId())
   }
 
   /**
@@ -441,17 +411,15 @@ class DelegationTokenManager(val config: KafkaConfig,
    *
    * @param tokenId
    */
-  private def removeToken(tokenId: String): Unit = {
-    zkClient.deleteDelegationToken(tokenId)
+  protected def removeToken(tokenId: String): Unit = {
     removeCache(tokenId)
-    zkClient.createTokenChangeNotification(tokenId)
   }
 
   /**
    *
    * @param tokenId
    */
-  private def removeCache(tokenId: String): Unit = {
+  protected def removeCache(tokenId: String): Unit = {
     tokenCache.removeCache(tokenId)
   }
 
@@ -477,19 +445,9 @@ class DelegationTokenManager(val config: KafkaConfig,
     getAllTokenInformation.filter(filterToken).map(token => getToken(token))
   }
 
-  object TokenChangedNotificationHandler extends NotificationHandler {
-    override def processNotification(tokenIdBytes: Array[Byte]): Unit = {
-      lock.synchronized {
-        val tokenId = new String(tokenIdBytes, StandardCharsets.UTF_8)
-        info(s"Processing Token Notification for tokenId: $tokenId")
-        getTokenFromZk(tokenId) match {
-          case Some(token) => updateCache(token)
-          case None => removeCache(tokenId)
-        }
-      }
-    }
+  def getDelegationToken(tokenInfo: TokenInformation): DelegationToken = {
+    getToken(tokenInfo)
   }
-
 }
 
 case class CreateTokenResult(owner: KafkaPrincipal,
