@@ -199,7 +199,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     public static class UnsentRequest {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
-        private Optional<Node> node; // empty if random node can be choosen
+        private Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
         public UnsentRequest(

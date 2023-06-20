@@ -854,7 +854,7 @@ public class UtilsTest {
 
     private void checkExceptionForGetDateTimeMethod(Executable executable) {
         assertTrue(assertThrows(ParseException.class, executable)
-            .getMessage().contains("Unparseable date"));
+            .getMessage().contains("Unparsable date"));
     }
 
     private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
