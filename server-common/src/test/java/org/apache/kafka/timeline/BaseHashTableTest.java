@@ -85,7 +85,7 @@ public class BaseHashTableTest {
     }
 
     @Test
-    public void testHashCollisons() {
+    public void testHashCollisions() {
         Foo one = new Foo();
         Foo two = new Foo();
         Foo three = new Foo();
