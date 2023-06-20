@@ -2180,7 +2180,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALOS() {
+    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALSO() {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
         replay(stateManager);

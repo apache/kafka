@@ -713,7 +713,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 queryableStoreName == null ?
                     Materialized.with(null, serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)) :
                     // not actually going to query this store, but we need to force materialization here
-                    // to really test this confuguration
+                    // to really test this configuration
                     Materialized.<String, String>as(Stores.inMemoryKeyValueStore(queryableStoreName + "-rejoin"))
                         .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
                         // the cache suppresses some of the unnecessary tombstones we want to make assertions about
