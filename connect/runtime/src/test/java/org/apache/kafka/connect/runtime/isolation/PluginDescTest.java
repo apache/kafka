@@ -36,7 +36,7 @@ public class PluginDescTest {
     private final ClassLoader systemLoader = ClassLoader.getSystemClassLoader();
     private final String regularVersion = "1.0.0";
     private final String newerVersion = "1.0.1";
-    private final String snaphotVersion = "1.0.0-SNAPSHOT";
+    private final String snapshotVersion = "1.0.0-SNAPSHOT";
     private final String noVersion = "undefined";
     private PluginClassLoader pluginLoader;
 
@@ -61,11 +61,11 @@ public class PluginDescTest {
 
         PluginDesc<Converter> converterDesc = new PluginDesc<>(
                 Converter.class,
-                snaphotVersion,
+                snapshotVersion,
                 pluginLoader
         );
 
-        assertPluginDesc(converterDesc, Converter.class, snaphotVersion, pluginLoader.location());
+        assertPluginDesc(converterDesc, Converter.class, snapshotVersion, pluginLoader.location());
 
         PluginDesc<Transformation> transformDesc = new PluginDesc<>(
                 Transformation.class,
@@ -90,11 +90,11 @@ public class PluginDescTest {
 
         PluginDesc<Converter> converterDesc = new PluginDesc<>(
                 Converter.class,
-                snaphotVersion,
+                snapshotVersion,
                 systemLoader
         );
 
-        assertPluginDesc(converterDesc, Converter.class, snaphotVersion, location);
+        assertPluginDesc(converterDesc, Converter.class, snapshotVersion, location);
 
         PluginDesc<Transformation> transformDesc = new PluginDesc<>(
                 Transformation.class,
@@ -136,13 +136,13 @@ public class PluginDescTest {
     public void testPluginDescEquality() {
         PluginDesc<Connector> connectorDescPluginPath = new PluginDesc<>(
                 Connector.class,
-                snaphotVersion,
+                snapshotVersion,
                 pluginLoader
         );
 
         PluginDesc<Connector> connectorDescClasspath = new PluginDesc<>(
                 Connector.class,
-                snaphotVersion,
+                snapshotVersion,
                 systemLoader
         );
 
@@ -204,7 +204,7 @@ public class PluginDescTest {
 
         PluginDesc<Converter> converterDescClasspath = new PluginDesc<>(
                 Converter.class,
-                snaphotVersion,
+                snapshotVersion,
                 systemLoader
         );
 
