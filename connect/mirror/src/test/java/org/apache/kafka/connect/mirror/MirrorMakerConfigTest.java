@@ -100,7 +100,7 @@ public class MirrorMakerConfigTest {
         assertEquals("b__topic1", aClientConfig.replicationPolicy().formatRemoteTopic("b", "topic1"),
             "replication.policy.separator is honored");
         assertEquals("one:9092, two:9092", aClientConfig.adminConfig().get("bootstrap.servers"),
-            "client configs include boostrap.servers");
+            "client configs include bootstrap.servers");
         assertEquals("PLAINTEXT", aClientConfig.adminConfig().get("security.protocol"),
             "client configs include security.protocol");
         assertEquals("SSL", aClientConfig.producerConfig().get("security.protocol"),
@@ -108,7 +108,7 @@ public class MirrorMakerConfigTest {
         assertFalse(aClientConfig.adminConfig().containsKey("xxx"),
             "unknown properties aren't included in client configs");
         assertFalse(aClientConfig.adminConfig().containsKey("metric.reporters"),
-            "top-leve metrics reporters aren't included in client configs");
+            "top-level metrics reporters aren't included in client configs");
         assertEquals("secret1", aClientConfig.getPassword("ssl.truststore.password").value(),
             "security properties are picked up in MirrorClientConfig");
         assertEquals("secret1", ((Password) aClientConfig.adminConfig().get("ssl.truststore.password")).value(),
