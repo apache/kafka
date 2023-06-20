@@ -152,7 +152,7 @@ class KafkaRaftManager[T](
   private val dataDir = createDataDir()
 
   private val dataDirLock = {
-    // Aquire the log dir lock if the metadata log dir is different from the log dirs
+    // Acquire the log dir lock if the metadata log dir is different from the log dirs
     val differentMetadataLogDir = !config
       .logDirs
       .map(Paths.get(_).toAbsolutePath)
