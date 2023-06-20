@@ -24,6 +24,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName}
 import kafka.server.ReplicaManager.createLogReadResult
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.server.metadata.ZkMetadataCache
@@ -177,6 +178,39 @@ object HostedPartition {
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
 
+  private val LeaderCountMetricName = "LeaderCount"
+  private val PartitionCountMetricName = "PartitionCount"
+  private val OfflineReplicaCountMetricName = "OfflineReplicaCount"
+  private val UnderReplicatedPartitionsMetricName = "UnderReplicatedPartitions"
+  private val UnderMinIsrPartitionCountMetricName = "UnderMinIsrPartitionCount"
+  private val AtMinIsrPartitionCountMetricName = "AtMinIsrPartitionCount"
+  private val ReassigningPartitionsMetricName = "ReassigningPartitions"
+  private val PartitionsWithLateTransactionsCountMetricName = "PartitionsWithLateTransactionsCount"
+  private val ProducerIdCountMetricName = "ProducerIdCount"
+  private val IsrExpandsPerSecMetricName = "IsrExpandsPerSec"
+  private val IsrShrinksPerSecMetricName = "IsrShrinksPerSec"
+  private val FailedIsrUpdatesPerSecMetricName = "FailedIsrUpdatesPerSec"
+
+  private[server] val GaugeMetricNames = Set(
+    LeaderCountMetricName,
+    PartitionCountMetricName,
+    OfflineReplicaCountMetricName,
+    UnderReplicatedPartitionsMetricName,
+    UnderMinIsrPartitionCountMetricName,
+    AtMinIsrPartitionCountMetricName,
+    ReassigningPartitionsMetricName,
+    PartitionsWithLateTransactionsCountMetricName,
+    ProducerIdCountMetricName
+  )
+
+  private[server] val MeterMetricNames = Set(
+    IsrExpandsPerSecMetricName,
+    IsrShrinksPerSecMetricName,
+    FailedIsrUpdatesPerSecMetricName
+  )
+
+  private[server] val MetricNames = GaugeMetricNames.union(MeterMetricNames)
+
   def createLogReadResult(highWatermark: Long,
                           leaderLogStartOffset: Long,
                           leaderLogEndOffset: Long,
@@ -282,16 +316,16 @@ class ReplicaManager(val config: KafkaConfig,
   // Visible for testing
   private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
-  metricsGroup.newGauge("LeaderCount", () => leaderPartitionsIterator.size)
+  metricsGroup.newGauge(LeaderCountMetricName, () => leaderPartitionsIterator.size)
   // Visible for testing
-  private[kafka] val partitionCount = metricsGroup.newGauge("PartitionCount", () => allPartitions.size)
-  metricsGroup.newGauge("OfflineReplicaCount", () => offlinePartitionCount)
-  metricsGroup.newGauge("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
-  metricsGroup.newGauge("UnderMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isUnderMinIsr))
-  metricsGroup.newGauge("AtMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isAtMinIsr))
-  metricsGroup.newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
-  metricsGroup.newGauge("PartitionsWithLateTransactionsCount", () => lateTransactionsCount)
-  metricsGroup.newGauge("ProducerIdCount", () => producerIdCount)
+  private[kafka] val partitionCount = metricsGroup.newGauge(PartitionCountMetricName, () => allPartitions.size)
+  metricsGroup.newGauge(OfflineReplicaCountMetricName, () => offlinePartitionCount)
+  metricsGroup.newGauge(UnderReplicatedPartitionsMetricName, () => underReplicatedPartitionCount)
+  metricsGroup.newGauge(UnderMinIsrPartitionCountMetricName, () => leaderPartitionsIterator.count(_.isUnderMinIsr))
+  metricsGroup.newGauge(AtMinIsrPartitionCountMetricName, () => leaderPartitionsIterator.count(_.isAtMinIsr))
+  metricsGroup.newGauge(ReassigningPartitionsMetricName, () => reassigningPartitionsCount)
+  metricsGroup.newGauge(PartitionsWithLateTransactionsCountMetricName, () => lateTransactionsCount)
+  metricsGroup.newGauge(ProducerIdCountMetricName, () => producerIdCount)
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -302,9 +336,9 @@ class ReplicaManager(val config: KafkaConfig,
 
   def producerIdCount: Int = onlinePartitionsIterator.map(_.producerIdCount).sum
 
-  val isrExpandRate: Meter = metricsGroup.newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
-  val isrShrinkRate: Meter = metricsGroup.newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
-  val failedIsrUpdatesRate: Meter = metricsGroup.newMeter("FailedIsrUpdatesPerSec", "failedUpdates", TimeUnit.SECONDS)
+  val isrExpandRate: Meter = metricsGroup.newMeter(IsrExpandsPerSecMetricName, "expands", TimeUnit.SECONDS)
+  val isrShrinkRate: Meter = metricsGroup.newMeter(IsrShrinksPerSecMetricName, "shrinks", TimeUnit.SECONDS)
+  val failedIsrUpdatesRate: Meter = metricsGroup.newMeter(FailedIsrUpdatesPerSecMetricName, "failedUpdates", TimeUnit.SECONDS)
 
   def underReplicatedPartitionCount: Int = leaderPartitionsIterator.count(_.isUnderReplicated)
 
@@ -631,7 +665,7 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * TODO: move this action queue to handle thread so we can simplify concurrency handling
    */
-  private val actionQueue = new ActionQueue
+  private val actionQueue = new DelayedActionQueue
 
   def tryCompleteActions(): Unit = actionQueue.tryCompleteActions()
 
@@ -655,6 +689,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
    * @param transactionStatePartition     partition that holds the transactional state if transactionalId is present
+   * @param actionQueue                   the action queue to use. ReplicaManager#actionQueue is used by default.
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -666,7 +701,8 @@ class ReplicaManager(val config: KafkaConfig,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
-                    transactionStatePartition: Option[Int] = None): Unit = {
+                    transactionStatePartition: Option[Int] = None,
+                    actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       
@@ -722,6 +758,7 @@ class ReplicaManager(val config: KafkaConfig,
             new PartitionResponse(
               result.error,
               result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
+              result.info.lastOffset,
               result.info.logAppendTime,
               result.info.logStartOffset,
               result.info.recordErrors,
@@ -731,23 +768,21 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
         actionQueue.add {
-          () =>
-            allResults.foreach {
-              case (topicPartition, result) =>
-                val requestKey = TopicPartitionOperationKey(topicPartition)
-                result.info.leaderHwChange match {
-                  case LeaderHwChange.INCREASED =>
-                    // some delayed operations may be unblocked after HW changed
-                    delayedProducePurgatory.checkAndComplete(requestKey)
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                    delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                  case LeaderHwChange.SAME =>
-                    // probably unblock some follower fetch requests since log end offset has been updated
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                  case LeaderHwChange.NONE =>
-                  // nothing
-                }
+          () => allResults.foreach { case (topicPartition, result) =>
+            val requestKey = TopicPartitionOperationKey(topicPartition)
+            result.info.leaderHwChange match {
+              case LeaderHwChange.INCREASED =>
+                // some delayed operations may be unblocked after HW changed
+                delayedProducePurgatory.checkAndComplete(requestKey)
+                delayedFetchPurgatory.checkAndComplete(requestKey)
+                delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+              case LeaderHwChange.SAME =>
+                // probably unblock some follower fetch requests since log end offset has been updated
+                delayedFetchPurgatory.checkAndComplete(requestKey)
+              case LeaderHwChange.NONE =>
+              // nothing
             }
+          }
         }
 
         recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
@@ -764,7 +799,6 @@ class ReplicaManager(val config: KafkaConfig,
           // this is because while the delayed produce operation is being created, new
           // requests may arrive and hence make this operation completable.
           delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-
         } else {
           // we can respond immediately
           val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
@@ -1142,7 +1176,7 @@ class ReplicaManager(val config: KafkaConfig,
                               currentLeaderEpoch: Optional[Integer],
                               fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = {
     val partition = getPartitionOrException(topicPartition)
-    partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader)
+    partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader, remoteLogManager)
   }
 
   def legacyFetchOffsetsForTimestamp(topicPartition: TopicPartition,
@@ -2160,18 +2194,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def removeMetrics(): Unit = {
-    metricsGroup.removeMetric("LeaderCount")
-    metricsGroup.removeMetric("PartitionCount")
-    metricsGroup.removeMetric("OfflineReplicaCount")
-    metricsGroup.removeMetric("UnderReplicatedPartitions")
-    metricsGroup.removeMetric("UnderMinIsrPartitionCount")
-    metricsGroup.removeMetric("AtMinIsrPartitionCount")
-    metricsGroup.removeMetric("ReassigningPartitions")
-    metricsGroup.removeMetric("PartitionsWithLateTransactionsCount")
-    metricsGroup.removeMetric("ProducerIdCount")
-    metricsGroup.removeMetric("IsrExpandsPerSec")
-    metricsGroup.removeMetric("IsrShrinksPerSec")
-    metricsGroup.removeMetric("FailedIsrUpdatesPerSec")
+    ReplicaManager.MetricNames.foreach(metricsGroup.removeMetric)
   }
 
   def beginControlledShutdown(): Unit = {
@@ -2379,18 +2402,22 @@ class ReplicaManager(val config: KafkaConfig,
       // Handle partitions which we are now the leader or follower for.
       if (!localChanges.leaders.isEmpty || !localChanges.followers.isEmpty) {
         val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
-        val changedPartitions = new mutable.HashSet[Partition]
+        val leaderChangedPartitions = new mutable.HashSet[Partition]
+        val followerChangedPartitions = new mutable.HashSet[Partition]
         if (!localChanges.leaders.isEmpty) {
-          applyLocalLeadersDelta(changedPartitions, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala)
+          applyLocalLeadersDelta(leaderChangedPartitions, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala)
         }
         if (!localChanges.followers.isEmpty) {
-          applyLocalFollowersDelta(changedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala)
+          applyLocalFollowersDelta(followerChangedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala)
         }
-        maybeAddLogDirFetchers(changedPartitions, lazyOffsetCheckpoints,
+
+        maybeAddLogDirFetchers(leaderChangedPartitions ++ followerChangedPartitions, lazyOffsetCheckpoints,
           name => Option(newImage.topics().getTopic(name)).map(_.id()))
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+
+        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
       }
     }
   }

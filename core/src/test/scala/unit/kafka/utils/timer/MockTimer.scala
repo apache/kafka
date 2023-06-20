@@ -16,13 +16,16 @@
   */
 package kafka.utils.timer
 
-import kafka.utils.MockTime
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.util.timer.{Timer, TimerTask, TimerTaskEntry}
 
 import scala.collection.mutable
 
 class MockTimer(val time: MockTime = new MockTime) extends Timer {
 
-  private val taskQueue = mutable.PriorityQueue[TimerTaskEntry]()(Ordering[TimerTaskEntry].reverse)
+  private val taskQueue = mutable.PriorityQueue.empty[TimerTaskEntry](new Ordering[TimerTaskEntry] {
+    override def compare(x: TimerTaskEntry, y: TimerTaskEntry): Int = java.lang.Long.compare(x.expirationMs, y.expirationMs)
+  }.reverse)
 
   def add(timerTask: TimerTask): Unit = {
     if (timerTask.delayMs <= 0)
@@ -64,6 +67,6 @@ class MockTimer(val time: MockTime = new MockTime) extends Timer {
 
   def size: Int = taskQueue.size
 
-  override def shutdown(): Unit = {}
+  override def close(): Unit = {}
 
 }

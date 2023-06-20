@@ -658,6 +658,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )
 
@@ -703,6 +704,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )
 
@@ -745,6 +747,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any())
 
     assertEquals(Set.empty, listExpirableTransactionalIds())
@@ -768,7 +771,7 @@ class TransactionStateManagerTest {
 
     loadTransactionsForPartitions(partitionIds)
 
-    // When TransactionMetadata is intialized for the first time, it has the following
+    // When TransactionMetadata is initialized for the first time, it has the following
     // shape. Then, the producer id and producer epoch are initialized and we try to
     // write the change. If the write fails (e.g. under min isr), the TransactionMetadata
     // is left at it is. If the transactional id is never reused, the TransactionMetadata
@@ -800,6 +803,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any(),
@@ -953,6 +957,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => callbackCapture.getValue.apply(
       recordsCapture.getValue.map { case (topicPartition, records) =>
@@ -1102,6 +1107,7 @@ class TransactionStateManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any(),

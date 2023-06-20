@@ -1105,7 +1105,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     writeTaskConfigs(connName, Collections.emptyList());
                     configBackingStore.putTargetState(connName, TargetState.STOPPED);
                     // Force a read of the new target state for the connector
-                    refreshConfigSnapshot(workerSyncTimeoutMs);
+                    if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
+                        log.warn("Failed to read to end of config topic after writing the STOPPED target state for connector {}", connName);
+                    }
 
                     callback.onCompletion(null, null);
                     return null;
@@ -1244,8 +1246,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void doFenceZombieSourceTasks(String connName, Callback<Void> callback) {
         log.trace("Performing zombie fencing request for connector {}", connName);
 
-        if (checkRebalanceNeeded(callback))
-            return;
+        // We don't have to check for a pending rebalance here
 
         if (!isLeader())
             callback.onCompletion(new NotLeaderException("Only the leader may perform zombie fencing.", leaderUrl()), null);
@@ -2212,6 +2213,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     DistributedHerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
         DistributedHerderRequest req = new DistributedHerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
+        // We don't need to synchronize here
+        // If the condition evaluates to true, we can and should trigger a wakeup
+        // If it evaluates to false because our request has suddenly been popped off of the queue, then
+        // the herder is already running the request and no wakeup is necessary
+        // If it evaluates to false because our request was not at the head of the queue, then a wakeup
+        // should already have been triggered when the request that is currently at the head of the
+        // queue was added
         if (peekWithoutException() == req)
             member.wakeup();
         return req;

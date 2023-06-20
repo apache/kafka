@@ -24,8 +24,8 @@ import org.apache.kafka.common.compress.ZstdFactory;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.ChunkedBytesStream;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -66,14 +66,23 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                // Set output buffer (uncompressed) to 16 KB (none by default) and input buffer (compressed) to
-                // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller reads a small
-                // number of bytes (potentially a single byte)
-                return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
-                        16 * 1024);
+                // Set input buffer (compressed) to 8 KB (GZIPInputStream uses 0.5 KB by default) to ensure reasonable
+                // performance in cases where the caller reads a small number of bytes (potentially a single byte).
+                //
+                // Size of output buffer (uncompressed) is provided by decompressionOutputSize.
+                //
+                // ChunkedBytesStream is used to wrap the GZIPInputStream because the default implementation of
+                // GZIPInputStream does not use an intermediate buffer for decompression in chunks.
+                return new ChunkedBytesStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024), decompressionBufferSupplier, decompressionOutputSize(), false);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
+        }
+
+        @Override
+        public int decompressionOutputSize() {
+            // 16KB has been chosen based on legacy implementation introduced in https://github.com/apache/kafka/pull/6785
+            return 16 * 1024;
         }
     },
 
@@ -91,7 +100,17 @@ public enum CompressionType {
 
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            return SnappyFactory.wrapForInput(buffer);
+            // SnappyInputStream uses default implementation of InputStream for skip. Default implementation of
+            // SnappyInputStream allocates a new skip buffer every time, hence, we prefer our own implementation.
+            return new ChunkedBytesStream(SnappyFactory.wrapForInput(buffer), decompressionBufferSupplier, decompressionOutputSize(), false);
+        }
+
+        @Override
+        public int decompressionOutputSize() {
+            // SnappyInputStream already uses an intermediate buffer internally. The size
+            // of this buffer is based on legacy implementation based on skipArray introduced in
+            // https://github.com/apache/kafka/pull/6785
+            return 2 * 1024; // 2KB
         }
     },
 
@@ -108,11 +127,20 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer inputBuffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                return new KafkaLZ4BlockInputStream(inputBuffer, decompressionBufferSupplier,
-                                                    messageVersion == RecordBatch.MAGIC_VALUE_V0);
+                return new ChunkedBytesStream(
+                    new KafkaLZ4BlockInputStream(inputBuffer, decompressionBufferSupplier, messageVersion == RecordBatch.MAGIC_VALUE_V0),
+                    decompressionBufferSupplier, decompressionOutputSize(), true);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
+        }
+
+        @Override
+        public int decompressionOutputSize() {
+            // KafkaLZ4BlockInputStream uses an internal intermediate buffer to store decompressed data. The size
+            // of this buffer is based on legacy implementation based on skipArray introduced in
+            // https://github.com/apache/kafka/pull/6785
+            return 2 * 1024; // 2KB
         }
     },
 
@@ -124,8 +152,21 @@ public enum CompressionType {
 
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            return ZstdFactory.wrapForInput(buffer, messageVersion, decompressionBufferSupplier);
+            return new ChunkedBytesStream(ZstdFactory.wrapForInput(buffer, messageVersion, decompressionBufferSupplier), decompressionBufferSupplier, decompressionOutputSize(), false);
         }
+
+        /**
+         * Size of intermediate buffer which contains uncompressed data.
+         * This size should be <= ZSTD_BLOCKSIZE_MAX
+         * see: https://github.com/facebook/zstd/blob/189653a9c10c9f4224a5413a6d6a69dd01d7c3bd/lib/zstd.h#L854
+         */
+        @Override
+        public int decompressionOutputSize() {
+            // 16KB has been chosen based on legacy implementation introduced in https://github.com/apache/kafka/pull/6785
+            return 16 * 1024;
+        }
+
+
     };
 
     public final int id;
@@ -140,7 +181,7 @@ public enum CompressionType {
 
     /**
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
-     *
+     * <p>
      * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@link ByteBuffer}s directly.
      * Currently, {@link MemoryRecordsBuilder#writeDefaultBatchHeader()} and {@link MemoryRecordsBuilder#writeLegacyCompressedWrapperHeader()}
      * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
@@ -158,6 +199,13 @@ public enum CompressionType {
      *                                    performance impact.
      */
     public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
+
+    /**
+     * Recommended size of buffer for storing decompressed output.
+     */
+    public int decompressionOutputSize() {
+        throw new UnsupportedOperationException("Size of decompression buffer is not defined for this compression type=" + this.name);
+    }
 
     public static CompressionType forId(int id) {
         switch (id) {

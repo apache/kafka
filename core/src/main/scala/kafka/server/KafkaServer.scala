@@ -32,6 +32,7 @@ import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMeta
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -128,7 +129,7 @@ class KafkaServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   @volatile private var _logManager: LogManager = _
-  var remoteLogManager: Option[RemoteLogManager] = None
+  var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   @volatile private var _replicaManager: ReplicaManager = _
   var adminManager: ZkAdminManager = _
@@ -280,7 +281,7 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
-        remoteLogManager = createRemoteLogManager(config)
+        remoteLogManagerOpt = createRemoteLogManager()
 
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
@@ -505,7 +506,17 @@ class KafkaServer(
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
         // Start RemoteLogManager before broker start serving the requests.
-        remoteLogManager.foreach(_.startup())
+        remoteLogManagerOpt.foreach(rlm => {
+          val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
+          if (listenerName != null) {
+            brokerInfo.broker.endPoints
+              .find(e => e.listenerName.equals(ListenerName.normalised(listenerName)))
+              .orElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
+                " should be set as a listener name within valid broker listener name list."))
+              .foreach(e => rlm.onEndPointCreated(e))
+          }
+          rlm.startup()
+        })
 
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache, brokerEpochManager)
@@ -596,14 +607,13 @@ class KafkaServer(
     }
   }
 
-  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
-    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
-    if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+  protected def createRemoteLogManager(): Option[RemoteLogManager] = {
+    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if(config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
       }
 
-      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head, time,
+      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava));
     } else {
       None
@@ -621,7 +631,7 @@ class KafkaServer(
       time = time,
       scheduler = kafkaScheduler,
       logManager = logManager,
-      remoteLogManager = remoteLogManager,
+      remoteLogManager = remoteLogManagerOpt,
       quotaManagers = quotaManagers,
       metadataCache = metadataCache,
       logDirFailureChannel = logDirFailureChannel,
@@ -932,7 +942,7 @@ class KafkaServer(
         // Close remote log manager before stopping processing requests, to give a chance to any
         // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
         // to close gracefully.
-        CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)
+        CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)

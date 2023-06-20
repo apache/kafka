@@ -47,8 +47,8 @@ public class DedicatedMirrorIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(DedicatedMirrorIntegrationTest.class);
 
-    private static final int TOPIC_CREATION_TIMEOUT_MS = 30_000;
-    private static final int TOPIC_REPLICATION_TIMEOUT_MS = 30_000;
+    private static final int TOPIC_CREATION_TIMEOUT_MS = 120_000;
+    private static final int TOPIC_REPLICATION_TIMEOUT_MS = 120_000;
 
     private Map<String, EmbeddedKafkaCluster> kafkaClusters;
     private Map<String, MirrorMaker> mirrorMakers;

@@ -95,7 +95,6 @@ final public class SnapshotWriterReaderTest {
         RaftClientTestContext context = contextBuilder.build();
 
         context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
-        int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
@@ -110,6 +109,8 @@ final public class SnapshotWriterReaderTest {
             int recordCount = validateDelimiters(snapshot, magicTimestamp);
             assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
             assertSnapshot(expected, reader);
+
+            assertEquals(magicTimestamp, Snapshots.lastContainedLogTimestamp(snapshot));
         }
     }
 
@@ -127,7 +128,6 @@ final public class SnapshotWriterReaderTest {
         RaftClientTestContext context = contextBuilder.build();
 
         context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
-        int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
@@ -155,7 +155,6 @@ final public class SnapshotWriterReaderTest {
         RaftClientTestContext context = contextBuilder.build();
 
         context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
-        int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 

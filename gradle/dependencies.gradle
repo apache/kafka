@@ -27,8 +27,8 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.15'
-def defaultScala213Version = '2.13.10'
+def defaultScala212Version = '2.12.18'
+def defaultScala213Version = '2.13.11'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -124,7 +124,7 @@ versions += [
   scalaJava8Compat : "1.0.2",
   scoverage: "1.9.3",
   slf4j: "1.7.36",
-  snappy: "1.1.10.0",
+  snappy: "1.1.10.1",
   spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",

@@ -113,7 +113,6 @@ object LogTestUtils {
       keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable,
-      remoteLogManager = remoteLogManager,
       logOffsetsListener = logOffsetsListener
     )
   }

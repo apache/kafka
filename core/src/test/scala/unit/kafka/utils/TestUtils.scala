@@ -71,6 +71,7 @@ import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -154,6 +155,21 @@ object TestUtils extends Logging {
    * Create a temporary file with particular suffix and prefix
    */
   def tempFile(prefix: String, suffix: String): File = JTestUtils.tempFile(prefix, suffix)
+
+  /**
+   * Create a file with the given contents in the default temporary-file directory,
+   * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
+   */
+  def tempFile(contents: String): File = JTestUtils.tempFile(contents)
+
+  def tempPropertiesFile(properties: Properties): File = {
+    return tempPropertiesFile(properties.asScala)
+  }
+
+  def tempPropertiesFile(properties: Map[String, String]): File = {
+    val content = properties.map{case (k, v) => k + "=" + v}.mkString(System.lineSeparator())
+    return tempFile(content)
+  }
 
   /**
    * Create a temporary file and return an open file channel for this file
@@ -605,16 +621,39 @@ object TestUtils extends Logging {
   }
 
   /**
-    * Create the consumer offsets/group metadata topic and wait until the leader is elected and metadata is propagated
-    * to all brokers.
-    */
+   * Ensures that the consumer offsets/group metadata topic exists. If it does not, the topic is created and the method waits
+   * until the leader is elected and metadata is propagated to all brokers. If it does, the method verifies that it has
+   * the expected number of partition and replication factor however it does not guarantee that the topic is empty.
+   */
   def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
     val server = servers.head
-    createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME,
-      server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
-      server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
-      servers,
-      server.groupCoordinator.groupMetadataTopicConfigs)
+    val numPartitions = server.config.offsetsTopicPartitions
+    val replicationFactor = server.config.offsetsTopicReplicationFactor.toInt
+
+    try {
+      createTopic(
+        zkClient,
+        Topic.GROUP_METADATA_TOPIC_NAME,
+        numPartitions,
+        replicationFactor,
+        servers,
+        server.groupCoordinator.groupMetadataTopicConfigs
+      )
+    } catch {
+      case ex: TopicExistsException =>
+        val allPartitionsMetadata = waitForAllPartitionsMetadata(
+          servers,
+          Topic.GROUP_METADATA_TOPIC_NAME,
+          numPartitions
+        )
+
+        // If the topic already exists, we ensure that it has the required
+        // number of partitions and replication factor. If it has not, the
+        // exception is thrown further.
+        if (allPartitionsMetadata.size != numPartitions || allPartitionsMetadata.head._2.replicas.size != replicationFactor) {
+          throw ex
+        }
+    }
   }
 
   /**
@@ -1340,10 +1379,12 @@ object TestUtils extends Logging {
   // Note: Call this method in the test itself, rather than the @AfterEach method.
   // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
   def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
-    val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
+    val nonDaemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
-    assertEquals(0, threadCount)
+
+    val threadCount = nonDaemonThreads.size
+    assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
   def allThreadStackTraces(): String = {
@@ -1380,7 +1421,8 @@ object TestUtils extends Logging {
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
                    keepPartitionMetadataFile = true,
-                   interBrokerProtocolVersion = interBrokerProtocolVersion)
+                   interBrokerProtocolVersion = interBrokerProtocolVersion,
+                   remoteStorageSystemEnable = false)
   }
 
   class MockAlterPartitionManager extends AlterPartitionManager {

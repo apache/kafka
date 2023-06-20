@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
@@ -25,7 +25,9 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
+import java.util
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 
@@ -45,7 +47,10 @@ class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransac
 
 
 class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time: Time)
-  extends InterBrokerSendThread("AddPartitionsToTxnSenderThread-" + config.brokerId, client, config.requestTimeoutMs, time) {
+  extends InterBrokerSendThread("AddPartitionsToTxnSenderThread-" + config.brokerId, client, config.requestTimeoutMs, time)
+  with Logging {
+
+  this.logIdent = logPrefix
 
   private val inflightNodes = mutable.HashSet[Node]()
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
@@ -181,20 +186,20 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     }
   }
 
-  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+  override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     // build and add requests to queue
-    val buffer = mutable.Buffer[RequestAndCompletionHandler]()
+    val list = new util.ArrayList[RequestAndCompletionHandler]()
     val currentTimeMs = time.milliseconds()
     val removedNodes = mutable.Set[Node]()
     nodesToTransactions.synchronized {
       nodesToTransactions.foreach { case (node, transactionDataAndCallbacks) =>
         if (!inflightNodes.contains(node)) {
-          buffer += RequestAndCompletionHandler(
+          list.add(new RequestAndCompletionHandler(
             currentTimeMs,
             node,
             AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData),
             new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
-          )
+          ))
 
           removedNodes.add(node)
         }
@@ -204,7 +209,7 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
         nodesToTransactions.remove(node)
       }
     }
-    buffer
+    list
   }
 
 }

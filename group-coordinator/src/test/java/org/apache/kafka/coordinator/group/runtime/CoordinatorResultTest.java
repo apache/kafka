@@ -14,8 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.coordinator.group.runtime;
 
+import org.apache.kafka.coordinator.group.Record;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -23,24 +24,24 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class ResultTest {
+public class CoordinatorResultTest {
     @Test
     public void testAttributes() {
-        Result<String> result = new Result<>(Collections.emptyList(), "response");
+        CoordinatorResult<String, Record> result = new CoordinatorResult<>(Collections.emptyList(), "response");
         assertEquals(Collections.emptyList(), result.records());
         assertEquals("response", result.response());
     }
 
     @Test
     public void testAttributesCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new Result<>(Collections.emptyList(), null));
-        assertThrows(NullPointerException.class, () -> new Result<>(null, "response"));
+        assertThrows(NullPointerException.class, () -> new CoordinatorResult<>(Collections.emptyList(), null));
+        assertThrows(NullPointerException.class, () -> new CoordinatorResult<>(null, "response"));
     }
 
     @Test
     public void testEquals() {
-        Result<String> result1 = new Result<>(Collections.emptyList(), "response");
-        Result<String> result2 = new Result<>(Collections.emptyList(), "response");
+        CoordinatorResult<String, Record> result1 = new CoordinatorResult<>(Collections.emptyList(), "response");
+        CoordinatorResult<String, Record> result2 = new CoordinatorResult<>(Collections.emptyList(), "response");
         assertEquals(result1, result2);
     }
 }

@@ -76,8 +76,8 @@ class ConsumerGroupServiceTest {
     val testTopicPartition4 = new TopicPartition("testTopic2", 1);
     val testTopicPartition5 = new TopicPartition("testTopic2", 2);
 
-    // Some topic's partitions gets valid OffsetAndMetada values, other gets nulls values (negative integers) and others aren't defined
-    val commitedOffsets = Map(
+    // Some topic's partitions gets valid OffsetAndMetadata values, other gets nulls values (negative integers) and others aren't defined
+    val committedOffsets = Map(
       testTopicPartition1 -> new OffsetAndMetadata(100),
       testTopicPartition2 -> null,
       testTopicPartition3 -> new OffsetAndMetadata(100),
@@ -115,7 +115,7 @@ class ConsumerGroupServiceTest {
     when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec), any()))
       .thenReturn(
         AdminClientTestUtils.listConsumerGroupOffsetsResult(
-          Collections.singletonMap(group, commitedOffsets)))
+          Collections.singletonMap(group, committedOffsets)))
     when(admin.listOffsets(
       ArgumentMatchers.argThat(offsetsArgMatcher(assignedTopicPartitions)),
       any()
