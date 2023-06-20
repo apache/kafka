@@ -123,7 +123,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   @Test
-  def shouldCompleteDelayedOperationWheCoordinatorEpochFenced(): Unit = {
+  def shouldCompleteDelayedOperationWhenCoordinatorEpochFenced(): Unit = {
     mockCache()
 
     verifyRemoveDelayedOperationOnError(Errors.TRANSACTION_COORDINATOR_FENCED)

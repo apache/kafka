@@ -48,9 +48,9 @@ class InMemoryLeaderEpochCheckpointTest {
     val epochs = java.util.Arrays.asList(new EpochEntry(expectedEpoch, expectedStartOffset))
     checkpoint.write(epochs)
     assertEquals(epochs, checkpoint.read())
-    val ba = checkpoint.readAsByteBuffer()
+    val buffer = checkpoint.readAsByteBuffer()
 
-    val bufferedReader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(ba.array()), StandardCharsets.UTF_8))
+    val bufferedReader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(buffer.array()), StandardCharsets.UTF_8))
     assertEquals(expectedVersion.toString, bufferedReader.readLine())
     assertEquals(epochs.size().toString, bufferedReader.readLine())
     assertEquals(s"$expectedEpoch $expectedStartOffset", bufferedReader.readLine())
