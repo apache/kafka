@@ -1084,6 +1084,9 @@ public class TransactionManager {
         if (!hasError()) {
             return;
         }
+        if (lastError instanceof IllegalStateException) {
+            throw lastError;
+        }
         // for ProducerFencedException, do not wrap it as a KafkaException
         // but create a new instance without the call trace since it was not thrown because of the current call
         if (lastError instanceof ProducerFencedException) {
