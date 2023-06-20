@@ -29,7 +29,7 @@ public abstract class ShutdownableThread extends Thread {
 
     public final String logPrefix;
 
-    private final Logger log;
+    protected final Logger log;
 
     private final boolean isInterruptible;
 
