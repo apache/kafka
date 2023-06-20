@@ -32,31 +32,28 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBTimeOrderedKeyValueBufferTest {
     public RocksDBTimeOrderedKeyValueBuffer<String, String> buffer;
-    @Mock
     public SerdeGetter serdeGetter;
     public InternalProcessorContext<String, String> context;
     public StreamsMetricsImpl streamsMetrics;
-    @Mock
     public Sensor sensor;
     public long offset;
 
-    @Before
+    @BeforeEach
     public void setUp() {
+        serdeGetter = mock(SerdeGetter.class);
+        sensor = mock(Sensor.class);
         when(serdeGetter.keySerde()).thenReturn(new Serdes.StringSerde());
         when(serdeGetter.valueSerde()).thenReturn(new Serdes.StringSerde());
         final Metrics metrics = new Metrics();
