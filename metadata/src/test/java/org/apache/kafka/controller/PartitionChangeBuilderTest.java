@@ -93,10 +93,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
     private static PartitionChangeBuilder createFooBuilder() {
-        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, MetadataVersion.latest(), false);
-    }
-    private static PartitionChangeBuilder createFooBuilderWithZkMigration() {
-        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, MetadataVersion.latest(), true);
+        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, MetadataVersion.latest());
     }
 
     private static final PartitionRegistration BAR = new PartitionRegistration.Builder().
@@ -113,7 +110,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static PartitionChangeBuilder createBarBuilder() {
-        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, MetadataVersion.latest(), false);
+        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, MetadataVersion.latest());
     }
 
     private static final PartitionRegistration BAZ = new PartitionRegistration.Builder().
@@ -128,7 +125,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
 
     private static PartitionChangeBuilder createBazBuilder() {
-        return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true, MetadataVersion.latest(), false);
+        return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true, MetadataVersion.latest());
     }
 
     private static final PartitionRegistration OFFLINE = new PartitionRegistration.Builder().
@@ -143,7 +140,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static PartitionChangeBuilder createOfflineBuilder() {
-        return new PartitionChangeBuilder(OFFLINE, OFFLINE_ID, 0, r -> r == 1, MetadataVersion.latest(), false);
+        return new PartitionChangeBuilder(OFFLINE, OFFLINE_ID, 0, r -> r == 1, MetadataVersion.latest());
     }
 
     private static void assertElectLeaderEquals(PartitionChangeBuilder builder,
@@ -207,9 +204,10 @@ public class PartitionChangeBuilderTest {
             NO_LEADER_CHANGE
         );
         testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilderWithZkMigration().setTargetIsrWithBrokerStates(
-                AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4))
-            ),
+            createFooBuilder()
+                .setTargetIsrWithBrokerStates(
+                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4)))
+                .setBumpLeaderEpochOnIsrShrink(true),
             new PartitionChangeRecord(),
             NO_LEADER_CHANGE
         );
@@ -223,7 +221,7 @@ public class PartitionChangeBuilderTest {
         // Check that the leader epoch is bump if the ISR shrinks and isSkipLeaderEpochBumpSupported is not supported.
         // See KAFKA-15021 for details.
         testTriggerLeaderEpochBumpIfNeededLeader(
-            new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, MetadataVersion.IBP_3_5_IV2, false)
+            new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, MetadataVersion.IBP_3_5_IV2)
                 .setTargetIsrWithBrokerStates(
                     AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))
                 ),
@@ -233,9 +231,10 @@ public class PartitionChangeBuilderTest {
 
         // Shrinking the ISR while in ZK migration mode does increase the leader epoch
         testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilderWithZkMigration().setTargetIsrWithBrokerStates(
-                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))
-            ),
+            createFooBuilder()
+                .setTargetIsrWithBrokerStates(
+                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1)))
+                .setBumpLeaderEpochOnIsrShrink(true),
             new PartitionChangeRecord(),
             1
         );
@@ -436,9 +435,9 @@ public class PartitionChangeBuilderTest {
             FOO_ID,
             0,
             brokerId -> false,
-            metadataVersion,
-            zkMigrationsEnabled
+            metadataVersion
         );
+        offlineBuilder.setBumpLeaderEpochOnIsrShrink(zkMigrationsEnabled);
         // Set the target ISR to empty to indicate that the last leader is offline
         offlineBuilder.setTargetIsrWithBrokerStates(Collections.emptyList());
 
@@ -462,9 +461,9 @@ public class PartitionChangeBuilderTest {
             FOO_ID,
             0,
             brokerId -> true,
-            metadataVersion,
-            zkMigrationsEnabled
+            metadataVersion
         );
+        onlineBuilder.setBumpLeaderEpochOnIsrShrink(zkMigrationsEnabled);
 
         // The only broker in the ISR is elected leader and stays in the recovering
         changeRecord = (PartitionChangeRecord) onlineBuilder.build().get().message();
@@ -499,10 +498,9 @@ public class PartitionChangeBuilderTest {
             FOO_ID,
             0,
             brokerId -> brokerId == leaderId,
-            metadataVersion,
-            zkMigrationsEnabled
+            metadataVersion
         ).setElection(Election.UNCLEAN);
-
+        onlineBuilder.setBumpLeaderEpochOnIsrShrink(zkMigrationsEnabled);
         // The partition should stay as recovering
         PartitionChangeRecord changeRecord = (PartitionChangeRecord) onlineBuilder
             .build()
@@ -569,8 +567,7 @@ public class PartitionChangeBuilderTest {
             topicId,
             0,
             isValidLeader,
-            leaderRecoveryMetadataVersion(false),
-            false
+            leaderRecoveryMetadataVersion(false)
         );
 
         // Before we build the new PartitionChangeBuilder, confirm the current leader is 0.

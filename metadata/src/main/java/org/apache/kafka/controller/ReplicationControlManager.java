@@ -993,9 +993,9 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     clusterControl::isActive,
-                    featureControl.metadataVersion(),
-                    clusterControl.zkRegistrationAllowed()
+                    featureControl.metadataVersion()
                 );
+                builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1381,10 +1381,9 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             clusterControl::isActive,
-            featureControl.metadataVersion(),
-            clusterControl.zkRegistrationAllowed()
+            featureControl.metadataVersion()
         );
-        builder.setElection(election);
+        builder.setElection(election).setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
             if (electionType == ElectionType.PREFERRED) {
@@ -1517,10 +1516,10 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 clusterControl::isActive,
-                featureControl.metadataVersion(),
-                clusterControl.zkRegistrationAllowed()
+                featureControl.metadataVersion()
             );
-            builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
+            builder.setElection(PartitionChangeBuilder.Election.PREFERRED)
+                .setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
             builder.build().ifPresent(records::add);
         }
 
@@ -1739,9 +1738,9 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
-                featureControl.metadataVersion(),
-                clusterControl.zkRegistrationAllowed()
+                featureControl.metadataVersion()
             );
+            builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -1852,9 +1851,9 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion(),
-            clusterControl.zkRegistrationAllowed()
+            featureControl.metadataVersion()
         );
+        builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -1910,9 +1909,9 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion(),
-            clusterControl.zkRegistrationAllowed()
+            featureControl.metadataVersion()
         );
+        builder.setBumpLeaderEpochOnIsrShrink(clusterControl.zkRegistrationAllowed());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
