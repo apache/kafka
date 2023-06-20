@@ -138,7 +138,7 @@ class ReplicaManagerTest {
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
       rm.checkpointHighWatermarks()
     } finally {
-      rm.shutdown(checkpointHW = false)
+      rm.shutdown(checkpointHW = true)
     }
   }
 
@@ -164,7 +164,7 @@ class ReplicaManagerTest {
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
       rm.checkpointHighWatermarks()
     } finally {
-      rm.shutdown(checkpointHW = false)
+      rm.shutdown(checkpointHW = true)
     }
   }
 
