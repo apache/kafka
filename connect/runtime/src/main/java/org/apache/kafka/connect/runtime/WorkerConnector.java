@@ -271,12 +271,12 @@ public class WorkerConnector implements Runnable {
 
     void doShutdown() {
         try {
-            TargetState preEmptiedState = pendingTargetStateChange.getAndSet(null);
+            TargetState preEmptedState = pendingTargetStateChange.getAndSet(null);
             Callback<TargetState> stateChangeCallback = pendingStateChangeCallback.getAndSet(null);
             if (stateChangeCallback != null) {
                 stateChangeCallback.onCompletion(
                         new ConnectException(
-                                "Could not begin changing connector state to " + preEmptiedState.name()
+                                "Could not begin changing connector state to " + preEmptedState.name()
                                     + " as the connector has been scheduled for shutdown"),
                         null);
             }
@@ -325,17 +325,17 @@ public class WorkerConnector implements Runnable {
     }
 
     public void transitionTo(TargetState targetState, Callback<TargetState> stateChangeCallback) {
-        Callback<TargetState> preEmptiedStateChangeCallback;
-        TargetState preEmptiedState;
+        Callback<TargetState> preEmptedStateChangeCallback;
+        TargetState preEmptedState;
         synchronized (this) {
-            preEmptiedStateChangeCallback = pendingStateChangeCallback.getAndSet(stateChangeCallback);
-            preEmptiedState = pendingTargetStateChange.getAndSet(targetState);
+            preEmptedStateChangeCallback = pendingStateChangeCallback.getAndSet(stateChangeCallback);
+            preEmptedState = pendingTargetStateChange.getAndSet(targetState);
             notify();
         }
-        if (preEmptiedStateChangeCallback != null) {
-            preEmptiedStateChangeCallback.onCompletion(
+        if (preEmptedStateChangeCallback != null) {
+            preEmptedStateChangeCallback.onCompletion(
                     new ConnectException(
-                            "Could not begin changing connector state to " + preEmptiedState.name()
+                            "Could not begin changing connector state to " + preEmptedState.name()
                                 + " before another request to change state was made;"
                                 + " the new request (which is to change the state to " + targetState.name()
                                 + ") has pre-emptied this one"),
