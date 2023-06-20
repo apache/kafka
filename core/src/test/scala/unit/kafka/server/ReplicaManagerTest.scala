@@ -84,7 +84,7 @@ import scala.jdk.CollectionConverters._
 class ReplicaManagerTest {
 
   private val topic = "test-topic"
-  private val topicId: Uuid = Uuid.randomUuid()
+  private val topicId = Uuid.randomUuid()
   private val topicIds = scala.Predef.Map("test-topic" -> topicId)
   private val topicNames = scala.Predef.Map(topicId -> "test-topic")
   private val time = new MockTime
