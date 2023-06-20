@@ -1490,10 +1490,10 @@ public class ReplicationControlManager {
     ControllerResult<Boolean> maybeBalancePartitionLeaders() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
-        boolean rescheduleImmidiately = false;
+        boolean rescheduleImmediately = false;
         for (TopicIdPartition topicPartition : imbalancedPartitions) {
             if (records.size() >= maxElectionsPerImbalance) {
-                rescheduleImmidiately = true;
+                rescheduleImmediately = true;
                 break;
             }
 
@@ -1521,7 +1521,7 @@ public class ReplicationControlManager {
             builder.build().ifPresent(records::add);
         }
 
-        return ControllerResult.of(records, rescheduleImmidiately);
+        return ControllerResult.of(records, rescheduleImmediately);
     }
 
     ControllerResult<List<CreatePartitionsTopicResult>> createPartitions(
