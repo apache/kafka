@@ -47,11 +47,15 @@ public class DeleteRecordsHandlerTest {
     private final LogContext logContext = new LogContext();
     private final TopicPartition t0p0 = new TopicPartition("t0", 0);
     private final TopicPartition t0p1 = new TopicPartition("t0", 1);
+    private final TopicPartition t0p2 = new TopicPartition("t0", 2);
+    private final TopicPartition t0p3 = new TopicPartition("t0", 3);
     private final Node node = new Node(1, "host", 1234);
     private final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<TopicPartition, RecordsToDelete>() {
         {
             put(t0p0, RecordsToDelete.beforeOffset(10L));
             put(t0p1, RecordsToDelete.beforeOffset(10L));
+            put(t0p2, RecordsToDelete.beforeOffset(10L));
+            put(t0p3, RecordsToDelete.beforeOffset(10L));
         }
     };
 
@@ -140,6 +144,41 @@ public class DeleteRecordsHandlerTest {
         Set<TopicPartition> completed = new HashSet<>(recordsToDelete.keySet());
         completed.removeAll(failed.keySet());
         assertResult(result, completed, failed, emptyList(), emptySet());
+    }
+
+    @Test
+    public void testMixedResponse() {
+        Map<TopicPartition, Short> errorsByPartition = new HashMap<>();
+
+        TopicPartition errorPartition = t0p0;
+        Errors error = Errors.UNKNOWN_SERVER_ERROR;
+        errorsByPartition.put(errorPartition, error.code());
+
+        TopicPartition retriableErrorPartition = t0p1;
+        Errors retriableError = Errors.NOT_LEADER_OR_FOLLOWER;
+        errorsByPartition.put(retriableErrorPartition, retriableError.code());
+
+        TopicPartition retriableErrorPartition2 = t0p2;
+        Errors retriableError2 = Errors.REQUEST_TIMED_OUT;
+        errorsByPartition.put(retriableErrorPartition2, retriableError2.code());
+
+        AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
+                handleResponse(createResponse(errorsByPartition));
+
+        Set<TopicPartition> completed = new HashSet<>(recordsToDelete.keySet());
+
+        Map<TopicPartition, Throwable> failed = new HashMap<>();
+        failed.put(errorPartition, error.exception());
+        completed.removeAll(failed.keySet());
+
+        List<TopicPartition> unmapped = new ArrayList<>();
+        unmapped.add(retriableErrorPartition);
+        completed.removeAll(unmapped);
+
+        Set<TopicPartition> retriable = singleton(retriableErrorPartition2);
+        completed.removeAll(retriable);
+
+        assertResult(result, completed, failed, unmapped, retriable);
     }
 
     @Test

@@ -2911,6 +2911,7 @@ public class KafkaAdminClient extends AdminClient {
                 maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
                     throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
                 // Fail all the other remaining futures
+
                 completeAllExceptionally(futures.values(), throwable);
             }
         };
@@ -2919,7 +2920,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                              final DeleteRecordsOptions options) {
-        AdminApiFuture.SimpleAdminApiFuture<TopicPartition, DeletedRecords> future = DeleteRecordsHandler.newFuture(recordsToDelete.keySet());
+        SimpleAdminApiFuture<TopicPartition, DeletedRecords> future = DeleteRecordsHandler.newFuture(recordsToDelete.keySet());
         DeleteRecordsHandler handler = new DeleteRecordsHandler(recordsToDelete, logContext);
         invokeDriver(handler, future, options.timeoutMs);
 
