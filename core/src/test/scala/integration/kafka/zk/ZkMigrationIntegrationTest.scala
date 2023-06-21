@@ -126,7 +126,11 @@ class ZkMigrationIntegrationTest {
     metadataVersion = MetadataVersion.IBP_3_4_IV0,
     serverProperties = Array(
       new ClusterConfigProperty(key = "authorizer.class.name", value = "kafka.security.authorizer.AclAuthorizer"),
-      new ClusterConfigProperty(key = "super.users", value = "User:ANONYMOUS")
+      new ClusterConfigProperty(key = "super.users", value = "User:ANONYMOUS"),
+      new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+      new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+      new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+      new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
     )
   )
   def testStartZkBrokerWithAuthorizer(zkCluster: ClusterInstance): Unit = {
@@ -160,6 +164,12 @@ class ZkMigrationIntegrationTest {
 
       val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
       TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+
+      def inDualWrite(): Boolean = {
+        val migrationState = kraftCluster.controllers().get(3000).migrationSupport.get.migrationDriver.migrationState().get(10, TimeUnit.SECONDS)
+        migrationState.allowDualWrite()
+      }
+      TestUtils.waitUntilTrue(() => inDualWrite(), "Timed out waiting for dual-write mode")
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
