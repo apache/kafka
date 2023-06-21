@@ -153,6 +153,9 @@ public class ConnectUtilsTest {
 
         expectedClientIdBase = "connect-" + userSpecifiedClientId + "-";
         assertClientIdBase(null, userSpecifiedClientId, expectedClientIdBase);
+
+        expectedClientIdBase = "connect-";
+        assertClientIdBase(null, "", expectedClientIdBase);
     }
 
     private void assertClientIdBase(String groupId, String userSpecifiedClientId, String expectedClientIdBase) {
