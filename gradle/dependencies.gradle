@@ -61,6 +61,7 @@ versions += [
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
   bcpkix: "1.73",
+  caffeine: "2.9.3", // 3.x supports JDK 11 and above
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   commonsValidator: "1.7",
@@ -145,6 +146,7 @@ libs += [
   apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk18on:$versions.bcpkix",
+  caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   easymock: "org.easymock:easymock:$versions.easymock",
