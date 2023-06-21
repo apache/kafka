@@ -2153,15 +2153,6 @@ object TestUtils extends Logging {
       }.sum
   }
 
-  def histogramMaxValue(metricName: String): Double = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
-      .values.map {
-      case histogram: Histogram => histogram.max()
-      case _ => 0
-    }.max
-  }
-
   def clearYammerMetrics(): Unit = {
     for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)

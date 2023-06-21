@@ -212,4 +212,10 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
     list
   }
 
+  override def shutdown(): Unit = {
+    super.shutdown()
+    metricsGroup.removeMetric("VerificationFailureRate")
+    metricsGroup.removeMetric("VerificationTimeMs")
+  }
+
 }
