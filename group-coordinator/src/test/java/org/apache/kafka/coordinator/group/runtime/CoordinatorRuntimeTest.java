@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashSet;
 import org.junit.jupiter.api.Test;
@@ -218,7 +219,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(CoordinatorRuntime.CoordinatorState.ACTIVE, ctx.state);
 
         // Verify that onLoaded is called.
-        verify(coordinator, times(1)).onLoaded();
+        verify(coordinator, times(1)).onLoaded(MetadataImage.EMPTY);
 
         // Verify that the listener is registered.
         verify(writer, times(1)).registerListener(

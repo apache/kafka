@@ -323,7 +323,7 @@
     <suppress checks="CyclomaticComplexity"
               files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="MethodLength"
-              files="(ConsumerGroupTest|GroupMetadataManagerTest).java"/>
+              files="(GroupMetadataManager|ConsumerGroupTest|GroupMetadataManagerTest).java"/>
     <suppress checks="NPathComplexity"
               files="(GroupMetadataManager).java"/>
     <suppress checks="ParameterNumber"

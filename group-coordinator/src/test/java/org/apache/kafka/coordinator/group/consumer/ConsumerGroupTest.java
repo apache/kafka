@@ -19,8 +19,9 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -392,7 +393,7 @@ public class ConsumerGroupTest {
         Uuid barTopicId = Uuid.randomUuid();
         Uuid zarTopicId = Uuid.randomUuid();
 
-        TopicsImage image = new GroupMetadataManagerTest.TopicsImageBuilder()
+        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
             .addTopic(fooTopicId, "foo", 1)
             .addTopic(barTopicId, "bar", 2)
             .addTopic(zarTopicId, "zar", 3)
@@ -416,7 +417,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics()
             )
         );
 
@@ -428,7 +429,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 member1,
-                image
+                image.topics()
             )
         );
 
@@ -443,7 +444,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics()
             )
         );
 
@@ -453,7 +454,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 member1,
                 null,
-                image
+                image.topics()
             )
         );
 
@@ -466,7 +467,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 member2,
-                image
+                image.topics()
             )
         );
 
@@ -482,7 +483,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics()
             )
         );
 
@@ -494,7 +495,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 member2,
                 null,
-                image
+                image.topics()
             )
         );
 
@@ -506,7 +507,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 member1,
                 null,
-                image
+                image.topics()
             )
         );
 
@@ -520,7 +521,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 member3,
-                image
+                image.topics()
             )
         );
 
@@ -537,8 +538,35 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics()
             )
         );
+    }
+
+    @Test
+    public void testNextMetadataRefreshTime() {
+        MockTime time = new MockTime();
+        ConsumerGroup group = createConsumerGroup("group-foo");
+
+        // The next refresh time should be empty when the group is created or loaded.
+        assertTrue(group.refreshMetadataNeeded(time.milliseconds()));
+        assertEquals(0L, group.nextMetadataRefreshTime().timeMs);
+        assertEquals(0, group.nextMetadataRefreshTime().epoch);
+
+        // Set the next refresh time.
+        group.setNextMetadataRefreshTime(time.milliseconds() + 1000, group.groupEpoch());
+        assertFalse(group.refreshMetadataNeeded(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.nextMetadataRefreshTime().timeMs);
+        assertEquals(group.groupEpoch(), group.nextMetadataRefreshTime().epoch);
+
+        // Advance past the deadline.
+        time.sleep(1001L);
+        assertTrue(group.refreshMetadataNeeded(time.milliseconds()));
+
+        // Set the next refresh time with a higher group epoch.
+        group.setNextMetadataRefreshTime(time.milliseconds() + 1000, group.groupEpoch() + 1);
+        assertTrue(group.refreshMetadataNeeded(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.nextMetadataRefreshTime().timeMs);
+        assertEquals(group.groupEpoch() + 1, group.nextMetadataRefreshTime().epoch);
     }
 }
