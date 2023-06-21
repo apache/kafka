@@ -91,7 +91,7 @@ import scala.util.control.ControlThrowable
  * @param initialConfig Initial configuration parameters for the cleaner. Actual config may be dynamically updated.
  * @param logDirs The directories where offset checkpoints reside
  * @param logs The pool of logs
- * @param logDirFailureChannel The channel used to add offline log dirs that may occur when cleaning the log
+ * @param logDirFailureChannel The channel used to add offline log dirs that may be encountered when cleaning the log
  * @param time A way to control the passage of time
  */
 class LogCleaner(initialConfig: CleanerConfig,
@@ -175,7 +175,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Remove metrics when shutdown cleaner threads
+   * Remove metrics
    */
   def removeMetrics(): Unit = {
     LogCleaner.MetricNames.foreach(metricsGroup.removeMetric)
@@ -189,7 +189,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Mainly validate the new cleaner threads num is reasonable
+   * Validate the new cleaner threads num is reasonable
    *
    * @param newConfig A submitted new KafkaConfig instance that contains new cleaner config
    */
@@ -231,7 +231,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of
    *  the partition is aborted.
    *
-   *  @param topicPartition The topic and partition to be abort cleaning
+   *  @param topicPartition The topic and partition to abort cleaning
    */
   def abortCleaning(topicPartition: TopicPartition): Unit = {
     cleanerManager.abortCleaning(topicPartition)
@@ -240,7 +240,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * Update checkpoint file to remove partitions if necessary.
    *
-   * @param dataDir The file object to be updated
+   * @param dataDir The data dir to be updated if necessary
    * @param partitionToRemove The topicPartition to be removed, default none
    */
   def updateCheckpoints(dataDir: File, partitionToRemove: Option[TopicPartition] = None): Unit = {
@@ -248,7 +248,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Alter the checkpoint directory for the topicPartition, to remove the data in sourceLogDir, and add the data in destLogDir
+   * Alter the checkpoint directory for the `topicPartition`, to remove the data in `sourceLogDir`, and add the data in `destLogDir`
    * Generally occurs when the disk balance ends and replaces the previous file with the future file
    *
    * @param topicPartition The topic and partition to alter checkpoint
@@ -865,9 +865,9 @@ private[log] class Cleaner(val id: Int,
   }
 
   /**
-   * Judge a batch should be discard by cleaned transaction state
+   * Determine if a batch should be discard by cleaned transaction state
    *
-   * @param batch The batch of records to judge
+   * @param batch The batch of records to check
    * @param transactionMetadata The maintained transaction state about cleaning
    *
    * @return if the batch can be discarded
@@ -881,12 +881,12 @@ private[log] class Cleaner(val id: Int,
   }
 
   /**
-   * Judge a record should be retained
+   * Determine if a record should be retained
    *
    * @param map The offset map(key=>offset) to use for cleaning segments
    * @param retainDeletesForLegacyRecords Should tombstones (lower than version 2) and markers be retained while cleaning this segment
    * @param batch The batch of records that the record belongs to
-   * @param record The record to judge
+   * @param record The record to check
    * @param stats The collector for cleaning statistics
    * @param currentTime The current time that used to compare with the delete horizon time of the batch when judging a non-legacy record
    *
