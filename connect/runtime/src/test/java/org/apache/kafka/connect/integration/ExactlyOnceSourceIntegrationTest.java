@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -51,6 +52,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -83,6 +85,7 @@ import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CU
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MESSAGES_PER_POLL_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MAX_MESSAGES_PER_SECOND_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.UPDATE_OFFSETS;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
@@ -121,6 +124,8 @@ public class ExactlyOnceSourceIntegrationTest {
     private static final int MINIMUM_MESSAGES = 100;
     private static final String MESSAGES_PER_POLL = Integer.toString(MINIMUM_MESSAGES);
     private static final String MESSAGES_PER_SECOND = Long.toString(MINIMUM_MESSAGES / 2);
+
+    private static final long OFFSET_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
 
     private Properties brokerProps;
     private Map<String, String> workerProps;
@@ -249,7 +254,8 @@ public class ExactlyOnceSourceIntegrationTest {
     /**
      * A simple green-path test that ensures the worker can start up a source task with exactly-once support enabled
      * and write some records to Kafka that will be visible to a downstream consumer using the "READ_COMMITTED"
-     * isolation level. The "poll" transaction boundary is used.
+     * isolation level. The "poll" transaction boundary is used. We also ensure that no new extra source partitions
+     * are updated in the offsets committed for the connector.
      */
     @Test
     public void testPollBoundary() throws Exception {
@@ -273,6 +279,8 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(TRANSACTION_BOUNDARY_CONFIG, POLL.toString());
         props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
         props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
+        // By default it's false. Setting here explicitly for illustrative purposes
+        props.put(UPDATE_OFFSETS, Boolean.toString(false));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(MINIMUM_MESSAGES);
@@ -288,6 +296,70 @@ public class ExactlyOnceSourceIntegrationTest {
         log.info("Waiting for records to be committed to Kafka by worker");
         // wait for the connector tasks to commit enough records
         connectorHandle.awaitCommits(TimeUnit.MINUTES.toMillis(1));
+
+        validateOffsets(1, "We should have the offsets of exactly one partition");
+
+        StartAndStopLatch connectorStop = connectorHandle.expectedStops(1, true);
+        connect.deleteConnector(CONNECTOR_NAME);
+        assertConnectorStopped(connectorStop);
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        ConsumerRecords<byte[], byte[]> records = connect.kafka().consumeAll(
+                CONSUME_RECORDS_TIMEOUT_MS,
+                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                null,
+                topic
+        );
+        assertTrue("Not enough records produced by source connector. Expected at least: " + MINIMUM_MESSAGES + " + but got " + records.count(),
+                records.count() >= MINIMUM_MESSAGES);
+        assertExactlyOnceSeqnos(records, numTasks);
+    }
+
+    /**
+     * A simple green-path test that tests the same functionality as {@link #testPollBoundary()} with one difference of the allowance
+     * of updating offsets via {@link SourceTask#updateOffsets(Map)} method.
+     */
+    @Test
+    public void testPollBoundaryWithUpdatedOffsets() throws Exception {
+        // Much slower offset commit interval; should never be triggered during this test
+        workerProps.put(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG, "600000");
+        connectBuilder.numWorkers(1);
+        startConnect();
+
+        String topic = "test-topic";
+        connect.kafka().createTopic(topic, 3);
+
+        int numTasks = 1;
+
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
+        props.put(TOPIC_CONFIG, topic);
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(NAME_CONFIG, CONNECTOR_NAME);
+        props.put(TRANSACTION_BOUNDARY_CONFIG, POLL.toString());
+        props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
+        props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
+        // Allow offsets to be updated
+        props.put(UPDATE_OFFSETS, Boolean.toString(true));
+
+        // expect all records to be consumed and committed by the connector
+        connectorHandle.expectedRecords(MINIMUM_MESSAGES);
+        connectorHandle.expectedCommits(MINIMUM_MESSAGES);
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        log.info("Waiting for records to be provided to worker by task");
+        // wait for the connector tasks to produce enough records
+        connectorHandle.awaitRecords(SOURCE_TASK_PRODUCE_TIMEOUT_MS);
+
+        log.info("Waiting for records to be committed to Kafka by worker");
+        // wait for the connector tasks to commit enough records
+        connectorHandle.awaitCommits(TimeUnit.MINUTES.toMillis(1));
+
+        validateOffsets(2, "We should have the offsets of an extra source partition");
 
         StartAndStopLatch connectorStop = connectorHandle.expectedStops(1, true);
         connect.deleteConnector(CONNECTOR_NAME);
@@ -308,7 +380,8 @@ public class ExactlyOnceSourceIntegrationTest {
     /**
      * A simple green-path test that ensures the worker can start up a source task with exactly-once support enabled
      * and write some records to Kafka that will be visible to a downstream consumer using the "READ_COMMITTED"
-     * isolation level. The "interval" transaction boundary is used with a connector-specific override.
+     * isolation level. The "interval" transaction boundary is used with a connector-specific override. We also ensure
+     * that no new extra source partitions are updated in the offsets committed for the connector.
      */
     @Test
     public void testIntervalBoundary() throws Exception {
@@ -333,6 +406,8 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(TRANSACTION_BOUNDARY_INTERVAL_CONFIG, "10000");
         props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
         props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
+        // By default it's false. Setting here explicitly for illustrative purposes
+        props.put(UPDATE_OFFSETS, Boolean.toString(false));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(MINIMUM_MESSAGES);
@@ -348,6 +423,70 @@ public class ExactlyOnceSourceIntegrationTest {
         log.info("Waiting for records to be committed to Kafka by worker");
         // wait for the connector tasks to commit enough records
         connectorHandle.awaitCommits(TimeUnit.MINUTES.toMillis(1));
+        validateOffsets(1, "We should have the offsets of exactly one partition");
+
+        StartAndStopLatch connectorStop = connectorHandle.expectedStops(1, true);
+        connect.deleteConnector(CONNECTOR_NAME);
+        assertConnectorStopped(connectorStop);
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        ConsumerRecords<byte[], byte[]> records = connect.kafka().consumeAll(
+                CONSUME_RECORDS_TIMEOUT_MS,
+                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                null,
+                topic
+        );
+        assertTrue("Not enough records produced by source connector. Expected at least: " + MINIMUM_MESSAGES + " + but got " + records.count(),
+                records.count() >= MINIMUM_MESSAGES);
+        assertExactlyOnceSeqnos(records, numTasks);
+    }
+
+    /**
+     * A simple green-path test that tests the same functionality as {@link #testIntervalBoundary()}
+     * with one difference of the allowance of updating offsets via {@link SourceTask#updateOffsets(Map)} method.
+     */
+    @Test
+    public void testIntervalBoundaryWithUpdatedOffsets() throws Exception {
+        // Much slower offset commit interval; should never be triggered during this test
+        workerProps.put(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG, "600000");
+        connectBuilder.numWorkers(1);
+        startConnect();
+
+        String topic = "test-topic";
+        connect.kafka().createTopic(topic, 3);
+
+        int numTasks = 1;
+
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
+        props.put(TOPIC_CONFIG, topic);
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(NAME_CONFIG, CONNECTOR_NAME);
+        props.put(TRANSACTION_BOUNDARY_CONFIG, INTERVAL.toString());
+        props.put(TRANSACTION_BOUNDARY_INTERVAL_CONFIG, "10000");
+        props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
+        props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
+        // Allow offsets to be updated
+        props.put(UPDATE_OFFSETS, Boolean.toString(true));
+
+        // expect all records to be consumed and committed by the connector
+        connectorHandle.expectedRecords(MINIMUM_MESSAGES);
+        connectorHandle.expectedCommits(MINIMUM_MESSAGES);
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        log.info("Waiting for records to be provided to worker by task");
+        // wait for the connector tasks to produce enough records
+        connectorHandle.awaitRecords(SOURCE_TASK_PRODUCE_TIMEOUT_MS);
+
+        log.info("Waiting for records to be committed to Kafka by worker");
+        // wait for the connector tasks to commit enough records
+        connectorHandle.awaitCommits(TimeUnit.MINUTES.toMillis(1));
+
+        validateOffsets(2, "We should have the offsets of an extra source partition");
 
         StartAndStopLatch connectorStop = connectorHandle.expectedStops(1, true);
         connect.deleteConnector(CONNECTOR_NAME);
@@ -370,7 +509,8 @@ public class ExactlyOnceSourceIntegrationTest {
      * and write some records to Kafka that will be visible to a downstream consumer using the "READ_COMMITTED"
      * isolation level. The "connector" transaction boundary is used with a connector that defines transactions whose
      * size correspond to successive elements of the Fibonacci sequence, where transactions with an even number of
-     * records are aborted, and those with an odd number of records are committed.
+     * records are aborted, and those with an odd number of records are committed. We also ensure
+     * that no new extra source partitions are updated in the offsets committed for the connector.
      */
     @Test
     public void testConnectorBoundary() throws Exception {
@@ -393,6 +533,8 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_SUPPORTED);
         props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
         props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
+        // By default it's false. Setting here explicitly for illustrative purposes
+        props.put(UPDATE_OFFSETS, Boolean.toString(false));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(MINIMUM_MESSAGES);
@@ -408,6 +550,8 @@ public class ExactlyOnceSourceIntegrationTest {
         log.info("Waiting for records to be committed to Kafka by worker");
         // wait for the connector tasks to commit enough records
         connectorHandle.awaitCommits(TimeUnit.MINUTES.toMillis(1));
+
+        validateOffsets(1, "We should have the offsets of exactly one partition");
 
         Map<String, Object> consumerProps = new HashMap<>();
         consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
@@ -440,6 +584,107 @@ public class ExactlyOnceSourceIntegrationTest {
                 );
 
         List<Long> actualOffsetSeqnos = parseAndAssertOffsetsForSingleTask(offsetRecords);
+
+        assertEquals("Committed offsets should match connector-defined transaction boundaries",
+                expectedOffsetSeqnos, actualOffsetSeqnos.subList(0, expectedOffsetSeqnos.size()));
+
+        List<Long> expectedRecordSeqnos = LongStream.range(1, MINIMUM_MESSAGES + 1).boxed().collect(Collectors.toList());
+        long priorBoundary = 1;
+        long nextBoundary = 2;
+        while (priorBoundary < expectedRecordSeqnos.get(expectedRecordSeqnos.size() - 1)) {
+            if (nextBoundary % 2 == 0) {
+                for (long i = priorBoundary + 1; i < nextBoundary + 1; i++) {
+                    expectedRecordSeqnos.remove(i);
+                }
+            }
+            nextBoundary += priorBoundary;
+            priorBoundary = nextBoundary - priorBoundary;
+        }
+        List<Long> actualRecordSeqnos = parseAndAssertValuesForSingleTask(sourceRecords);
+        // Have to sort the records by seqno since we produce to multiple partitions and in-order consumption isn't guaranteed
+        Collections.sort(actualRecordSeqnos);
+        assertEquals("Committed records should exclude connector-aborted transactions",
+                expectedRecordSeqnos, actualRecordSeqnos.subList(0, expectedRecordSeqnos.size()));
+    }
+
+    /**
+     * A simple green-path test that tests the same functionality as {@link #testConnectorBoundary()}
+     * with one difference of the allowance of updating offsets via {@link SourceTask#updateOffsets(Map)} method.
+     */
+    @Test
+    public void testConnectorBoundaryWithUpdatedOffsets() throws Exception {
+        String offsetsTopic = "exactly-once-source-cluster-offsets";
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, offsetsTopic);
+        connectBuilder.numWorkers(1);
+        startConnect();
+
+        String topic = "test-topic";
+        connect.kafka().createTopic(topic, 3);
+
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(TASKS_MAX_CONFIG, "1");
+        props.put(TOPIC_CONFIG, topic);
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(NAME_CONFIG, CONNECTOR_NAME);
+        props.put(TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
+        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_SUPPORTED);
+        props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
+        props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
+        // Allow offsets to be updated
+        props.put(UPDATE_OFFSETS, Boolean.toString(true));
+
+        // expect all records to be consumed and committed by the connector
+        connectorHandle.expectedRecords(MINIMUM_MESSAGES);
+        connectorHandle.expectedCommits(MINIMUM_MESSAGES);
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        log.info("Waiting for records to be provided to worker by task");
+        // wait for the connector tasks to produce enough records
+        connectorHandle.awaitRecords(SOURCE_TASK_PRODUCE_TIMEOUT_MS);
+
+        log.info("Waiting for records to be committed to Kafka by worker");
+        // wait for the connector tasks to commit enough records
+        connectorHandle.awaitCommits(TimeUnit.MINUTES.toMillis(1));
+        validateOffsets(2, "We should have the offsets of an extra source partition");
+
+        Map<String, Object> consumerProps = new HashMap<>();
+        consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka().consumeAll(
+                CONSUME_RECORDS_TIMEOUT_MS,
+                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                null,
+                topic
+        );
+        assertTrue("Not enough records produced by source connector. Expected at least: " + MINIMUM_MESSAGES + " + but got " + sourceRecords.count(),
+                sourceRecords.count() >= MINIMUM_MESSAGES);
+
+        // also consume from the cluster's offsets topic to verify that the expected offsets (which should correspond to the connector's
+        // custom transaction boundaries) were committed
+        List<Long> expectedOffsetSeqnos = new ArrayList<>();
+        long lastExpectedOffsetSeqno = 1;
+        long nextExpectedOffsetSeqno = 1;
+        while (nextExpectedOffsetSeqno <= MINIMUM_MESSAGES) {
+            expectedOffsetSeqnos.add(nextExpectedOffsetSeqno);
+            nextExpectedOffsetSeqno += lastExpectedOffsetSeqno;
+            lastExpectedOffsetSeqno = nextExpectedOffsetSeqno - lastExpectedOffsetSeqno;
+        }
+        ConsumerRecords<byte[], byte[]> offsetRecords = connect.kafka()
+                .consume(
+                        expectedOffsetSeqnos.size(),
+                        TimeUnit.MINUTES.toMillis(1),
+                        consumerProps,
+                        offsetsTopic
+                );
+
+
+        Map<Integer, List<Long>> parsedOffsets = parseOffsetForTasks(offsetRecords);
+        assertEquals("Expected records to be from 2 source partitions", 2, parsedOffsets.keySet().size());
+        List<Long> actualOffsetSeqnos = parsedOffsets.get(0);
 
         assertEquals("Committed offsets should match connector-defined transaction boundaries",
                 expectedOffsetSeqnos, actualOffsetSeqnos.subList(0, expectedOffsetSeqnos.size()));
@@ -915,6 +1160,13 @@ public class ExactlyOnceSourceIntegrationTest {
 
         connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(
             CONNECTOR_NAME, 1, "Task should have failed after trying to produce to its own offsets topic");
+    }
+
+    private void validateOffsets(int numPartitions, String message) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            ConnectorOffsets offsets = connect.connectorOffsets(CONNECTOR_NAME);
+            return offsets.offsets().size() == numPartitions;
+        }, OFFSET_READ_TIMEOUT_MS, message);
     }
 
     private ConfigInfo findConfigInfo(String property, ConfigInfos validationResult) {
