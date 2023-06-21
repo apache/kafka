@@ -340,6 +340,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
                     state = CoordinatorState.LOADING;
                     coordinator = coordinatorBuilderSupplier
                         .get()
+                        .withLogContext(logContext)
                         .withSnapshotRegistry(snapshotRegistry)
                         .build();
                     break;

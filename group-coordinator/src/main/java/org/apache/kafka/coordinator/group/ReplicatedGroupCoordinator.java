@@ -62,6 +62,7 @@ public class ReplicatedGroupCoordinator implements Coordinator<Record> {
             this.config = config;
         }
 
+        @Override
         public CoordinatorBuilder<ReplicatedGroupCoordinator, Record> withLogContext(
             LogContext logContext
         ) {

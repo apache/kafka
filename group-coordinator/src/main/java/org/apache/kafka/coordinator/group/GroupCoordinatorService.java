@@ -228,13 +228,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
         ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException) {
+            if (exception instanceof UnknownTopicOrPartitionException ||
+                exception instanceof NotEnoughReplicasException) {
                 return new ConsumerGroupHeartbeatResponseData()
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
             }
 
             if (exception instanceof NotLeaderOrFollowerException ||
-                exception instanceof NotEnoughReplicasException ||
                 exception instanceof KafkaStorageException) {
                 return new ConsumerGroupHeartbeatResponseData()
                     .setErrorCode(Errors.NOT_COORDINATOR.code());

@@ -332,6 +332,7 @@ public class CoordinatorRuntimeTest {
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
