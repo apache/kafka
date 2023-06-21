@@ -865,7 +865,7 @@ private[log] class Cleaner(val id: Int,
   }
 
   /**
-   * Determine if a batch should be discard by cleaned transaction state
+   * Check if a batch should be discard by cleaned transaction state
    *
    * @param batch The batch of records to check
    * @param transactionMetadata The maintained transaction state about cleaning
@@ -881,7 +881,7 @@ private[log] class Cleaner(val id: Int,
   }
 
   /**
-   * Determine if a record should be retained
+   * Check if a record should be retained
    *
    * @param map The offset map(key=>offset) to use for cleaning segments
    * @param retainDeletesForLegacyRecords Should tombstones (lower than version 2) and markers be retained while cleaning this segment
