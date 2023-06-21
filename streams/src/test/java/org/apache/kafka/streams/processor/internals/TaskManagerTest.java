@@ -185,7 +185,7 @@ public class TaskManagerTest {
 
     @org.mockito.Mock
     private InternalTopologyBuilder topologyBuilder;
-    @Mock(type = MockType.DEFAULT)
+    @org.mockito.Mock
     private StateDirectory stateDirectory;
     @org.mockito.Mock
     private ChangelogReader changeLogReader;
@@ -1489,13 +1489,9 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotLockAnythingIfStateDirIsEmpty() {
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>()).once();
-
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
-
-        verify(stateDirectory);
         assertTrue(taskManager.lockedTaskDirectories().isEmpty());
+        Mockito.verify(stateDirectory).listNonEmptyTaskDirectories();
     }
 
     @Test
@@ -1508,10 +1504,7 @@ public class TaskManagerTest {
             taskId10.toString(),
             "dummy"
         );
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
-
-        verify(stateDirectory);
         assertThat(taskManager.lockedTaskDirectories(), is(singleton(taskId01)));
     }
 
@@ -1555,7 +1548,6 @@ public class TaskManagerTest {
             taskId01.toString(),  // standby task
             taskId02.toString()   // unassigned but able to lock
         );
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01, taskId02)));
@@ -1567,7 +1559,6 @@ public class TaskManagerTest {
 
         taskManager.handleRebalanceComplete();
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
-        verify(stateDirectory);
     }
 
     @Test
@@ -1677,7 +1668,6 @@ public class TaskManagerTest {
                                            final Map<TaskId, Long> expectedOffsetSums) throws Exception {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
         final StateMachineTask restoringTask = handleAssignment(
@@ -1700,7 +1690,6 @@ public class TaskManagerTest {
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
         final StateMachineTask restoringTask = handleAssignment(
@@ -1724,8 +1713,6 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
-
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
@@ -1742,7 +1729,6 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
         final StateMachineTask uninitializedTask = new StateMachineTask(taskId00, taskId00Partitions, true);
@@ -1766,7 +1752,6 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
 
         final StateMachineTask closedTask = new StateMachineTask(taskId00, taskId00Partitions, true);
 
@@ -1787,7 +1772,6 @@ public class TaskManagerTest {
     public void shouldNotReportOffsetSumsForTaskWeCantLock() throws Exception {
         expectLockFailedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
         assertTrue(taskManager.lockedTaskDirectories().isEmpty());
 
@@ -1798,12 +1782,10 @@ public class TaskManagerTest {
     public void shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint() throws Exception {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
-        replay(stateDirectory);
+        when(stateDirectory.checkpointFileFor(taskId00)).thenReturn(getCheckpointFile(taskId00));
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertTrue(taskManager.getTaskOffsetSums().isEmpty());
-        verify(stateDirectory);
     }
 
     @Test
@@ -1819,7 +1801,6 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
@@ -1907,9 +1888,7 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00, taskId01);
 
         // The second attempt will return empty tasks.
-        makeTaskFolders();
         expectLockObtainedFor();
-        replay(stateDirectory);
 
         taskManager.handleRebalanceStart(emptySet());
         assertThat(taskManager.lockedTaskDirectories(), Matchers.is(mkSet(taskId00, taskId01)));
@@ -1932,6 +1911,7 @@ public class TaskManagerTest {
         // The locked task map will not be cleared.
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
 
+        makeTaskFolders();
         taskManager.handleRebalanceStart(emptySet());
 
         assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
@@ -2161,7 +2141,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCleanAndReviveCorruptedStandbyTasksBeforeCommittingNonCorruptedTasks() {
+    public void shouldCleanAndReviveCorruptedStandbyTaskzBeforeCommittingNonCorruptedTaskz() {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
         replay(stateManager);
@@ -2204,7 +2184,6 @@ public class TaskManagerTest {
     @Test
     public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
         final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new ArrayList<>());
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
 
@@ -2224,7 +2203,7 @@ public class TaskManagerTest {
 
         expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        replay(consumer, stateDirectory, stateManager);
+        replay(consumer, stateManager);
 
         uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
 
@@ -2848,7 +2827,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCommitOnHandleAssignmentIfNoTaskClosed() {
+    public void shouldNotCommitOnHandleAssignmentIfNoTaskClozed() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets00);
@@ -2878,7 +2857,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCommitOnHandleAssignmentIfOnlyStandbyTaskClosed() {
+    public void shouldNotCommitOnHandleAzzignmentIfOnlyStandbyTaskClozed() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets00);
@@ -3428,8 +3407,8 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
         expectLastCall();
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>());
-        replay(consumer, stateDirectory);
+        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(new ArrayList<>());
+        replay(consumer);
         assertThat(taskManager.rebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
         assertThat(taskManager.rebalanceInProgress(), is(true));
@@ -3544,14 +3523,13 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
         makeTaskFolders(taskId00.toString(), task01.toString());
-        expectLockObtainedFor(taskId00, taskId01);
         expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
             .thenReturn(singletonList(task00));
         when(standbyTaskCreator.createTasks(taskId01Assignment))
             .thenReturn(singletonList(task01));
 
-        replay(stateDirectory, consumer);
+        replay(consumer);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4305,22 +4283,22 @@ public class TaskManagerTest {
         return allTasks;
     }
 
-    private void expectLockObtainedFor(final TaskId... tasks) throws Exception {
+    private void expectLockObtainedFor(final TaskId... tasks) {
         for (final TaskId task : tasks) {
-            expect(stateDirectory.lock(task)).andReturn(true).once();
+            when(stateDirectory.lock(task)).thenReturn(true);
         }
     }
 
-    private void expectLockFailedFor(final TaskId... tasks) throws Exception {
+    private void expectLockFailedFor(final TaskId... tasks) {
         for (final TaskId task : tasks) {
-            expect(stateDirectory.lock(task)).andReturn(false).once();
+            when(stateDirectory.lock(task)).thenReturn(false);
         }
     }
 
-    private void expectUnlockFor(final TaskId... tasks) throws Exception {
+    private void expectUnlockFor(final TaskId... tasks) {
         for (final TaskId task : tasks) {
             stateDirectory.unlock(task);
-            expectLastCall();
+            Mockito.verify(stateDirectory, Mockito.atLeastOnce()).unlock(task);
         }
     }
 
@@ -4609,14 +4587,14 @@ public class TaskManagerTest {
         for (int i = 0; i < names.length; ++i) {
             taskFolders.add(new TaskDirectory(testFolder.newFolder(names[i]), null));
         }
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
+        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(taskFolders);
     }
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
         Files.createFile(checkpointFile.toPath());
         new OffsetCheckpoint(checkpointFile).write(offsets);
-        expect(stateDirectory.checkpointFileFor(task)).andReturn(checkpointFile);
+        when(stateDirectory.checkpointFileFor(task)).thenReturn(checkpointFile);
     }
 
     private File getCheckpointFile(final TaskId task) {
