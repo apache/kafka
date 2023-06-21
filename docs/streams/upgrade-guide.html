@@ -159,7 +159,7 @@
     <p>
       <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-904%3A+Kafka+Streams+-+Guarantee+subtractor+is+called+before+adder+if+key+has+not+changed">KIP-904</a>
       improves the implementation of KTable aggregations. In general, an input KTable update triggers a result refinent for two rows;
-      however, prior to KIP-904, if both refinements happens to the same result row, two independent updates to the same row are applied, resulting in spurious itermediate results.
+      however, prior to KIP-904, if both refinements happen to the same result row, two independent updates to the same row are applied, resulting in spurious itermediate results.
       KIP-904 allows us to detect this case, and to only apply a single update avoiding spurious intermediate results.
     </p>
 
