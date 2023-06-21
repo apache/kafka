@@ -538,7 +538,7 @@ public class CoordinatorRuntimeTest {
         CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP,
             state -> new CoordinatorResult<>(Collections.emptyList(), "response4"));
 
-        // It is completed immediately because the state is fully commited.
+        // It is completed immediately because the state is fully committed.
         assertTrue(write4.isDone());
         assertEquals("response4", write4.get(5, TimeUnit.SECONDS));
         assertEquals(Collections.singletonList(3L), ctx.snapshotRegistry.epochsList());

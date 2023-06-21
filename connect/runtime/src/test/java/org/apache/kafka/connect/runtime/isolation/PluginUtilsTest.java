@@ -693,7 +693,7 @@ public class PluginUtilsTest {
 
     private void assertUrls(List<Path> expected, List<Path> actual) {
         Collections.sort(expected);
-        // not sorting 'actual' because it should be returned sorted from withing the PluginUtils.
+        // not sorting 'actual' because it should be returned sorted from within the PluginUtils.
         assertEquals(expected, actual);
     }
 }

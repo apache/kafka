@@ -1985,11 +1985,11 @@ public class GroupMetadataManagerTest {
     ) {
         if (assignment == null) return null;
 
-        Map<Uuid, Set<Integer>> assigmentMap = new HashMap<>();
+        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
         assignment.forEach(topicPartitions -> {
-            assigmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
+            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
         });
-        return assigmentMap;
+        return assignmentMap;
     }
 
     private void assertRecordsEquals(
