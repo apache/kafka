@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.io.{Closeable, File, FileWriter, IOException, Reader, StringReader}
+import java.io.{Closeable, File, IOException, Reader, StringReader}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
@@ -376,7 +376,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Produce/consume should work with new truststore with new producer/consumer
     val producer = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    // Start the new consumer in a separate group than the continous consumer started at the beginning of the test so
+    // Start the new consumer in a separate group than the continuous consumer started at the beginning of the test so
     // that it is not disrupted by rebalance.
     val consumer = ConsumerBuilder("group2").trustStoreProps(sslProperties2).topic(topic2).build()
     verifyProduceConsume(producer, consumer, 10, topic2)
@@ -1712,15 +1712,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def alterConfigsUsingConfigCommand(props: Properties): Unit = {
-    val propsFile = TestUtils.tempFile()
-    val propsWriter = new FileWriter(propsFile)
-    try {
-      clientProps(SecurityProtocol.SSL).forEach {
-        case (k, v) => propsWriter.write(s"$k=$v\n")
-      }
-    } finally {
-      propsWriter.close()
-    }
+    val propsFile = TestUtils.tempPropertiesFile(clientProps(SecurityProtocol.SSL))
 
     servers.foreach { server =>
       val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),

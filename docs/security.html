@@ -262,7 +262,7 @@ default_ca    = CA_default      # The default ca section
 [ CA_default ]
 
 base_dir      = .
-certificate   = $base_dir/cacert.pem   # The CA certifcate
+certificate   = $base_dir/cacert.pem   # The CA certificate
 private_key   = $base_dir/cakey.pem    # The CA private key
 new_certs_dir = $base_dir              # Location for new certs after signing
 database      = $base_dir/index.txt    # Database index file
@@ -437,7 +437,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                 <li><b>Failure to copy extension fields</b><br>
                     CA operators are often hesitant to copy and requested extension fields from CSRs and prefer to specify these themselves as this makes it
                     harder for a malicious party to obtain certificates with potentially misleading or fraudulent values.
-                    It is adviseable to double check signed certificates, whether these contain all requested SAN fields to enable proper hostname verification.
+                    It is advisable to double check signed certificates, whether these contain all requested SAN fields to enable proper hostname verification.
                     The following command can be used to print certificate details to the console, which should be compared with what was originally requested:
                     <pre class="line-numbers"><code class="language-bash">&gt; openssl x509 -in certificate.crt -text -noout</code></pre>
                 </li>
@@ -1269,7 +1269,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     </ol>
 
     <h3 class="anchor-heading"><a id="security_authz" class="anchor-link"></a><a href="#security_authz">7.5 Authorization and ACLs</a></h3>
-    Kafka ships with a pluggable authorization framework, which is configured with the <tt>authorizer.class.name</tt> property in the server confgiuration.
+    Kafka ships with a pluggable authorization framework, which is configured with the <tt>authorizer.class.name</tt> property in the server configuration.
     Configured implementations must extend <code>org.apache.kafka.server.authorizer.Authorizer</code>.
     Kafka provides default implementations which store ACLs in the cluster metadata (either Zookeeper or the KRaft metadata log).
 

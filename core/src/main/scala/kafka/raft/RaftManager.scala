@@ -152,7 +152,7 @@ class KafkaRaftManager[T](
   private val dataDir = createDataDir()
 
   private val dataDirLock = {
-    // Aquire the log dir lock if the metadata log dir is different from the log dirs
+    // Acquire the log dir lock if the metadata log dir is different from the log dirs
     val differentMetadataLogDir = !config
       .logDirs
       .map(Paths.get(_).toAbsolutePath)
@@ -195,7 +195,7 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
-    CoreUtils.swallow(expirationTimer.shutdown(), this)
+    CoreUtils.swallow(expirationTimer.close(), this)
     CoreUtils.swallow(raftIoThread.shutdown(), this)
     CoreUtils.swallow(client.close(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)

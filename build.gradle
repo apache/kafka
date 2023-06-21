@@ -180,6 +180,12 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
+    dependsOn subprojects.collect {
+      it.tasks.matching {
+        it.name == "processMessages" || it.name == "processTestMessages"
+      }
+    }
+
     verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
