@@ -31,12 +31,14 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.function.IntPredicate;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.controller.PartitionChangeBuilder.Election;
@@ -46,6 +48,7 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 
 @Timeout(value = 40)
@@ -200,6 +203,14 @@ public class PartitionChangeBuilderTest {
             new PartitionChangeRecord(),
             NO_LEADER_CHANGE
         );
+        testTriggerLeaderEpochBumpIfNeededLeader(
+            createFooBuilder()
+                .setTargetIsrWithBrokerStates(
+                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4)))
+                .setBumpLeaderEpochOnIsrShrink(true),
+            new PartitionChangeRecord(),
+            NO_LEADER_CHANGE
+        );
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder().
             setTargetReplicas(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
             NO_LEADER_CHANGE);
@@ -214,6 +225,16 @@ public class PartitionChangeBuilderTest {
                 .setTargetIsrWithBrokerStates(
                     AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))
                 ),
+            new PartitionChangeRecord(),
+            1
+        );
+
+        // KAFKA-15109: Shrinking the ISR while in ZK migration mode does increase the leader epoch
+        testTriggerLeaderEpochBumpIfNeededLeader(
+            createFooBuilder()
+                .setTargetIsrWithBrokerStates(
+                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1)))
+                .setBumpLeaderEpochOnIsrShrink(true),
             new PartitionChangeRecord(),
             1
         );
@@ -382,9 +403,18 @@ public class PartitionChangeBuilderTest {
         );
     }
 
+    private static Stream<Arguments> leaderRecoveryAndZkMigrationParams() {
+        return Stream.of(
+                arguments(true, true),
+                arguments(true, false),
+                arguments(false, true),
+                arguments(false, false)
+        );
+    }
+
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported) {
+    @MethodSource("leaderRecoveryAndZkMigrationParams")
+    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported, boolean zkMigrationsEnabled) {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
@@ -407,6 +437,7 @@ public class PartitionChangeBuilderTest {
             brokerId -> false,
             metadataVersion
         );
+        offlineBuilder.setBumpLeaderEpochOnIsrShrink(zkMigrationsEnabled);
         // Set the target ISR to empty to indicate that the last leader is offline
         offlineBuilder.setTargetIsrWithBrokerStates(Collections.emptyList());
 
@@ -432,6 +463,7 @@ public class PartitionChangeBuilderTest {
             brokerId -> true,
             metadataVersion
         );
+        onlineBuilder.setBumpLeaderEpochOnIsrShrink(zkMigrationsEnabled);
 
         // The only broker in the ISR is elected leader and stays in the recovering
         changeRecord = (PartitionChangeRecord) onlineBuilder.build().get().message();
@@ -445,8 +477,8 @@ public class PartitionChangeBuilderTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported) {
+    @MethodSource("leaderRecoveryAndZkMigrationParams")
+    void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported, boolean zkMigrationsEnabled) {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         PartitionRegistration registration = new PartitionRegistration.Builder().
@@ -468,7 +500,7 @@ public class PartitionChangeBuilderTest {
             brokerId -> brokerId == leaderId,
             metadataVersion
         ).setElection(Election.UNCLEAN);
-
+        onlineBuilder.setBumpLeaderEpochOnIsrShrink(zkMigrationsEnabled);
         // The partition should stay as recovering
         PartitionChangeRecord changeRecord = (PartitionChangeRecord) onlineBuilder
             .build()

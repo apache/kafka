@@ -114,7 +114,7 @@ class PartitionLockTest extends Logging {
 
   /**
    * Verifies concurrent produce and replica fetch log read result update with ISR updates. This
-   * can result in delays in processing produce and replica fetch requets since write lock is obtained,
+   * can result in delays in processing produce and replica fetch requests since write lock is obtained,
    * but it should complete without any failures.
    */
   @Test

@@ -19,8 +19,6 @@ package kafka.coordinator.transaction
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
@@ -35,6 +33,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
@@ -183,7 +182,7 @@ class TransactionMarkerChannelManager(
   }
 
   def retryLogAppends(): Unit = {
-    val txnLogAppendRetries: java.util.List[PendingCompleteTxn] = new util.ArrayList[PendingCompleteTxn]()
+    val txnLogAppendRetries: util.List[PendingCompleteTxn] = new util.ArrayList[PendingCompleteTxn]()
     txnLogAppendRetryQueue.drainTo(txnLogAppendRetries)
     txnLogAppendRetries.forEach { txnLogAppend =>
       debug(s"Retry appending $txnLogAppend transaction log")
@@ -191,9 +190,9 @@ class TransactionMarkerChannelManager(
     }
   }
 
-  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+  override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     retryLogAppends()
-    val txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
+    val txnIdAndMarkerEntries: util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
     markersQueueForUnknownBroker.forEachTxnTopicPartition { case (_, queue) =>
       queue.drainTo(txnIdAndMarkerEntries)
     }
@@ -221,13 +220,13 @@ class TransactionMarkerChannelManager(
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
       val request = new WriteTxnMarkersRequest.Builder(writeTxnMarkersRequestVersion, markersToSend)
 
-      RequestAndCompletionHandler(
+      new RequestAndCompletionHandler(
         currentTimeMs,
         node,
         request,
         requestCompletionHandler
       )
-    }
+    }.asJavaCollection
   }
 
   private def writeTxnCompletion(pendingCompleteTxn: PendingCompleteTxn): Unit = {
