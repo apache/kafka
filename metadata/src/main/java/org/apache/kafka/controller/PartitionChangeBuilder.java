@@ -283,8 +283,8 @@ public class PartitionChangeBuilder {
      * bump is not required when the ISR shrinks. Note, that the leader epoch is never increased if
      * the ISR expanded.
      *
-     * When the controller is in ZK migration mode, the leader epoch must be bumped during ISR
-     * shrink for compatability with ZK brokers.
+     * In MV 3.6 and beyond, if the controller is in ZK migration mode, the leader epoch must
+     * be bumped during ISR shrink for compatability with ZK brokers.
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {

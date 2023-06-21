@@ -229,7 +229,7 @@ public class PartitionChangeBuilderTest {
             1
         );
 
-        // Shrinking the ISR while in ZK migration mode does increase the leader epoch
+        // KAFKA-15109: Shrinking the ISR while in ZK migration mode does increase the leader epoch
         testTriggerLeaderEpochBumpIfNeededLeader(
             createFooBuilder()
                 .setTargetIsrWithBrokerStates(
