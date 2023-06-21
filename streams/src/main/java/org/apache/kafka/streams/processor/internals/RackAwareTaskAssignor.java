@@ -2,14 +2,17 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -24,18 +27,21 @@ public class RackAwareTaskAssignor {
   private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
   private final Map<UUID, Map<String, Optional<String>>> processRacks;
   private final AssignmentConfigs assignmentConfigs;
-  private Logger log;
+  private final Logger log;
   private final Map<TopicPartition, Set<String>> racksForPartition;
+  private final InternalTopicManager internalTopicManager;
 
   public RackAwareTaskAssignor(final Cluster fullMetadata,
                                final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
                                final Map<UUID, Map<String, Optional<String>>> processRacks,
+                               final InternalTopicManager internalTopicManager,
                                final AssignmentConfigs assignmentConfigs,
                                final String logPrefix) {
     this.fullMetadata = fullMetadata;
     this.partitionsForTask = partitionsForTask;
     this.processRacks = processRacks;
+    this.internalTopicManager = internalTopicManager;
     this.assignmentConfigs = assignmentConfigs;
     this.racksForPartition = new HashMap<>();
     final LogContext logContext = new LogContext(logPrefix);
@@ -68,14 +74,10 @@ public class RackAwareTaskAssignor {
           log.error("TopicPartition {} doesn't exist in cluster", topicPartition);
           return false;
         }
-        final Node leader = partitionInfo.leader();
         final Node[] replica = partitionInfo.replicas();
-        if (leader == null || replica == null || replica.length == 0) {
+        if (replica == null || replica.length == 0) {
           topicsToDescribe.add(topicPartition.topic());
           continue;
-        }
-        if (leader.hasRack()) {
-          racksForPartition.computeIfAbsent(topicPartition, k -> new HashSet<>()).add(leader.rack());
         }
         for (final Node r : replica) {
           if (r.hasRack()) {
@@ -86,8 +88,14 @@ public class RackAwareTaskAssignor {
     }
 
     if (!topicsToDescribe.isEmpty()) {
-      // TODO
-      log.info("Fetching PartitionInfo for {} topics", topicsToDescribe.size());
+      log.info("Fetching PartitionInfo for topics {}", topicsToDescribe);
+      try {
+        final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = internalTopicManager.getTopicPartitionInfo(topicsToDescribe);
+        
+      } catch (Exception e) {
+        log.error("Failed to describe topics {}", topicsToDescribe);
+        return false;
+      }
     }
 
     return true;
