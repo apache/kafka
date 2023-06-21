@@ -291,7 +291,7 @@ public class ChunkedBytesStream extends FilterInputStream {
         // Skip bytes stored in intermediate buffer first
         int avail = count - pos;
         long bytesSkipped = (avail < remaining) ? avail : remaining;
-        pos += bytesSkipped;
+        pos += (int) bytesSkipped;
         remaining -= bytesSkipped;
 
         while (remaining > 0) {
@@ -319,7 +319,7 @@ public class ChunkedBytesStream extends FilterInputStream {
                 }
                 avail = count - pos;
                 bytesSkipped = (avail < remaining) ? avail : remaining;
-                pos += bytesSkipped;
+                pos += (int) bytesSkipped;
             }
             remaining -= bytesSkipped;
         }
