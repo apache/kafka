@@ -58,6 +58,8 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
   SCALA_BINARY_VERSION=$(echo $SCALA_VERSION | cut -f 1-2 -d '.')
 fi
 
+KAFKA_VERSION=`grep "^version=" "$base_dir/gradle.properties" | cut -d= -f 2`
+
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
@@ -192,7 +194,7 @@ do
   fi
 done
 
-for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
+for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}-${KAFKA_VERSION}.jar;
 do
   if should_include_file "$file"; then
     CLASSPATH="$CLASSPATH":"$file"
