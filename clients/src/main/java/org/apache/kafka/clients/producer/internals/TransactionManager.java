@@ -142,6 +142,8 @@ public class TransactionManager {
     private volatile boolean transactionStarted = false;
     private volatile boolean epochBumpRequired = false;
 
+    private boolean onlyFencing;
+
     private enum State {
         UNINITIALIZED,
         INITIALIZING,
@@ -201,7 +203,8 @@ public class TransactionManager {
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
-                              final ApiVersions apiVersions) {
+                              final ApiVersions apiVersions,
+                              final boolean onlyFencing) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -218,6 +221,7 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.txnPartitionMap = new TxnPartitionMap();
         this.apiVersions = apiVersions;
+        this.onlyFencing = onlyFencing;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -365,7 +369,7 @@ public class TransactionManager {
     }
 
     public boolean isTransactional() {
-        return transactionalId != null;
+        return transactionalId != null && !onlyFencing;
     }
 
     synchronized boolean hasPartitionsToAdd() {
@@ -496,9 +500,16 @@ public class TransactionManager {
             }
             if (currentState != State.INITIALIZING && !hasProducerId()) {
                 transitionTo(State.INITIALIZING);
-                InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                InitProducerIdRequestData requestData;
+                if (onlyFencing) {
+                    requestData = new InitProducerIdRequestData()
+                        .setTransactionalId(transactionalId)
+                        .setTransactionTimeoutMs(transactionTimeoutMs);
+                } else {
+                    requestData = new InitProducerIdRequestData()
                         .setTransactionalId(null)
                         .setTransactionTimeoutMs(Integer.MAX_VALUE);
+                }
                 InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData), false);
                 enqueueRequest(handler);
             }

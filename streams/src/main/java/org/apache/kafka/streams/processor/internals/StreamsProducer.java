@@ -98,6 +98,11 @@ public class StreamsProducer {
         switch (processingMode) {
             case AT_LEAST_ONCE: {
                 producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
+
+                // Enable a transactional ID, but only for fencing (no transactions)
+                final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_FOR_FENCING_ONLY_CONFIG, true);
                 eosV2ProducerConfigs = null;
 
                 break;
