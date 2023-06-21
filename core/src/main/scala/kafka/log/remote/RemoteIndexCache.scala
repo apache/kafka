@@ -47,6 +47,10 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
   private[remote] var markedForCleanup = false
   // visible for testing
   private[remote] var cleanStarted = false
+  // This lock is used to synchronize cleanup methods and read methods. This ensures that cleanup (which changes the
+  // underlying files of the index) isn't performed while a read is in-progress for the entry. This is required in
+  // addition to using the thread safe cache because, while the thread safety of the cache ensures that we can read
+  // entries concurrently, it does not ensure that we won't mutate underlying files beloging to an entry.
   private val lock: ReentrantReadWriteLock = new ReentrantReadWriteLock()
 
   def lookupOffset(targetOffset: Long): OffsetPosition = {
@@ -143,7 +147,8 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
    */
   private[remote] val expiredIndexes = new LinkedBlockingQueue[Entry]()
   /**
-   * Lock used to synchronize close/init with other read operations. Note that multi threads can still read concurrently.
+   * Lock used to synchronize close with other read operations. This ensures that when we close, we don't have any other
+   * concurrent reads in-progress.
    */
   private val lock: ReentrantReadWriteLock = new ReentrantReadWriteLock()
   /**
