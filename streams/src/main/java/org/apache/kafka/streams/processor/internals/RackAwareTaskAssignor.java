@@ -53,10 +53,13 @@ public class RackAwareTaskAssignor {
           return canEnableForActive;
       }
 
+      /*
+      TODO: enable this after we add the config
       if (StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
           canEnableForActive = false;
           return false;
       }
+       */
 
       if (!validateClientRack()) {
           canEnableForActive = false;
