@@ -84,7 +84,6 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             }
 
             buffer.get().setSerdesIfNull(new SerdeGetter(context));
-            //cast doesn't matter, it is just because the processor is deprecated. The context gets converted back with StoreToProcessorContextAdapter.adapt(context)
             buffer.get().init((org.apache.kafka.streams.processor.StateStoreContext) context(), null);
         }
     }

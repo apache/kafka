@@ -73,10 +73,17 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         buffer.init((StateStoreContext) context, store);
     }
 
-    private void pipeRecord(final String key, final String value, final long time) {
+    private boolean pipeRecord(final String key, final String value, final long time) {
         final Record<String, String> record = new Record<>(key, value, time);
         context.setRecordContext(new ProcessorRecordContext(time, offset++, 0, "testing", new RecordHeaders()));
-        buffer.put(time, record, context.recordContext());
+        return buffer.put(time, record, context.recordContext());
+    }
+
+    @Test
+    public void shouldReturnIfRecordWasAdded() {
+        createBuffer(Duration.ofMillis(1));
+        assertThat(pipeRecord("K", "V", 2L), equalTo(true));
+        assertThat(pipeRecord("K", "V", 0L), equalTo(false));
     }
 
     @Test
