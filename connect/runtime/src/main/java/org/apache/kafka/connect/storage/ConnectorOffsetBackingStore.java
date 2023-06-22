@@ -142,7 +142,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     private final Optional<KafkaOffsetBackingStore> connectorStore;
     private final Optional<TopicAdmin> connectorStoreAdmin;
 
-    private boolean isEOSEnabled;
+    private boolean exactlyOnce;
     private long offsetFlushTimeoutMs;
 
     ConnectorOffsetBackingStore(
@@ -297,7 +297,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                         log.warn("Failed to write offsets with tombstone records to secondary backing store", secondaryWriteError);
                         secondaryStoreTombstoneWriteError.compareAndSet(null, secondaryWriteError);
                     } else {
-                        log.debug("Successfully flushed tombstone offsets to secondary backing store");
+                        log.debug("Successfully flushed tombstone(s)-containing to secondary backing store");
                     }
                 }
             });
@@ -306,24 +306,24 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 // commits. We still need to wait because we want to fail the offset commit for cases when
                 // tombstone records fail to be written to the secondary store. Note that while commitTransaction
                 // already waits for all records to be sent and ack'ed, in this case we do need to add an explicit
-                // blocking call. In case of ALOS, we wait for the same duration as `offset.commit.timeout.ms`
+                // blocking call. In case EOS is disabled, we wait for the same duration as `offset.commit.timeout.ms`
                 // and throw that exception which would allow the offset commit to fail.
-                if (isEOSEnabled) {
+                if (exactlyOnce) {
                     secondaryWriteFuture.get();
                 } else {
                     secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
                 }
             } catch (InterruptedException e) {
-                log.warn("{} Flush of tombstone offsets to secondary store interrupted, cancelling", this);
+                log.warn("{} Flush of tombstone(s)-containing to secondary store interrupted, cancelling", this);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             } catch (ExecutionException e) {
-                log.error("{} Flush of tombstone offsets to secondary store threw an unexpected exception: ", this, e);
+                log.error("{} Flush of tombstone(s)-containing offsets to secondary store threw an unexpected exception: ", this, e);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             } catch (TimeoutException e) {
                 log.error("{} Timed out waiting to flush offsets with tombstones to secondary storage ", this);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             } catch (Exception e) {
-                log.error("{} Got Exception when trying to flush tombstone offsets to secondary storage", this);
+                log.error("{} Got Exception when trying to flush tombstone(s)-containing offsets to secondary storage", this);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             }
             Throwable writeError = secondaryStoreTombstoneWriteError.get();
@@ -335,10 +335,10 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         }
 
         return primaryStore.set(values, (primaryWriteError, ignored) -> {
-            // Secondary store writes have already happened for tombstone records
+            // Secondary store writes have already happened if the offsets batch contains tombstone records
             if (secondaryStore != null && !containsTombstones) {
                 if (primaryWriteError != null) {
-                    log.trace("Skipping offsets write to secondary store for non tombstone offsets because primary write has failed", primaryWriteError);
+                    log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
                 } else {
                     try {
                         // Invoke OffsetBackingStore::set but ignore the resulting future; we don't block on writes to this
@@ -382,7 +382,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     public void configure(WorkerConfig config) {
         // Worker offset store should already be configured
         connectorStore.ifPresent(store -> store.configure(config));
-        isEOSEnabled = config.exactlyOnceSourceEnabled();
+        exactlyOnce = config.exactlyOnceSourceEnabled();
         offsetFlushTimeoutMs = config.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
     }
 
