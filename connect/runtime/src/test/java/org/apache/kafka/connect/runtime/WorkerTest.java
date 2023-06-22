@@ -1839,10 +1839,9 @@ public class WorkerTest {
             adminFuture.complete(consumerGroupOffsets);
         }
         when(result.partitionsToOffsetAndMetadata()).thenAnswer(invocation -> {
-            if (time == null) {
-                return adminFuture;
+            if (time != null) {
+                time.sleep(delayMs);
             }
-            time.sleep(delayMs);
             return adminFuture;
         });
     }
