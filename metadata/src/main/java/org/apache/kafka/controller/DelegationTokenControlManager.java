@@ -154,12 +154,13 @@ public class DelegationTokenControlManager {
                 .setTokenRequesterPrincipalType(owner.getPrincipalType());
 
         for (CreatableRenewers renewer : requestData.renewers()) {
-            if (renewer.principalType() != KafkaPrincipal.USER_TYPE) {
-                return ControllerResult.atomicOf(records, responseData.setErrorCode(INVALID_PRINCIPAL_TYPE.code()));
-            } else {
+            System.out.println("Got renewer : " + renewer.toString());
+            if (renewer.principalType().equals(KafkaPrincipal.USER_TYPE)) {
                 renewers.add(new KafkaPrincipal(renewer.principalType(), renewer.principalName()));
+            } else {
+                return ControllerResult.atomicOf(records, responseData.setErrorCode(INVALID_PRINCIPAL_TYPE.code()));
             }
-         } 
+        }
 
         TokenInformation newTokenInformation = new TokenInformation(tokenId, owner, owner, renewers,
             now, maxTimestamp, expiryTimestamp);

@@ -23,6 +23,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -36,12 +37,15 @@ public final class DelegationTokenData {
     private TokenInformation tokenInformation;
 
     public static DelegationTokenData fromRecord(DelegationTokenRecord record) {
-        ArrayList<KafkaPrincipal> foo = new ArrayList<KafkaPrincipal>();
+        List<KafkaPrincipal>renewers = new ArrayList<>();
+        for (String renewerString : record.renewers()) {
+            renewers.add(SecurityUtils.parseKafkaPrincipal(renewerString));
+        }
         return new DelegationTokenData(TokenInformation.fromRecord(
             record.tokenId(),
             SecurityUtils.parseKafkaPrincipal(record.owner()),
             SecurityUtils.parseKafkaPrincipal(record.requester()),
-            foo, // XXX record.renewers(),
+            renewers,
             record.issueTimestamp(),
             record.maxTimestamp(),
             record.expirationTimestamp()));
@@ -56,9 +60,6 @@ public final class DelegationTokenData {
     }
 
     public DelegationTokenRecord toRecord() {
-        // Collection<String> foo = tokenInformation.renewersAsString();
-        // String[] foos = foo.toArray(new String[foo.size()]);
-        //    .setRenewers(tokenInformation.renewersAsString())
         return new DelegationTokenRecord()
             .setOwner(tokenInformation.ownerAsString())
             .setRequester(tokenInformation.tokenRequesterAsString())
