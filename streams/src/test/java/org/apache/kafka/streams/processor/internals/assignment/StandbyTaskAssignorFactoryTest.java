@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.StreamsConfig;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -48,7 +47,6 @@ public class StandbyTaskAssignorFactoryTest {
                                                            MAX_WARMUP_REPLICAS,
                                                            NUMBER_OF_STANDBY_REPLICAS,
                                                            PROBING_REBALANCE_INTERVAL_MS,
-                                                           rackAwareAssignmentTags,
-                                                           StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE);
+                                                           rackAwareAssignmentTags);
     }
 }

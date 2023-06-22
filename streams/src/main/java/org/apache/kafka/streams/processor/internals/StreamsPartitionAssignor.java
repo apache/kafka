@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -191,7 +190,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Supplier<TaskAssignor> taskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
-    private Map<UUID, Map<String, Optional<String>>> processRacks;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -227,7 +225,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
         clientTags = referenceContainer.clientTags;
-        processRacks = new HashMap<>();
     }
 
     @Override
@@ -348,8 +345,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             } else {
                 processId = info.processId();
             }
-
-            processRacks.computeIfAbsent(processId, k -> new HashMap<>()).put(consumerId, subscription.rackId());
 
             ClientMetadata clientMetadata = clientMetadataMap.get(processId);
 
