@@ -1090,6 +1090,12 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoClos
         });
     }
 
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The metadata delta.
+     */
     public void onNewMetadataImage(
         MetadataImage newImage,
         MetadataDelta delta
