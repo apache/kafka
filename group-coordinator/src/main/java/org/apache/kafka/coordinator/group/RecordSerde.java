@@ -103,8 +103,8 @@ public class RecordSerde implements PartitionWriter.Serializer<Record>, Coordina
         try {
             message.read(new ByteBufferAccessor(buffer), version);
         } catch (RuntimeException ex) {
-            throw new RuntimeException(String.format("Could not read record (%d) from %s's buffer due to: %s.",
-                message.apiKey(), name, ex.getMessage()), ex);
+            throw new RuntimeException(String.format("Could not read record with version %d from %s's buffer due to: %s.",
+                version, name, ex.getMessage()), ex);
         }
     }
 

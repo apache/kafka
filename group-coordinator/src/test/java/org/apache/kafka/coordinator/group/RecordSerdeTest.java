@@ -199,7 +199,7 @@ public class RecordSerdeTest {
         RuntimeException ex =
             assertThrows(RuntimeException.class,
                 () -> serDe.deserialize(keyBuffer, valueBuffer));
-        assertTrue(ex.getMessage().startsWith("Could not read record from key's buffer due to"),
+        assertTrue(ex.getMessage().startsWith("Could not read record with version 3 from key's buffer due to"),
             ex.getMessage());
     }
 
@@ -220,7 +220,7 @@ public class RecordSerdeTest {
         RuntimeException ex =
             assertThrows(RuntimeException.class,
                 () -> serDe.deserialize(keyBuffer, valueBuffer));
-        assertTrue(ex.getMessage().startsWith("Could not read record from value's buffer due to"),
+        assertTrue(ex.getMessage().startsWith("Could not read record with version 0 from value's buffer due to"),
             ex.getMessage());
     }
 
