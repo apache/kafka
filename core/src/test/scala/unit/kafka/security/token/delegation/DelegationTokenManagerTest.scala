@@ -45,6 +45,10 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 
+/*
+ * These tests are only for the Zk DelegationTokenManager.
+ * They work by directly calling the DelegationTokenManager which only exists in Zk
+ */
 class DelegationTokenManagerTest extends QuorumTestHarness  {
 
   val time = new MockTime()

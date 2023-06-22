@@ -216,7 +216,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, handleCreatePartitionsRequest)
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
-//        case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForwardToController(request, handleRenewTokenRequest)
         case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewTokenRequest(request)
 //        case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForwardToController(request, handleExpireTokenRequest)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
@@ -3030,7 +3029,6 @@ class KafkaApis(val requestChannel: RequestChannel,
             Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
       }
       else {
-        println("handleCreateTokenRequest: maybeForward")
         maybeForwardToController(request, handleCreateTokenRequestLocal)
       }
     }
@@ -3157,6 +3155,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         def eligible(token: TokenInformation) = DelegationTokenManager
           .filterToken(requestPrincipal, owners, token, authorizeToken, authorizeRequester)
         val tokens =  tokenManager.getTokens(eligible)
+        println(s"Got response ${tokens}")
         sendResponseCallback(Errors.NONE, tokens)
       }
     }
