@@ -323,7 +323,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 log.error("{} Timed out waiting to flush offsets with tombstones to secondary storage ", this);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             } catch (Exception e) {
-                log.error("{} Got Exception when trying to flush tombstone(s)-containing offsets to secondary storage", this);
+                log.error("{} Got Exception when trying to flush tombstone(s)-containing offsets to secondary storage", this, e);
                 secondaryStoreTombstoneWriteError.compareAndSet(null, e);
             }
             Throwable writeError = secondaryStoreTombstoneWriteError.get();
