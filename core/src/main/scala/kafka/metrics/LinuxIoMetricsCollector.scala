@@ -17,9 +17,11 @@
 
 package kafka.metrics
 
-import java.nio.file.{Files, Paths}
+import com.yammer.metrics.core.{Gauge, MetricsRegistry}
 
+import java.nio.file.{Files, Paths}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.slf4j.Logger
 
 import scala.jdk.CollectionConverters._
@@ -92,6 +94,22 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
     } else {
       logger.debug(s"disabling IO metrics collection because $path does not exist.")
       false
+    }
+  }
+
+  def maybeRegisterMetrics(registry: MetricsRegistry): Unit = {
+    def registerGauge(name: String, gauge: Gauge[Long]): Unit = {
+      val metricName = KafkaYammerMetrics.getMetricName(
+        "kafka.server",
+        "KafkaServer",
+        name
+      )
+      registry.newGauge(metricName, gauge)
+    }
+
+    if (usable()) {
+      registerGauge("linux-disk-read-bytes", () => readBytes())
+      registerGauge("linux-disk-write-bytes", () => writeBytes())
     }
   }
 }

@@ -18,19 +18,32 @@
 package kafka.security.authorizer
 
 import java.net.InetAddress
-
 import kafka.network.RequestChannel.Session
+import kafka.server.KafkaConfig
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer}
 
 
-object AuthorizerUtils {
+object AuthorizerUtils extends Logging{
 
   def createAuthorizer(className: String): Authorizer = Utils.newInstance(className, classOf[Authorizer])
 
   def isClusterResource(name: String): Boolean = name.equals(Resource.CLUSTER_NAME)
+
+  def configureAuthorizer(config: KafkaConfig): Option[Authorizer] = {
+    val authorizerOpt = config.createNewAuthorizer()
+    authorizerOpt.foreach { authorizer =>
+      authorizer.configure(config.originals)
+    }
+    authorizerOpt
+  }
+
+  def closeAuthorizer(authorizer: Authorizer): Unit = {
+    CoreUtils.swallow(authorizer.close(), this)
+  }
 
   def sessionToRequestContext(session: Session): AuthorizableRequestContext = {
     new AuthorizableRequestContext {
