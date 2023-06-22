@@ -31,8 +31,13 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.mirror.MirrorSourceTask.PartitionState;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import org.apache.kafka.connect.source.SourceTaskContext;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
+import org.mockito.internal.util.collections.Sets;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,16 +45,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -212,6 +223,82 @@ public class MirrorSourceTaskTest {
             sourceRecord.headers().forEach(taskHeaders::add);
             compareHeaders(expectedHeaders, taskHeaders);
         }
+    }
+
+    @Test
+    public void testSeekBehaviorDuringStart() {
+        // Setting up mock behavior.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+
+        @SuppressWarnings("unchecked")
+        KafkaProducer<byte[], byte[]> mockProducer = mock(KafkaProducer.class);
+
+        String sourceClusterName = "sourceCluster";
+        MirrorSourceMetrics mockMetrics = mock(MirrorSourceMetrics.class);
+
+        SourceTaskContext mockSourceTaskContext = mock(SourceTaskContext.class);
+        OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
+        when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
+
+        MockedStatic<MirrorUtils> mockMirrorUtils = mockStatic(MirrorUtils.class, new CallsRealMethods());
+        mockMirrorUtils.when(() -> MirrorUtils.newConsumer(anyMap())).thenReturn(mockConsumer);
+        mockMirrorUtils.when(() -> MirrorUtils.newProducer(anyMap())).thenReturn(mockProducer);
+
+        Set<TopicPartition> topicPartitions = Sets.newSet(
+                new TopicPartition("previouslyReplicatedTopic", 8),
+                new TopicPartition("previouslyReplicatedTopic1", 0),
+                new TopicPartition("previouslyReplicatedTopic", 1),
+                new TopicPartition("newTopicToReplicate1", 1),
+                new TopicPartition("newTopicToReplicate1", 4),
+                new TopicPartition("newTopicToReplicate2", 0)
+        );
+
+        long arbitraryCommittedOffset = 4L;
+        long offsetToSeek = arbitraryCommittedOffset + 1L;
+        when(mockOffsetStorageReader.offset(anyMap())).thenAnswer(testInvocation -> {
+
+            Map<String, Object> topicPartitionOffsetMap = testInvocation.getArgument(0);
+            String topicName = topicPartitionOffsetMap.get("topic").toString();
+
+            // Only return the offset for previously replicated topics.
+            // For others, there is no value set.
+            if (topicName.startsWith("previouslyReplicatedTopic")) {
+                topicPartitionOffsetMap.put("offset", arbitraryCommittedOffset);
+            }
+            return topicPartitionOffsetMap;
+        });
+
+        Map<String, String> configProps = TestUtils.makeProps("task.assigned.partitions",
+                encodeTopicPartitionsToString(topicPartitions));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, mockMetrics, sourceClusterName,
+                new DefaultReplicationPolicy(), 50, mockProducer, null, null, null);
+        mirrorSourceTask.initialize(mockSourceTaskContext);
+
+        // Call test subject
+        mirrorSourceTask.start(configProps);
+
+        // Verifications
+        // Ensure all the topic partitions are assigned to consumer
+        verify(mockConsumer, times(1)).assign(topicPartitions);
+
+        // Ensure seek is only called for previously committed topic partitions.
+        verify(mockConsumer, times(1))
+                .seek(new TopicPartition("previouslyReplicatedTopic", 8), offsetToSeek);
+        verify(mockConsumer, times(1))
+                .seek(new TopicPartition("previouslyReplicatedTopic", 1), offsetToSeek);
+        verify(mockConsumer, times(1))
+                .seek(new TopicPartition("previouslyReplicatedTopic1", 0), offsetToSeek);
+        verifyNoMoreInteractions(mockConsumer);
+
+        mockMirrorUtils.close();
+    }
+
+    private static String encodeTopicPartitionsToString(Set<TopicPartition> topicPartitions) {
+        return topicPartitions.stream()
+                .map(MirrorUtils::encodeTopicPartition)
+                .collect(Collectors.joining(","));
     }
 
     @Test
