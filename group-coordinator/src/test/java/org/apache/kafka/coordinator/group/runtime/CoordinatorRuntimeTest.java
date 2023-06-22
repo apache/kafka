@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.runtime;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashSet;
 import org.junit.jupiter.api.Test;
@@ -152,6 +153,13 @@ public class CoordinatorRuntimeTest {
         }
 
         @Override
+        public CoordinatorBuilder<MockCoordinator, String> withLogContext(
+            LogContext logContext
+        ) {
+            return this;
+        }
+
+        @Override
         public MockCoordinator build() {
             return new MockCoordinator(Objects.requireNonNull(this.snapshotRegistry));
         }
@@ -184,6 +192,7 @@ public class CoordinatorRuntimeTest {
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -235,6 +244,7 @@ public class CoordinatorRuntimeTest {
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -279,6 +289,7 @@ public class CoordinatorRuntimeTest {
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -321,6 +332,7 @@ public class CoordinatorRuntimeTest {
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -380,6 +392,7 @@ public class CoordinatorRuntimeTest {
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
 
@@ -421,6 +434,7 @@ public class CoordinatorRuntimeTest {
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
 
