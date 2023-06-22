@@ -53,6 +53,7 @@ public class MirrorSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
 
     private static final int MAX_OUTSTANDING_OFFSET_SYNCS = 10;
+    public static final long NON_EXISTING_OFFSET_VALUE = -1L;
 
     private KafkaConsumer<byte[], byte[]> consumer;
     private KafkaProducer<byte[], byte[]> offsetProducer;
@@ -106,11 +107,26 @@ public class MirrorSourceTask extends SourceTask {
         Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
         consumer.assign(topicPartitionOffsets.keySet());
         log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.entrySet().stream()
-            .filter(x -> x.getValue() == 0L).count());
-        log.trace("Seeking offsets: {}", topicPartitionOffsets);
-        topicPartitionOffsets.forEach(consumer::seek);
+            .filter(x -> x.getValue() == NON_EXISTING_OFFSET_VALUE).count());
+
+        log.trace("Seeking offsets: {}", topicPartitionOffsets.entrySet().stream()
+                .filter(topicPartitionOffset ->
+                        topicPartitionOffset.getValue() != NON_EXISTING_OFFSET_VALUE));
+
+        topicPartitionOffsets.forEach(this::maybeSeek);
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
             taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
+    }
+
+    private void maybeSeek(TopicPartition topicPartition, Long offset) {
+        // Do not call seek on partitions that don't have an existing offset committed.
+        if (offset == NON_EXISTING_OFFSET_VALUE) {
+            log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+            return;
+        }
+        long nextOffsetToCommittedOffset = offset + 1L;
+        log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
+        consumer.seek(topicPartition, nextOffsetToCommittedOffset);
     }
 
     @Override
@@ -266,7 +282,7 @@ public class MirrorSourceTask extends SourceTask {
     private Long loadOffset(TopicPartition topicPartition) {
         Map<String, Object> wrappedPartition = MirrorUtils.wrapPartition(topicPartition, sourceClusterAlias);
         Map<String, Object> wrappedOffset = context.offsetStorageReader().offset(wrappedPartition);
-        return MirrorUtils.unwrapOffset(wrappedOffset) + 1;
+        return MirrorUtils.unwrapOffset(wrappedOffset);
     }
 
     // visible for testing 
