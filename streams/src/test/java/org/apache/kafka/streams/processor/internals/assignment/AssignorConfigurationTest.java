@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.streams.StreamsConfig;
 import org.junit.Test;
 
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
@@ -31,8 +30,7 @@ public class AssignorConfigurationTest {
     public void configsShouldRejectZeroWarmups() {
         final ConfigException exception = assertThrows(
             ConfigException.class,
-            () -> new AssignorConfiguration.AssignmentConfigs(1L, 0, 1, 1L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-                StreamsConfig.RACK_AWARE_ASSSIGNMENT_STRATEGY_NONE)
+            () -> new AssignorConfiguration.AssignmentConfigs(1L, 0, 1, 1L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
         assertThat(exception.getMessage(), containsString("Invalid value 0 for configuration max.warmup.replicas"));
