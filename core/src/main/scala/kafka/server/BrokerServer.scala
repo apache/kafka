@@ -295,9 +295,9 @@ class BrokerServer(
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
+        time,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        clientToControllerChannelManager,
-        config.requestTimeoutMs
+        clientToControllerChannelManager
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.
