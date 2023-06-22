@@ -55,7 +55,6 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.api.AfterEach;
 
 public class KStreamKTableJoinTest {
     private final static KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
