@@ -80,7 +80,7 @@ versions += [
   gradle: "8.1.1",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  easymock: "4.3",
+  easymock: "5.1.0",
   jackson: "2.13.5",
   jacksonDatabind: "2.13.5",
   jacoco: "0.8.10",
