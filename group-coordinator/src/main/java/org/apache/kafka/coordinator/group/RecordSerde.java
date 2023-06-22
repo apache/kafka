@@ -45,7 +45,7 @@ import java.nio.ByteBuffer;
 /**
  * Serializer/Deserializer for {{@link Record}}.
  */
-public class RecordSerDe implements PartitionWriter.Serializer<Record>, CoordinatorLoader.Deserializer<Record> {
+public class RecordSerde implements PartitionWriter.Serializer<Record>, CoordinatorLoader.Deserializer<Record> {
     @Override
     public byte[] serializeKey(Record record) {
         // Record does not accept a null key.
@@ -73,23 +73,20 @@ public class RecordSerDe implements PartitionWriter.Serializer<Record>, Coordina
         ByteBuffer keyBuffer,
         ByteBuffer valueBuffer
     ) throws RuntimeException {
-        final short keyVersion = readVersion(keyBuffer, "key");
-        final ApiMessage keyMessage = apiMessageKeyFor(keyVersion);
-        readMessage(keyMessage, keyBuffer, keyVersion, "key");
+        final short recordType = readVersion(keyBuffer, "key");
+        final ApiMessage keyMessage = apiMessageKeyFor(recordType);
+        readMessage(keyMessage, keyBuffer, recordType, "key");
 
         if (valueBuffer == null) {
-            return new Record(
-                new ApiMessageAndVersion(keyMessage, keyVersion),
-                null
-            );
+            return new Record(new ApiMessageAndVersion(keyMessage, recordType), null);
         }
 
-        final ApiMessage valueMessage = apiMessageValueFor(keyVersion);
+        final ApiMessage valueMessage = apiMessageValueFor(recordType);
         final short valueVersion = readVersion(valueBuffer, "value");
         readMessage(valueMessage, valueBuffer, valueVersion, "value");
 
         return new Record(
-            new ApiMessageAndVersion(keyMessage, keyVersion),
+            new ApiMessageAndVersion(keyMessage, recordType),
             new ApiMessageAndVersion(valueMessage, valueVersion)
         );
     }
@@ -106,13 +103,13 @@ public class RecordSerDe implements PartitionWriter.Serializer<Record>, Coordina
         try {
             message.read(new ByteBufferAccessor(buffer), version);
         } catch (RuntimeException ex) {
-            throw new RuntimeException(String.format("Could not read record from %s's buffer due to: %s.",
-                name, ex.getMessage()), ex);
+            throw new RuntimeException(String.format("Could not read record (%d) from %s's buffer due to: %s.",
+                message.apiKey(), name, ex.getMessage()), ex);
         }
     }
 
-    private ApiMessage apiMessageKeyFor(short version) {
-        switch (version) {
+    private ApiMessage apiMessageKeyFor(short recordType) {
+        switch (recordType) {
             case 0:
             case 1:
                 return new OffsetCommitKey();
@@ -131,12 +128,12 @@ public class RecordSerDe implements PartitionWriter.Serializer<Record>, Coordina
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentKey();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(version);
+                throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
     }
 
-    private ApiMessage apiMessageValueFor(short version) {
-        switch (version) {
+    private ApiMessage apiMessageValueFor(short recordType) {
+        switch (recordType) {
             case 0:
             case 1:
                 return new OffsetCommitValue();
@@ -155,7 +152,7 @@ public class RecordSerDe implements PartitionWriter.Serializer<Record>, Coordina
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentValue();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(version);
+                throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
     }
 }
