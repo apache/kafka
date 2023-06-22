@@ -74,6 +74,10 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
     }
 
+    protected Queue<UnsentRequest> unsentRequests() {
+        return unsentRequests;
+    }
+
     @Override
     public boolean isUnavailable(Node node) {
         return NetworkClientUtils.isUnavailable(client, node, time);
@@ -128,8 +132,8 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
         }
     }
 
-    private boolean doSend(final UnsentRequest r,
-                           final long currentTimeMs) {
+    boolean doSend(final UnsentRequest r,
+                   final long currentTimeMs) {
         Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
         if (node == null || nodeUnavailable(node)) {
             log.debug("No broker available to send the request: {}. Retrying.", r);
@@ -146,7 +150,7 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
         return true;
     }
 
-    private void checkDisconnects() {
+    protected void checkDisconnects() {
         // Check the connection of the unsent request. Disconnect the disconnected node if it is unable to be connected.
         Iterator<UnsentRequest> iter = unsentRequests.iterator();
         while (iter.hasNext()) {
@@ -221,6 +225,13 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
         private final Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
+                             final Node node,
+                             final BiConsumer<ClientResponse, Throwable> responseHandler) {
+            this(requestBuilder, Optional.of(node));
+            future().whenComplete(responseHandler);
+        }
+
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder, final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
@@ -243,7 +254,7 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
             return handler.future;
         }
 
-        RequestCompletionHandler callback() {
+        FutureCompletionHandler callback() {
             return handler;
         }
 
@@ -251,9 +262,18 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
             return requestBuilder;
         }
 
+        Optional<Node> node() {
+            return node;
+        }
+
         @Override
         public String toString() {
-            return "UnsentRequest(builder=" + requestBuilder + ")";
+            return "UnsentRequest{" +
+                    "requestBuilder=" + requestBuilder +
+                    ", handler=" + handler +
+                    ", node=" + node +
+                    ", timer=" + timer +
+                    '}';
         }
     }
 

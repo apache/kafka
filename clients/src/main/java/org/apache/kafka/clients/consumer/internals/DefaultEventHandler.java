@@ -36,27 +36,27 @@ import java.util.function.Supplier;
  * An {@link EventHandler} that uses a single background thread to consume {@link ApplicationEvent} and produce
  * {@link BackgroundEvent} from the {@link DefaultBackgroundThread}.
  */
-public class DefaultEventHandler implements EventHandler {
+public class DefaultEventHandler<K, V> implements EventHandler {
 
     private final Logger log;
     private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final DefaultBackgroundThread backgroundThread;
+    private final DefaultBackgroundThread<K, V> backgroundThread;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public DefaultEventHandler(final Time time,
                                final LogContext logContext,
                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                               final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+                               final Supplier<ApplicationEventProcessor<K, V>> applicationEventProcessorSupplier,
                                final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                               final Supplier<RequestManagers> requestManagersSupplier) {
+                               final Supplier<RequestManagers<K, V>> requestManagersSupplier) {
         this.log = logContext.logger(DefaultEventHandler.class);
         this.time = time;
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
-        this.backgroundThread = new DefaultBackgroundThread(time,
+        this.backgroundThread = new DefaultBackgroundThread<>(time,
                 logContext,
                 applicationEventQueue,
                 applicationEventProcessorSupplier,

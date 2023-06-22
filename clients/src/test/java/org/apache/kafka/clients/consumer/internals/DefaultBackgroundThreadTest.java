@@ -58,11 +58,11 @@ public class DefaultBackgroundThreadTest {
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
-    private ApplicationEventProcessor applicationEventProcessor;
+    private ApplicationEventProcessor<String, String> applicationEventProcessor;
     private CoordinatorRequestManager coordinatorManager;
     private CommitRequestManager commitManager;
     private TopicMetadataRequestManager topicMetadataRequestManager;
-    private DefaultBackgroundThread backgroundThread;
+    private DefaultBackgroundThread<String, String> backgroundThread;
 
     @BeforeEach
     public void setup() {

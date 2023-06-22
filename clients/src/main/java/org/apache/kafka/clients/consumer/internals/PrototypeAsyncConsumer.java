@@ -37,6 +37,7 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -65,6 +67,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -81,6 +84,7 @@ import java.util.stream.Collectors;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.Utils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.Utils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.Utils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.Utils.createMetrics;
@@ -107,6 +111,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final long defaultApiTimeoutMs;
+    private final ConsumerMetadata metadata;
+    private final ConsumerInterceptors<K, V> interceptors;
+    private final FetchBuffer<K, V> fetchBuffer;
+    private final FetchCollector<K, V> fetchCollector;
 
     public PrototypeAsyncConsumer(final Properties properties,
                                   final Deserializer<K> keyDeserializer,
@@ -142,10 +150,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.subscriptions = createSubscriptionState(config, logContext);
         Metrics metrics = createMetrics(config, time);
         List<ConsumerInterceptor<K, V>> interceptorList = getConfiguredConsumerInterceptors(config);
+        this.interceptors = new ConsumerInterceptors<>(interceptorList);
         ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(metrics.reporters(),
                 interceptorList,
                 Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
-        ConsumerMetadata metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+        this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
         // Bootstrap the metadata with the bootstrap server IP address, which will be used once for the subsequent
         // metadata refresh once the background thread has started up.
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
@@ -162,25 +171,37 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 new ApiVersions(),
                 metrics,
                 fetchMetricsManager);
-        final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
+        final Supplier<RequestManagers<String, String>> requestManagersSupplier = RequestManagers.supplier(time,
                 logContext,
                 backgroundEventQueue,
                 metadata,
                 subscriptions,
                 config,
                 groupRebalanceConfig,
-                new ApiVersions());
-        final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
+                new ApiVersions(),
+                fetchMetricsManager,
+                networkClientDelegateSupplier);
+        final Supplier<ApplicationEventProcessor<String, String>> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                 metadata,
                 backgroundEventQueue,
                 requestManagersSupplier);
-        this.eventHandler = new DefaultEventHandler(time,
+        this.eventHandler = new DefaultEventHandler<>(time,
                 logContext,
                 applicationEventQueue,
                 backgroundEventQueue,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
+
+        // These are specific to the foreground thread
+        FetchConfig<K, V> fetchConfig = createFetchConfig(config, deserializers);
+        this.fetchBuffer = new FetchBuffer<>(logContext);
+        this.fetchCollector = new FetchCollector<>(logContext,
+                metadata,
+                subscriptions,
+                fetchConfig,
+                fetchMetricsManager,
+                time);
     }
 
     public PrototypeAsyncConsumer(LogContext logContext,
@@ -188,7 +209,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   EventHandler eventHandler,
                                   Optional<String> groupId,
                                   SubscriptionState subscriptions,
-                                  long defaultApiTimeoutMs) {
+                                  long defaultApiTimeoutMs,
+                                  ConsumerMetadata metadata,
+                                  ConsumerInterceptors<K, V> interceptors,
+                                  FetchBuffer<K, V> fetchBuffer,
+                                  FetchCollector<K, V> fetchCollector) {
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
@@ -196,6 +221,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.groupId = groupId;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.eventHandler = eventHandler;
+        this.metadata = metadata;
+        this.interceptors = interceptors;
+        this.fetchBuffer = fetchBuffer;
+        this.fetchCollector = fetchCollector;
     }
 
     /**
@@ -211,6 +240,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
         try {
+            Timer timer = time.timer(timeout);
+
             do {
                 if (!eventHandler.isEmpty()) {
                     final Optional<BackgroundEvent> backgroundEvent = eventHandler.poll();
@@ -222,16 +253,25 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     // Callback invocation will trigger callback function execution, which is blocking until completion.
                     // Successful fetch responses will be added to the completedFetches in the fetcher, which will then
                     // be processed in the collectFetches().
-                    backgroundEvent.ifPresent(event -> processEvent(event, timeout));
+                    backgroundEvent.ifPresent(event -> log.warn("Do something with this background event: {}", event));
                 }
+
+                // Create our event as a means to request the background thread to return any completed fetches.
+                // If there are any
+                Queue<CompletedFetch<K, V>> completedFetches = eventHandler.addAndGet(new FetchEvent<>(), timeout);
+
+                if (completedFetches != null && !completedFetches.isEmpty()) {
+                    fetchBuffer.addAll(completedFetches);
+                }
+
                 // The idea here is to have the background thread sending fetches autonomously, and the fetcher
                 // uses the poll loop to retrieve successful fetchResponse and process them on the polling thread.
-                final Fetch<K, V> fetch = collectFetches();
+                final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
                 if (!fetch.isEmpty()) {
-                    return processFetchResults(fetch);
+                    return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
                 }
                 // We will wait for retryBackoffMs
-            } while (time.timer(timeout).notExpired());
+            } while (timer.notExpired());
         } catch (final Exception e) {
             throw new RuntimeException(e);
         }
@@ -246,20 +286,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitSync() {
         commitSync(Duration.ofMillis(defaultApiTimeoutMs));
-    }
-
-    private void processEvent(final BackgroundEvent backgroundEvent, final Duration timeout) {
-        // stubbed class
-    }
-
-    private ConsumerRecords<K, V> processFetchResults(final Fetch<K, V> fetch) {
-        // stubbed class
-        return ConsumerRecords.empty();
-    }
-
-    private Fetch<K, V> collectFetches() {
-        // stubbed class
-        return Fetch.empty();
     }
 
     /**
@@ -587,8 +613,16 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (isBlank(topic))
                 throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
         }
-        // TODO: implement fetcher
-        // fetcher.clearBufferedDataForUnassignedPartitions(partitions);
+
+        // Clear the buffered data which are not a part of newly assigned topics
+        final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
+
+        for (TopicPartition tp : subscriptions.assignedPartitions()) {
+            if (partitions.contains(tp))
+                currentTopicPartitions.add(tp);
+        }
+
+        fetchBuffer.retainAll(currentTopicPartitions);
 
         // make sure the offsets of topic partitions the consumer is unsubscribing from
         // are committed since there will be no following rebalance
@@ -616,15 +650,15 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void unsubscribe() {
-        // fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
+        fetchBuffer.retainAll(Collections.emptySet());
         eventHandler.add(new UnsubscribeApplicationEvent());
         this.subscriptions.unsubscribe();
     }
 
     @Override
     @Deprecated
-    public ConsumerRecords<K, V> poll(long timeout) {
-        throw new KafkaException("method not implemented");
+    public ConsumerRecords<K, V> poll(final long timeoutMs) {
+        return poll(Duration.ofMillis(timeoutMs));
     }
 
     // This is here temporary as we don't have public access to the ConsumerConfig in this module.

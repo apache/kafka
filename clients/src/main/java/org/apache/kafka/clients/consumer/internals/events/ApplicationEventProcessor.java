@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
+import org.apache.kafka.clients.consumer.internals.CompletedFetch;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
@@ -31,11 +32,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
-public class ApplicationEventProcessor {
+public class ApplicationEventProcessor<K, V> {
 
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
@@ -43,10 +45,10 @@ public class ApplicationEventProcessor {
 
     private final ConsumerMetadata metadata;
 
-    private final RequestManagers requestManagers;
+    private final RequestManagers<K, V> requestManagers;
 
     public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                     final RequestManagers requestManagers,
+                                     final RequestManagers<K, V> requestManagers,
                                      final ConsumerMetadata metadata,
                                      final LogContext logContext) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
@@ -55,6 +57,7 @@ public class ApplicationEventProcessor {
         this.metadata = metadata;
     }
 
+    @SuppressWarnings("unchecked")
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event, "Attempt to process null ApplicationEvent");
         Objects.requireNonNull(event.type(), "Attempt to process ApplicationEvent with null type: " + event);
@@ -80,6 +83,8 @@ public class ApplicationEventProcessor {
                 return process((UnsubscribeApplicationEvent) event);
             case LIST_OFFSETS:
                 return process((ListOffsetsApplicationEvent) event);
+            case FETCH:
+                return process((FetchEvent<K, V>) event);
         }
         return false;
     }
@@ -116,6 +121,14 @@ public class ApplicationEventProcessor {
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         event.chain(manager.addOffsetCommitRequest(event.offsets()));
+        return true;
+    }
+
+    private boolean process(final FetchEvent<K, V> event) {
+        // The request manager keeps track of the completed fetches, so we pull any that are ready off, and return
+        // them to the application.
+        Queue<CompletedFetch<K, V>> completedFetches = requestManagers.fetchRequestManager.drain();
+        event.future().complete(completedFetches);
         return true;
     }
 
@@ -162,15 +175,15 @@ public class ApplicationEventProcessor {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
      */
-    public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
-                                                               final ConsumerMetadata metadata,
-                                                               final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                                               final Supplier<RequestManagers> requestManagersSupplier) {
-        return new CachedSupplier<ApplicationEventProcessor>() {
+    public static <K, V> Supplier<ApplicationEventProcessor<K, V>> supplier(final LogContext logContext,
+                                                                            final ConsumerMetadata metadata,
+                                                                            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                                                            final Supplier<RequestManagers<K, V>> requestManagersSupplier) {
+        return new CachedSupplier<ApplicationEventProcessor<K, V>>() {
             @Override
-            protected ApplicationEventProcessor create() {
-                RequestManagers requestManagers = requestManagersSupplier.get();
-                return new ApplicationEventProcessor(backgroundEventQueue, requestManagers, metadata, logContext);
+            protected ApplicationEventProcessor<K, V> create() {
+                RequestManagers<K, V> requestManagers = requestManagersSupplier.get();
+                return new ApplicationEventProcessor<>(backgroundEventQueue, requestManagers, metadata, logContext);
             }
         };
     }

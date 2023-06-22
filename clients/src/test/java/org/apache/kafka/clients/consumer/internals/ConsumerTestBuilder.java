@@ -41,7 +41,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -71,11 +70,9 @@ public class ConsumerTestBuilder implements Closeable {
     final TopicMetadataRequestManager topicMetadataRequestManager;
     final CoordinatorRequestManager coordinatorRequestManager;
     final CommitRequestManager commitRequestManager;
-    final RequestManagers requestManagers;
-    final ApplicationEventProcessor applicationEventProcessor;
-    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;
-    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
-    final Supplier<RequestManagers> requestManagersSupplier;
+    final FetchRequestManager<String, String> fetchRequestManager;
+    final RequestManagers<String, String> requestManagers;
+    final ApplicationEventProcessor<String, String> applicationEventProcessor;
 
     public ConsumerTestBuilder() {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
@@ -129,19 +126,25 @@ public class ConsumerTestBuilder implements Closeable {
                 config,
                 coordinatorRequestManager,
                 groupState));
-        this.requestManagers = new RequestManagers(logContext,
+        this.fetchRequestManager = spy(new FetchRequestManager<>(logContext,
+                time,
+                errorEventHandler,
+                metadata,
+                subscriptions,
+                fetchConfig,
+                metricsManager,
+                networkClientDelegate));
+        this.requestManagers = new RequestManagers<>(logContext,
                 listOffsetsRequestManager,
                 topicMetadataRequestManager,
+                fetchRequestManager,
                 Optional.of(coordinatorRequestManager),
                 Optional.of(commitRequestManager));
-        this.applicationEventProcessor = spy(new ApplicationEventProcessor(
+        this.applicationEventProcessor = spy(new ApplicationEventProcessor<>(
                 backgroundEventQueue,
                 requestManagers,
                 metadata,
                 logContext));
-        this.applicationEventProcessorSupplier = () -> applicationEventProcessor;
-        this.networkClientDelegateSupplier = () -> networkClientDelegate;
-        this.requestManagersSupplier = () -> requestManagers;
     }
 
     @Override
@@ -151,16 +154,16 @@ public class ConsumerTestBuilder implements Closeable {
 
     public static class DefaultBackgroundThreadTestBuilder extends ConsumerTestBuilder {
 
-        final DefaultBackgroundThread backgroundThread;
+        final DefaultBackgroundThread<String, String> backgroundThread;
 
         public DefaultBackgroundThreadTestBuilder() {
-            this.backgroundThread = new DefaultBackgroundThread(
+            this.backgroundThread = new DefaultBackgroundThread<>(
                     time,
                     logContext,
                     applicationEventQueue,
-                    applicationEventProcessorSupplier,
-                    networkClientDelegateSupplier,
-                    requestManagersSupplier);
+                    () -> applicationEventProcessor,
+                    () -> networkClientDelegate,
+                    () -> requestManagers);
         }
 
         @Override
@@ -174,14 +177,14 @@ public class ConsumerTestBuilder implements Closeable {
         final EventHandler eventHandler;
 
         public DefaultEventHandlerTestBuilder() {
-            this.eventHandler = spy(new DefaultEventHandler(
+            this.eventHandler = spy(new DefaultEventHandler<>(
                     time,
                     logContext,
                     applicationEventQueue,
                     backgroundEventQueue,
-                    applicationEventProcessorSupplier,
-                    networkClientDelegateSupplier,
-                    requestManagersSupplier));
+                    () -> applicationEventProcessor,
+                    () -> networkClientDelegate,
+                    () -> requestManagers));
         }
 
         @Override
@@ -195,12 +198,22 @@ public class ConsumerTestBuilder implements Closeable {
         final PrototypeAsyncConsumer<String, String> consumer;
 
         public PrototypeAsyncConsumerTestBuilder(Optional<String> groupIdOpt) {
+            FetchCollector<String, String> fetchCollector = new FetchCollector<>(logContext,
+                    metadata,
+                    subscriptions,
+                    fetchConfig,
+                    metricsManager,
+                    time);
             this.consumer = spy(new PrototypeAsyncConsumer<>(logContext,
                     time,
                     eventHandler,
                     groupIdOpt,
                     subscriptions,
-                    3000));
+                    3000,
+                    metadata,
+                    new ConsumerInterceptors<>(Collections.emptyList()),
+                    new FetchBuffer<>(logContext),
+                    fetchCollector));
         }
 
         @Override

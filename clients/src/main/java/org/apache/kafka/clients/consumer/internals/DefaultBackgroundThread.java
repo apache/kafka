@@ -41,29 +41,29 @@ import java.util.function.Supplier;
  * It holds a reference to the {@link SubscriptionState}, which is
  * initialized by the polling thread.
  */
-public class DefaultBackgroundThread extends KafkaThread implements Closeable {
+public class DefaultBackgroundThread<K, V> extends KafkaThread implements Closeable {
 
     private static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;
+    private final Supplier<ApplicationEventProcessor<K, V>> applicationEventProcessorSupplier;
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
-    private final Supplier<RequestManagers> requestManagersSupplier;
+    private final Supplier<RequestManagers<K, V>> requestManagersSupplier;
     // empty if groupId is null
-    private ApplicationEventProcessor applicationEventProcessor;
+    private ApplicationEventProcessor<K, V> applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
-    private RequestManagers requestManagers;
+    private RequestManagers<K, V> requestManagers;
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public DefaultBackgroundThread(Time time,
                                    LogContext logContext,
                                    BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                   Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+                                   Supplier<ApplicationEventProcessor<K, V>> applicationEventProcessorSupplier,
                                    Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                   Supplier<RequestManagers> requestManagersSupplier) {
+                                   Supplier<RequestManagers<K, V>> requestManagersSupplier) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());

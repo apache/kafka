@@ -34,6 +34,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.Utils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.Utils.getConfiguredIsolationLevel;
 
 /**
@@ -41,19 +42,22 @@ import static org.apache.kafka.clients.consumer.internals.Utils.getConfiguredIso
  * This allows callers to both use the specific {@link RequestManager} instance, or to iterate over the list via
  * the {@link #entries()} method.
  */
-public class RequestManagers implements Closeable {
+public class RequestManagers<K, V> implements Closeable {
 
     private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final ListOffsetsRequestManager listOffsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
+    public final FetchRequestManager<K, V> fetchRequestManager;
+
     private final List<Optional<? extends RequestManager>> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public RequestManagers(LogContext logContext,
                            ListOffsetsRequestManager listOffsetsRequestManager,
                            TopicMetadataRequestManager topicMetadataRequestManager,
+                           FetchRequestManager<K, V> fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager) {
         this.log = logContext.logger(RequestManagers.class);
@@ -61,12 +65,14 @@ public class RequestManagers implements Closeable {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
         this.topicMetadataRequestManager = topicMetadataRequestManager;
+        this.fetchRequestManager = fetchRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
         list.add(Optional.of(listOffsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
+        list.add(Optional.of(fetchRequestManager));
         entries = Collections.unmodifiableList(list);
     }
 
@@ -99,19 +105,23 @@ public class RequestManagers implements Closeable {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
      */
-    public static Supplier<RequestManagers> supplier(final Time time,
-                                                     final LogContext logContext,
-                                                     final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                                     final ConsumerMetadata metadata,
-                                                     final SubscriptionState subscriptions,
-                                                     final ConsumerConfig config,
-                                                     final GroupRebalanceConfig groupRebalanceConfig,
-                                                     final ApiVersions apiVersions) {
-        return new CachedSupplier<RequestManagers>() {
+    public static <K, V> Supplier<RequestManagers<K, V>> supplier(final Time time,
+                                                                  final LogContext logContext,
+                                                                  final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                                                  final ConsumerMetadata metadata,
+                                                                  final SubscriptionState subscriptions,
+                                                                  final ConsumerConfig config,
+                                                                  final GroupRebalanceConfig groupRebalanceConfig,
+                                                                  final ApiVersions apiVersions,
+                                                                  final FetchMetricsManager fetchMetricsManager,
+                                                                  final Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
+        return new CachedSupplier<RequestManagers<K, V>>() {
             @Override
-            protected RequestManagers create() {
+            protected RequestManagers<K, V> create() {
+                final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
                 final ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
                 final IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
+                final FetchConfig<K, V> fetchConfig = createFetchConfig(config);
                 final ListOffsetsRequestManager listOffsets = new ListOffsetsRequestManager(subscriptions,
                         metadata,
                         isolationLevel,
@@ -119,6 +129,14 @@ public class RequestManagers implements Closeable {
                         apiVersions,
                         logContext);
                 final TopicMetadataRequestManager topicMetadata = new TopicMetadataRequestManager(logContext, config);
+                final FetchRequestManager<K, V> fetch = new FetchRequestManager<>(logContext,
+                        time,
+                        errorEventHandler,
+                        metadata,
+                        subscriptions,
+                        fetchConfig,
+                        fetchMetricsManager,
+                        networkClientDelegate);
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commit = null;
 
@@ -133,9 +151,10 @@ public class RequestManagers implements Closeable {
                     commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
                 }
 
-                return new RequestManagers(logContext,
+                return new RequestManagers<>(logContext,
                         listOffsets,
                         topicMetadata,
+                        fetch,
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commit));
             }
