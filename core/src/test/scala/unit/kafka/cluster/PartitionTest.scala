@@ -1979,9 +1979,10 @@ class PartitionTest extends AbstractPartitionTest {
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr()
+    assertEquals(alterPartitionManager.isrUpdates.size, 0)
     assertEquals(Set(brokerId, remoteBrokerId1, remoteBrokerId2), partition.partitionState.isr)
 
-    // If enough time passes without a fetch update, the ISR should shrink
+    // If enough time passes without a fetch update, the ISR should shrink after the following maybeShrinkIsr
     time.sleep(partition.replicaLagTimeMaxMs + 1)
 
     // Shrink the ISR

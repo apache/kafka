@@ -2263,13 +2263,13 @@ class GroupCoordinatorTest {
 
     assertEquals(Errors.NONE, await(leaderResult, 1).error)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.NONE)
 
     // Advance part the rebalance timeout to trigger the delayed operation.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.REBALANCE_IN_PROGRESS)
 
     // Followers should have been removed.
@@ -2347,7 +2347,7 @@ class GroupCoordinatorTest {
     val followerErrors = followerResults.map(await(_, 1).error)
     assertEquals(Set(Errors.NONE), followerErrors.toSet)
 
-    // Advance past the rebalance timeout to expire the Sync timout. All
+    // Advance past the rebalance timeout to expire the Sync timeout. All
     // members should remain and the group should not rebalance.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 

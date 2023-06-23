@@ -16,25 +16,22 @@
  */
 package org.apache.kafka.connect.mirror.integration;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 
 /**
  * Integration test for MirrorMaker2 in which source records are emitted with a transactional producer,
  * which interleaves transaction commit messages into the source topic which are not propagated downstream.
  */
 public class MirrorConnectorsIntegrationTransactionsTest extends MirrorConnectorsIntegrationBaseTest {
-
-    private Map<String, Object> producerProps = new HashMap<>();
 
     @BeforeEach
     @Override
@@ -43,24 +40,29 @@ public class MirrorConnectorsIntegrationTransactionsTest extends MirrorConnector
         backupBrokerProps.put("transaction.state.log.replication.factor", "1");
         primaryBrokerProps.put("transaction.state.log.min.isr", "1");
         backupBrokerProps.put("transaction.state.log.min.isr", "1");
-        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-        producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "embedded-kafka-0");
         super.startClusters();
     }
 
-    /**
-     * Produce records with a short-lived transactional producer to interleave transaction markers in the topic.
-     */
     @Override
-    protected void produce(EmbeddedKafkaCluster cluster, String topic, Integer partition, String key, String value) {
-        ProducerRecord<byte[], byte[]> msg = new ProducerRecord<>(topic, partition, key == null ? null : key.getBytes(), value == null ? null : value.getBytes());
-        try (Producer<byte[], byte[]> producer = cluster.createProducer(producerProps)) {
-            producer.initTransactions();
+    protected Producer<byte[], byte[]> initializeProducer(EmbeddedConnectCluster cluster) {
+        Map<String, Object> producerProps = new HashMap<>();
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "embedded-kafka-0");
+        KafkaProducer<byte[], byte[]> producer = cluster.kafka().createProducer(producerProps);
+        producer.initTransactions();
+        return producer;
+    }
+
+
+    @Override
+    protected void produceMessages(Producer<byte[], byte[]> producer, List<ProducerRecord<byte[], byte[]>> records) {
+        try {
             producer.beginTransaction();
-            producer.send(msg).get(120000, TimeUnit.MILLISECONDS);
+            super.produceMessages(producer, records);
             producer.commitTransaction();
-        } catch (Exception e) {
-            throw new KafkaException("Could not produce message: " + msg, e);
+        } catch (RuntimeException e) {
+            producer.abortTransaction();
+            throw e;
         }
     }
 }

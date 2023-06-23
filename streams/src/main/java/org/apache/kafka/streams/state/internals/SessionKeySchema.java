@@ -190,7 +190,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         // since the session window length can vary, we define the search boundary as:
         // lower: [0, ESET]
         // upper: [LSST, INF]
-        // and by puting the end time first and then the start time, the serialized search boundary
+        // and by putting the end time first and then the start time, the serialized search boundary
         // is: [(ESET-0), (INF-LSST)]
         buf.put(key.get());
         buf.putLong(endTime);
