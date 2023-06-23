@@ -157,6 +157,21 @@ object TestUtils extends Logging {
   def tempFile(prefix: String, suffix: String): File = JTestUtils.tempFile(prefix, suffix)
 
   /**
+   * Create a file with the given contents in the default temporary-file directory,
+   * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
+   */
+  def tempFile(contents: String): File = JTestUtils.tempFile(contents)
+
+  def tempPropertiesFile(properties: Properties): File = {
+    return tempPropertiesFile(properties.asScala)
+  }
+
+  def tempPropertiesFile(properties: Map[String, String]): File = {
+    val content = properties.map{case (k, v) => k + "=" + v}.mkString(System.lineSeparator())
+    return tempFile(content)
+  }
+
+  /**
    * Create a temporary file and return an open file channel for this file
    */
   def tempChannel(): FileChannel =

@@ -204,7 +204,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testGetMainConsumerConfigsWithMainConsumerOverridenPrefix() {
+    public void testGetMainConsumerConfigsWithMainConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.GROUP_ID_CONFIG), "another-id");
@@ -463,7 +463,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testGetRestoreConsumerConfigsWithRestoreConsumerOverridenPrefix() {
+    public void testGetRestoreConsumerConfigsWithRestoreConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -511,7 +511,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testGetGlobalConsumerConfigsWithGlobalConsumerOverridenPrefix() {
+    public void testGetGlobalConsumerConfigsWithGlobalConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -599,14 +599,14 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldAcceptExactlyOnce() {
-        // don't use `StreamsConfig.EXACLTY_ONCE` to actually do a useful test
+        // don't use `StreamsConfig.EXACTLY_ONCE` to actually do a useful test
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         new StreamsConfig(props);
     }
 
     @Test
     public void shouldAcceptExactlyOnceBeta() {
-        // don't use `StreamsConfig.EXACLTY_ONCE_BETA` to actually do a useful test
+        // don't use `StreamsConfig.EXACTLY_ONCE_BETA` to actually do a useful test
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once_beta");
         new StreamsConfig(props);
     }

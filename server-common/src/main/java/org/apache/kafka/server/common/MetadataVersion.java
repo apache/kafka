@@ -99,7 +99,7 @@ public enum MetadataVersion {
     IBP_2_1_IV2(-1, "2.1", "IV2"),
 
     // Introduced broker generation (KIP-380), and
-    // LeaderAdnIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
+    // LeaderAndIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
     IBP_2_2_IV0(-1, "2.2", "IV0"),
 
     // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)

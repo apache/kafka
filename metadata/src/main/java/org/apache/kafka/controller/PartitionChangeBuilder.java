@@ -81,6 +81,8 @@ public class PartitionChangeBuilder {
     private List<Integer> targetAdding;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
+    private boolean bumpLeaderEpochOnIsrShrink;
+
 
     public PartitionChangeBuilder(
         PartitionRegistration partition,
@@ -94,6 +96,8 @@ public class PartitionChangeBuilder {
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
+        this.bumpLeaderEpochOnIsrShrink = !metadataVersion.isSkipLeaderEpochBumpSupported();
+
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
@@ -137,6 +141,11 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
         this.targetLeaderRecoveryState = targetLeaderRecoveryState;
+        return this;
+    }
+
+    public PartitionChangeBuilder setBumpLeaderEpochOnIsrShrink(boolean bumpLeaderEpochOnIsrShrink) {
+        this.bumpLeaderEpochOnIsrShrink = bumpLeaderEpochOnIsrShrink;
         return this;
     }
 
@@ -273,13 +282,15 @@ public class PartitionChangeBuilder {
      * that required that the leader epoch be bump whenever the ISR shrank. In MV 3.6 this leader
      * bump is not required when the ISR shrinks. Note, that the leader epoch is never increased if
      * the ISR expanded.
+     *
+     * In MV 3.6 and beyond, if the controller is in ZK migration mode, the leader epoch must
+     * be bumped during ISR shrink for compatability with ZK brokers.
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {
             if (!Replicas.contains(targetReplicas, partition.replicas)) {
                 record.setLeader(partition.leader);
-            } else if (!metadataVersion.isSkipLeaderEpochBumpSupported() &&
-                       !Replicas.contains(targetIsr, partition.isr)) {
+            } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
                 record.setLeader(partition.leader);
             }
         }

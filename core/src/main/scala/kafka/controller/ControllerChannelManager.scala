@@ -361,7 +361,7 @@ class ControllerBrokerRequestBatch(
  * @param metadataProvider Provider to provide the relevant metadata to build the state needed to
  *                         send RPCs
  * @param metadataVersionProvider Provider to provide the metadata version used by the controller.
- * @param stateChangeLogger logger to log the various events while sending requests and receving
+ * @param stateChangeLogger logger to log the various events while sending requests and receiving
  *                          responses from the brokers
  * @param kraftController whether the controller is KRaft controller
  */

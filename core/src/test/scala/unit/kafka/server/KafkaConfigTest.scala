@@ -1714,12 +1714,9 @@ class KafkaConfigTest {
     // All needed configs are now set
     KafkaConfig.fromProps(props)
 
-    // Don't allow migration startup with an authorizer set
+    // Check that we allow authorizer to be set
     props.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getCanonicalName)
-    assertEquals(
-      "requirement failed: ZooKeeper migration does not yet support authorizers. Remove authorizer.class.name before performing a migration.",
-      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
-    props.remove(KafkaConfig.AuthorizerClassNameProp)
+    KafkaConfig.fromProps(props)
 
     // Don't allow migration startup with an older IBP
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_3_3_IV0.version())

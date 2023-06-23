@@ -143,7 +143,7 @@ RoundTripWorkload tests both production and consumption.  The workload starts a 
 
 ### ConsumeBench
 ConsumeBench starts one or more Kafka consumers on a single agent node. Depending on the passed in configuration (see ConsumeBenchSpec), the consumers either subscribe to a set of topics (leveraging consumer group functionality and dynamic partition assignment) or manually assign partitions to themselves.
-The workload measures the average produce latency, as well as the median, 95th percentile, and 99th percentile latency.
+The workload measures the average consume latency, as well as the median, 95th percentile, and 99th percentile latency.
 
 Faults
 ========================================

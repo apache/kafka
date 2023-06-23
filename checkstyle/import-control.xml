@@ -223,6 +223,8 @@
     <subpackage name="group">
       <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.common.annotation" />
+      <allow pkg="org.apache.kafka.common.config" />
+      <allow pkg="org.apache.kafka.common.internals" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.metadata" />
       <allow pkg="org.apache.kafka.common.network" />
@@ -232,6 +234,7 @@
       <allow pkg="org.apache.kafka.deferred" />
       <allow pkg="org.apache.kafka.image"/>
       <allow pkg="org.apache.kafka.server.common"/>
+      <allow pkg="org.apache.kafka.server.record"/>
       <allow pkg="org.apache.kafka.server.util"/>
       <allow pkg="org.apache.kafka.test" />
       <allow pkg="org.apache.kafka.timeline" />
