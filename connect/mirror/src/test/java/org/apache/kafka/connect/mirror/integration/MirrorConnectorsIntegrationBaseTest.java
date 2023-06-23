@@ -686,21 +686,23 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Props.put("offset.lag.max", Integer.toString(OFFSET_LAG_MAX));
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
-        // Produce and consume an initial batch of records to establish an initial checkpoint
-        produceMessages(primaryProducer, "test-topic-1");
+        // Produce 1 record to each partition, so that offset 0 is synced and can be translated
+        produceMessages(primaryProducer, TestUtils.generateRecords("test-topic-1", 1, NUM_PARTITIONS));
+        int expectedRecords = NUM_PARTITIONS;
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
         Map<TopicPartition, OffsetAndMetadata> initialCheckpoints = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic);
         // Produce a large number of records to the topic, all replicated within one MM2 lifetime.
         int iterations = 100;
-        for (int i = 1; i < iterations; i++) {
+        for (int i = 0; i < iterations; i++) {
             produceMessages(primaryProducer, "test-topic-1");
+            expectedRecords += NUM_RECORDS_PRODUCED;
         }
         waitForTopicCreated(backup, remoteTopic);
-        assertEquals(iterations * NUM_RECORDS_PRODUCED, backup.kafka().consume(iterations * NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, remoteTopic).count(),
+        assertEquals(expectedRecords, backup.kafka().consume(expectedRecords, RECORD_TRANSFER_DURATION_MS, remoteTopic).count(),
                 "Records were not replicated to backup cluster.");
         // Once the replication has finished, we spin up the upstream consumer again and start consuming records
-        ConsumerRecords<byte[], byte[]> allRecords = primary.kafka().consume(iterations * NUM_RECORDS_PRODUCED, RECORD_CONSUME_DURATION_MS, "test-topic-1");
+        ConsumerRecords<byte[], byte[]> allRecords = primary.kafka().consume(expectedRecords, RECORD_CONSUME_DURATION_MS, "test-topic-1");
         Map<TopicPartition, OffsetAndMetadata> partialCheckpoints;
         log.info("Initial checkpoints: {}", initialCheckpoints);
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
