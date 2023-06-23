@@ -104,6 +104,7 @@ public abstract class SourceConnector extends Connector {
      * @throws UnsupportedOperationException if it is impossible to alter/reset the offsets for this connector
      * @throws org.apache.kafka.connect.errors.ConnectException if the offsets for this connector cannot be
      * reset for any other reason (for example, they have failed custom validation logic specific to this connector)
+     * @since 3.6
      */
     public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
         return false;
