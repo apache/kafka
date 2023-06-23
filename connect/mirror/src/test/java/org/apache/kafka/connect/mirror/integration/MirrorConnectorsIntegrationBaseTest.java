@@ -563,7 +563,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
                 "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
         waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
+            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
                 if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
@@ -1117,7 +1117,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             Map<String, Map<TopicPartition, Checkpoint>> checkpointsByGroup = new HashMap<>();
             long deadline = System.currentTimeMillis() + CHECKPOINT_DURATION_MS;
             do {
-                ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
+                ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
                     Map<TopicPartition, Checkpoint> lastCheckpoints = checkpointsByGroup.computeIfAbsent(
