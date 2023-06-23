@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @param <S> The type of the state machine.
  * @param <U> The type of the record.
  */
-public class CoordinatorRuntime<S extends Coordinator<U>, U> {
+public class CoordinatorRuntime<S extends Coordinator<U>, U> implements AutoCloseable {
 
     /**
      * Builder to create a CoordinatorRuntime.
@@ -69,11 +69,17 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
      * @param <U> The type of the record.
      */
     public static class Builder<S extends Coordinator<U>, U> {
+        private String logPrefix;
         private LogContext logContext;
         private CoordinatorEventProcessor eventProcessor;
         private PartitionWriter<U> partitionWriter;
         private CoordinatorLoader<U> loader;
         private CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier;
+
+        public Builder<S, U> withLogPrefix(String logPrefix) {
+            this.logPrefix = logPrefix;
+            return this;
+        }
 
         public Builder<S, U> withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -101,8 +107,10 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         }
 
         public CoordinatorRuntime<S, U> build() {
+            if (logPrefix == null)
+                logPrefix = "";
             if (logContext == null)
-                logContext = new LogContext();
+                logContext = new LogContext(logPrefix);
             if (eventProcessor == null)
                 throw new IllegalArgumentException("Event processor must be set.");
             if (partitionWriter == null)
@@ -113,6 +121,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
                 throw new IllegalArgumentException("State machine supplier must be set.");
 
             return new CoordinatorRuntime<>(
+                logPrefix,
                 logContext,
                 eventProcessor,
                 partitionWriter,
@@ -189,6 +198,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
         final TopicPartition tp;
 
         /**
+         * The log context.
+         */
+        final LogContext logContext;
+
+        /**
          * The snapshot registry backing the coordinator.
          */
         final SnapshotRegistry snapshotRegistry;
@@ -235,6 +249,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
             TopicPartition tp
         ) {
             this.tp = tp;
+            this.logContext = new LogContext(String.format("[%s topic=%s partition=%d] ",
+                logPrefix,
+                tp.topic(),
+                tp.partition()
+            ));
             this.snapshotRegistry = new SnapshotRegistry(logContext);
             this.deferredEventQueue = new DeferredEventQueue(logContext);
             this.state = CoordinatorState.INITIAL;
@@ -321,6 +340,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
                     state = CoordinatorState.LOADING;
                     coordinator = coordinatorBuilderSupplier
                         .get()
+                        .withLogContext(logContext)
                         .withSnapshotRegistry(snapshotRegistry)
                         .build();
                     break;
@@ -736,6 +756,11 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
     }
 
     /**
+     * The log prefix.
+     */
+    private final String logPrefix;
+
+    /**
      * The log context.
      */
     private final LogContext logContext;
@@ -785,6 +810,7 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
     /**
      * Constructor.
      *
+     * @param logPrefix                     The log prefix.
      * @param logContext                    The log context.
      * @param processor                     The event processor.
      * @param partitionWriter               The partition writer.
@@ -792,12 +818,14 @@ public class CoordinatorRuntime<S extends Coordinator<U>, U> {
      * @param coordinatorBuilderSupplier    The coordinator builder.
      */
     private CoordinatorRuntime(
+        String logPrefix,
         LogContext logContext,
         CoordinatorEventProcessor processor,
         PartitionWriter<U> partitionWriter,
         CoordinatorLoader<U> loader,
         CoordinatorBuilderSupplier<S, U> coordinatorBuilderSupplier
     ) {
+        this.logPrefix = logPrefix;
         this.logContext = logContext;
         this.log = logContext.logger(CoordinatorRuntime.class);
         this.coordinators = new ConcurrentHashMap<>();

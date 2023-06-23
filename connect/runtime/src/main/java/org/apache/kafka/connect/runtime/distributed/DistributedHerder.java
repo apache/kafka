@@ -1246,8 +1246,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void doFenceZombieSourceTasks(String connName, Callback<Void> callback) {
         log.trace("Performing zombie fencing request for connector {}", connName);
 
-        if (checkRebalanceNeeded(callback))
-            return;
+        // We don't have to check for a pending rebalance here
 
         if (!isLeader())
             callback.onCompletion(new NotLeaderException("Only the leader may perform zombie fencing.", leaderUrl()), null);

@@ -59,6 +59,8 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -197,7 +199,11 @@ public class KRaftMetadataRequestBenchmark {
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).
                 setTokenManager(null).
-                setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.BROKER, false, false)).
+                setApiVersionManager(new SimpleApiVersionManager(
+                        ApiMessageType.ListenerType.BROKER,
+                        false,
+                        false,
+                        () -> Features.fromKRaftVersion(MetadataVersion.latest()))).
                 build();
     }
 

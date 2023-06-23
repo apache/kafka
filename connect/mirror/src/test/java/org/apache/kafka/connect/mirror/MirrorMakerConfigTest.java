@@ -105,7 +105,7 @@ public class MirrorMakerConfigTest {
         assertEquals("b__topic1", aClientConfig.replicationPolicy().formatRemoteTopic("b", "topic1"),
             "replication.policy.separator is honored");
         assertEquals(clusterABootstrap, aClientConfig.adminConfig().get("bootstrap.servers"),
-            "client configs include boostrap.servers");
+            "client configs include bootstrap.servers");
         assertEquals(ForwardingAdmin.class.getName(), aClientConfig.forwardingAdmin(aClientConfig.adminConfig()).getClass().getName(),
                 "Cluster a uses the default ForwardingAdmin");
         assertEquals("PLAINTEXT", aClientConfig.adminConfig().get("security.protocol"),
@@ -115,7 +115,7 @@ public class MirrorMakerConfigTest {
         assertFalse(aClientConfig.adminConfig().containsKey("xxx"),
             "unknown properties aren't included in client configs");
         assertFalse(aClientConfig.adminConfig().containsKey("metric.reporters"),
-            "top-leve metrics reporters aren't included in client configs");
+            "top-level metrics reporters aren't included in client configs");
         assertEquals("secret2", aClientConfig.getPassword("ssl.key.password").value(),
             "security properties are translated from external sources");
         assertEquals("secret2", ((Password) aClientConfig.adminConfig().get("ssl.key.password")).value(),

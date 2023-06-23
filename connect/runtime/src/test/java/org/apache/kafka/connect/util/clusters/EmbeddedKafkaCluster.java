@@ -343,7 +343,7 @@ public class EmbeddedKafkaCluster {
                     Throwable cause = e.getCause();
                     if (cause instanceof UnknownTopicOrPartitionException) {
                         results.put(topicName, Optional.empty());
-                        log.info("Found non-existant topic {}", topicName);
+                        log.info("Found non-existent topic {}", topicName);
                         continue;
                     }
                     throw new AssertionError("Could not describe topic(s)" + topicNames, e);

@@ -17,7 +17,6 @@
 
 package unit.kafka.server
 
-import kafka.common.RequestAndCompletionHandler
 import kafka.server.{AddPartitionsToTxnManager, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -29,6 +28,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractResponse, AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.mock
@@ -110,7 +110,7 @@ class AddPartitionsToTxnManagerTest {
     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1, producerEpoch = 0), setErrors(transaction1RetryWithOldEpochErrors))
     assertEquals(expectedEpochErrors, transaction1RetryWithOldEpochErrors)
 
-    val requestsAndHandlers = addPartitionsToTxnManager.generateRequests()
+    val requestsAndHandlers = addPartitionsToTxnManager.generateRequests().asScala
     requestsAndHandlers.foreach { requestAndHandler =>
       if (requestAndHandler.destination == node0) {
         assertEquals(time.milliseconds(), requestAndHandler.creationTimeMs)
@@ -130,7 +130,7 @@ class AddPartitionsToTxnManagerTest {
     addPartitionsToTxnManager.addTxnData(node0, transactionData(transactionalId1, producerId1), setErrors(transactionErrors))
     addPartitionsToTxnManager.addTxnData(node1, transactionData(transactionalId2, producerId2), setErrors(transactionErrors))
 
-    val requestsAndHandlers = addPartitionsToTxnManager.generateRequests()
+    val requestsAndHandlers = addPartitionsToTxnManager.generateRequests().asScala
     assertEquals(2, requestsAndHandlers.size)
     // Note: handlers are tested in testAddPartitionsToTxnHandlerErrorHandling
     requestsAndHandlers.foreach{ requestAndHandler =>
@@ -147,7 +147,7 @@ class AddPartitionsToTxnManagerTest {
     // Test creationTimeMs increases too.
     time.sleep(1000)
 
-    val requestsAndHandlers2 = addPartitionsToTxnManager.generateRequests()
+    val requestsAndHandlers2 = addPartitionsToTxnManager.generateRequests().asScala
     // The request for node1 should not be added because one request is already inflight.
     assertEquals(1, requestsAndHandlers2.size)
     requestsAndHandlers2.foreach { requestAndHandler =>
@@ -156,7 +156,7 @@ class AddPartitionsToTxnManagerTest {
 
     // Complete the request for node1 so the new one can go through.
     requestsAndHandlers.filter(_.destination == node1).head.handler.onComplete(authenticationErrorResponse)
-    val requestsAndHandlers3 = addPartitionsToTxnManager.generateRequests()
+    val requestsAndHandlers3 = addPartitionsToTxnManager.generateRequests().asScala
     assertEquals(1, requestsAndHandlers3.size)
     requestsAndHandlers3.foreach { requestAndHandler =>
       verifyRequest(node1, transactionalId2, producerId2, requestAndHandler)
@@ -238,7 +238,7 @@ class AddPartitionsToTxnManagerTest {
   }
 
   private def receiveResponse(response: ClientResponse): Unit = {
-    addPartitionsToTxnManager.generateRequests().head.handler.onComplete(response)
+    addPartitionsToTxnManager.generateRequests().asScala.head.handler.onComplete(response)
   }
 
   private def verifyRequest(expectedDestination: Node, transactionalId: String, producerId: Long, requestAndHandler: RequestAndCompletionHandler): Unit = {

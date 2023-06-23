@@ -26,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <U> The type of the record.
  */
-interface CoordinatorLoader<U> {
+public interface CoordinatorLoader<U> {
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition

@@ -441,23 +441,14 @@ class ControllerApis(val requestChannel: RequestChannel,
     if (apiVersionRequest.hasUnsupportedRequestVersion) {
       requestHelper.sendResponseMaybeThrottle(request,
         requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
     } else if (!apiVersionRequest.isValid) {
       requestHelper.sendResponseMaybeThrottle(request,
         requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception))
-      CompletableFuture.completedFuture[Unit](())
     } else {
-      val context = new ControllerRequestContext(request.context.header.data, request.context.principal, OptionalLong.empty())
-      controller.finalizedFeatures(context).handle { (result, exception) =>
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-          if (exception != null) {
-            apiVersionRequest.getErrorResponse(requestThrottleMs, exception)
-          } else {
-            apiVersionManager.apiVersionResponse(requestThrottleMs, result.featureMap().asScala.toMap, result.epoch())
-          }
-        })
-      }
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs))
     }
+    CompletableFuture.completedFuture[Unit](())
   }
 
   def authorizeAlterResource(requestContext: RequestContext,

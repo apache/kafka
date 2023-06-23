@@ -1134,7 +1134,7 @@ object KafkaConfig {
   val DelegationTokenSecretKeyDoc = "Secret key to generate and verify delegation tokens. The same key must be configured across all the brokers. " +
     " If the key is not set or set to empty string, brokers will disable the delegation token support."
   val DelegationTokenMaxLifeTimeDoc = "The token has a maximum lifetime beyond which it cannot be renewed anymore. Default value 7 days."
-  val DelegationTokenExpiryTimeMsDoc = "The token validity time in miliseconds before the token needs to be renewed. Default value 1 day."
+  val DelegationTokenExpiryTimeMsDoc = "The token validity time in milliseconds before the token needs to be renewed. Default value 1 day."
   val DelegationTokenExpiryCheckIntervalDoc = "Scan interval to remove expired delegation tokens."
 
   /** ********* Password encryption configuration for dynamic configs *********/
@@ -2305,8 +2305,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else {
       // ZK-based
       if (migrationEnabled) {
-        require(!originals.containsKey(KafkaConfig.AuthorizerClassNameProp),
-          s"ZooKeeper migration does not yet support authorizers. Remove ${KafkaConfig.AuthorizerClassNameProp} before performing a migration.")
         validateNonEmptyQuorumVotersForMigration()
         require(controllerListenerNames.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")

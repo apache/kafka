@@ -74,8 +74,8 @@ public class TimerTest {
     }
 
     @AfterEach
-    public void teardown() {
-        timer.shutdown();
+    public void teardown() throws Exception {
+        timer.close();
     }
 
     @Test

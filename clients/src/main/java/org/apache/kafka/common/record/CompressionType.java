@@ -37,7 +37,7 @@ import java.util.zip.GZIPOutputStream;
  * The compression type to use
  */
 public enum CompressionType {
-    NONE(0, "none", 1.0f) {
+    NONE((byte) 0, "none", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             return buffer;
@@ -50,7 +50,7 @@ public enum CompressionType {
     },
 
     // Shipped with the JDK
-    GZIP(1, "gzip", 1.0f) {
+    GZIP((byte) 1, "gzip", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
@@ -92,7 +92,7 @@ public enum CompressionType {
     // To ensure this, we only reference compression library code from classes that are only invoked when actual usage
     // happens.
 
-    SNAPPY(2, "snappy", 1.0f) {
+    SNAPPY((byte) 2, "snappy", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             return SnappyFactory.wrapForOutput(buffer);
@@ -114,7 +114,7 @@ public enum CompressionType {
         }
     },
 
-    LZ4(3, "lz4", 1.0f) {
+    LZ4((byte) 3, "lz4", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
@@ -144,7 +144,7 @@ public enum CompressionType {
         }
     },
 
-    ZSTD(4, "zstd", 1.0f) {
+    ZSTD((byte) 4, "zstd", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             return ZstdFactory.wrapForOutput(buffer);
@@ -169,11 +169,13 @@ public enum CompressionType {
 
     };
 
-    public final int id;
+    // compression type is represented by two bits in the attributes field of the record batch header, so `byte` is
+    // large enough
+    public final byte id;
     public final String name;
     public final float rate;
 
-    CompressionType(int id, String name, float rate) {
+    CompressionType(byte id, String name, float rate) {
         this.id = id;
         this.name = name;
         this.rate = rate;
