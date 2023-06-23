@@ -554,6 +554,7 @@ public class ErrorHandlingTaskTest {
     private abstract static class TestSinkTask extends SinkTask {
     }
 
+    // Public to allow plugin discovery to complete without errors
     public static class FaultyConverter extends JsonConverter {
         private static final Logger log = LoggerFactory.getLogger(FaultyConverter.class);
         private int invocations = 0;
@@ -573,6 +574,7 @@ public class ErrorHandlingTaskTest {
         }
     }
 
+    // Public to allow plugin discovery to complete without errors
     public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
 
         private static final Logger log = LoggerFactory.getLogger(FaultyPassthrough.class);
