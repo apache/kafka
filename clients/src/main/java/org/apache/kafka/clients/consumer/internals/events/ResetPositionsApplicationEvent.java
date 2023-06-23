@@ -14,27 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Map;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * Event for resetting offsets for all assigned partitions that require it.
  */
-public abstract class ApplicationEvent {
+public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, Long>> {
 
-    public enum Type {
-        NOOP, COMMIT, POLL, FETCH, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, UNSUBSCRIBE,
-        LIST_OFFSETS, TOPIC_METADATA, RESET_POSITIONS
-    }
-
-    protected final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
-    }
-
-    public Type type() {
-        return type;
+    public ResetPositionsApplicationEvent() {
+        super(Type.RESET_POSITIONS);
     }
 }

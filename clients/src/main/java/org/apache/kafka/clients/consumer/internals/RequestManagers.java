@@ -122,10 +122,14 @@ public class RequestManagers<K, V> implements Closeable {
                 final ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
                 final IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
                 final FetchConfig<K, V> fetchConfig = createFetchConfig(config);
+                final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+                final long requestTimeoutMs = config.getLong(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
                 final ListOffsetsRequestManager listOffsets = new ListOffsetsRequestManager(subscriptions,
                         metadata,
                         isolationLevel,
                         time,
+                        retryBackoffMs,
+                        requestTimeoutMs,
                         apiVersions,
                         logContext);
                 final TopicMetadataRequestManager topicMetadata = new TopicMetadataRequestManager(logContext, config);
@@ -141,7 +145,6 @@ public class RequestManagers<K, V> implements Closeable {
                 CommitRequestManager commit = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
-                    final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                     final GroupState groupState = new GroupState(groupRebalanceConfig);
                     coordinator = new CoordinatorRequestManager(time,
                             logContext,

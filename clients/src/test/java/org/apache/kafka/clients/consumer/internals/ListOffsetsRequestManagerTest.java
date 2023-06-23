@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -81,14 +82,16 @@ public class ListOffsetsRequestManagerTest {
     private static final Node LEADER_1 = new Node(0, "host1", 9092);
     private static final Node LEADER_2 = new Node(0, "host2", 9092);
     private static final IsolationLevel DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_COMMITTED;
+    private static final int RETRY_BACKOFF_MS = 500;
+    private static final int REQUEST_TIMEOUT_MS = 500;
 
     @BeforeEach
     public void setup() {
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         this.time = new MockTime(0);
-        requestManager = new ListOffsetsRequestManager(subscriptionState,
-                metadata, DEFAULT_ISOLATION_LEVEL, time,
+        requestManager = new ListOffsetsRequestManager(subscriptionState, metadata,
+                DEFAULT_ISOLATION_LEVEL, time, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
                 mock(ApiVersions.class), new LogContext());
     }
 
@@ -136,6 +139,7 @@ public class ListOffsetsRequestManagerTest {
                 requestManager.fetchOffsets(timestampsToSearch, false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
+        verify(metadata).requestUpdate();
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         // Metadata update not happening within the time boundaries of the request future, so
@@ -226,6 +230,8 @@ public class ListOffsetsRequestManagerTest {
                         false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
+        verify(metadata).requestUpdate();
+
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         assertFalse(fetchOffsetsFuture.isDone());
@@ -468,6 +474,23 @@ public class ListOffsetsRequestManagerTest {
         // Request completed with error. Nothing pending to be sent or retried
         verifyRequestCompletedWithErrorResponse(fetchOffsetsFuture, AuthenticationException.class);
         assertEquals(0, requestManager.requestsToRetry());
+        assertEquals(0, requestManager.requestsToSend());
+    }
+
+    @Test
+    public void testResetPartitionsSendNoRequestIfNoPartitionsNeedingReset() {
+        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.emptySet());
+        requestManager.resetPositionsIfNeeded();
+        assertEquals(0, requestManager.requestsToSend());
+    }
+
+    @Test
+    public void testResetPositionsMissingLeader() {
+        expectFailedRequest_MissingLeader();
+        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
+        requestManager.resetPositionsIfNeeded();
+        verify(metadata).requestUpdate();
         assertEquals(0, requestManager.requestsToSend());
     }
 

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.MetadataUpdateApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -142,6 +143,16 @@ public class DefaultBackgroundThreadTest {
         this.applicationEventsQueue.add(e);
         backgroundThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsApplicationEvent.class));
+        assertTrue(applicationEventsQueue.isEmpty());
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testResetPositionsEventIsProcessed() {
+        ApplicationEvent e = new ResetPositionsApplicationEvent();
+        this.applicationEventsQueue.add(e);
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
         assertTrue(applicationEventsQueue.isEmpty());
         backgroundThread.close();
     }

@@ -93,9 +93,12 @@ public class ConsumerTestBuilder implements Closeable {
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
+        properties.put(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
 
         this.config = new ConsumerConfig(properties);
         IsolationLevel isolationLevel = getConfiguredIsolationLevel(config);
+        final long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        final long requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         Metrics metrics = createMetrics(config, time);
 
         this.subscriptions = createSubscriptionState(config, logContext);
@@ -112,6 +115,8 @@ public class ConsumerTestBuilder implements Closeable {
                 metadata,
                 isolationLevel,
                 time,
+                retryBackoffMs,
+                requestTimeoutMs,
                 apiVersions,
                 logContext));
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));

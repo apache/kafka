@@ -85,6 +85,8 @@ public class ApplicationEventProcessor<K, V> {
                 return process((ListOffsetsApplicationEvent) event);
             case FETCH:
                 return process((FetchEvent<K, V>) event);
+            case RESET_POSITIONS:
+                return processResetPositionsEvent();
         }
         return false;
     }
@@ -161,6 +163,11 @@ public class ApplicationEventProcessor<K, V> {
                 requestManagers.listOffsetsRequestManager.fetchOffsets(event.timestampsToSearch,
                         event.requireTimestamps);
         event.chain(future);
+        return true;
+    }
+
+    private boolean processResetPositionsEvent() {
+        requestManagers.listOffsetsRequestManager.resetPositionsIfNeeded();
         return true;
     }
 
