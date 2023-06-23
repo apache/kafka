@@ -794,7 +794,7 @@ public class StreamsConfig extends AbstractConfig {
                     NUM_STANDBY_REPLICAS_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
-                    System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
+                    "Depends on the value returned from System.getProperty(\"java.io.tmpdir\")",
                     Importance.HIGH,
                     STATE_DIR_DOC)
 
