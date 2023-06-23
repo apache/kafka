@@ -144,8 +144,20 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    public PartitionChangeBuilder setBumpLeaderEpochOnIsrShrink(boolean bumpLeaderEpochOnIsrShrink) {
-        this.bumpLeaderEpochOnIsrShrink = bumpLeaderEpochOnIsrShrink;
+    /**
+     * If skipping the leader epoch bump on ISR shrink is supported by the MetadataVersion (3.6-IV0), allow
+     * the caller to override it. This is used during ZK migrations.
+     *
+     * @param bumpLeaderEpochOnIsrShrink true to force a leader epoch bump on ISR shrink, false to use the
+     *                                   default behavior based on the MetadataVersion.
+     * @return this builder object.
+     * @see #triggerLeaderEpochBumpIfNeeded
+     */
+    public PartitionChangeBuilder enableBumpLeaderEpochOnIsrShrink(boolean bumpLeaderEpochOnIsrShrink) {
+        // If the MV doesn't support skipping leader epoch bump the caller cannot override it.
+        if (metadataVersion.isSkipLeaderEpochBumpSupported()) {
+            this.bumpLeaderEpochOnIsrShrink = bumpLeaderEpochOnIsrShrink;
+        }
         return this;
     }
 
