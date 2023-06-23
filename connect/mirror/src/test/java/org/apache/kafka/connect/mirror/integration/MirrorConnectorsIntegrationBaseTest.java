@@ -113,6 +113,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     private static final int CHECKPOINT_INTERVAL_DURATION_MS = 1_000;
     private static final int NUM_WORKERS = 3;
     protected static final Duration CONSUMER_POLL_TIMEOUT_MS = Duration.ofMillis(5000L);
+    protected static final Duration REMOTE_CONSUMER_OFFSETS_TIMEOUT = Duration.ofMillis(CHECKPOINT_DURATION_MS);
     protected static final String PRIMARY_CLUSTER_ALIAS = "primary";
     protected static final String BACKUP_CLUSTER_ALIAS = "backup";
     protected static final List<Class<? extends Connector>> CONNECTOR_LIST = Arrays.asList(
@@ -621,7 +622,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
         waitForCondition(() -> {
             Map<TopicPartition, OffsetAndMetadata> translatedOffsets = backupClient.remoteConsumerOffsets(
-                    consumerGroupName, PRIMARY_CLUSTER_ALIAS, Duration.ofSeconds(30L));
+                    consumerGroupName, PRIMARY_CLUSTER_ALIAS, REMOTE_CONSUMER_OFFSETS_TIMEOUT);
             return translatedOffsets.containsKey(remoteTopicPartition(tp1, PRIMARY_CLUSTER_ALIAS)) &&
                    !translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
         }, OFFSET_SYNC_DURATION_MS, "Checkpoints were not emitted correctly to backup cluster");
@@ -642,7 +643,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         waitForCondition(() -> {
             Map<TopicPartition, OffsetAndMetadata> translatedOffsets = backupClient.remoteConsumerOffsets(
-                    consumerGroupName, PRIMARY_CLUSTER_ALIAS, Duration.ofSeconds(30L));
+                    consumerGroupName, PRIMARY_CLUSTER_ALIAS, REMOTE_CONSUMER_OFFSETS_TIMEOUT);
             return translatedOffsets.containsKey(remoteTopicPartition(tp1, PRIMARY_CLUSTER_ALIAS)) &&
                    translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
         }, OFFSET_SYNC_DURATION_MS, "Checkpoints were not emitted correctly to backup cluster");
@@ -1029,7 +1030,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         waitForCondition(
                 () -> {
                     Map<TopicPartition, OffsetAndMetadata> offsets = client.remoteConsumerOffsets(
-                            consumerGroupName, remoteClusterAlias, Duration.ofMillis(3000));
+                            consumerGroupName, remoteClusterAlias, REMOTE_CONSUMER_OFFSETS_TIMEOUT);
                     for (int i = 0; i < NUM_PARTITIONS; i++) {
                         TopicPartition tp = new TopicPartition(topicName, i);
                         if (!offsets.containsKey(tp)) {
