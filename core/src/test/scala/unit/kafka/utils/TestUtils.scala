@@ -1382,9 +1382,14 @@ object TestUtils extends Logging {
     val nonDaemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
-
     val threadCount = nonDaemonThreads.size
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
+  }
+
+  def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {
+    Thread.getAllStackTraces.keySet.asScala.filter { t =>
+      isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+    }
   }
 
   def allThreadStackTraces(): String = {

@@ -17,6 +17,7 @@
 package kafka.log.remote
 
 import kafka.log.UnifiedLog
+import kafka.log.remote.RemoteIndexCache.remoteLogIndexCacheCleanerThread
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
@@ -40,7 +41,6 @@ import scala.collection.mutable
 class RemoteIndexCacheTest {
   private val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])
   private val time = new MockTime()
-  private val partition = new TopicPartition("foo", 0)
   private val brokerId = 1
   private val baseOffset = 45L
   private val lastOffset = 75L
@@ -50,10 +50,11 @@ class RemoteIndexCacheTest {
   private var rlsMetadata: RemoteLogSegmentMetadata = _
   private var logDir: File = _
   private var tpDir: File = _
+  private var idPartition: TopicIdPartition = _
 
   @BeforeEach
   def setup(): Unit = {
-    val idPartition = new TopicIdPartition(Uuid.randomUuid(), partition)
+    idPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     logDir = TestUtils.tempDir()
     tpDir = new File(logDir, idPartition.toString)
     Files.createDirectory(tpDir.toPath)
@@ -90,7 +91,8 @@ class RemoteIndexCacheTest {
     // best effort to delete the per-test resource. Even if we don't delete, it is ok because the parent directory
     // will be deleted at the end of test.
     Utils.delete(logDir)
-    // Verify no lingering threads
+    // Verify no lingering threads. It is important to have this as the last statement in the @aftereach
+    // because this may throw an exception and prevent cleanup after it
     TestUtils.assertNoNonDaemonThreads(RemoteIndexCache.remoteLogIndexCacheCleanerThread)
   }
 
@@ -256,6 +258,39 @@ class RemoteIndexCacheTest {
   }
 
   @Test
+  def testCleanerThreadShutdown(): Unit = {
+    // cache is empty at beginning
+    assertTrue(cache.internalCache.asMap().isEmpty)
+    // verify that cleaner thread is running
+    TestUtils.numThreadsRunning(remoteLogIndexCacheCleanerThread, isDaemon = true)
+    // create a new entry
+    val spyEntry = generateSpyCacheEntry()
+    // an exception should not close the cleaner thread
+    when(spyEntry.cleanup()).thenThrow(new RuntimeException("kaboom! I am expected exception in unit test."))
+    val key = Uuid.randomUuid()
+    cache.internalCache.put(key, spyEntry)
+    // trigger cleanup
+    cache.internalCache.invalidate(key)
+    // wait for cleanup to start
+    TestUtils.waitUntilTrue(() => spyEntry.cleanStarted, "Failed while waiting for clean up to start")
+    // Give the thread cleaner thread some time to throw an exception
+    Thread.sleep(100)
+    // Verify that Cleaner thread is still running even when exception is thrown in doWork()
+    var threads = TestUtils.numThreadsRunning(remoteLogIndexCacheCleanerThread, isDaemon = true)
+    assertEquals(1, threads.size,
+      s"Found unexpected ${threads.size} threads=${threads.map(t => t.getName).mkString(", ")}")
+
+    // close the cache properly
+    cache.close()
+
+    // verify that the thread is closed properly
+    threads = TestUtils.numThreadsRunning(remoteLogIndexCacheCleanerThread, isDaemon = true)
+    assertTrue(threads.isEmpty, s"Found unexpected ${threads.size} threads=${threads.map(t => t.getName).mkString(", ")}")
+    // if the thread is correctly being shutdown it will not be running
+    assertFalse(cache.cleanerThread.isRunning, "Unexpected thread state=running. Check error logs.")
+  }
+
+  @Test
   def testClose(): Unit = {
     val spyEntry = generateSpyCacheEntry()
     cache.internalCache.put(rlsMetadata.remoteLogSegmentId().id(), spyEntry)
@@ -385,6 +420,9 @@ class RemoteIndexCacheTest {
   }
 
   private def generateSpyCacheEntry(): Entry = {
+    val remoteLogSegmentId = new RemoteLogSegmentId(idPartition, Uuid.randomUuid())
+    val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
+      time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
     val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
     val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
@@ -416,20 +454,23 @@ class RemoteIndexCacheTest {
   }
 
   private def createTxIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TransactionIndex = {
-    val txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix)
+    val fileNamePrefix = cache.generateFileNamePrefixForIndex(metadata)
+    val txnIdxFile = new File(tpDir, fileNamePrefix + UnifiedLog.TxnIndexFileSuffix)
     txnIdxFile.createNewFile()
     new TransactionIndex(metadata.startOffset(), txnIdxFile)
   }
 
   private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TimeIndex = {
+    val fileNamePrefix = cache.generateFileNamePrefixForIndex(metadata)
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix),
+    new TimeIndex(new File(tpDir, fileNamePrefix + UnifiedLog.TimeIndexFileSuffix),
       metadata.startOffset(), maxEntries * 12)
   }
 
   private def createOffsetIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata) = {
+    val fileNamePrefix = cache.generateFileNamePrefixForIndex(metadata)
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix),
+    new OffsetIndex(new File(tpDir, fileNamePrefix + UnifiedLog.IndexFileSuffix),
       metadata.startOffset(), maxEntries * 8)
   }
 

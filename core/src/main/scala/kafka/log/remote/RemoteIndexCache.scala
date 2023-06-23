@@ -244,22 +244,28 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     setDaemon(true)
 
     override def doWork(): Unit = {
-      try {
-        while (!isRemoteIndexCacheClosed.get()) {
+      if (!isRemoteIndexCacheClosed.get()) {
+        try {
           val entry = expiredIndexes.take()
           debug(s"Cleaning up index entry $entry")
           entry.cleanup()
+        } catch {
+          // propagate the InterruptedException outside to correctly close the thread.
+          // do not propagate any other exceptions because it will kill the thread
+          case ex: InterruptedException =>
+            // cleaner thread should only be interrupted when cache is being closed, else it's an error
+            if (!isRemoteIndexCacheClosed.get()) {
+              error("Cleaner thread received interruption but remote index cache is not closed", ex)
+              throw ex
+            } else {
+              debug("Cleaner thread was interrupted on cache shutdown")
+            }
+          case ex: Throwable => error("Error occurred while fetching/cleaning up expired entry", ex)
         }
-      } catch {
-        case ex: InterruptedException =>
-          // cleaner thread should only be interrupted when cache is being closed, else it's an error
-          if (!isRemoteIndexCacheClosed.get()) {
-            error("Cleaner thread received interruption but remote index cache is not closed", ex)
-            throw ex
-          } else {
-            debug("Cleaner thread was interrupted on cache shutdown")
-          }
-        case ex: Exception => error("Error occurred while fetching/cleaning up expired entry", ex)
+      } else {
+        error("Cleaner thread is not closed even though associated cache is closed." +
+          "Initiating shutdown to prevent thread leak.")
+        cleanerThread.initiateShutdown
       }
     }
   }
@@ -274,7 +280,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
     inReadLock(lock) {
       val cacheKey = remoteLogSegmentMetadata.remoteLogSegmentId().id()
-      internalCache.get(cacheKey, (uuid: Uuid) => {
+      internalCache.get(cacheKey, (_: Uuid) => {
         def loadIndexFile[T](fileName: String,
                              suffix: String,
                              fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
@@ -311,8 +317,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         }
 
         val startOffset = remoteLogSegmentMetadata.startOffset()
-        // uuid.toString uses URL encoding which is safe for filenames and URLs.
-        val fileName = startOffset.toString + "_" + uuid.toString + "_"
+        val fileName = generateFileNamePrefixForIndex(remoteLogSegmentMetadata)
 
         val offsetIndex: OffsetIndex = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
@@ -353,6 +358,13 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     inReadLock(lock) {
       getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position
     }
+  }
+
+  private[remote] def generateFileNamePrefixForIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): String = {
+    val startOffset = remoteLogSegmentMetadata.startOffset
+    val segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id
+    // uuid.toString uses URL encoding which is safe for filenames and URLs.
+    s"${startOffset.toString}_${segmentId.toString}_"
   }
 
   /**
