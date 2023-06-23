@@ -54,6 +54,10 @@ public abstract class SinkConnector extends Connector {
      * User requests to alter/reset offsets will be handled by the Connect runtime and will be reflected in the offsets
      * for this connector's consumer group.
      * <p>
+     * Note that altering / resetting offsets is expected to be an idempotent operation and this method should be able
+     * to handle being called more than once with the same arguments (which could occur if a user retries the request
+     * due to a failure in altering the consumer group offsets, for example).
+     * <p>
      * Similar to {@link #validate(Map) validate}, this method may be called by the runtime before the
      * {@link #start(Map) start} method is invoked.
      *

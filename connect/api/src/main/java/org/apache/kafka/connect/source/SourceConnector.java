@@ -85,6 +85,10 @@ public abstract class SourceConnector extends Connector {
      * returned by any {@link org.apache.kafka.connect.storage.OffsetStorageReader OffsetStorageReader instances}
      * provided to this connector and its tasks.
      * <p>
+     * Note that altering / resetting offsets is expected to be an idempotent operation and this method should be able
+     * to handle being called more than once with the same arguments (which could occur if a user retries the request
+     * due to a failure in writing the new offsets to the offsets store, for example).
+     * <p>
      * Similar to {@link #validate(Map) validate}, this method may be called by the runtime before the
      * {@link #start(Map) start} method is invoked.
      *
