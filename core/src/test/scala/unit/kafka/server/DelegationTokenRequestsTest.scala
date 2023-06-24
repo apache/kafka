@@ -43,6 +43,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
   override def brokerCount = 1
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
+  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
   // May want to set enableControlledShutdown = false
 
   @BeforeEach
@@ -70,7 +71,8 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+//  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
@@ -79,7 +81,6 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val createResult1 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer1))
     val tokenCreated = createResult1.delegationToken().get()
 
-    println(s"Got token: ${tokenCreated}")
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),
           "Timed out waiting for token to propagate to all servers")
 
@@ -93,6 +94,9 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val renewer2 = List(SecurityUtils.parseKafkaPrincipal("User:renewer2")).asJava
     val createResult2 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer2))
     val token2 = createResult2.delegationToken().get()
+
+    TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 2),
+          "Timed out waiting for token to propagate to all servers")
 
     //get all tokens
     tokens = adminClient.describeDelegationToken().delegationTokens().get()

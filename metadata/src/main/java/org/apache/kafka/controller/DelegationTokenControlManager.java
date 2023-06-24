@@ -20,9 +20,12 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
+import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
 // import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
@@ -45,10 +48,12 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 // import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 
-import static org.apache.kafka.common.protocol.Errors.NONE;
+import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_NOT_FOUND;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PRINCIPAL_TYPE;
+import static org.apache.kafka.common.protocol.Errors.NONE;
 
 /**
  * Manages DelegationTokens.
@@ -129,6 +134,12 @@ public class DelegationTokenControlManager {
         return result;
     }
 
+    private TokenInformation getToken(byte[] hmac) {
+        String base64Pwd = Base64.getEncoder().encodeToString(hmac);
+        System.out.println("tokencache has token count : " + tokenCache.tokens().size());
+        return (tokenCache.tokenForHmac(base64Pwd));
+    }
+
     /*
      * Pass in the MetadataVersion so that we can return a response to the caller 
      * if the current metadataVersion is too low.
@@ -139,7 +150,8 @@ public class DelegationTokenControlManager {
         MetadataVersion metadataVersion
     ) {
         long now = time.milliseconds();
-        long maxTimestamp = now + DEFAULTTOKENMAXTIME + 1000000;
+        // XXX Handle default vs requested
+        long maxTimestamp = now + DEFAULTTOKENMAXTIME + 10000000;
         long expiryTimestamp = Math.min(maxTimestamp, now + DEFAULTTOKENRENEWTIME + 1000000);
 
         String tokenId = Uuid.randomUuid().toString();
@@ -167,7 +179,6 @@ public class DelegationTokenControlManager {
 
         DelegationTokenData newDelegationTokenData = new DelegationTokenData(newTokenInformation);
 
-        // XXX Throttle time is set by caller
         responseData
                 .setErrorCode(NONE.code())
                 .setIssueTimestampMs(now)
@@ -182,8 +193,47 @@ public class DelegationTokenControlManager {
         return ControllerResult.atomicOf(records, responseData);
     }
 
+    public ControllerResult<RenewDelegationTokenResponseData> renewDelegationToken(
+        ControllerRequestContext context,
+        RenewDelegationTokenRequestData requestData,
+        MetadataVersion metadataVersion
+    ) {
+        long now = time.milliseconds();
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        RenewDelegationTokenResponseData responseData = new RenewDelegationTokenResponseData();
+
+//        if (!allowedToRenew(principal, tokenInfo)
+//            renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
+//            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
+//              renewCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
+//
+//              renewCallback(Errors.DELEGATION_TOKEN_NOT_FOUND, -1)
+
+//        byte[] hmac = requestData.hmac();
+
+        TokenInformation myTokenInformation = getToken(requestData.hmac());
+
+        if (myTokenInformation == null) {
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
+        }
+
+        long renewTimeStamp = now + 1000000;
+        long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(), renewTimeStamp);
+
+        myTokenInformation.setExpiryTimestamp(expiryTimestamp);
+
+        DelegationTokenData newDelegationTokenData = new DelegationTokenData(myTokenInformation);
+
+        responseData
+            .setErrorCode(NONE.code())
+            .setExpiryTimestampMs(expiryTimestamp);
+
+        records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
+        return ControllerResult.atomicOf(records, responseData);
+    }
+
     public void replay(DelegationTokenRecord record) {
         // XXX Do nothing right now
     }
-
 }

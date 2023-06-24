@@ -216,7 +216,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, handleCreatePartitionsRequest)
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
-        case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewTokenRequest(request)
+        case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForwardToController(request, handleRenewTokenRequest)
 //        case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForwardToController(request, handleExpireTokenRequest)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
@@ -3069,7 +3069,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleRenewTokenRequest(request: RequestChannel.Request): Unit = {
-//    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val renewTokenRequest = request.body[RenewDelegationTokenRequest]
 
     // the callback for sending a renew token response

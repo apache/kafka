@@ -26,7 +26,8 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher,
+DynamicConfigPublisher, ScramPublisher, DelegationTokenPublisher}
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -117,6 +118,7 @@ class ControllerServer(
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
   val featuresPublisher = new FeaturesPublisher()
+  var tokenManager: DelegationTokenManager = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -357,6 +359,18 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         credentialProvider
+      ))
+
+      // XXX We need a tokenManager for the Publisher (for now)
+      tokenManager = new DelegationTokenManager(config, tokenCache, time)
+
+      // Set up the DelegationToken publisher.
+      // The tokenCache in the tokenManager is the same as set for DelegationTokenControlManager
+      metadataPublishers.add(new DelegationTokenPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "controller",
+          tokenManager
       ))
 
       // Set up the metrics publisher.
