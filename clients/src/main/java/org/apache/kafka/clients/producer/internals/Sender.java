@@ -783,13 +783,12 @@ public class Sender implements Runnable {
         Function<Integer, RuntimeException> recordExceptions,
         boolean adjustSequenceNumbers
     ) {
-        if (transactionManager != null) {
-            transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
-        }
-
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
         if (batch.completeExceptionally(topLevelException, recordExceptions)) {
+            if (transactionManager != null) {
+                transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
+            }
             maybeRemoveAndDeallocateBatch(batch);
         }
     }
