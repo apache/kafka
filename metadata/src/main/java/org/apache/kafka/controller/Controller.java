@@ -40,6 +40,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -95,6 +97,19 @@ public interface Controller extends AclMutator, AutoCloseable {
     CompletableFuture<CreateDelegationTokenResponseData> createDelegationToken(
         ControllerRequestContext context,
         CreateDelegationTokenRequestData request
+    );
+
+    /**
+     * Renew an existing DelegationToken creating a new one as a result.
+     *
+     * @param context       The controller request context.
+     * @param request       The RenewDelegationTokenRequest data.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<RenewDelegationTokenResponseData> renewDelegationToken(
+        ControllerRequestContext context,
+        RenewDelegationTokenRequestData request
     );
 
     /**

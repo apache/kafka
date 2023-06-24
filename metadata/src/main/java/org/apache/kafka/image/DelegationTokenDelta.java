@@ -33,6 +33,7 @@ import java.util.Map;
 public final class DelegationTokenDelta {
     private final DelegationTokenImage image;
 
+    // XXX This must use the same key value as the tokenCache
     private final Map<String, DelegationTokenData> changes = new HashMap<>();
 
     public DelegationTokenDelta(DelegationTokenImage image) {
@@ -47,7 +48,7 @@ public final class DelegationTokenDelta {
         return image;
     }
 
-    //XXX Map uuid to Data?
+    //XXX Map hash to Data?
     public Map<String, DelegationTokenData> changes() {
         return changes;
     }
