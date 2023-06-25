@@ -104,6 +104,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private Admin offsetSyncsAdminClient;
     private volatile boolean useIncrementalAlterConfigs;
     private AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
+    private List<AclBinding> knownTopicAclBindings = Collections.emptyList();
 
     public MirrorSourceConnector() {
         // nop
@@ -582,12 +583,20 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void updateTopicAcls(List<AclBinding> bindings) {
-        log.trace("Syncing {} topic ACL bindings.", bindings.size());
-        targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-            if (e != null) {
-                log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
-            }
-        }));
+        Set<AclBinding> addBindings = new HashSet<>();
+        addBindings.addAll(bindings);
+        addBindings.removeAll(knownTopicAclBindings);
+        if (!addBindings.isEmpty()) {
+            log.info("Syncing new found {} topic ACL bindings.", addBindings.size());
+            targetAdminClient.createAcls(addBindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                if (e != null) {
+                    log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
+                }
+            }));
+            knownTopicAclBindings = bindings;
+        } else {
+            log.debug("Not found new topic Acl info, skip sync!");
+        }
     }
 
     private static Stream<TopicPartition> expandTopicDescription(TopicDescription description) {
