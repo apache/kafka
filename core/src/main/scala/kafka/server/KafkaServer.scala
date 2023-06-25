@@ -461,9 +461,9 @@ class KafkaServer(
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
           ProducerIdManager.rpc(
             config.brokerId,
+            time,
             brokerEpochSupplier = brokerEpochSupplier,
-            clientToControllerChannelManager,
-            config.requestTimeoutMs
+            clientToControllerChannelManager
           )
         } else {
           ProducerIdManager.zk(config.brokerId, zkClient)

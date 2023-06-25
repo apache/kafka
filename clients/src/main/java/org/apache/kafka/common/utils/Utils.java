@@ -1262,7 +1262,7 @@ public final class Utils {
      * @return The length of the actual written data
      * @throws IOException If an I/O error occurs
      */
-    public static long tryWriteTo(TransferableChannel destChannel,
+    public static int tryWriteTo(TransferableChannel destChannel,
                                   int position,
                                   int length,
                                   ByteBuffer sourceBuffer) throws IOException {
