@@ -41,7 +41,6 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
-    public static final String UNDEFINED_VERSION = "undefined";
 
     private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final ConcurrentMap<String, String> aliases;
