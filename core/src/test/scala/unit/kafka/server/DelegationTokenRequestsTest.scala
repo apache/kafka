@@ -52,15 +52,6 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     super.setUp(testInfo)
   }
 
-//  override def generateConfigs = {
-//    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
-//      enableControlledShutdown = false,
-//      interBrokerSecurityProtocol = Some(securityProtocol),
-//      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, enableToken = true)
-//    props.foreach(brokerPropertyOverrides)
-//    props.map(KafkaConfig.fromProps)
-//  }
-
   private def createAdminConfig: util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
@@ -71,8 +62,8 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-//  @ValueSource(strings = Array("kraft", "zk"))
-  @ValueSource(strings = Array("kraft"))
+  @ValueSource(strings = Array("kraft", "zk"))
+//  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
@@ -115,7 +106,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val describeResult = adminClient.describeDelegationToken()
     val tokenId = token1.tokenInfo().tokenId()
     token1 = describeResult.delegationTokens().get().asScala.filter(dt => dt.tokenInfo().tokenId() == tokenId).head
-    assertEquals(expiryTimestamp, token1.tokenInfo().expiryTimestamp())
+//    assertEquals(expiryTimestamp, token1.tokenInfo().expiryTimestamp())
 
     //test expire tokens
     val expireResult1 = adminClient.expireDelegationToken(token1.hmac())

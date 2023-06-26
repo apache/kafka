@@ -207,6 +207,14 @@ class ControllerServer(
         QuorumFeatures.defaultFeatureMap(),
         controllerNodes)
 
+      val delegationTokenKeyString = {
+        if (config.tokenAuthEnabled) {
+          config.delegationTokenSecretKey.value
+        } else {
+          null
+        }
+      }
+
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
           OptionalLong.of(TimeUnit.NANOSECONDS.convert(config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS))
@@ -239,7 +247,8 @@ class ControllerServer(
           setFatalFaultHandler(sharedServer.fatalQuorumControllerFaultHandler).
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
           setZkMigrationEnabled(config.migrationEnabled).
-          setDelegationTokenCache(tokenCache)
+          setDelegationTokenCache(tokenCache).
+          setDelegationTokenSecretKeyString(delegationTokenKeyString)
       }
       controller = controllerBuilder.build()
 
