@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.server.AddPartitionsToTxnManager.{verificationFailureRateMetricName, verificationTimeMsMetricName}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -33,6 +34,9 @@ import scala.collection.mutable
 
 object AddPartitionsToTxnManager {
   type AppendCallback = Map[TopicPartition, Errors] => Unit
+
+  val verificationFailureRateMetricName = "VerificationFailureRate"
+  val verificationTimeMsMetricName = "VerificationTimeMs"
 }
 
 
@@ -56,8 +60,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
-  val verificationFailureRate = metricsGroup.newMeter("VerificationFailureRate", "failures", TimeUnit.SECONDS)
-  val verificationTimeMs = metricsGroup.newHistogram("VerificationTimeMs")
+  val verificationFailureRate = metricsGroup.newMeter(verificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
+  val verificationTimeMs = metricsGroup.newHistogram(verificationTimeMsMetricName)
 
   def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
     nodesToTransactions.synchronized {
@@ -214,8 +218,8 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
 
   override def shutdown(): Unit = {
     super.shutdown()
-    metricsGroup.removeMetric("VerificationFailureRate")
-    metricsGroup.removeMetric("VerificationTimeMs")
+    metricsGroup.removeMetric(verificationFailureRateMetricName)
+    metricsGroup.removeMetric(verificationTimeMsMetricName)
   }
 
 }

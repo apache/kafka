@@ -2158,12 +2158,6 @@ object TestUtils extends Logging {
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
   }
 
-  def clearYammerMetric(metricName: String): Unit = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
-      .keys.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric(_))
-  }
-
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
     Json.encodeAsString(Map("partitions" ->
       partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava).asJava)

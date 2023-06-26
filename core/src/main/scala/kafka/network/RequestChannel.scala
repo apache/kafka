@@ -240,18 +240,18 @@ object RequestChannel extends Logging {
       val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
       val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
-      val metricNames =
+      val overrideMetricNames =
         if (header.apiKey == ApiKeys.FETCH) {
           val specifiedMetricName =
             if (body[FetchRequest].isFromFollower) RequestMetrics.followFetchMetricName
             else RequestMetrics.consumerFetchMetricName
           Seq(specifiedMetricName, header.apiKey.name)
-        } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].verifyOnlyRequest()) {
+        } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].allVerifyOnlyRequest()) {
             Seq(RequestMetrics.verifyPartitionsInTxnMetricName)
         } else {
           Seq(header.apiKey.name)
         }
-      metricNames.foreach { metricName =>
+      overrideMetricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))

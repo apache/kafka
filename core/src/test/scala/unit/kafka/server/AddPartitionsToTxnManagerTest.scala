@@ -248,8 +248,8 @@ class AddPartitionsToTxnManagerTest {
     )
 
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup], (mock: KafkaMetricsGroup, context: Context) => {
-        when(mock.newMeter(ArgumentMatchers.eq("VerificationFailureRate"), anyString(), any(classOf[TimeUnit]))).thenReturn(mockVerificationFailureMeter)
-        when(mock.newHistogram(ArgumentMatchers.eq("VerificationTimeMs"))).thenReturn(mockVerificationTime)
+        when(mock.newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))).thenReturn(mockVerificationFailureMeter)
+        when(mock.newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationTimeMsMetricName))).thenReturn(mockVerificationTime)
       })
 
     val addPartitionsManagerWithMockedMetrics = new AddPartitionsToTxnManager(
@@ -280,10 +280,10 @@ class AddPartitionsToTxnManagerTest {
 
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
 
-      verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq("VerificationFailureRate"), anyString(), any(classOf[TimeUnit]))
-      verify(mockMetricsGroup).newHistogram(ArgumentMatchers.eq("VerificationTimeMs"))
-      verify(mockMetricsGroup).removeMetric("VerificationFailureRate")
-      verify(mockMetricsGroup).removeMetric("VerificationTimeMs")
+      verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationFailureRateMetricName), anyString(), any(classOf[TimeUnit]))
+      verify(mockMetricsGroup).newHistogram(ArgumentMatchers.eq(AddPartitionsToTxnManager.verificationTimeMsMetricName))
+      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.verificationFailureRateMetricName)
+      verify(mockMetricsGroup).removeMetric(AddPartitionsToTxnManager.verificationTimeMsMetricName)
 
       // assert that we have verified all invocations on the metrics group.
       verifyNoMoreInteractions(mockMetricsGroup)
