@@ -979,7 +979,7 @@ public final class Utils {
         } catch (IOException outer) {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
+                log.warn("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
                         outer.getMessage());
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
