@@ -133,7 +133,7 @@ public abstract class PluginScanner {
         return PluginDesc.UNDEFINED_VERSION;
     }
 
-    protected String reflectiveErrorDescription(Throwable t) {
+    protected static String reflectiveErrorDescription(Throwable t) {
         if (t instanceof NoSuchMethodException) {
             return ": Plugin class must have a no-args constructor, and cannot be a non-static inner class";
         } else if (t instanceof SecurityException) {
@@ -149,7 +149,7 @@ public abstract class PluginScanner {
         }
     }
 
-    public LoaderSwap withClassLoader(ClassLoader loader) {
+    protected LoaderSwap withClassLoader(ClassLoader loader) {
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         try {
             return new LoaderSwap(savedLoader);

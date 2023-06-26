@@ -69,7 +69,7 @@ public class Plugins {
         scanResult = initLoaders(pluginSources);
     }
 
-    public PluginScanResult initLoaders(Set<PluginSource> pluginSources) {
+    private PluginScanResult initLoaders(Set<PluginSource> pluginSources) {
         PluginScanResult reflectiveScanResult = new ReflectionScanner().discoverPlugins(pluginSources);
         delegatingLoader.installDiscoveredPlugins(reflectiveScanResult);
         return reflectiveScanResult;

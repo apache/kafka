@@ -29,6 +29,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import java.util.SortedSet;
 
 public class ServiceLoaderScanner extends PluginScanner {
+
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         ClassLoader loader = source.loader();

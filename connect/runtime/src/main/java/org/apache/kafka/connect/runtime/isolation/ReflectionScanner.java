@@ -48,6 +48,7 @@ public class ReflectionScanner extends PluginScanner {
         return versionFor(pluginImpl);
     }
 
+    @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         ClassLoader loader = source.loader();
         ConfigurationBuilder builder = new ConfigurationBuilder();
