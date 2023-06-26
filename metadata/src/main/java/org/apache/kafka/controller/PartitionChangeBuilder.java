@@ -81,7 +81,7 @@ public class PartitionChangeBuilder {
     private List<Integer> targetAdding;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
-    private boolean bumpLeaderEpochOnIsrShrink;
+    private boolean zkMigrationEnabled;
 
 
     public PartitionChangeBuilder(
@@ -96,7 +96,7 @@ public class PartitionChangeBuilder {
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
-        this.bumpLeaderEpochOnIsrShrink = !metadataVersion.isSkipLeaderEpochBumpSupported();
+        this.zkMigrationEnabled = false;
 
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
@@ -144,20 +144,8 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    /**
-     * If skipping the leader epoch bump on ISR shrink is supported by the MetadataVersion (3.6-IV0), allow
-     * the caller to override it. This is used during ZK migrations.
-     *
-     * @param bumpLeaderEpochOnIsrShrink true to force a leader epoch bump on ISR shrink, false to use the
-     *                                   default behavior based on the MetadataVersion.
-     * @return this builder object.
-     * @see #triggerLeaderEpochBumpIfNeeded
-     */
-    public PartitionChangeBuilder enableBumpLeaderEpochOnIsrShrink(boolean bumpLeaderEpochOnIsrShrink) {
-        // If the MV doesn't support skipping leader epoch bump the caller cannot override it.
-        if (metadataVersion.isSkipLeaderEpochBumpSupported()) {
-            this.bumpLeaderEpochOnIsrShrink = bumpLeaderEpochOnIsrShrink;
-        }
+    public PartitionChangeBuilder setZkMigrationEnabled(boolean zkMigrationEnabled) {
+        this.zkMigrationEnabled = zkMigrationEnabled;
         return this;
     }
 
@@ -300,9 +288,13 @@ public class PartitionChangeBuilder {
      */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
         if (record.leader() == NO_LEADER_CHANGE) {
+            boolean bumpLeaderEpochOnIsrShrink = metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled;
+
             if (!Replicas.contains(targetReplicas, partition.replicas)) {
+                // Reassignment
                 record.setLeader(partition.leader);
-            } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
+            } else if (!Replicas.contains(targetIsr, partition.isr) && bumpLeaderEpochOnIsrShrink) {
+                // ISR shrink
                 record.setLeader(partition.leader);
             }
         }
