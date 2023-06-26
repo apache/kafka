@@ -3525,6 +3525,7 @@ public class TaskManagerTest {
 
         Mockito.verify(producer).commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
         Mockito.verify(producer).commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
+        Mockito.verifyNoMoreInteractions(producer);
     }
 
     @Test
@@ -3541,6 +3542,7 @@ public class TaskManagerTest {
         shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_V2, offsetsT01, offsetsT02);
 
         Mockito.verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
+        Mockito.verifyNoMoreInteractions(producer);
     }
 
     private void shouldCommitViaProducerIfEosEnabled(final ProcessingMode processingMode,
