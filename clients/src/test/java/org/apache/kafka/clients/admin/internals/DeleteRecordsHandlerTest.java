@@ -66,7 +66,7 @@ public class DeleteRecordsHandlerTest {
         List<DeleteRecordsRequestData.DeleteRecordsTopic> topicPartitions = request.data().topics();
         assertEquals(1, topicPartitions.size());
         DeleteRecordsRequestData.DeleteRecordsTopic topic = topicPartitions.get(0);
-        assertEquals(2, topic.partitions().size());
+        assertEquals(4, topic.partitions().size());
     }
 
     @Test
