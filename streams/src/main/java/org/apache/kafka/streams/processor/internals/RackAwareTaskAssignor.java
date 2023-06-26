@@ -19,14 +19,15 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RackAwareTaskAssignor {
+    private static final Logger log = LoggerFactory.getLogger(RackAwareTaskAssignor.class);
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
     private final Map<UUID, Map<String, Optional<String>>> processRacks;
     private final AssignmentConfigs assignmentConfigs;
-    private final Logger log;
     private final Map<TopicPartition, Set<String>> racksForPartition;
     private final InternalTopicManager internalTopicManager;
     private Boolean canEnableForActive;
@@ -36,16 +37,13 @@ public class RackAwareTaskAssignor {
                                  final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
                                  final Map<UUID, Map<String, Optional<String>>> processRacks,
                                  final InternalTopicManager internalTopicManager,
-                                 final AssignmentConfigs assignmentConfigs,
-                                 final String logPrefix) {
+                                 final AssignmentConfigs assignmentConfigs) {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
         this.processRacks = processRacks;
         this.internalTopicManager = internalTopicManager;
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
     }
 
   public synchronized boolean canEnableForActive() {
