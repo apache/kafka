@@ -56,7 +56,6 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final ConcurrentMap<String, String> aliases;
-    private final List<Path> pluginLocations;
 
     // Although this classloader does not load classes directly but rather delegates loading to a
     // PluginClassLoader or its parent through its base class, because of the use of inheritance in
@@ -66,23 +65,22 @@ public class DelegatingClassLoader extends URLClassLoader {
         ClassLoader.registerAsParallelCapable();
     }
 
-    public DelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
+    public DelegatingClassLoader(ClassLoader parent) {
         super(new URL[0], parent);
-        this.pluginLocations = pluginLocations;
         this.pluginLoaders = new ConcurrentHashMap<>();
         this.aliases = new ConcurrentHashMap<>();
     }
 
-    public DelegatingClassLoader(List<Path> pluginLocations) {
+    public DelegatingClassLoader() {
         // Use as parent the classloader that loaded this class. In most cases this will be the
         // System classloader. But this choice here provides additional flexibility in managed
         // environments that control classloading differently (OSGi, Spring and others) and don't
         // depend on the System classloader to load Connect's classes.
-        this(pluginLocations, DelegatingClassLoader.class.getClassLoader());
+        this(DelegatingClassLoader.class.getClassLoader());
     }
 
-    public Set<PluginSource> sources() {
-        Set<PluginSource> pluginLoaders = new HashSet<>();
+    public static Set<PluginSource> sources(List<Path> pluginLocations, DelegatingClassLoader classLoader) {
+        Set<PluginSource> pluginSources = new HashSet<>();
         for (Path pluginLocation : pluginLocations) {
 
             try {
@@ -91,12 +89,12 @@ public class DelegatingClassLoader extends URLClassLoader {
                     pluginUrls.add(path.toUri().toURL());
                 }
                 URL[] urls = pluginUrls.toArray(new URL[0]);
-                PluginClassLoader loader = newPluginClassLoader(
+                PluginClassLoader loader = classLoader.newPluginClassLoader(
                         pluginLocation.toUri().toURL(),
                         urls,
-                        this
+                        classLoader
                 );
-                pluginLoaders.add(new PluginSource(pluginLocation, loader, urls));
+                pluginSources.add(new PluginSource(pluginLocation, loader, urls));
             } catch (InvalidPathException | MalformedURLException e) {
                 log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
             } catch (IOException e) {
@@ -104,8 +102,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             }
         }
         URL[] classpathUrls = ClasspathHelper.forJavaClassPath().toArray(new URL[0]);
-        pluginLoaders.add(new PluginSource(null, getParent(), classpathUrls));
-        return pluginLoaders;
+        pluginSources.add(new PluginSource(null, classLoader.getParent(), classpathUrls));
+        return pluginSources;
     }
 
     /**

@@ -24,12 +24,10 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.net.URL;
-import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BrokenBarrierException;
@@ -81,10 +79,10 @@ public class SynchronizationTest {
         pclBreakpoint = new Breakpoint<>();
         plugins = new Plugins(pluginProps) {
             @Override
-            protected DelegatingClassLoader newDelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
+            protected DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
                 return AccessController.doPrivileged(
                     (PrivilegedAction<DelegatingClassLoader>) () ->
-                        new SynchronizedDelegatingClassLoader(pluginLocations, parent)
+                        new SynchronizedDelegatingClassLoader(parent)
                 );
             }
         };
@@ -172,8 +170,8 @@ public class SynchronizationTest {
             ClassLoader.registerAsParallelCapable();
         }
 
-        public SynchronizedDelegatingClassLoader(List<Path> pluginLocations, ClassLoader parent) {
-            super(pluginLocations, parent);
+        public SynchronizedDelegatingClassLoader(ClassLoader parent) {
+            super(parent);
         }
 
         @Override

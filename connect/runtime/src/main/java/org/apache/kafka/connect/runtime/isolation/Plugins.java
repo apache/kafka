@@ -66,19 +66,19 @@ public class Plugins {
     Plugins(Map<String, String> props, ClassLoader parent) {
         String pluginPath = WorkerConfig.pluginPath(props);
         List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
-        delegatingLoader = newDelegatingClassLoader(pluginLocations, parent);
-        scanResult = initLoaders();
+        delegatingLoader = newDelegatingClassLoader(parent);
+        Set<PluginSource> pluginSources = DelegatingClassLoader.sources(pluginLocations, delegatingLoader);
+        scanResult = initLoaders(pluginSources);
     }
 
     // VisibleForTesting
-    protected DelegatingClassLoader newDelegatingClassLoader(final List<Path> pluginLocations, ClassLoader parent) {
+    protected DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
         return AccessController.doPrivileged(
-                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(pluginLocations, parent)
+                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(parent)
         );
     }
 
-    public PluginScanResult initLoaders() {
-        Set<PluginSource> pluginSources = delegatingLoader.sources();
+    public PluginScanResult initLoaders(Set<PluginSource> pluginSources) {
         PluginScanResult reflectiveScanResult = new ReflectionScanner().discoverPlugins(pluginSources);
         delegatingLoader.installDiscoveredPlugins(reflectiveScanResult);
         return reflectiveScanResult;

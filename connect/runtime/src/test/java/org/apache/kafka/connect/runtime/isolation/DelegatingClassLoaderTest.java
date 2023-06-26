@@ -24,6 +24,7 @@ import org.junit.rules.TemporaryFolder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.Assert.assertNotNull;
@@ -36,13 +37,9 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingUnloadedPluginClass() {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.emptyList(),
-                DelegatingClassLoader.class.getClassLoader()
+        DelegatingClassLoader classLoader = initClassLoader(
+                Collections.emptyList()
         );
-        Set<PluginSource> classLoaders = classLoader.sources();
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
-        classLoader.installDiscoveredPlugins(scanResult);
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
         }
@@ -50,13 +47,9 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingPluginClass() throws ClassNotFoundException {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                TestPlugins.pluginPath(),
-                DelegatingClassLoader.class.getClassLoader()
+        DelegatingClassLoader classLoader = initClassLoader(
+                TestPlugins.pluginPath()
         );
-        Set<PluginSource> classLoaders = classLoader.sources();
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
-        classLoader.installDiscoveredPlugins(scanResult);
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertNotNull(classLoader.loadClass(pluginClassName));
             assertNotNull(classLoader.pluginClassLoader(pluginClassName));
@@ -67,13 +60,9 @@ public class DelegatingClassLoaderTest {
     public void testLoadingInvalidUberJar() throws Exception {
         pluginDir.newFile("invalid.jar");
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
+        initClassLoader(
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
-        Set<PluginSource> classLoaders = classLoader.sources();
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
-        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
@@ -81,37 +70,25 @@ public class DelegatingClassLoaderTest {
         pluginDir.newFolder("my-plugin");
         pluginDir.newFile("my-plugin/invalid.jar");
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
+        initClassLoader(
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
-        Set<PluginSource> classLoaders = classLoader.sources();
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
-        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
     public void testLoadingNoPlugins() {
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
+        initClassLoader(
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
-        Set<PluginSource> classLoaders = classLoader.sources();
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
-        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
     public void testLoadingPluginDirEmpty() throws Exception {
         pluginDir.newFolder("my-plugin");
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
+        initClassLoader(
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
-        Set<PluginSource> classLoaders = classLoader.sources();
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
-        classLoader.installDiscoveredPlugins(scanResult);
     }
 
     @Test
@@ -125,16 +102,21 @@ public class DelegatingClassLoaderTest {
             Files.copy(source, pluginPath.resolve(source.getFileName()));
         }
 
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath()),
-                DelegatingClassLoader.class.getClassLoader()
+        DelegatingClassLoader classLoader = initClassLoader(
+                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
         );
-        Set<PluginSource> classLoaders = classLoader.sources();
-        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(classLoaders);
-        classLoader.installDiscoveredPlugins(scanResult);
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertNotNull(classLoader.loadClass(pluginClassName));
             assertNotNull(classLoader.pluginClassLoader(pluginClassName));
         }
     }
+
+    private DelegatingClassLoader initClassLoader(List<Path> pluginLocations) {
+        DelegatingClassLoader classLoader = new DelegatingClassLoader();
+        Set<PluginSource> pluginSources = DelegatingClassLoader.sources(pluginLocations, classLoader);
+        PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(pluginSources);
+        classLoader.installDiscoveredPlugins(scanResult);
+        return classLoader;
+    }
+
 }
