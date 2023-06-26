@@ -26,8 +26,6 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -79,7 +77,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         this(DelegatingClassLoader.class.getClassLoader());
     }
 
-    public static Set<PluginSource> sources(List<Path> pluginLocations, DelegatingClassLoader classLoader) {
+    public static Set<PluginSource> sources(List<Path> pluginLocations, DelegatingClassLoader classLoader, ClassLoaderFactory factory) {
         Set<PluginSource> pluginSources = new HashSet<>();
         for (Path pluginLocation : pluginLocations) {
 
@@ -89,7 +87,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                     pluginUrls.add(path.toUri().toURL());
                 }
                 URL[] urls = pluginUrls.toArray(new URL[0]);
-                PluginClassLoader loader = classLoader.newPluginClassLoader(
+                PluginClassLoader loader = factory.newPluginClassLoader(
                         pluginLocation.toUri().toURL(),
                         urls,
                         classLoader
@@ -136,17 +134,6 @@ public class DelegatingClassLoader extends URLClassLoader {
             connectorClassOrAlias
         );
         return classLoader;
-    }
-
-    // VisibleForTesting
-    PluginClassLoader newPluginClassLoader(
-            final URL pluginLocation,
-            final URL[] urls,
-            final ClassLoader parent
-    ) {
-        return AccessController.doPrivileged(
-                (PrivilegedAction<PluginClassLoader>) () -> new PluginClassLoader(pluginLocation, urls, parent)
-        );
     }
 
     public void installDiscoveredPlugins(PluginScanResult scanResult) {
