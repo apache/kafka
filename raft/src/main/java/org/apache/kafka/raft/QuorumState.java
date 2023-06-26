@@ -233,7 +233,7 @@ public class QuorumState {
     }
 
     public int leaderIdOrSentinel() {
-        return leaderId().orElse(-1);
+        return state.election().leaderIdOrSentinel();
     }
 
     public Optional<LogOffsetMetadata> highWatermark() {
@@ -571,4 +571,7 @@ public class QuorumState {
         return state instanceof CandidateState;
     }
 
+    public EpochState epochState() {
+        return state;
+    }
 }

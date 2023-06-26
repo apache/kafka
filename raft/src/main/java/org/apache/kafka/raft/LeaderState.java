@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -50,7 +51,9 @@ public class LeaderState<T> implements EpochState {
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
 
-    private Optional<LogOffsetMetadata> highWatermark;
+    // The high-watermark has a single writer, the polling thread, but it can be read from the polling thread and the
+    // expiration service thread.
+    private final AtomicReference<Optional<LogOffsetMetadata>> highWatermark = new AtomicReference<>(Optional.empty());
     private final Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
@@ -71,7 +74,6 @@ public class LeaderState<T> implements EpochState {
         this.localId = localId;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
-        this.highWatermark = Optional.empty();
 
         for (int voterId : voters) {
             boolean hasAcknowledgedLeader = voterId == localId;
@@ -116,7 +118,7 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public Optional<LogOffsetMetadata> highWatermark() {
-        return highWatermark;
+        return highWatermark.get();
     }
 
     @Override
@@ -166,13 +168,13 @@ public class LeaderState<T> implements EpochState {
             long highWatermarkUpdateOffset = highWatermarkUpdateMetadata.offset;
 
             if (highWatermarkUpdateOffset > epochStartOffset) {
-                if (highWatermark.isPresent()) {
-                    LogOffsetMetadata currentHighWatermarkMetadata = highWatermark.get();
+                if (highWatermark().isPresent()) {
+                    LogOffsetMetadata currentHighWatermarkMetadata = highWatermark().get();
                     if (highWatermarkUpdateOffset > currentHighWatermarkMetadata.offset
                         || (highWatermarkUpdateOffset == currentHighWatermarkMetadata.offset &&
                             !highWatermarkUpdateMetadata.metadata.equals(currentHighWatermarkMetadata.metadata))) {
-                        Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
-                        highWatermark = highWatermarkUpdateOpt;
+                        Optional<LogOffsetMetadata> oldHighWatermark = highWatermark();
+                        highWatermark.set(highWatermarkUpdateOpt);
                         logHighWatermarkUpdate(
                             oldHighWatermark,
                             highWatermarkUpdateMetadata,
@@ -190,8 +192,8 @@ public class LeaderState<T> implements EpochState {
                         return false;
                     }
                 } else {
-                    Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
-                    highWatermark = highWatermarkUpdateOpt;
+                    Optional<LogOffsetMetadata> oldHighWatermark = highWatermark();
+                    highWatermark.set(highWatermarkUpdateOpt);
                     logHighWatermarkUpdate(
                         oldHighWatermark,
                         highWatermarkUpdateMetadata,
@@ -470,7 +472,7 @@ public class LeaderState<T> implements EpochState {
             localId,
             epoch,
             epochStartOffset,
-            highWatermark,
+            highWatermark.get(),
             voterStates
         );
     }

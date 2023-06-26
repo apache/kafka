@@ -872,6 +872,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Errors error,
         Records records,
         ValidOffsetAndEpoch validOffsetAndEpoch,
+        EpochState epochState,
         Optional<LogOffsetMetadata> highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(log.topicPartition(), log.topicId(), Errors.NONE, partitionData -> {
@@ -879,13 +880,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setRecords(records)
                 .setErrorCode(error.code())
                 .setLogStartOffset(log.startOffset())
-                .setHighWatermark(highWatermark
-                    .map(offsetMetadata -> offsetMetadata.offset)
-                    .orElse(-1L));
+                .setHighWatermark(
+                    highWatermark.map(offsetMetadata -> offsetMetadata.offset).orElse(-1L)
+                );
 
             partitionData.currentLeader()
-                .setLeaderEpoch(quorum.epoch())
-                .setLeaderId(quorum.leaderIdOrSentinel());
+                .setLeaderEpoch(epochState.epoch())
+                .setLeaderId(epochState.election().leaderIdOrSentinel());
 
             switch (validOffsetAndEpoch.kind()) {
                 case DIVERGING:
@@ -905,12 +906,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private FetchResponseData buildEmptyFetchResponse(
         Errors error,
+        EpochState epochState,
         Optional<LogOffsetMetadata> highWatermark
     ) {
         return buildFetchResponse(
             error,
             MemoryRecords.EMPTY,
             ValidOffsetAndEpoch.valid(),
+            epochState,
             highWatermark
         );
     }
@@ -960,8 +963,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             || fetchPartition.fetchOffset() < 0
             || fetchPartition.lastFetchedEpoch() < 0
             || fetchPartition.lastFetchedEpoch() > fetchPartition.currentLeaderEpoch()) {
-            return completedFuture(buildEmptyFetchResponse(
-                Errors.INVALID_REQUEST, Optional.empty()));
+            return completedFuture(
+                buildEmptyFetchResponse(Errors.INVALID_REQUEST, quorum.epochState(), Optional.empty())
+            );
         }
 
         int replicaId = FetchRequest.replicaId(request);
@@ -984,14 +988,24 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Throwable cause = exception instanceof ExecutionException ?
                     exception.getCause() : exception;
 
-                // If the fetch timed out in purgatory, it means no new data is available,
-                // and we will complete the fetch successfully. Otherwise, if there was
-                // any other error, we need to return it.
                 Errors error = Errors.forException(cause);
-                if (error != Errors.REQUEST_TIMED_OUT) {
+                if (error == Errors.REQUEST_TIMED_OUT) {
+                    // If the fetch timed out in purgatory, it means no new data is available,
+                    // and it needs to be complete the fetch successfully with no data.
+
+                    // Note that for this case the calling thread is the service thread.
+                    EpochState epochState = quorum.epochState();
+                    Optional<LogOffsetMetadata> highWatermark = Optional.empty();
+                    if (epochState instanceof LeaderState) {
+                        // Only send the high watermark if this replica is still the leader
+                        highWatermark = epochState.highWatermark();
+                    }
+                    return buildEmptyFetchResponse(Errors.NONE, epochState, highWatermark);
+                } else {
+                    // If there was any error other than REQUEST_TIMED_OUT, return it.
                     logger.info("Failed to handle fetch from {} at {} due to {}",
                         replicaId, fetchPartition.fetchOffset(), error);
-                    return buildEmptyFetchResponse(error, Optional.empty());
+                    return buildEmptyFetchResponse(error, quorum.epochState(), Optional.empty());
                 }
             }
 
@@ -999,6 +1013,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             logger.trace("Completing delayed fetch from {} starting at offset {} at {}",
                 replicaId, fetchPartition.fetchOffset(), completionTimeMs);
 
+            // It is safe to call tryCompleteFetchRequest because only the polling thread completes this
+            // future successfully. This is true because only the polling thread appends record batches to
+            // the log from maybeAppendBatches.
             return tryCompleteFetchRequest(replicaId, fetchPartition, time.milliseconds());
         });
     }
@@ -1011,7 +1028,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         try {
             Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.currentLeaderEpoch());
             if (errorOpt.isPresent()) {
-                return buildEmptyFetchResponse(errorOpt.get(), Optional.empty());
+                return buildEmptyFetchResponse(errorOpt.get(), quorum.epochState(), Optional.empty());
             }
 
             long fetchOffset = request.fetchOffset();
@@ -1032,10 +1049,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 records = MemoryRecords.EMPTY;
             }
 
-            return buildFetchResponse(Errors.NONE, records, validOffsetAndEpoch, state.highWatermark());
+            return buildFetchResponse(Errors.NONE, records, validOffsetAndEpoch, state, state.highWatermark());
         } catch (Exception e) {
             logger.error("Caught unexpected error in fetch completion of request {}", request, e);
-            return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
+            return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, quorum.epochState(), Optional.empty());
         }
     }
 
