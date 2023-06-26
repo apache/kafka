@@ -25,6 +25,7 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.sql.Driver;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceConfigurationError;
@@ -49,7 +50,12 @@ public abstract class PluginScanner {
     }
 
     private PluginScanResult scanUrlsAndAddPlugins(PluginSource source) {
+        log.info("Loading plugin from: {}", source.location());
+        if (log.isDebugEnabled()) {
+            log.debug("Loading plugin urls: {}", Arrays.toString(source.urls()));
+        }
         PluginScanResult plugins = scanPlugins(source);
+        log.info("Registered loader: {}", source.loader());
         loadJdbcDrivers(source.loader());
         return plugins;
     }
