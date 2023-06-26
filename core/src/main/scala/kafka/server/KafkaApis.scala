@@ -3000,16 +3000,17 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTokenRequest(request: RequestChannel.Request): Unit = {
-    println("We are here")
     val createTokenRequest = request.body[CreateDelegationTokenRequest]
 
+    val requester = request.context.principal
     val ownerPrincipalName = createTokenRequest.data.ownerPrincipalName
     val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
       request.context.principal
     } else {
       new KafkaPrincipal(createTokenRequest.data.ownerPrincipalType, ownerPrincipalName)
     }
-    val requester = request.context.principal
+    val renewerList = createTokenRequest.data.renewers.asScala.toList.map(entry =>
+      new KafkaPrincipal(entry.principalType, entry.principalName))
 
     if (!allowTokenRequests(request)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3019,23 +3020,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
           Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
+    } else if (renewerList.exists(principal => principal.getPrincipalType != KafkaPrincipal.USER_TYPE)) {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+          Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
     } else {
-      val renewerList = createTokenRequest.data.renewers.asScala.toList.map(entry =>
-        new KafkaPrincipal(entry.principalType, entry.principalName))
-
-      if (renewerList.exists(principal => principal.getPrincipalType != KafkaPrincipal.USER_TYPE)) {
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
-            Errors.INVALID_PRINCIPAL_TYPE, owner, requester))
-      }
-      else {
-        maybeForwardToController(request, handleCreateTokenRequestLocal)
-      }
+      maybeForwardToController(request, handleCreateTokenRequestLocal)
     }
   }
 
   def handleCreateTokenRequestLocal(request: RequestChannel.Request): Unit = {
-    println("We are here 2")
     metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
 
     val createTokenRequest = request.body[CreateDelegationTokenRequest]

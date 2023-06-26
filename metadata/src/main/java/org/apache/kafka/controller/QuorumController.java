@@ -207,6 +207,7 @@ public final class QuorumController implements Controller {
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
         private DelegationTokenCache tokenCache;
+        private String tokenKeyString;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -337,6 +338,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setDelegationTokenSecretKeyString(String tokenKeyString) {
+            this.tokenKeyString = tokenKeyString;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -390,7 +396,8 @@ public final class QuorumController implements Controller {
                     bootstrapMetadata,
                     maxRecordsPerBatch,
                     zkMigrationEnabled,
-                    tokenCache
+                    tokenCache,
+                    tokenKeyString
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1849,7 +1856,8 @@ public final class QuorumController implements Controller {
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
         boolean zkMigrationEnabled,
-        DelegationTokenCache tokenCache
+        DelegationTokenCache tokenCache,
+        String tokenKeyString
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1916,6 +1924,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             setTokenCache(tokenCache).
+            setTokenKeyString(tokenKeyString).
             build();
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));

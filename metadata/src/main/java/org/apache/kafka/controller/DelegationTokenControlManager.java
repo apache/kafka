@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 
+import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_AUTH_DISABLED;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_NOT_FOUND;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PRINCIPAL_TYPE;
 import static org.apache.kafka.common.protocol.Errors.NONE;
@@ -70,6 +71,7 @@ public class DelegationTokenControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private DelegationTokenCache tokenCache = null;
+        private String secretKeyString = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -86,26 +88,38 @@ public class DelegationTokenControlManager {
             return this;
         }
 
+        Builder setTokenKeyString(String secretKeyString) {
+            this.secretKeyString = secretKeyString;
+            return this;
+        }
+
         DelegationTokenControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            return new DelegationTokenControlManager(logContext, snapshotRegistry, tokenCache);
+            return new DelegationTokenControlManager(
+              logContext,
+              snapshotRegistry,
+              tokenCache,
+              secretKeyString);
         }
     }
 
     private final Logger log;
     private final DelegationTokenCache tokenCache;
-    // private final SecretKeySpec secretKey;
+    private final String secretKeyString;
     // private final Mac mac;
     // private final TimelineHashMap<ScramCredentialKey, ScramCredentialValue> credentials;
 
     private DelegationTokenControlManager(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
-        DelegationTokenCache tokenCache
+        DelegationTokenCache tokenCache,
+        String secretKeyString
     ) {
         this.log = logContext.logger(DelegationTokenControlManager.class);
         this.tokenCache = tokenCache;
+        this.secretKeyString = secretKeyString;
+
         // this.credentials = new TimelineHashMap<>(snapshotRegistry, 0);
 //        try {
 //            this.mac = Mac.getInstance("HmacSHA512");
@@ -125,7 +139,7 @@ public class DelegationTokenControlManager {
 
         try {
             Mac mac = Mac.getInstance("HmacSHA512");
-            SecretKeySpec secretKey = new SecretKeySpec(toBytes("testKey"), mac.getAlgorithm());
+            SecretKeySpec secretKey = new SecretKeySpec(toBytes(secretKeyString), mac.getAlgorithm());
             mac.init(secretKey);
             result = mac.doFinal(toBytes(tokenId));
         } catch (NoSuchAlgorithmException|InvalidKeyException e) {
@@ -165,8 +179,12 @@ public class DelegationTokenControlManager {
                 .setTokenRequesterPrincipalName(owner.getName())
                 .setTokenRequesterPrincipalType(owner.getPrincipalType());
 
+        if (secretKeyString == null) {
+            // DelegationTokens are not enabled
+            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_AUTH_DISABLED.code()));
+        }
+
         for (CreatableRenewers renewer : requestData.renewers()) {
-            System.out.println("Got renewer : " + renewer.toString());
             if (renewer.principalType().equals(KafkaPrincipal.USER_TYPE)) {
                 renewers.add(new KafkaPrincipal(renewer.principalType(), renewer.principalName()));
             } else {

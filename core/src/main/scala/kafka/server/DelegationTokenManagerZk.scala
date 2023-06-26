@@ -20,12 +20,72 @@ package kafka.server
 import java.nio.charset.StandardCharsets
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
+import kafka.utils.Json
 import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode}
-import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.security.token.delegation.DelegationToken
-import org.apache.kafka.common.utils.Time
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
+import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils, Time}
 
+import scala.jdk.CollectionConverters._
+import scala.collection.mutable
+
+/*
+ * Object used to encode and decode TokenInformation to Zk
+ */
+object DelegationTokenManagerZk {
+  val OwnerKey ="owner"
+  val TokenRequesterKey = "tokenRequester"
+  val RenewersKey = "renewers"
+  val IssueTimestampKey = "issueTimestamp"
+  val MaxTimestampKey = "maxTimestamp"
+  val ExpiryTimestampKey = "expiryTimestamp"
+  val TokenIdKey = "tokenId"
+  val VersionKey = "version"
+  val CurrentVersion = 3
+
+  def toJsonCompatibleMap(tokenInfo: TokenInformation):  Map[String, Any] = {
+    val tokenInfoMap = mutable.Map[String, Any]()
+    tokenInfoMap(VersionKey) = CurrentVersion
+    tokenInfoMap(OwnerKey) = Sanitizer.sanitize(tokenInfo.ownerAsString)
+    tokenInfoMap(TokenRequesterKey) = Sanitizer.sanitize(tokenInfo.tokenRequester.toString)
+    tokenInfoMap(RenewersKey) = tokenInfo.renewersAsString.asScala.map(e => Sanitizer.sanitize(e)).asJava
+    tokenInfoMap(IssueTimestampKey) = tokenInfo.issueTimestamp
+    tokenInfoMap(MaxTimestampKey) = tokenInfo.maxTimestamp
+    tokenInfoMap(ExpiryTimestampKey) = tokenInfo.expiryTimestamp
+    tokenInfoMap(TokenIdKey) = tokenInfo.tokenId()
+    tokenInfoMap.toMap
+  }
+
+  def fromBytes(bytes: Array[Byte]): Option[TokenInformation] = {
+    if (bytes == null || bytes.isEmpty)
+      return None
+
+    Json.parseBytes(bytes) match {
+      case Some(js) =>
+        val mainJs = js.asJsonObject
+        val version = mainJs(VersionKey).to[Int]
+        require(version > 0 && version <= CurrentVersion)
+        val owner = SecurityUtils.parseKafkaPrincipal(Sanitizer.desanitize(mainJs(OwnerKey).to[String]))
+        var tokenRequester = owner
+        if (version >= 3)
+          tokenRequester = SecurityUtils.parseKafkaPrincipal(Sanitizer.desanitize(mainJs(TokenRequesterKey).to[String]))
+        val renewerStr = mainJs(RenewersKey).to[Seq[String]]
+        val renewers = renewerStr.map(Sanitizer.desanitize).map(SecurityUtils.parseKafkaPrincipal)
+        val issueTimestamp = mainJs(IssueTimestampKey).to[Long]
+        val expiryTimestamp = mainJs(ExpiryTimestampKey).to[Long]
+        val maxTimestamp = mainJs(MaxTimestampKey).to[Long]
+        val tokenId = mainJs(TokenIdKey).to[String]
+
+        val tokenInfo = new TokenInformation(tokenId, owner, tokenRequester, renewers.asJava,
+          issueTimestamp, maxTimestamp, expiryTimestamp)
+
+        Some(tokenInfo)
+      case None =>
+        None
+    }
+  }
+}
 
 /*
  * Cache for Delegation Tokens when using Zk for metadata.
