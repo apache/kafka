@@ -20,19 +20,23 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.connect.file.FileStreamSourceTask.FILENAME_FIELD;
+import static org.apache.kafka.connect.file.FileStreamSourceTask.POSITION_FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 public class FileStreamSourceConnectorTest {
 
@@ -146,5 +150,64 @@ public class FileStreamSourceConnectorTest {
     public void testInvalidBatchSize() {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
         assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
+    }
+
+    @Test
+    public void testAlterOffsetsStdin() {
+        sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 0)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsMultiplePartitions() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
+        offsets.put(Collections.singletonMap(FILENAME_FIELD, FILENAME), Collections.singletonMap(POSITION_FIELD, 0));
+        offsets.put(Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"), Collections.singletonMap(POSITION_FIELD, 0));
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectPartitionKey() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap("invalid_partition_key", FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 0)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectPartitionValue() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"),
+                Collections.singletonMap(POSITION_FIELD, 0)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectOffsetKey() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap("invalid_offset_key", 0)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
+    }
+
+    @Test
+    public void testSuccessfulAlterOffsets() {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+                Collections.singletonMap(POSITION_FIELD, 0)
+        );
+
+        // Expect no exception to be thrown when a valid offsets map is passed. An empty offsets map is treated as valid
+        // since it could indicate that the offsets were reset previously or that no offsets have been committed yet
+        // (for a reset operation)
+        connector.alterOffsets(sourceProperties, offsets);
+        connector.alterOffsets(sourceProperties, new HashMap<>());
     }
 }
