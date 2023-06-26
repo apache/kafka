@@ -797,9 +797,14 @@ public class RemoteLogManager implements Closeable {
                 boolean isSegmentDeleted = deleteRemoteLogSegment(metadata, x -> {
                     // Assumption that segments contain size >= 0
                     if (remainingBreachedSize > 0) {
-                        remainingBreachedSize -= x.segmentSizeInBytes();
-                        return remainingBreachedSize >= 0;
-                    } else return false;
+                        long remainingBytes = remainingBreachedSize - x.segmentSizeInBytes();
+                        if (remainingBytes >= 0) {
+                            remainingBreachedSize = remainingBytes;
+                            return true;
+                        }
+                    }
+
+                    return false;
                 });
                 if (isSegmentDeleted) {
                     logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
@@ -987,12 +992,14 @@ public class RemoteLogManager implements Closeable {
                 // This is the total size of segments in local log that have their base-offset > local-log-start-offset
                 // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
                 long totalSize = log.validLocalLogSegmentsSize() + totalSizeEarlierToLocalLogStartOffset;
-                long remainingBreachedSize = totalSize - retentionSize;
-                RetentionSizeData retentionSizeData = new RetentionSizeData(retentionSize, remainingBreachedSize);
-                return Optional.of(retentionSizeData);
-            } else {
-                return Optional.empty();
+                if (totalSize > retentionSize) {
+                    long remainingBreachedSize = totalSize - retentionSize;
+                    RetentionSizeData retentionSizeData = new RetentionSizeData(retentionSize, remainingBreachedSize);
+                    return Optional.of(retentionSizeData);
+                }
             }
+
+            return Optional.empty();
         }
 
         public String toString() {
