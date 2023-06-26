@@ -114,7 +114,7 @@ public class DelegatingClassLoaderTest {
     private DelegatingClassLoader initClassLoader(List<Path> pluginLocations) {
         ClassLoaderFactory factory = new ClassLoaderFactory();
         DelegatingClassLoader classLoader = factory.newDelegatingClassLoader(DelegatingClassLoader.class.getClassLoader());
-        Set<PluginSource> pluginSources = DelegatingClassLoader.sources(pluginLocations, classLoader, factory);
+        Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, classLoader, factory);
         PluginScanResult scanResult = new ReflectionScanner().discoverPlugins(pluginSources);
         classLoader.installDiscoveredPlugins(scanResult);
         return classLoader;

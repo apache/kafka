@@ -16,22 +16,13 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.reflections.util.ClasspathHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -75,33 +66,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         // environments that control classloading differently (OSGi, Spring and others) and don't
         // depend on the System classloader to load Connect's classes.
         this(DelegatingClassLoader.class.getClassLoader());
-    }
-
-    public static Set<PluginSource> sources(List<Path> pluginLocations, DelegatingClassLoader classLoader, ClassLoaderFactory factory) {
-        Set<PluginSource> pluginSources = new HashSet<>();
-        for (Path pluginLocation : pluginLocations) {
-
-            try {
-                List<URL> pluginUrls = new ArrayList<>();
-                for (Path path : PluginUtils.pluginUrls(pluginLocation)) {
-                    pluginUrls.add(path.toUri().toURL());
-                }
-                URL[] urls = pluginUrls.toArray(new URL[0]);
-                PluginClassLoader loader = factory.newPluginClassLoader(
-                        pluginLocation.toUri().toURL(),
-                        urls,
-                        classLoader
-                );
-                pluginSources.add(new PluginSource(pluginLocation, loader, urls));
-            } catch (InvalidPathException | MalformedURLException e) {
-                log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
-            } catch (IOException e) {
-                log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
-            }
-        }
-        URL[] classpathUrls = ClasspathHelper.forJavaClassPath().toArray(new URL[0]);
-        pluginSources.add(new PluginSource(null, classLoader.getParent(), classpathUrls));
-        return pluginSources;
     }
 
     /**

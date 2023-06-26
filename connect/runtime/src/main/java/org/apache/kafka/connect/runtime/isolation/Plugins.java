@@ -65,7 +65,7 @@ public class Plugins {
         String pluginPath = WorkerConfig.pluginPath(props);
         List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = factory.newDelegatingClassLoader(parent);
-        Set<PluginSource> pluginSources = DelegatingClassLoader.sources(pluginLocations, delegatingLoader, factory);
+        Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, delegatingLoader, factory);
         scanResult = initLoaders(pluginSources);
     }
 
