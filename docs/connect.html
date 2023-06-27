@@ -313,7 +313,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
         <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
         <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
-        <li>Offsets management REST APIs (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details):
+        <li>Offsets management endpoints (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details):
             <ul>
                 <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector</li>
                 <li><code>DELETE /connectors/{name}/offsets</code> - reset the offsets for a connector. The connector must exist and must be in the stopped state.</li>
