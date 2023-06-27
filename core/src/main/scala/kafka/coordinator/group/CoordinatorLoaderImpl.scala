@@ -83,16 +83,18 @@ class CoordinatorLoaderImpl[T](
         case Some(log) =>
           def logEndOffset: Long = replicaManager.getLogEndOffset(tp).getOrElse(-1L)
 
-          // buffer may not be needed if records are read from memory
+          // Buffer may not be needed if records are read from memory.
           var buffer = ByteBuffer.allocate(0)
-          // loop breaks if leader changes at any time during the load, since logEndOffset is -1
-          var currOffset = log.logStartOffset
-          // loop breaks if no records have been read, since the end of the log has been reached
+          // Loop breaks if leader changes at any time during the load, since logEndOffset is -1.
+          var currentOffset = log.logStartOffset
+          // Loop breaks if no records have been read, since the end of the log has been reached.
+          // This is to ensure that the loop breaks even if the current offset remains smaller than
+          // the log end offset but the log is empty. This could happen with compacted topics.
           var readAtLeastOneRecord = true
 
-          while (currOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
+          while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
             val fetchDataInfo = log.read(
-              startOffset = currOffset,
+              startOffset = currentOffset,
               maxLength = loadBufferSize,
               isolation = FetchIsolation.LOG_END,
               minOneMessage = true
@@ -108,7 +110,7 @@ class CoordinatorLoaderImpl[T](
                 val sizeInBytes = fileRecords.sizeInBytes
                 val bytesNeeded = Math.max(loadBufferSize, sizeInBytes)
 
-                // minOneMessage = true in the above log.read means that the buffer may need to
+                // "minOneMessage = true in the above log.read() means that the buffer may need to
                 // be grown to ensure progress can be made.
                 if (buffer.capacity < bytesNeeded) {
                   if (loadBufferSize < bytesNeeded)
@@ -139,7 +141,7 @@ class CoordinatorLoaderImpl[T](
                 }
               }
 
-              currOffset = batch.nextOffset
+              currentOffset = batch.nextOffset
             }
           }
 

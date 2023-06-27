@@ -53,7 +53,7 @@ public class RecordSerdeTest {
         Record record = new Record(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
-                (short) 1
+                (short) 3
             ),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue().setEpoch(10),
@@ -73,7 +73,7 @@ public class RecordSerdeTest {
         Record record = new Record(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
-                (short) 1
+                (short) 3
             ),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue().setEpoch(10),
@@ -103,7 +103,7 @@ public class RecordSerdeTest {
 
     @Test
     public void testDeserialize() {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -117,14 +117,14 @@ public class RecordSerdeTest {
         );
         ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(value.version(), value.message());
 
-        Record record = serDe.deserialize(keyBuffer, valueBuffer);
+        Record record = serde.deserialize(keyBuffer, valueBuffer);
         assertEquals(key, record.key());
         assertEquals(value, record.value());
     }
 
     @Test
     public void testDeserializeWithTombstoneForValue() {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -132,14 +132,14 @@ public class RecordSerdeTest {
         );
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
 
-        Record record = serDe.deserialize(keyBuffer, null);
+        Record record = serde.deserialize(keyBuffer, null);
         assertEquals(key, record.key());
         assertNull(record.value());
     }
 
     @Test
     public void testDeserializeWithInvalidRecordType() {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(64);
         keyBuffer.putShort((short) 255);
@@ -149,26 +149,26 @@ public class RecordSerdeTest {
 
         CoordinatorLoader.UnknownRecordTypeException ex =
             assertThrows(CoordinatorLoader.UnknownRecordTypeException.class,
-                () -> serDe.deserialize(keyBuffer, valueBuffer));
+                () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals((short) 255, ex.unknownType());
     }
 
     @Test
     public void testDeserializeWithKeyEmptyBuffer() {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(0);
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
 
         RuntimeException ex =
             assertThrows(RuntimeException.class,
-                () -> serDe.deserialize(keyBuffer, valueBuffer));
+                () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals("Could not read version from key's buffer.", ex.getMessage());
     }
 
     @Test
     public void testDeserializeWithValueEmptyBuffer() {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -180,13 +180,13 @@ public class RecordSerdeTest {
 
         RuntimeException ex =
             assertThrows(RuntimeException.class,
-                () -> serDe.deserialize(keyBuffer, valueBuffer));
+                () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals("Could not read version from value's buffer.", ex.getMessage());
     }
 
     @Test
     public void testDeserializeWithInvalidKeyBytes() {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(2);
         keyBuffer.putShort((short) 3);
@@ -198,14 +198,14 @@ public class RecordSerdeTest {
 
         RuntimeException ex =
             assertThrows(RuntimeException.class,
-                () -> serDe.deserialize(keyBuffer, valueBuffer));
+                () -> serde.deserialize(keyBuffer, valueBuffer));
         assertTrue(ex.getMessage().startsWith("Could not read record with version 3 from key's buffer due to"),
             ex.getMessage());
     }
 
     @Test
     public void testDeserializeWithInvalidValueBytes() {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -219,7 +219,7 @@ public class RecordSerdeTest {
 
         RuntimeException ex =
             assertThrows(RuntimeException.class,
-                () -> serDe.deserialize(keyBuffer, valueBuffer));
+                () -> serde.deserialize(keyBuffer, valueBuffer));
         assertTrue(ex.getMessage().startsWith("Could not read record with version 0 from value's buffer due to"),
             ex.getMessage());
     }
@@ -242,13 +242,13 @@ public class RecordSerdeTest {
         ApiMessage key,
         ApiMessage val
     ) {
-        RecordSerde serDe = new RecordSerde();
+        RecordSerde serde = new RecordSerde();
 
         for (short version = val.lowestSupportedVersion(); version < val.highestSupportedVersion(); version++) {
             ApiMessageAndVersion keyMessageAndVersion = new ApiMessageAndVersion(key, recordType);
             ApiMessageAndVersion valMessageAndVersion = new ApiMessageAndVersion(val, version);
 
-            Record record = serDe.deserialize(
+            Record record = serde.deserialize(
                 MessageUtil.toVersionPrefixedByteBuffer(recordType, key),
                 MessageUtil.toVersionPrefixedByteBuffer(version, val)
             );
