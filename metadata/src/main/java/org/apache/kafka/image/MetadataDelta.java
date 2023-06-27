@@ -30,6 +30,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
+import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -236,7 +237,9 @@ public final class MetadataDelta {
             case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
                 replay((RemoveUserScramCredentialRecord) record);
                 break;
-            // XXX Need to create a REMOVE_DELEGATION_TOKEN_RECORD
+            case REMOVE_DELEGATION_TOKEN_RECORD:
+                replay((RemoveDelegationTokenRecord) record);
+                break;
             case NO_OP_RECORD:
                 /* NoOpRecord is an empty record and doesn't need to be replayed beyond
                  * updating the highest offset and epoch.
@@ -288,6 +291,10 @@ public final class MetadataDelta {
     }
 
     public void replay(DelegationTokenRecord record) {
+        getOrCreateDelegationTokenDelta().replay(record);
+    }
+
+    public void replay(RemoveDelegationTokenRecord record) {
         getOrCreateDelegationTokenDelta().replay(record);
     }
 

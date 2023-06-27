@@ -20,9 +20,12 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
+import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 // import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
@@ -251,7 +254,26 @@ public class DelegationTokenControlManager {
         return ControllerResult.atomicOf(records, responseData);
     }
 
+    public ControllerResult<ExpireDelegationTokenResponseData> expireDelegationToken(
+        ControllerRequestContext context,
+        ExpireDelegationTokenRequestData requestData,
+        MetadataVersion metadataVersion
+    ) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ExpireDelegationTokenResponseData responseData = new ExpireDelegationTokenResponseData();
+
+        TokenInformation myTokenInformation = getToken(requestData.hmac());
+
+        records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
+                setTokenId(myTokenInformation.tokenId()), (short) 0));
+        return ControllerResult.atomicOf(records, responseData);
+    }
+
     public void replay(DelegationTokenRecord record) {
+        // XXX Do nothing right now
+    }
+
+    public void replay(RemoveDelegationTokenRecord record) {
         // XXX Do nothing right now
     }
 }

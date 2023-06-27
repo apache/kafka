@@ -51,9 +51,13 @@ class DelegationTokenPublisher(
     try {
       // Apply changes to DelegationTokens.
       Option(delta.delegationTokenDelta()).foreach { delegationTokenDelta =>
-        delegationTokenDelta.changes()forEach { 
+        delegationTokenDelta.changes().forEach { 
           case (tokenId, delegationTokenData) => 
-            tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()))
+            if (delegationTokenData.isPresent) {
+              tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()))
+            } else {
+              // XXX
+            }
         }
       }
     } catch {

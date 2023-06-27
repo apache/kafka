@@ -18,13 +18,14 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
+import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.metadata.DelegationTokenData;
 
 import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.Map;
-// import java.util.Optional;
+import java.util.Optional;
 
 
 /**
@@ -33,8 +34,8 @@ import java.util.Map;
 public final class DelegationTokenDelta {
     private final DelegationTokenImage image;
 
-    // XXX This must use the same key value as the tokenCache
-    private final Map<String, DelegationTokenData> changes = new HashMap<>();
+    // Key is TokenID which is contained in the value TokenInformation
+    private final Map<String, Optional<DelegationTokenData>> changes = new HashMap<>();
 
     public DelegationTokenDelta(DelegationTokenImage image) {
         this.image = image;
@@ -48,13 +49,16 @@ public final class DelegationTokenDelta {
         return image;
     }
 
-    //XXX Map hash to Data?
-    public Map<String, DelegationTokenData> changes() {
+    public Map<String, Optional<DelegationTokenData>> changes() {
         return changes;
     }
 
     public void replay(DelegationTokenRecord record) {
-        changes.put(record.tokenId(), DelegationTokenData.fromRecord(record));
+        changes.put(record.tokenId(), Optional.of(DelegationTokenData.fromRecord(record)));
+    }
+
+    public void replay(RemoveDelegationTokenRecord record) {
+        changes.put(record.tokenId(), Optional.empty());
     }
 
     public void handleMetadataVersionChange(MetadataVersion changedMetadataVersion) {
@@ -63,18 +67,12 @@ public final class DelegationTokenDelta {
 
     public DelegationTokenImage apply() {
         Map<String, DelegationTokenData> newTokens = new HashMap<>();
-        for (Entry<String, DelegationTokenData> tokenChange : changes.entrySet()) {
-            newTokens.put(tokenChange.getKey(), tokenChange.getValue());
-            /*
-            if (userNameEntry.getValue().isPresent()) {
-                userMap.put(userNameEntry.getKey(), userNameEntry.getValue().get());
-            } else {
-                userMap.remove(userNameEntry.getKey());
-                if (userMap.isEmpty()) {
-                    newMechanisms.remove(mechanismChangeEntry.getKey());
-                }
+        for (Entry<String, Optional<DelegationTokenData>> tokenChange : changes.entrySet()) {
+            if (tokenChange.getValue().isPresent()) {
+                newTokens.put(tokenChange.getKey(), tokenChange.getValue().get());
+            } else{
+                newTokens.remove(tokenChange.getKey());
             }
-            */
         }
         return new DelegationTokenImage(newTokens);
     }
